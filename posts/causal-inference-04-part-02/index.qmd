@@ -1,0 +1,97 @@
+---
+title: "[Causal Inference] 4. Confounding and Backdoor (Part 2)"
+description: "Counfounding Bias"
+author: "유성현"
+date: "2026-01-07"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: true
+    code-fold: true
+    mathjax: true
+---
+
+# Overview
+
+* 지난 포스트에서는 인과 효과의 **식별 가능성(Identifiability)**에 대해 다루었습니다. 이번에는 현실 데이터 분석에서 가장 빈번하게 마주치는 문제이자, 인과추론이 필요한 가장 큰 이유 중 하나인 **교란 편향(Confounding Bias)**에 대해 구체적인 예시를 통해 알아보겠습니다.
+
+---
+
+# The Problem of Confounding: Exercise and Cholesterol
+
+* 우리가 운동($X$)이 콜레스테롤 수치($Y$)에 미치는 인과 효과를 알고 싶다고 가정해 봅시다. 이를 위해 사람들의 운동 시간과 콜레스테롤 수치를 측정하여 데이터를 수집했습니다.
+
+## 1. 단순 관측: 직관과 반대되는 결과
+
+* 수집한 데이터를 단순히 산점도(Scatter Plot)로 그려보았더니 놀라운 결과가 나타났습니다.
+
+![Figure 1. Observed Correlation between Exercise and Cholesterol](./images/exercise_cholesterol_scatter.png)
+
+* **관측 결과:** 운동을 많이 하는 사람일수록 콜레스테롤 수치가 더 높게 나타납니다.
+* **의문:** $P(\text{cholesterol} | \text{exercise})$를 보면, 운동이 콜레스테롤을 높이는 것처럼 보입니다.
+과연 "더 많은 운동 $\Rightarrow$ 콜레스테롤 증가"라고 결론 내릴 수 있을까요?
+
+## 2. 교란 변수의 발견: 나이(Age)
+
+* 이 이상한 현상을 이해하기 위해, 우리는 데이터에 숨겨진 제3의 변수인 **'나이(Age)'**를 색상으로 구분하여 다시 시각화해보았습니다.
+
+![Figure 2. Scatter Plot Stratified by Age](./images/exercise_cholesterol_age.png)
+
+* 그래프를 자세히 보면 다음과 같은 패턴이 드러납니다:
+  1.  **나이와 운동:** 나이가 많은 사람(노란색 계열)들이 건강 관리를 위해 운동을 더 많이 하는 경향이 있습니다.
+  2.  **나이와 콜레스테롤:** 동시에, 나이가 많을수록 자연적으로 콜레스테롤 수치가 높습니다.
+
+* 즉, **'나이'**가 운동량($X$)과 콜레스테롤($Y$) 모두에 영향을 미치는 **교란 변수(Confounder)**로 작용하고 있었던 것입니다.
+
+## 3. 계층별 분석: 인과 효과의 확인
+
+* 이제 나이(Age)를 고정한 상태에서 운동과 콜레스테롤의 관계를 다시 살펴봅시다.
+
+![Figure 3. True Causal Effect within Age Groups](./images/exercise_cholesterol_stratified.png)
+
+* 각 연령대 그룹(같은 색깔) 내부를 들여다보면, 운동을 많이 할수록 콜레스테롤 수치가 **낮아지는** 것을 명확히 볼 수 있습니다.
+* **결론:** 운동의 진짜 인과 효과는 콜레스테롤을 낮추는 것입니다. ($More\ exercise \Rightarrow Lower\ Cholesterol$)
+
+---
+
+# Confounding Bias Definition
+
+* 위의 예시는 **교란 편향(Confounding Bias)**이 무엇인지 명확하게 보여줍니다.
+
+  * **Association (관측된 상관관계):** $P(y|x)$
+    * 데이터 전체를 그냥 보았을 때의 분포입니다. 여기서는 "운동을 하면 콜레스테롤이 높다"였습니다.
+  * **Causation (인과 효과):** $P(y|do(x))$
+    * 우리가 알고 싶은 진짜 효과입니다. "운동을 시키면($do$) 콜레스테롤이 낮아진다"입니다.
+
+* 이 둘의 차이가 바로 편향입니다.
+
+$$P(y|x) \neq P(y|do(x))$$
+
+* 이 차이는 인과추론과 해석 가능성(Interpretability)을 가로막는 가장 큰 장애물 중 하나입니다. 
+
+---
+
+# Is Confounding Bias Removable?
+
+* 그렇다면 이러한 교란 편향은 어떻게 제거할 수 있을까요? 
+* 위의 예시처럼 '나이'라는 변수가 명확하다면 조정(Adjustment)하면 되지만, 변수 관계가 복잡해지면 어떤 변수를 통제해야 할지 결정하기가 쉽지 않습니다.
+
+## 복잡한 인과 그래프에서의 문제
+
+* 다음과 같이 복잡한 인과 그래프를 고려해 봅시다.
+
+![Figure 4. A Complex Causal Graph](./images/complex_dag.png)
+
+* **Goal:** 변수 $Z_1, ..., Z_k$가 측정되었을 때, $X$가 $Y$에 미치는 인과 효과 $Q = P(y|do(x))$를 찾아내는 것.
+
+* 여기서 중요한 질문이 생깁니다.
+  *  **"부모 변수(Parents) 중 일부만 관측되었을 때, 타겟 인과 효과 $Q$를 식별할 수 있는가?"**
+
+## 주의해야 할 구조: Collider
+* 그래프 분석 시 주의해야 할 점은 단순히 모든 변수를 통제(Conditioning)한다고 좋은 것이 아니라는 점입니다. 
+* 예를 들어 위 그래프에서 **$Z_4$**와 같은 변수를 살펴봅시다.
+
+> **Note:** $Z_4$는 $Z_1$과 $Z_2$의 화살표를 동시에 받는 **Collider** ($Z_1 \rightarrow Z_4 \leftarrow Z_2$)입니다. $Z_4$를 조건부(given)로 잡을 경우, 오히려 $Z_1$과 $Z_2$ 사이에 길이 뚫리는 현상이 발생하여 새로운 편향을 만들 수 있습니다.
+
+* 따라서 우리는 어떤 변수를 조정 집합(Adjustment Set)에 넣어야 편향을 제거하고 올바른 인과 효과를 구할 수 있는지 판단하는 체계적인 기준이 필요합니다. 이것이 바로 다음 포스트에서 다룰 **Back-door Criterion**입니다.

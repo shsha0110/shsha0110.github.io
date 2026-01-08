@@ -1,17 +1,17 @@
 [
   {
-    "objectID": "index 2.html",
-    "href": "index 2.html",
-    "title": "shsha0110.github.io",
-    "section": "",
-    "text": "[Causal Inference] 1. 왜 인과추론인가? (Correlation vs Causation & Pearl’s Hierarchy)\n\n\n\nCausal Inference\n\nStudy\n\nGSDS\n\n\n\n\n\n\n\n\n\nJan 6, 2026\n\n\nSunghyun Yoo\n\n\n\n\n\nNo matching items"
-  },
-  {
     "objectID": "about.html",
     "href": "about.html",
     "title": "About",
     "section": "",
     "text": "About this blog"
+  },
+  {
+    "objectID": "Untitled2.html",
+    "href": "Untitled2.html",
+    "title": "shsha0110.github.io",
+    "section": "",
+    "text": "import numpy as np\nimport pandas as pd\nimport dowhy\nfrom dowhy import CausalModel\nimport matplotlib.pyplot as plt\nimport seaborn as sns\n\n# ---------------------------------------------------------\n# 1. 데이터 생성 (Data Generation)\n# ---------------------------------------------------------\nnp.random.seed(42)\nN = 1000\n\n# (1) 교란 변수: 나이 (Age)\nage = np.random.randint(20, 70, size=N)\n\n# (2) 처치 변수: 운동 여부 (Exercise, 0 or 1)\n# 나이가 많을수록 운동할 확률이 높아짐\nprob_exercise = 1 / (1 + np.exp(-(age - 45) / 20))\nexercise = np.random.binomial(1, prob_exercise)\n\n# (3) 결과 변수: 콜레스테롤 (Cholesterol)\n# 나이가 많으면 콜레스테롤 증가 (+2.0 * Age)\n# 운동을 하면 콜레스테롤 감소 (True Effect = -10)\ncholesterol = 2.0 * age - 10 * exercise + np.random.normal(150, 10, size=N)\n\ndf = pd.DataFrame({'Age': age, 'Exercise': exercise, 'Exercise_Prob': prob_exercise, 'Cholesterol': cholesterol})\n\nplt.figure(figsize=(8, 6))\nsns.scatterplot(\n    x='Exercise_Prob', \n    y='Cholesterol', \n    data=df, \n    hue='Age', \n    palette='viridis', \n    alpha=0.6\n)\nplt.title(\"Exercise vs Cholesterol (Colored by Age)\")\nplt.legend(title='Age')\nplt.show()\n# ---------------------------------------------------------\n# 2. 단순 비교 (Naive Comparison)\n# ---------------------------------------------------------\n# 단순히 운동한 사람과 안 한 사람의 평균만 비교\nmean_exercise = df[df['Exercise'] == 1]['Cholesterol'].mean()\nmean_no_exercise = df[df['Exercise'] == 0]['Cholesterol'].mean()\nnaive_effect = mean_exercise - mean_no_exercise\n\nprint(\"\\n\" + \"=\"*50)\nprint(f\"1. 단순 평균 비교 (Naive Estimate): {naive_effect:.4f}\")\nprint(\"   -&gt; 운동한 사람의 콜레스테롤이 더 높게 나옴(심슨의 역설)\")\nprint(\"=\"*50)\n\n# ---------------------------------------------------------\n# 3. DoWhy를 이용한 인과 추론 (Causal Inference)\n# ---------------------------------------------------------\n\n# 단계 1: 모델 정의 (Causal Graph 생성)\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age'] # 교란 변수 지정\n)\n\n# 단계 2: 식별 (Identification) - 인과 효과를 구할 수 있는지 확인\nidentified_estimand = model.identify_effect()\n\n# 단계 3: 추정 (Estimation) - 성향 점수 층화법 사용\nestimate = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\",\n    method_params={'num_strata': 5, 'clipping_threshold': 5}\n)\n\nprint(\"\\n\" + \"=\"*50)\nprint(f\"2. 인과 효과 추정 (Causal Estimate): {estimate.value:.4f}\")\nprint(f\"   -&gt; 실제 효과 (-10.0)에 매우 근접함\")\nprint(\"=\"*50)\n\n# ---------------------------------------------------------\n# 4. 결과 검증 (Refutation)\n# ---------------------------------------------------------\nprint(\"\\n[검증 시작] 모델이 얼마나 튼튼한지 테스트합니다...\")\n\n# (1) 가짜 처치 검증 (Placebo Treatment)\n# 운동 여부를 랜덤으로 섞으면 효과가 0이 나와야 함\nrefute_placebo = model.refute_estimate(\n    identified_estimand,\n    estimate,\n    method_name=\"placebo_treatment_refuter\",\n    method_params={\"placebo_type\": \"permute_treatment\"}\n)\nprint(f\"\\n- Placebo Test (Expected 0): {refute_placebo.new_effect:.4f}\")\n\n# (2) 랜덤 공통 원인 검증 (Random Common Cause)\n# 아무 상관 없는 랜덤 변수를 추가해도 원래 효과(-10)가 유지되어야 함\nrefute_random = model.refute_estimate(\n    identified_estimand,\n    estimate,\n    method_name=\"random_common_cause\"\n)\nprint(f\"- Random Cause Test (Expected ~ -10): {refute_random.new_effect:.4f}\")\n\n# ---------------------------------------------------------\n# 5. 시각화 (Visualization)\n# ---------------------------------------------------------\nplt.figure(figsize=(12, 5))\n\n# (왼쪽) 단순 비교 시각화\nplt.subplot(1, 2, 1)\nsns.boxplot(x='Exercise', y='Cholesterol', data=df)\nplt.title(f\"Naive Comparison\\n(Effect: {naive_effect:.2f})\")\n\n# (오른쪽) 나이 통제 후 시각화 (회귀선)\nplt.subplot(1, 2, 2)\nsns.scatterplot(x='Age', y='Cholesterol', hue='Exercise', data=df, alpha=0.5)\n# 운동 O/X 별 추세선\nsns.regplot(x='Age', y='Cholesterol', data=df[df['Exercise']==0], scatter=False, label='No Exercise', color='blue')\nsns.regplot(x='Age', y='Cholesterol', data=df[df['Exercise']==1], scatter=False, label='Exercise', color='orange')\nplt.title(f\"Controlled Comparison by Age\\n(True Effect: -10.0)\")\nplt.legend()\n\nplt.tight_layout()\nplt.show()\n\n\n\n\n운동 여부에 따른 콜레스테롤 인과 효과 추정 전체 프로세스\n\n\n\n\n\n==================================================\n1. 단순 평균 비교 (Naive Estimate): 11.5646\n   -&gt; 운동한 사람의 콜레스테롤이 더 높게 나옴 (오해!)\n==================================================\n\n==================================================\n2. 인과 효과 추정 (Causal Estimate): -9.1264\n   -&gt; 실제 효과 (-10.0)에 매우 근접함\n==================================================\n\n[검증 시작] 모델이 얼마나 튼튼한지 테스트합니다...\n\n\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: divide by zero encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: overflow encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: invalid value encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n\n\n\n- Placebo Test (Expected 0): 0.0059\n- Random Cause Test (Expected ~ -10): -9.1264"
   },
   {
     "objectID": "posts/causal-inference-01/index.html",
@@ -49,60 +49,137 @@
     "text": "4. 마치며\n기존의 머신러닝은 Level 1 (Association)에 머물러 있었습니다. 하지만 진정한 지능(Intelligent Agent)이나 정책 결정(Policy Making)을 위해서는 Level 2, 3의 추론이 필수적입니다. 이번 강의를 통해 단순히 데이터를 예측(Prediction)하는 것을 넘어, 세상의 작동 원리(Mechanism)를 이해하는 인과추론의 세계로 나아가고자 합니다.\nReference: * Prof. Sanghack Lee, Causal Inference for Data Science, GSDS SNU. * Judea Pearl et al., Causal Inference in Statistics: A Primer."
   },
   {
-    "objectID": "index.html",
-    "href": "index.html",
+    "objectID": "posts/causal-inference-04-part-05/index.html",
+    "href": "posts/causal-inference-04-part-05/index.html",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
+    "section": "",
+    "text": "이전 포스트들에서 배운 교란(Confounding)과 Back-door Criterion을 실제 코드로 구현해 보는 시간입니다.\n특히 심슨의 역설(Simpson’s Paradox) 상황을 시뮬레이션하고, DoWhy 라이브러리의 성향 점수 층화(Propensity Score Stratification) 방법을 통해 올바른 인과 효과를 추정해 봅니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
+    "href": "posts/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
+    "section": "5.1 모델 정의 및 식별 (Modeling & Identification)",
+    "text": "5.1 모델 정의 및 식별 (Modeling & Identification)\n\n인과 그래프(Graph)를 정의하고 Back-door 기준을 통해 식별 가능성을 확인합니다.\n\n\n\nCode\n# 단계 1: 모델 정의 (Causal Graph 생성)\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age'] # 교란 변수 지정\n)\n\n# 단계 2: 식별 (Identification)\nidentified_estimand = model.identify_effect()\nprint(identified_estimand)\n\n\nEstimand type: EstimandType.NONPARAMETRIC_ATE\n\n### Estimand : 1\nEstimand name: backdoor\nEstimand expression:\n     d                         \n───────────(E[Cholesterol|Age])\nd[Exercise]                    \nEstimand assumption 1, Unconfoundedness: If U→{Exercise} and U→Cholesterol then P(Cholesterol|Exercise,Age,U) = P(Cholesterol|Exercise,Age)\n\n### Estimand : 2\nEstimand name: iv\nNo such variable(s) found!\n\n### Estimand : 3\nEstimand name: frontdoor\nNo such variable(s) found!"
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
+    "href": "posts/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
+    "section": "5.2 인과 효과 추정 (Estimation: Stratification)",
+    "text": "5.2 인과 효과 추정 (Estimation: Stratification)\n\n여기서는 성향 점수 층화(Propensity Score Stratification) 방법을 사용합니다. 나이가 비슷하여 운동할 확률(성향 점수)이 유사한 사람들끼리 묶어서 비교하는 방식입니다.\n\n\n\nCode\n# 단계 3: 추정 (Estimation)\n# num_strata=5: 데이터를 성향 점수에 따라 5개 구간으로 나눔\nestimate = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\",\n    method_params={'num_strata': 5, 'clipping_threshold': 5}\n)\n\nprint(\"=\"*50)\nprint(f\"2. 인과 효과 추정 (Causal Estimate): {estimate.value:.4f}\")\nprint(f\"   -&gt; 실제 효과 (-10.0)에 매우 근접함\")\nprint(\"=\"*50)\n\n\n==================================================\n2. 인과 효과 추정 (Causal Estimate): -9.1264\n   -&gt; 실제 효과 (-10.0)에 매우 근접함\n==================================================\n\n\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: divide by zero encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: overflow encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: invalid value encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights"
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-03/index.html",
+    "href": "posts/causal-inference-04-part-03/index.html",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
+    "section": "",
+    "text": "지난 포스트에서는 교란 편향(Confounding Bias)이 인과 효과 추정을 방해하는 주된 요인임을 살펴보았습니다.\n그렇다면 우리는 복잡한 인과 그래프(DAG)에서 어떤 변수들의 집합(\\(Z\\))을 조절(Control/Adjustment)해야 이 편향을 제거할 수 있을까요?\n이번 포스트에서는 그 해답이 되는 Back-door Criterion(백도어 기준)의 정의와 이를 이용한 보정 공식을 다룹니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-03/index.html#definition",
+    "href": "posts/causal-inference-04-part-03/index.html#definition",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
+    "section": "2.1 Definition",
+    "text": "2.1 Definition\n\n주어진 인과 그래프 \\(G\\)에서 변수 \\(X\\)와 \\(Y\\)에 대해, 변수들의 집합 \\(Z\\)가 다음 두 가지 조건을 만족할 때, \\(Z\\)는 Back-door Criterion을 만족한다고 정의합니다.\n\n\n(i) No node in \\(Z\\) is a descendant of \\(X\\). (\\(Z\\)에 속한 어떤 변수도 \\(X\\)의 자손이 아니어야 합니다.)\n(ii) \\(Z\\) blocks every path between \\(X\\) and \\(Y\\) that contains an arrow into \\(X\\). (\\(Z\\)는 \\(X\\)로 들어오는 화살표를 포함하는 \\(X\\)와 \\(Y\\) 사이의 모든 경로를 차단해야 합니다.)"
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-03/index.html#의미-해석",
+    "href": "posts/causal-inference-04-part-03/index.html#의미-해석",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
+    "section": "2.2 의미 해석",
+    "text": "2.2 의미 해석\n\n조건 (i)은 \\(X\\)의 결과(Effect)로 나타나는 변수를 통제하지 말라는 뜻입니다. \\(X\\)의 자손을 통제하면 \\(X\\)가 \\(Y\\)에 미치는 실제 인과 경로를 막아버리거나 새로운 편향을 만들 수 있기 때문입니다.\n조건 (ii)의 “arrow into \\(X\\)”는 소위 백도어 경로(Back-door Path)를 의미합니다. 이는 \\(X\\)의 원인이 되는 변수들에 의해 생성되는 비인과적 상관관계(Spurious Correlation)의 경로입니다. 이 경로를 차단함으로써 우리는 \\(X\\)에서 \\(Y\\)로 나가는 순수한 인과적 경로만 남길 수 있습니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-03/index.html#분석-포인트",
+    "href": "posts/causal-inference-04-part-03/index.html#분석-포인트",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
+    "section": "5.1 분석 포인트",
+    "text": "5.1 분석 포인트\n\n이 그래프에서 \\(X\\)와 \\(Y\\) 사이의 백도어 경로를 차단해야 합니다. \\(X\\)에서 나가는 화살표를 지운 그래프(\\(G_{\\underline{X}}\\))를 상상했을 때 \\(X\\)와 \\(Y\\)가 d-separation 되는지 확인하는 것과 같습니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-03/index.html#가능한-z-집합의-예시",
+    "href": "posts/causal-inference-04-part-03/index.html#가능한-z-집합의-예시",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
+    "section": "5.2 가능한 \\(Z\\) 집합의 예시",
+    "text": "5.2 가능한 \\(Z\\) 집합의 예시\n\n\\(Z = \\{Z_4, Z_2\\}\\)\n\\(Z = \\{Z_4, Z_5\\}\\)\n\\(Z = \\{Z_4, Z_2, Z_5\\}\\)"
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-03/index.html#주의할-점-collider-z_4",
+    "href": "posts/causal-inference-04-part-03/index.html#주의할-점-collider-z_4",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
+    "section": "5.3 주의할 점: Collider (\\(Z_4\\))",
+    "text": "5.3 주의할 점: Collider (\\(Z_4\\))\n\n위 그래프에서 \\(Z_4\\)는 \\(Z_1 \\to Z_4 \\leftarrow Z_2\\) 구조를 갖는 Collider입니다.\n만약 \\(Z_4\\)를 집합에 포함하지 않으면, \\(Z_1 - Z_4 - Z_2\\) 경로는 자연스럽게 막혀(Blocked) 있습니다.\n하지만 \\(Z_4\\)를 집합에 포함시켜 조건부로 잡으면(Conditioning), 오히려 \\(Z_1\\)과 \\(Z_2\\) 사이의 경로가 열리게 됩니다\n따라서 \\(Z_4\\)를 조정 변수로 사용할 때는, 이로 인해 열리는 다른 경로(\\(Z_1 \\dots Z_2\\))를 막아줄 추가적인 변수(\\(Z_2\\) 등)를 함께 포함해야 합니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-03/index.html#case-z-emptyset-no-confounding",
+    "href": "posts/causal-inference-04-part-03/index.html#case-z-emptyset-no-confounding",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
+    "section": "5.4 Case: \\(Z = \\emptyset\\) (No Confounding)",
+    "text": "5.4 Case: \\(Z = \\emptyset\\) (No Confounding)\n\n만약 \\(X\\)로 들어오는 백도어 경로가 아예 없는 그래프라면 어떨까요?\n\n\n\n\nFigure 3. Case where no adjustment is needed\n\n\n\n이 경우 공집합 \\(Z = \\emptyset\\)도 Back-door Criterion을 만족합니다.\n즉, 별도의 조정 없이 관측된 조건부 확률이 곧 인과 효과가 됩니다.\n\n\\[P(y|x) = P(y|do(x))\\]\n\n이것이 바로 “교란이 없으면 상관관계는 인과관계이다(Correlation is Causation)”가 성립하는 유일한 순간입니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-03/index.html#recap-adjustment-by-direct-parents",
+    "href": "posts/causal-inference-04-part-03/index.html#recap-adjustment-by-direct-parents",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
+    "section": "6.1 Recap: Adjustment by Direct Parents",
+    "text": "6.1 Recap: Adjustment by Direct Parents\n\n일반적으로 \\(X\\)의 모든 직접적인 부모(Direct Parents, \\(Pa_X\\))를 통제하면 Back-door Criterion을 항상 만족합니다.\n\n\\[P(y|do(x)) = \\sum_{pa_X} P(y | x, pa_X) P(pa_X)\\]\n\n하지만 모든 부모 변수를 관측하는 것은 현실적으로 어려울 수 있습니다.\n그렇다면, 부모가 아닌 Back-door Criterion을 만족하는 임의의 집합 \\(Z\\)를 통제해도 왜 동일한 결과가 나올까요?\n아래 증명은 Direct Parents Adjustment 공식에서 시작하여 Back-door Adjustment 공식으로 유도되는 과정을 보여줍니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-03/index.html#가정-assumptions",
+    "href": "posts/causal-inference-04-part-03/index.html#가정-assumptions",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
+    "section": "6.2 가정 (Assumptions)",
+    "text": "6.2 가정 (Assumptions)\n\n집합 \\(Z\\)가 Back-door criterion을 만족한다고 가정합시다.\nLet \\(Z^- = Z \\setminus Pa_X\\) (부모 변수를 제외한 나머지 \\(Z\\)의 요소들).\n\n\nCondition (i): \\(Z\\)의 어떤 노드도 \\(X\\)의 자손이 아님. \\[\\Rightarrow X \\perp (Z \\setminus Pa_X) \\mid Pa_X\\] \\[\\Rightarrow P(z^{-} | x, pa_{X}) = P(z^{-} | x, pa_{X})\\]\n\n“미래는 과거를 바꿀 수 없다”는 원리입니다.\n인과 그래프에서 부모(\\(Pa_{X}\\))와 \\(Z\\)는 \\(X\\)보다 먼저 일어난 일(또는 원인)이고, \\(X\\)는 그 결과입니다.\n이미 부모(\\(Pa_{X}\\))의 상태를 다 알고 있다면, 결과인 \\(X\\)가 무엇이든 간에 그 원인이나 별개의 사건인 \\(Z\\)의 확률은 변하지 않습니다.\n\nCondition (ii): \\(Z\\)는 \\(X\\)로 들어오는 모든 뒷문 경로를 차단함. \\[\\Rightarrow Y \\perp (Pa_X \\setminus Z) \\mid Z, X\\] \\[\\Rightarrow P(y | x, pa_{X}, z^{-}) = P(y | x, z)\\] (\\(Z\\)와 \\(X\\)가 주어졌을 때, \\(Y\\)는 \\(Z\\)에 포함되지 않은 나머지 부모들과 독립이다)\n\n“Z가 이미 충분한 정보를 담고 있다”는 원리입니다.\n원래 \\(Y\\)를 예측하려면 교란 요인인 모든 부모들(\\(Pa_{X}\\))을 다 봐야 합니다. 하지만 \\(Z\\)가 ’백도어 기준’을 만족한다는 것은, \\(Z\\)가 부모들이 \\(Y\\)에 미치는 교란을 대신해서 다 막아주고 있다는 뜻입니다.\n따라서 일단 \\(Z\\)를 알고 나면, 굳이 \\(Z\\)에 포함되지 않은 나머지 부모들(\\(Pa_{X}\\))을 추가로 더 안다고 해서 \\(Y\\)에 대한 예측이 달라지지 않습니다. \\(Z\\)가 그 역할을 완벽히 대체했기 때문입니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-03/index.html#증명-derivation",
+    "href": "posts/causal-inference-04-part-03/index.html#증명-derivation",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
+    "section": "6.3 증명 (Derivation)",
+    "text": "6.3 증명 (Derivation)\n\n부모 변수를 통한 조정(Adjustment by Direct Parents) 공식에서 시작합니다.\n\n\\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_{pa_X} P(y|x, pa_X)P(pa_X) \\\\\n&= \\sum_{z^-, pa_X} P(y|x, pa_X, z^-)P(z^-|x, pa_X)P(pa_X) && \\because \\text{Expand by } Z^- \\text{ (Total Probability)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-|pa_X)P(pa_X) && \\because \\text{Apply Assumptions Condition (i) \\& (ii)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-, pa_X) && \\because \\text{Chain Rule } P(A|B)P(B) = P(A,B) \\\\\n&= \\sum_{z} P(y|x, z) \\sum_{pa_X \\setminus z} P(z^-, pa_X) && \\because \\text{Rearrange Summation } (Z \\cup (Pa_X \\setminus Z) = \\{Z, Pa_X\\}) \\\\\n&= \\sum_{z} P(y|x, z)P(z) && \\because \\text{Marginalize out } Pa_X \\setminus Z\n\\end{aligned}\n\\]\n\n결론: \n\n\nAdjustment by \\(Z\\) is equivalent to adjustment by direct parents whenever \\(Z\\) is back-door admissible.\n\n\n즉, \\(Z\\)가 Back-door criterion만 만족한다면, 직접적인 부모를 모두 측정하지 못하더라도 \\(Z\\)를 통해 인과 효과를 정확히 계산할 수 있음이 수학적으로 증명됩니다."
+  },
+  {
+    "objectID": "Untitled1.html",
+    "href": "Untitled1.html",
     "title": "shsha0110.github.io",
     "section": "",
-    "text": "[Causal Inference] 4. Confounding and Backdoor (Part 5)\n\n\n\nCausal Inference\n\n\n\nSimpson’s Paradox Simulation Using DoWhy: Stratification & Refutation\n\n\n\n\n\nJan 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 4)\n\n\n\nCausal Inference\n\n\n\nInverse Probability Weighting\n\n\n\n\n\nJan 7, 2026\n\n\nYour Name\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 3)\n\n\n\nCausal Inference\n\n\n\nBack-door Criterion\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 2)\n\n\n\nCausal Inference\n\n\n\nCounfounding Bias\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 1)\n\n\n\nCausal Inference\n\nStatistics\n\nResearch\n\n\n\nIndentifiable and Non-identifiable Effects\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 1. Introduction\n\n\n\nCausal Inference\n\n\n\n\n\n\n\n\n\nJan 6, 2026\n\n\nSunghyun Yoo\n\n\n\n\n\nNo matching items"
+    "text": "import numpy as np\nimport pandas as pd\nimport dowhy\nfrom dowhy import CausalModel\nimport matplotlib.pyplot as plt\nimport seaborn as sns\n\n\nimport numpy as np\nimport pandas as pd\nimport matplotlib.pyplot as plt\nimport seaborn as sns\nimport scipy.stats as stats  # 확률 계산용\n\nnp.random.seed(42)\nN = 1000\n\n# ---------------------------------------------------------\n# 1. 데이터 생성 (기존 코드와 동일)\n# ---------------------------------------------------------\n# Confounder: Age\nage = np.random.randint(20, 70, size=N)\n\n# Threshold Calculation\nthreshold = 0.5 * (age - 20) \n\n# Latent Variable (Personal Will) ~ N(12.5, 10)\nmu = 12.5\nsigma = 10\npersonal_will = np.random.normal(mu, sigma, size=N)\n\n# Treatment Assignment\nexercise = (personal_will &gt; threshold).astype(int)\n\n# Outcome: Cholesterol\ncholesterol = 2.0 * age - 10 * exercise + np.random.normal(150, 10, size=N)\n\ndf_threshold = pd.DataFrame({\n    'Age': age, \n    'Threshold': threshold, \n    'Personal_Will': personal_will, \n    'Exercise': exercise, \n    'Cholesterol': cholesterol\n})\n\n# ---------------------------------------------------------\n# 2. 처치 확률(Propensity Score) 역산 및 나이대 그룹화\n# ---------------------------------------------------------\n\n# (1) 확률 계산: P(Will &gt; Threshold)\n# stats.norm.sf(x, loc, scale)은 P(X &gt; x)를 구해줍니다.\ndf_threshold['Propensity_Score'] = stats.norm.sf(df_threshold['Threshold'], loc=mu, scale=sigma)\n\n# (2) 나이대(Age Group) 생성 (시각화 색상용)\n# 10살 단위로 끊어서 그룹화 (20s, 30s, ..., 60s)\nbins = [20, 30, 40, 50, 60, 71]\nlabels = ['20s', '30s', '40s', '50s', '60s']\ndf_threshold['Age_Group'] = pd.cut(df_threshold['Age'], bins=bins, labels=labels, right=False)\n\n# ---------------------------------------------------------\n# 3. 요청하신 시각화\n# X: 처치 확률, Y: 콜레스테롤, Color: 나이대\n# ---------------------------------------------------------\nplt.figure(figsize=(12, 8))\n\n# Scatter Plot\nsns.scatterplot(\n    x='Propensity_Score', \n    y='Cholesterol', \n    hue='Age_Group',   # 나이대별 다른 색\n    style='Exercise',  # 운동 여부는 모양(O/X)으로 구분 (인과 효과 확인용)\n    data=df_threshold,\n    palette='viridis_r', # 나이가 많을수록(확률 낮음) 보라색 계열\n    s=60,              # 점 크기\n    alpha=0.7\n)\n\nplt.title(\"Cholesterol vs Propensity Score (Colored by Age Group)\")\nplt.xlabel(\"Probability of Exercise (Propensity Score)\")\nplt.ylabel(\"Cholesterol Level\")\nplt.grid(True, linestyle='--', alpha=0.5)\n\n# ---------------------------------------------------------\n# 시각적 해석을 돕기 위한 보조선 (True Effect)\n# ---------------------------------------------------------\n# 확률 0.5 근처인 사람들의 평균 차이를 화살표로 표시\nmid_prop = 0.5\nsubset = df_threshold[(df_threshold['Propensity_Score'] &gt; 0.45) & (df_threshold['Propensity_Score'] &lt; 0.55)]\nmean_exerciser = subset[subset['Exercise'] == 1]['Cholesterol'].mean()\nmean_non_exerciser = subset[subset['Exercise'] == 0]['Cholesterol'].mean()\n\nif not np.isnan(mean_exerciser) and not np.isnan(mean_non_exerciser):\n    plt.annotate(\n        f'Causal Effect\\n(Gap ≈ {mean_exerciser - mean_non_exerciser:.1f})', \n        xy=(mid_prop, mean_exerciser), \n        xytext=(mid_prop + 0.1, (mean_exerciser + mean_non_exerciser)/2),\n        arrowprops=dict(arrowstyle='-&gt;', color='red', lw=2),\n        fontsize=11, color='red', fontweight='bold'\n    )\n    # 실제 갭을 보여주는 수직선\n    plt.vlines(x=mid_prop, ymin=mean_exerciser, ymax=mean_non_exerciser, color='red', linestyle=':', lw=2)\n\nplt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')\nplt.tight_layout()\nplt.show()\n\n# 데이터 샘플 확인 (확률 컬럼 추가됨)\nprint(df_threshold[['Age', 'Threshold', 'Propensity_Score']].head())\n\n\n\n\n\n\n\n\n   Age  Threshold  Propensity_Score\n0   58       19.0          0.257846\n1   48       14.0          0.440382\n2   34        7.0          0.708840\n3   62       21.0          0.197663\n4   27        3.5          0.815940\n\n\n\nnp.random.seed(42)\nN = 1000\n\n# 1. Confounder: Age\nage = np.random.randint(20, 70, size=N)\n\n# 2. Treatment Assignment (Threshold 방식)\n# 아이디어: \"운동을 하기 위한 진입장벽(Threshold)\"은 나이가 들수록 높아진다.\n# Threshold = 나이에 비례하는 어떤 값\nthreshold = 0.5 * (age - 20) # 예: 20세=0, 70세=25\n\n# 개인의 운동 의지 (Latent Exercise Tendency)\n# 평균은 12.5 정도지만, 사람마다 편차(표준편차 10)가 큼\n# 이 '개인차(Noise)'가 있어야 overlap이 확보됨!\npersonal_will = np.random.normal(12.5, 10, size=N)\n\n# 처치 할당: 개인의 의지가 나이로 인한 장벽(Threshold)을 넘었는가?\nexercise = (personal_will &gt; threshold).astype(int)\n\n# 3. Outcome: Cholesterol\n# 나이가 많을수록 높음, 운동하면 낮아짐(-10)\ncholesterol = 2.0 * age - 10 * exercise + np.random.normal(150, 10, size=N)\n\ndf_threshold = pd.DataFrame({\n    'Age': age, \n    'Threshold': threshold, \n    'Personal_Will': personal_will, \n    'Exercise': exercise, \n    'Cholesterol': cholesterol\n})\n\n# ---------------------------------------------------------\n# 시각화: Threshold 모델의 작동 원리 확인\n# ---------------------------------------------------------\nplt.figure(figsize=(10, 6))\n\n# 운동 한 사람(1)과 안 한 사람(0) 시각화\nsns.scatterplot(\n    x='Age', \n    y='Personal_Will', \n    hue='Exercise', \n    data=df_threshold, \n    palette={0: 'blue', 1: 'red'},\n    alpha=0.6\n)\n\n# 기준선(Threshold) 그리기\n# 이 선보다 위에 있는 점은 빨강(운동 O), 아래는 파랑(운동 X)\nplt.plot(age, threshold, color='black', linewidth=2, linestyle='--', label='Exercise Threshold')\n\nplt.title(\"Treatment Assignment by Age-Dependent Threshold\")\nplt.xlabel(\"Age (Confounder)\")\nplt.ylabel(\"Latent Exercise Tendency (Personal Will)\")\nplt.legend(title='Exercise')\nplt.grid(True, alpha=0.3)\nplt.show()\n\n# 데이터 확인\nprint(df_threshold.head())\n\n\n\n\n\n\n\n\n   Age  Threshold  Personal_Will  Exercise  Cholesterol\n0   58       19.0       6.329096         0   276.675993\n1   48       14.0      -0.088420         0   254.483295\n2   34        7.0      24.388010         1   208.815630\n3   62       21.0      12.086916         0   287.065575\n4   27        3.5      14.239663         1   184.954853\n\n\n\n# # ---------------------------------------------------------\n# # 1. 데이터 생성 (Binary Treatment)\n# # ---------------------------------------------------------\n# np.random.seed(42)\n# N = 1000\n\n# # Confounder: Age\n# age = np.random.randint(20, 70, size=N)\n\n# # Treatment: Exercise (Binary: 0 or 1)\n# # 나이가 많을수록 운동할 확률(Propensity)이 높아짐 (교란 발생)\n# exercise_threshold = 0.2 * (age - 20) + 0.5\n\n# prob_exercise = 1 / (1 + np.exp(-(age - 45) / 20))\n# exercise = np.random.binomial(1, prob_exercise)\n\n# # Outcome: Cholesterol\n# # 나이가 많을수록 높음 (+2.0 * Age)\n# # 운동을 하면 낮아짐 (True Causal Effect = -10)\n# cholesterol = 2.0 * age - 10 * exercise + np.random.normal(150, 10, size=N)\n\n# df = pd.DataFrame({'Age': age, 'Exercise': exercise, 'prob_exercise': prob_exercise, 'Cholesterol': cholesterol})\n\n\nplt.figure(figsize=(8, 6))\n\n# 1. 점 찍기 (색상 기준: Age)\n# palette='viridis': 나이가 적을수록 보라색, 많을수록 노란색 계열\nsns.scatterplot(\n    x='exercise', \n    y='Cholesterol', \n    data=df, \n    hue='Age', \n    palette='viridis', \n    alpha=0.6\n)\n\n# 2. 전체적인 (잘못된) 추세선 그리기\n# scatter=False로 설정하여 점은 중복해서 찍지 않고 선만 그림\nsns.regplot(\n    x='prob_exercise', \n    y='Cholesterol', \n    data=df, \n    scatter=False, \n    line_kws={'color': 'red', 'label': 'Naive Trend (Positive)'}\n)\n\nplt.title(\"Exercise vs Cholesterol (Colored by Age)\")\nplt.legend(title='Age')\nplt.show()\n\n\n# ---------------------------------------------------------\n# 2. 단순 비교 (Naive Estimate)\n# ---------------------------------------------------------\nnaive_diff = df[df['Exercise']==1]['Cholesterol'].mean() - df[df['Exercise']==0]['Cholesterol'].mean()\nprint(f\"Naive Difference (Exercise 1 - 0): {naive_diff:.4f}\")\n\n\n# ---------------------------------------------------------\n# 3. DoWhy 모델링 및 층화(Stratification) 분석\n# ---------------------------------------------------------\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age']\n)\n\nidentified_estimand = model.identify_effect()\n\n# Stratification 적용\n# num_strata=50: 데이터를 성향 점수(나이)에 따라 50개(나이 개수) 구간으로 나눔\nestimate_strat = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\",\n    method_params={\n        'num_strata': 5\n    }\n)\n\nprint(\"-\" * 30)\nprint(f\"Causal Estimate (Stratification): {estimate_strat.value:.4f}\")\nprint(f\"True Causal Effect: -10.0\")\nprint(\"-\" * 30)\n\n\n# 50개 구간으로 나누기\nnum_strata = 50\n\n# [수정] duplicates='drop' 옵션 추가\n# 경계가 겹치면 중복되는 구간을 하나로 합쳐서 에러를 방지합니다.\ndf['strata_50'] = pd.qcut(\n    df['propensity_score'], \n    q=num_strata, \n    labels=False, \n    duplicates='drop'\n)\n\nplt.figure(figsize=(15, 6))\nsns.boxplot(x='strata_50', y='Age', data=df, color=\"skyblue\")\n\nplt.xticks(rotation=90, fontsize=8) \nplt.title(f\"Age Distribution per Strata (Exact Matching Check)\")\nplt.xlabel(\"Propensity Score Strata\")\nplt.ylabel(\"Age\")\nplt.show()\n\n# 실제로 생성된 구간 개수 확인\nprint(f\"Requested strata: {num_strata}\")\nprint(f\"Actual strata created: {df['strata_50'].nunique()}\")\n\n\n# ---------------------------------------------------------\n# 5. 결과 검증 (Refutation Test)\n# ---------------------------------------------------------\n# 우리가 구한 인과 효과가 정말 믿을만한지 테스트합니다.\n\nprint(\"\\n=== Refutation 1: Placebo Treatment (가짜 처치) ===\")\n# 처치(Exercise)를 무작위로 섞어서 모델에 넣습니다.\n# 기대 결과: 인과 효과가 0에 가까워야 함 (운동을 랜덤으로 배정하면 효과가 없어야 하므로)\n\nrefute_placebo = model.refute_estimate(\n    identified_estimand,\n    estimate_strat,\n    method_name=\"placebo_treatment_refuter\",\n    method_params={\"placebo_type\": \"permute_treatment\"}\n)\n\nprint(refute_placebo)\n\nprint(\"\\n=== Refutation 2: Add Random Common Cause (랜덤 변수 추가) ===\")\n# 데이터에 아무 상관 없는 랜덤 변수를 추가해서 다시 분석합니다.\n# 기대 결과: 원래 구한 인과 효과(-10.0 근처)가 크게 변하지 않아야 함\n\nrefute_random = model.refute_estimate(\n    identified_estimand,\n    estimate_strat,\n    method_name=\"random_common_cause\"\n)\n\nprint(refute_random)"
   },
   {
-    "objectID": "about 2.html",
-    "href": "about 2.html",
-    "title": "About",
+    "objectID": "posts/causal-inference-04-part-04/index.html",
+    "href": "posts/causal-inference-04-part-04/index.html",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
     "section": "",
-    "text": "About this blog"
+    "text": "지난 포스트에서는 Back-door Criterion을 통해 어떤 공변량 집합 \\(Z\\)를 보정(Adjustment)해야 인과 효과 \\(P(y|do(x))\\)를 식별할 수 있는지 알아보았습니다.\n\n\\[P(y|do(x)) = \\sum_{z} P(y|x,z)P(z)\\]\n\n이번 포스트에서는 이 식을 실제 데이터(Practice)에서 어떻게 평가하고 계산하는지, 특히 계산 복잡도 문제를 해결하기 위한 Inverse Probability Weighting (IPW) 기법에 대해 다룹니다."
   },
   {
-    "objectID": "posts/causal-inference-04/index.html",
-    "href": "posts/causal-inference-04/index.html",
-    "title": "Causal Inference: Confounding and Backdoor Criterion",
-    "section": "",
-    "text": "이번 포스트에서는 인과추론에서 가장 핵심적인 개념 중 하나인 교란(Confounding)과 이를 해결하기 위한 백도어 기준(Back-door Criterion)으로 나아가기 전, 식별 가능성(Identification Problem)에 대해 다시 한번 짚어보고자 합니다.\n[cite_start]강의 자료는 서울대학교 데이터사이언스대학원 이상학 교수님의 “Confounding and Backdoor” 수업 자료를 바탕으로 합니다[cite: 1, 2, 3].\n\n\n\nRecap: Identification Problem\nIdentifiable and Non-identifiable Effects\nConfounding Bias\nBack-door Criterion\nEvaluation [cite_start][cite: 5, 11]"
+    "objectID": "posts/causal-inference-04-part-04/index.html#derivation",
+    "href": "posts/causal-inference-04-part-04/index.html#derivation",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
+    "section": "3.1 Derivation",
+    "text": "3.1 Derivation\n\n기존의 Back-door Adjustment 식을 베이즈 정리와 결합 확률 법칙을 이용해 재구성해 봅시다.\n\n\\[\n\\begin{align}\nP(y|do(x)) &= \\sum_{z} P(y|x,z)P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x,z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)P(z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)} \\quad\n\\end{align}\n\\]\n\n이제 우리는 \\(P(z)\\)를 따로 추정하거나 모든 \\(z\\)에 대해 합을 구할 필요 없이, 결합 확률 \\(P(y,x,z)\\)를 \\(P(x|z)\\)로 나눈 형태로 식을 단순화했습니다."
   },
   {
-    "objectID": "posts/causal-inference-04/index.html#목차",
-    "href": "posts/causal-inference-04/index.html#목차",
-    "title": "Causal Inference: Confounding and Backdoor Criterion",
-    "section": "",
-    "text": "Recap: Identification Problem\nIdentifiable and Non-identifiable Effects\nConfounding Bias\nBack-door Criterion\nEvaluation [cite_start][cite: 5, 11]"
+    "objectID": "posts/causal-inference-04-part-04/index.html#propensity-score-gz",
+    "href": "posts/causal-inference-04-part-04/index.html#propensity-score-gz",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
+    "section": "3.2 Propensity Score \\(g(z)\\)",
+    "text": "3.2 Propensity Score \\(g(z)\\)\n\n위 식의 분모에 있는 \\(P(x|z)\\)는 공변량 \\(Z\\)가 주어졌을 때 원인 변수 \\(X\\)가 할당될 확률을 의미하며, 이를 Propensity Score라고 부릅니다.\n보통 \\(g(z)\\)로 표기하며 로지스틱 회귀(Logistic Regression) 등의 모델을 사용하여 추정합니다.\n\n\\[g(z) = P(X=x|Z=z)\\]"
   },
   {
-    "objectID": "posts/causal-inference-04/index.html#설정-setup",
-    "href": "posts/causal-inference-04/index.html#설정-setup",
-    "title": "Causal Inference: Confounding and Backdoor Criterion",
-    "section": "4.1 설정 (Setup)",
-    "text": "4.1 설정 (Setup)\n아래와 같은 “Bow-tie” 형태의 그래프를 고려합니다. 여기서 \\(U_{XY}\\)는 \\(X\\)와 \\(Y\\)에 동시에 영향을 주는 관측되지 않은 교란 변수(Unobserved Confounder)입니다.\n\n\n\nFigure 3. Causal Graph with Unobserved Confounder\n\n\n두 모델 \\(\\mathcal{H}^{(1)}\\)과 \\(\\mathcal{H}^{(2)}\\)는 다음과 같은 구조적 방정식(Structural Equations)을 갖습니다. [cite_start]여기서 \\(U_Y, U_{XY}\\)는 모두 베르누이 분포(동전 던지기, \\(p=0.5\\))를 따릅니다[cite: 37, 38].\n\n4.1.1 Model 1 (\\(\\mathcal{H}^{(1)}\\))\n\\[\n\\begin{cases}\nX \\leftarrow U_{XY} \\\\\nY \\leftarrow (X \\oplus U_{XY}) \\lor U_Y\n\\end{cases}\n\\] * 여기서 \\(\\oplus\\)는 XOR 연산, \\(\\lor\\)는 OR 연산을 의미합니다.\n\n\n4.1.2 Model 2 (\\(\\mathcal{H}^{(2)}\\))\n\\[\n\\begin{cases}\nX \\leftarrow U_{XY} \\\\\nY \\leftarrow U_Y\n\\end{cases}\n\\] * 모델 2에서는 \\(X\\)가 \\(Y\\)에 아무런 영향을 주지 않습니다 (끊어진 인과 관계)."
+    "objectID": "posts/causal-inference-04-part-04/index.html#핵심-포인트",
+    "href": "posts/causal-inference-04-part-04/index.html#핵심-포인트",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
+    "section": "4.1 핵심 포인트",
+    "text": "4.1 핵심 포인트\n\n\\(\\mathbb{1}(\\cdot)\\) (Indicator Function): 조건이 참이면 1, 거짓이면 0을 반환하는 함수입니다.\n시간 복잡도 \\(O(N)\\): 가장 마지막 식을 보면, 더 이상 \\(Z\\)의 모든 조합에 대해 합을 구할 필요가 없습니다. 단순히 관측된 \\(N\\)개의 데이터 샘플을 한 번씩만 순회하며 가중치(\\(1/g(z_i)\\))를 더하면 계산이 끝납니다. 이것이 IPW가 강력한 이유입니다."
   },
   {
-    "objectID": "posts/causal-inference-04/index.html#관측-분포의-일치-observational-equivalence",
-    "href": "posts/causal-inference-04/index.html#관측-분포의-일치-observational-equivalence",
-    "title": "Causal Inference: Confounding and Backdoor Criterion",
-    "section": "4.2 관측 분포의 일치 (Observational Equivalence)",
-    "text": "4.2 관측 분포의 일치 (Observational Equivalence)\n놀랍게도 두 모델은 관측 데이터 상으로는 완벽하게 동일합니다.\n\nModel 1의 경우: 구조 방정식을 보면 \\(X\\)는 \\(U_{XY}\\)와 같습니다. 따라서 \\(X \\oplus U_{XY}\\)는 항상 \\(0\\)이 됩니다 (\\(X\\)와 \\(U_{XY}\\)가 같으므로). \\[Y = 0 \\lor U_Y = U_Y\\] [cite_start]결국 관측 환경에서는 \\(Y\\)가 오직 \\(U_Y\\)에 의해서만 결정됩니다[cite: 42].\nModel 2의 경우: 정의상 \\(Y \\leftarrow U_Y\\)이므로, 역시 \\(Y\\)는 \\(U_Y\\)에 의해 결정됩니다.\n\n[cite_start]결과적으로 두 모델 모두 \\(P(Y=1) = P(U_Y=1) = 0.5\\)이며, \\(X\\)와 \\(Y\\)의 결합 분포 표(Truth Table)도 완전히 일치합니다[cite: 43].\n\n\n\n\n\n\n\n\n\n\n\\(U_Y\\)\n\\(U_{XY}\\) (\\(=X\\))\n\\(Y^{(1)}\\) (Model 1)\n\\(Y^{(2)}\\) (Model 2)\n\\(P(u)\\)\n\n\n\n\n0\n0\n0\n0\n1/4\n\n\n0\n1\n0\n0\n1/4\n\n\n1\n0\n1\n1\n1/4\n\n\n1\n1\n1\n1\n1/4\n\n\n\n[cite_start][cite: 35, 49]"
-  },
-  {
-    "objectID": "posts/causal-inference-04/index.html#인과-효과의-불일치-interventional-differences",
-    "href": "posts/causal-inference-04/index.html#인과-효과의-불일치-interventional-differences",
-    "title": "Causal Inference: Confounding and Backdoor Criterion",
-    "section": "4.3 인과 효과의 불일치 (Interventional Differences)",
-    "text": "4.3 인과 효과의 불일치 (Interventional Differences)\n이제 \\(do(x)\\) 연산을 통해 실제로 인과 효과를 계산해 보면 두 모델의 차이가 드러납니다. \\(do(x)\\)는 \\(X\\)를 강제로 특정 값으로 고정하는 것이므로, 더 이상 \\(X\\)는 \\(U_{XY}\\)의 영향을 받지 않습니다.\n\n\n\nFigure 4. Causal Graph with Unobserved Confounder\n\n\n[cite_start]우리는 \\(P(y=1 | do(x=0))\\)을 계산해 보겠습니다[cite: 62].\n\n4.3.1 Case 1: Model \\(\\mathcal{H}^{(1)}\\)\n구조 방정식: \\(Y \\leftarrow (x \\oplus U_{XY}) \\lor U_Y\\). 여기서 \\(x=0\\)으로 고정했습니다.\n\n\\(U_{XY}=0, U_Y=0 \\Rightarrow Y = (0 \\oplus 0) \\lor 0 = 0\\)\n\\(U_{XY}=0, U_Y=1 \\Rightarrow Y = (0 \\oplus 0) \\lor 1 = 1\\)\n\\(U_{XY}=1, U_Y=0 \\Rightarrow Y = (0 \\oplus 1) \\lor 0 = 1\\) (여기서 차이 발생!)\n\\(U_{XY}=1, U_Y=1 \\Rightarrow Y = (0 \\oplus 1) \\lor 1 = 1\\)\n\n4가지 경우 중 3가지 경우에 \\(Y=1\\)이 됩니다. \\[\\therefore P^{(1)}(y=1|do(x=0)) = \\frac{3}{4}\\]\n\n\n4.3.2 Case 2: Model \\(\\mathcal{H}^{(2)}\\)\n구조 방정식: \\(Y \\leftarrow U_Y\\). \\(X\\)의 값과 상관없이 \\(Y\\)는 \\(U_Y\\)를 따릅니다.\n\n\\(U_Y=0 \\Rightarrow Y=0\\)\n\\(U_Y=1 \\Rightarrow Y=1\\)\n\n\\[\\therefore P^{(2)}(y=1|do(x=0)) = \\frac{1}{2}\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-04/index.html#결론",
-    "href": "posts/causal-inference-04/index.html#결론",
-    "title": "Causal Inference: Confounding and Backdoor Criterion",
-    "section": "4.4 결론",
-    "text": "4.4 결론\n\n\n\n\\(Y\\)\n\\(P^{(1)}(Y|do(x))\\)\n\\(P^{(2)}(Y|do(x))\\)\n\n\n\n\n0\n\\(\\frac{1}{4}\\)\n\\(\\frac{1}{2}\\)\n\n\n1\n\\(\\frac{3}{4}\\)\n\\(\\frac{1}{2}\\)\n\n\n\n[cite_start]두 모델은 동일한 인과 그래프와 동일한 관측 분포 \\(P(v)\\)를 가지지만, 계산된 인과 효과 \\(P(y|do(x))\\)는 \\(\\frac{3}{4}\\)와 \\(\\frac{1}{2}\\)로 서로 다릅니다[cite: 92, 93, 94].\n\n[cite_start]Even though both models induce \\(I\\) (Graph) and have the same \\(P(v)\\), the effect \\(P^{(1)}(y|do(x)) \\neq P^{(2)}(y|do(x))\\). [cite: 95, 96]\n\n이는 주어진 그래프 구조(Unobserved Confounder가 존재하는 경우)만으로는 데이터에서 인과 효과를 유일하게 식별해낼 수 없음을(Non-identifiable) 의미합니다. 이러한 경우, 추가적인 가정이나 데이터를 통한 식별 전략이 필요합니다.\n\nNext Step: 다음 포스트에서는 이러한 교란 편향(Confounding Bias)을 공식적으로 정의하고, 이를 해결하기 위한 강력한 도구인 Back-door Criterion에 대해 다루겠습니다."
+    "objectID": "posts/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
+    "href": "posts/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
+    "section": "4.2 시간 복잡도의 개선",
+    "text": "4.2 시간 복잡도의 개선\n\n이 방식의 가장 큰 장점은 계산 효율성입니다.\n고차원 \\(Z\\)에 대해 적분하거나 합을 구하는 대신, 샘플 수 \\(N\\)에 비례하는 선형 시간(\\(O(N)\\)) 만에 계산이 가능합니다."
   },
   {
     "objectID": "posts/causal-inference-04-part-02/index.html",
@@ -138,6 +215,13 @@
     "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
     "section": "4.1 복잡한 인과 그래프에서의 문제",
     "text": "4.1 복잡한 인과 그래프에서의 문제\n\n다음과 같이 복잡한 인과 그래프를 고려해 봅시다.\n\n\n\n\nFigure 4. A Complex Causal Graph\n\n\n\nGoal: 변수 \\(Z_1, ..., Z_k\\)가 측정되었을 때, \\(X\\)가 \\(Y\\)에 미치는 인과 효과 \\(Q = P(y|do(x))\\)를 찾아내는 것.\n여기서 중요한 질문이 생깁니다.\n\n“부모 변수(Parents) 중 일부만 관측되었을 때, 타겟 인과 효과 \\(Q\\)를 식별할 수 있는가?”"
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
+    "href": "posts/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
+    "section": "4.2 주의해야 할 구조: Collider",
+    "text": "4.2 주의해야 할 구조: Collider\n\n그래프 분석 시 주의해야 할 점은 단순히 모든 변수를 통제(Conditioning)한다고 좋은 것이 아니라는 점입니다.\n예를 들어 위 그래프에서 \\(Z_4\\)와 같은 변수를 살펴봅시다.\n\n\nNote: \\(Z_4\\)는 \\(Z_1\\)과 \\(Z_2\\)의 화살표를 동시에 받는 Collider (\\(Z_1 \\rightarrow Z_4 \\leftarrow Z_2\\))입니다. \\(Z_4\\)를 조건부(given)로 잡을 경우, 오히려 \\(Z_1\\)과 \\(Z_2\\) 사이에 길이 뚫리는 현상이 발생하여 새로운 편향을 만들 수 있습니다.\n\n\n따라서 우리는 어떤 변수를 조정 집합(Adjustment Set)에 넣어야 편향을 제거하고 올바른 인과 효과를 구할 수 있는지 판단하는 체계적인 기준이 필요합니다. 이것이 바로 다음 포스트에서 다룰 Back-door Criterion입니다."
   },
   {
     "objectID": "posts/causal-inference-04-part-01/index.html",
@@ -182,244 +266,6 @@
     "text": "4.4 결론\n\n\n\n\\(Y\\)\n\\(P^{(1)}(Y|do(x))\\)\n\\(P^{(2)}(Y|do(x))\\)\n\n\n\n\n0\n\\(\\frac{1}{4}\\)\n\\(\\frac{1}{2}\\)\n\n\n1\n\\(\\frac{3}{4}\\)\n\\(\\frac{1}{2}\\)\n\n\n\n두 모델은 동일한 인과 그래프와 동일한 관측 분포 \\(P(v)\\)를 가지지만, 계산된 인과 효과 \\(P(y|do(x))\\)는 \\(\\frac{3}{4}\\)와 \\(\\frac{1}{2}\\)로 서로 다릅니다\n\nEven though both models induce \\(I\\) (Graph) and have the same \\(P(v)\\), the effect \\(P^{(1)}(y|do(x)) \\neq P^{(2)}(y|do(x))\\).\n\n이는 주어진 그래프 구조(Unobserved Confounder가 존재하는 경우)만으로는 데이터에서 인과 효과를 유일하게 식별해낼 수 없음을(Non-identifiable) 의미합니다. 이러한 경우, 추가적인 가정이나 데이터를 통한 식별 전략이 필요합니다."
   },
   {
-    "objectID": "posts/causal-inference-04-part-03/index.html",
-    "href": "posts/causal-inference-04-part-03/index.html",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "",
-    "text": "지난 포스트에서는 교란 편향(Confounding Bias)이 인과 효과 추정을 방해하는 주된 요인임을 살펴보았습니다.\n그렇다면 우리는 복잡한 인과 그래프(DAG)에서 어떤 변수들의 집합(\\(Z\\))을 조절(Control/Adjustment)해야 이 편향을 제거할 수 있을까요?\n이번 포스트에서는 그 해답이 되는 Back-door Criterion(백도어 기준)의 정의와 이를 이용한 보정 공식을 다룹니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#모델-설정",
-    "href": "posts/causal-inference-04-part-03/index.html#모델-설정",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "2.1 1.1 모델 설정",
-    "text": "2.1 1.1 모델 설정\n다음과 같은 인과 그래프(Causal Graph)를 가정해 봅시다.\n\n\n\nFigure 1. Causal Graph for Identifiable Effect\n\n\n[cite_start]이 그래프와 호환되는 모든 모델 쌍은 동일한 관측 분포 \\(P(v)\\)를 가집니다[cite: 18]. [cite_start]관측 분포는 확률의 연쇄 법칙(Chain Rule)과 그래프 구조(Markov Property)에 의해 다음과 같이 분해됩니다[cite: 25].\n\\[P(v) = P(z)P(x|z)P(y|x,z)\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#중재-분포interventional-distribution의-도출",
-    "href": "posts/causal-inference-04-part-03/index.html#중재-분포interventional-distribution의-도출",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "2.2 1.2 중재 분포(Interventional Distribution)의 도출",
-    "text": "2.2 1.2 중재 분포(Interventional Distribution)의 도출\n우리가 구하고자 하는 것은 \\(X\\)에 개입했을 때의 분포인 \\(P(y|do(x))\\)입니다. [cite_start]\\(do(x)\\) 연산을 수행하면 \\(X\\)로 들어오는 모든 화살표가 제거되므로, 중재된 그래프에서의 결합 분포 \\(P(v'|do(x))\\)는 다음과 같습니다[cite: 25].\n\\[P(v'|do(x)) = P(z)P(y|x,z)\\]\n[cite_start]따라서, \\(Y\\)에 대한 주변 분포(Marginal Distribution)를 구하면 다음과 같은 식을 얻을 수 있습니다[cite: 26].\n\\[P(y|do(x)) = \\sum_{z} P(z)P(y|x,z)\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#결론",
-    "href": "posts/causal-inference-04-part-03/index.html#결론",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "2.3 1.3 결론",
-    "text": "2.3 1.3 결론\n위 식의 우변에 있는 \\(P(z)\\)와 \\(P(y|x,z)\\)는 모두 관측 가능한 데이터로부터 추정할 수 있습니다. [cite_start]즉, 관측 분포 \\(P(v)\\)가 동일하다면(\\(\\langle \\emptyset, P(v) \\rangle\\)에서 일치), \\(P(y|do(x))\\) 또한 반드시 일치하게 됩니다[cite: 27]. [cite_start]구조 방정식의 구체적인 형태(함수 \\(f\\)나 오차항 \\(P(u)\\))가 무엇이든 상관없이 이 등식은 성립하므로, 이 경우의 인과 효과는 식별 가능(Identifiable)합니다[cite: 28]."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#모델-설정-the-bow-tie-graph",
-    "href": "posts/causal-inference-04-part-03/index.html#모델-설정-the-bow-tie-graph",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "3.1 2.1 모델 설정 (The “Bow-tie” Graph)",
-    "text": "3.1 2.1 모델 설정 (The “Bow-tie” Graph)\n다음과 같이 \\(X\\)와 \\(Y\\) 사이에 관측되지 않은 교란 변수(Unobserved Confounder) \\(U_{XY}\\)가 존재하는 그래프를 고려합니다.\n\n\n\nFigure 2. Causal Graph with Unobserved Confounder\n\n\n두 모델 \\(\\mathcal{H}^{(1)}\\)과 \\(\\mathcal{H}^{(2)}\\)는 다음과 같이 정의됩니다. [cite_start]여기서 \\(U_{XY}\\)와 \\(U_Y\\)는 모두 동전 던지기(Bernoulli(0.5))를 따르는 잠재 변수입니다[cite: 38].\nModel 1 (\\(\\mathcal{H}^{(1)}\\)): \\[\n\\begin{cases}\nX \\leftarrow U_{XY} \\\\\nY \\leftarrow (X \\oplus U_{XY}) \\lor U_Y\n\\end{cases}\n\\] (여기서 \\(\\oplus\\)는 XOR, \\(\\lor\\)는 OR 연산) [cite_start][cite: 37]\nModel 2 (\\(\\mathcal{H}^{(2)}\\)): \\[\n\\begin{cases}\nX \\leftarrow U_{XY} \\\\\nY \\leftarrow U_Y\n\\end{cases}\n\\] (Model 2에서 \\(X\\)는 \\(Y\\)에 영향을 주지 않습니다) [cite_start][cite: 37]"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#관측-분포의-일치-observational-equivalence",
-    "href": "posts/causal-inference-04-part-03/index.html#관측-분포의-일치-observational-equivalence",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "3.2 2.2 관측 분포의 일치 (Observational Equivalence)",
-    "text": "3.2 2.2 관측 분포의 일치 (Observational Equivalence)\n놀랍게도 두 모델은 관측 데이터 상으로는 구별할 수 없습니다.\n\nModel 1: \\(X\\)는 \\(U_{XY}\\)의 값을 그대로 복사합니다. 따라서 \\(X \\oplus U_{XY}\\)는 항상 \\(0\\)이 됩니다 (\\(0 \\oplus 0 = 0, 1 \\oplus 1 = 0\\)). [cite_start]결과적으로 \\(Y \\leftarrow 0 \\lor U_Y\\), 즉 \\(Y\\)는 \\(U_Y\\)와 같아집니다[cite: 41, 42].\nModel 2: 정의상 \\(Y \\leftarrow U_Y\\)입니다.\n\n[cite_start]따라서 두 모델 모두 \\(Y\\)는 \\(U_Y\\)의 분포를 따르며, \\(X\\)와 \\(Y\\)의 결합 분포(Table)는 완벽하게 일치합니다[cite: 35, 49].\n\n\n\n\\(U_Y\\)\n\\(U_{XY}\\) (\\(=X\\))\n\\(Y^{(1)}\\)\n\\(Y^{(2)}\\)\n\\(P(u)\\)\n\n\n\n\n0\n0\n0\n0\n1/4\n\n\n0\n1\n0\n0\n1/4\n\n\n1\n0\n1\n1\n1/4\n\n\n1\n1\n1\n1\n1/4\n\n\n\n[cite_start]결론적으로 \\(P^{(1)}(V) = P^{(2)}(V)\\)입니다[cite: 43]."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#인과-효과의-불일치-interventional-differences",
-    "href": "posts/causal-inference-04-part-03/index.html#인과-효과의-불일치-interventional-differences",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "3.3 2.3 인과 효과의 불일치 (Interventional Differences)",
-    "text": "3.3 2.3 인과 효과의 불일치 (Interventional Differences)\n이제 \\(do(x)\\)를 수행하여 실제 인과 효과를 계산해 봅시다. \\(do(x)\\)는 \\(X\\)를 강제로 고정하는 것이므로, 더 이상 \\(X\\)는 \\(U_{XY}\\)에 의존하지 않습니다.\n[cite_start]Case 1: Model \\(\\mathcal{H}^{(1)}\\)에서 \\(P(y=1|do(x=0))\\) [cite: 89] \\(x=0\\)으로 고정되었을 때 \\(Y \\leftarrow (0 \\oplus U_{XY}) \\lor U_Y\\)가 됩니다. 가능한 4가지 경우(\\(U_{XY}, U_Y\\)) 중: * \\(U_{XY}=0, U_Y=0 \\Rightarrow (0 \\oplus 0) \\lor 0 = 0\\) * \\(U_{XY}=0, U_Y=1 \\Rightarrow (0 \\oplus 0) \\lor 1 = 1\\) * \\(U_{XY}=1, U_Y=0 \\Rightarrow (0 \\oplus 1) \\lor 0 = 1\\) (여기서 \\(Y\\)값이 변함) * \\(U_{XY}=1, U_Y=1 \\Rightarrow (0 \\oplus 1) \\lor 1 = 1\\)\n[cite_start]따라서 \\(P^{(1)}(y=1|do(x=0)) = 3/4\\)입니다[cite: 92].\n[cite_start]Case 2: Model \\(\\mathcal{H}^{(2)}\\)에서 \\(P(y=1|do(x=0))\\) [cite: 89] \\(Y \\leftarrow U_Y\\) 이므로 \\(X\\)의 값에 상관없이 \\(U_Y\\)가 1일 확률과 같습니다. [cite_start]따라서 \\(P^{(2)}(y=1|do(x=0)) = 1/2\\)입니다[cite: 93].\n\n\n\nFigure 3. Comparison of Interventional Effects"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#결론-1",
-    "href": "posts/causal-inference-04-part-03/index.html#결론-1",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "3.4 2.4 결론",
-    "text": "3.4 2.4 결론\n[cite_start]두 모델은 동일한 그래프 구조와 동일한 관측 분포 \\(P(v)\\)를 가짐에도 불구하고, 인과 효과 \\(P(y|do(x))\\)는 서로 다릅니다 (\\(3/4 \\neq 1/2\\))[cite: 96]. 이는 식별 불가능(Non-identifiable)한 상황이며, 이 그래프 구조(\\(X\\)와 \\(Y\\) 사이에 관측되지 않은 Confounder 존재)만으로는 데이터에서 인과 효과를 유일하게 추정해낼 수 없음을 의미합니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#definition",
-    "href": "posts/causal-inference-04-part-03/index.html#definition",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "2.1 Definition",
-    "text": "2.1 Definition\n\n주어진 인과 그래프 \\(G\\)에서 변수 \\(X\\)와 \\(Y\\)에 대해, 변수들의 집합 \\(Z\\)가 다음 두 가지 조건을 만족할 때, \\(Z\\)는 Back-door Criterion을 만족한다고 정의합니다.\n\n\n(i) No node in \\(Z\\) is a descendant of \\(X\\). (\\(Z\\)에 속한 어떤 변수도 \\(X\\)의 자손이 아니어야 합니다.)\n(ii) \\(Z\\) blocks every path between \\(X\\) and \\(Y\\) that contains an arrow into \\(X\\). (\\(Z\\)는 \\(X\\)로 들어오는 화살표를 포함하는 \\(X\\)와 \\(Y\\) 사이의 모든 경로를 차단해야 합니다.)"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#분석-포인트",
-    "href": "posts/causal-inference-04-part-03/index.html#분석-포인트",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "5.1 분석 포인트",
-    "text": "5.1 분석 포인트\n\n이 그래프에서 \\(X\\)와 \\(Y\\) 사이의 백도어 경로를 차단해야 합니다. \\(X\\)에서 나가는 화살표를 지운 그래프(\\(G_{\\underline{X}}\\))를 상상했을 때 \\(X\\)와 \\(Y\\)가 d-separation 되는지 확인하는 것과 같습니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#case-z-emptyset-no-confounding",
-    "href": "posts/causal-inference-04-part-03/index.html#case-z-emptyset-no-confounding",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "5.4 Case: \\(Z = \\emptyset\\) (No Confounding)",
-    "text": "5.4 Case: \\(Z = \\emptyset\\) (No Confounding)\n\n만약 \\(X\\)로 들어오는 백도어 경로가 아예 없는 그래프라면 어떨까요?\n\n\n\n\nFigure 3. Case where no adjustment is needed\n\n\n\n이 경우 공집합 \\(Z = \\emptyset\\)도 Back-door Criterion을 만족합니다.\n즉, 별도의 조정 없이 관측된 조건부 확률이 곧 인과 효과가 됩니다.\n\n\\[P(y|x) = P(y|do(x))\\]\n\n이것이 바로 “교란이 없으면 상관관계는 인과관계이다(Correlation is Causation)”가 성립하는 유일한 순간입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-04/index.html",
-    "href": "posts/causal-inference-04-part-04/index.html",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "",
-    "text": "지난 포스트에서는 Back-door Criterion을 통해 어떤 공변량 집합 \\(Z\\)를 보정(Adjustment)해야 인과 효과 \\(P(y|do(x))\\)를 식별할 수 있는지 알아보았습니다.\n\n\\[P(y|do(x)) = \\sum_{z} P(y|x,z)P(z)\\]\n\n이번 포스트에서는 이 식을 실제 데이터(Practice)에서 어떻게 평가하고 계산하는지, 특히 계산 복잡도 문제를 해결하기 위한 Inverse Probability Weighting (IPW) 기법에 대해 다룹니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-04/index.html#derivation",
-    "href": "posts/causal-inference-04-part-04/index.html#derivation",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "3.1 Derivation",
-    "text": "3.1 Derivation\n\n기존의 Back-door Adjustment 식을 베이즈 정리와 결합 확률 법칙을 이용해 재구성해 봅시다.\n\n\\[\n\\begin{align}\nP(y|do(x)) &= \\sum_{z} P(y|x,z)P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x,z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)P(z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)} \\quad\n\\end{align}\n\\]\n\n이제 우리는 \\(P(z)\\)를 따로 추정하거나 모든 \\(z\\)에 대해 합을 구할 필요 없이, 결합 확률 \\(P(y,x,z)\\)를 \\(P(x|z)\\)로 나눈 형태로 식을 단순화했습니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-04/index.html#propensity-score-gz",
-    "href": "posts/causal-inference-04-part-04/index.html#propensity-score-gz",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "3.2 Propensity Score \\(g(z)\\)",
-    "text": "3.2 Propensity Score \\(g(z)\\)\n\n위 식의 분모에 있는 \\(P(x|z)\\)는 공변량 \\(Z\\)가 주어졌을 때 원인 변수 \\(X\\)가 할당될 확률을 의미하며, 이를 Propensity Score라고 부릅니다.\n보통 \\(g(z)\\)로 표기하며 로지스틱 회귀(Logistic Regression) 등의 모델을 사용하여 추정합니다.\n\n\\[g(z) = P(X=x|Z=z)\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-05/index.html",
-    "href": "posts/causal-inference-04-part-05/index.html",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "",
-    "text": "이전 포스트들에서 배운 교란(Confounding)과 Back-door Criterion을 실제 코드로 구현해 보는 시간입니다.\n특히 심슨의 역설(Simpson’s Paradox) 상황을 시뮬레이션하고, DoWhy 라이브러리의 성향 점수 층화(Propensity Score Stratification) 방법을 통해 올바른 인과 효과를 추정해 봅니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-05/index.html#데이터-생성",
-    "href": "posts/causal-inference-04-part-05/index.html#데이터-생성",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "",
-    "text": "나이(Age)가 운동(Exercise)과 콜레스테롤(Cholesterol) 모두에 영향을 주는 교란(Confounding) 상황을 가정합니다.\n\n\n\nCode\nimport numpy as np\nimport pandas as pd\nimport dowhy\nfrom dowhy import CausalModel\nimport matplotlib.pyplot as plt\nimport seaborn as sns\n\nnp.random.seed(42)\nN = 1000\n\n# 1. Confounder: Age (20~70세)\nage = np.random.randint(20, 70, size=N)\n\n# 2. Treatment: Exercise (Binary: 0 or 1)\n# 나이가 많을수록 운동할 확률(Propensity)이 높아진다고 가정 (Sigmoid 함수 적용)\n# (나이가 많음 -&gt; 운동 확률 높음 -&gt; 교란 발생)\nprob_exercise = 1 / (1 + np.exp(-(age - 45) / 10))\nexercise = np.random.binomial(1, prob_exercise)\n\n# 3. Outcome: Cholesterol\n# 나이가 많을수록 콜레스테롤 증가 (+2.0 * Age)\n# 운동을 하면 콜레스테롤 감소 (True Effect: -10)\ncholesterol = 2.0 * age - 10 * exercise + np.random.normal(150, 10, size=N)\n\ndf = pd.DataFrame({'Age': age, 'Exercise': exercise, 'Cholesterol': cholesterol})\nprint(df.head())\n\n\n   Age  Exercise  Cholesterol\n0   58         0   269.653010\n1   48         1   250.020721\n2   34         0   198.060692\n3   62         1   276.183373\n4   27         0   178.849615"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-05/index.html#단순-상관관계-분석-naive-estimate",
-    "href": "posts/causal-inference-04-part-05/index.html#단순-상관관계-분석-naive-estimate",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "",
-    "text": "데이터를 단순히 시각화해보면, 운동을 많이 할수록 콜레스테롤이 높아지는 양의 상관관계를 보입니다. 이는 교란 변수(나이)를 고려하지 않았기 때문입니다. [cite: 108, 109]\n\n\nCode\n#| label: naive-plot\n#| fig-cap: \"운동을 하는 집단(1)의 콜레스테롤이 오히려 더 높게 나타나는 역설\"\n#| echo: true\n\n# 운동 여부에 따른 콜레스테롤 분포 시각화\nsns.boxplot(x='Exercise', y='Cholesterol', data=df)\nplt.title(\"Naive Observation: Exercise(1) has Higher Cholesterol?\")\nplt.show()\n\n# 단순 평균 비교\nmean_diff = df[df['Exercise']==1]['Cholesterol'].mean() - df[df['Exercise']==0]['Cholesterol'].mean()\nprint(f\"Naive Difference (Exercise 1 - 0): {mean_diff:.4f}\")\n\n\n\n\n\n단순 관측 시 나타나는 양의 상관관계 (Simpson’s Paradox)\n\n\n\n\nNaive Difference (Exercise 1 - 0): 24.0994"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-05/index.html#인과-모델링-및-식별-identification",
-    "href": "posts/causal-inference-04-part-05/index.html#인과-모델링-및-식별-identification",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "",
-    "text": "DoWhy를 사용하여 인과 그래프를 정의하고, Back-door Criterion을 통해 식별 가능한지 확인합니다. [cite: 242, 246]\n\n\nCode\n# 모델 정의 (Age를 Common Cause로 명시)\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age']\n)\n\n# 식별 (Identification)\nidentified_estimand = model.identify_effect()\nprint(identified_estimand)\n\n\nEstimand type: EstimandType.NONPARAMETRIC_ATE\n\n### Estimand : 1\nEstimand name: backdoor\nEstimand expression:\n     d                         \n───────────(E[Cholesterol|Age])\nd[Exercise]                    \nEstimand assumption 1, Unconfoundedness: If U→{Exercise} and U→Cholesterol then P(Cholesterol|Exercise,Age,U) = P(Cholesterol|Exercise,Age)\n\n### Estimand : 2\nEstimand name: iv\nNo such variable(s) found!\n\n### Estimand : 3\nEstimand name: frontdoor\nNo such variable(s) found!"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-05/index.html#인과-효과-추정-estimation",
-    "href": "posts/causal-inference-04-part-05/index.html#인과-효과-추정-estimation",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "",
-    "text": "Back-door Adjustment를 적용하여 실제 인과 효과를 계산합니다. 여기서는 선형 회귀와 IPW(Inverse Probability Weighting) 두 가지 방법을 사용합니다. [cite: 258, 404]\n\n\nCode\n# 선형 회귀를 이용한 Back-door Adjustment\nestimate_reg = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.linear_regression\"\n)\n\n# IPW (Inverse Probability Weighting)\nestimate_ipw = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_weighting\"\n)\n\nprint(f\"Causal Estimate (Linear Regression): {estimate_reg.value:.4f}\")\nprint(f\"Causal Estimate (IPW): {estimate_ipw.value:.4f}\")\nprint(f\"True Causal Effect: -1.5\")\n\n\nCausal Estimate (Linear Regression): -9.5546\nCausal Estimate (IPW): -7.7540\nTrue Causal Effect: -1.5\n\n\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: divide by zero encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: overflow encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: invalid value encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
-    "href": "posts/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
-    "section": "4.2 주의해야 할 구조: Collider",
-    "text": "4.2 주의해야 할 구조: Collider\n\n그래프 분석 시 주의해야 할 점은 단순히 모든 변수를 통제(Conditioning)한다고 좋은 것이 아니라는 점입니다.\n예를 들어 위 그래프에서 \\(Z_4\\)와 같은 변수를 살펴봅시다.\n\n\nNote: \\(Z_4\\)는 \\(Z_1\\)과 \\(Z_2\\)의 화살표를 동시에 받는 Collider (\\(Z_1 \\rightarrow Z_4 \\leftarrow Z_2\\))입니다. \\(Z_4\\)를 조건부(given)로 잡을 경우, 오히려 \\(Z_1\\)과 \\(Z_2\\) 사이에 길이 뚫리는 현상이 발생하여 새로운 편향을 만들 수 있습니다.\n\n\n따라서 우리는 어떤 변수를 조정 집합(Adjustment Set)에 넣어야 편향을 제거하고 올바른 인과 효과를 구할 수 있는지 판단하는 체계적인 기준이 필요합니다. 이것이 바로 다음 포스트에서 다룰 Back-door Criterion입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#가정-assumptions",
-    "href": "posts/causal-inference-04-part-03/index.html#가정-assumptions",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "6.2 가정 (Assumptions)",
-    "text": "6.2 가정 (Assumptions)\n\n집합 \\(Z\\)가 Back-door criterion을 만족한다고 가정합시다.\nLet \\(Z^- = Z \\setminus Pa_X\\) (부모 변수를 제외한 나머지 \\(Z\\)의 요소들).\n\n\nCondition (i): \\(Z\\)의 어떤 노드도 \\(X\\)의 자손이 아님. \\[\\Rightarrow X \\perp (Z \\setminus Pa_X) \\mid Pa_X\\] \\[\\Rightarrow P(z^{-} | x, pa_{X}) = P(z^{-} | x, pa_{X})\\]\n\n“미래는 과거를 바꿀 수 없다”는 원리입니다.\n인과 그래프에서 부모(\\(Pa_{X}\\))와 \\(Z\\)는 \\(X\\)보다 먼저 일어난 일(또는 원인)이고, \\(X\\)는 그 결과입니다.\n이미 부모(\\(Pa_{X}\\))의 상태를 다 알고 있다면, 결과인 \\(X\\)가 무엇이든 간에 그 원인이나 별개의 사건인 \\(Z\\)의 확률은 변하지 않습니다.\n\nCondition (ii): \\(Z\\)는 \\(X\\)로 들어오는 모든 뒷문 경로를 차단함. \\[\\Rightarrow Y \\perp (Pa_X \\setminus Z) \\mid Z, X\\] \\[\\Rightarrow P(y | x, pa_{X}, z^{-}) = P(y | x, z)\\] (\\(Z\\)와 \\(X\\)가 주어졌을 때, \\(Y\\)는 \\(Z\\)에 포함되지 않은 나머지 부모들과 독립이다)\n\n“Z가 이미 충분한 정보를 담고 있다”는 원리입니다.\n원래 \\(Y\\)를 예측하려면 교란 요인인 모든 부모들(\\(Pa_{X}\\))을 다 봐야 합니다. 하지만 \\(Z\\)가 ’백도어 기준’을 만족한다는 것은, \\(Z\\)가 부모들이 \\(Y\\)에 미치는 교란을 대신해서 다 막아주고 있다는 뜻입니다.\n따라서 일단 \\(Z\\)를 알고 나면, 굳이 \\(Z\\)에 포함되지 않은 나머지 부모들(\\(Pa_{X}\\))을 추가로 더 안다고 해서 \\(Y\\)에 대한 예측이 달라지지 않습니다. \\(Z\\)가 그 역할을 완벽히 대체했기 때문입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#recap-adjustment-by-direct-parents",
-    "href": "posts/causal-inference-04-part-03/index.html#recap-adjustment-by-direct-parents",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "6.1 Recap: Adjustment by Direct Parents",
-    "text": "6.1 Recap: Adjustment by Direct Parents\n\n일반적으로 \\(X\\)의 모든 직접적인 부모(Direct Parents, \\(Pa_X\\))를 통제하면 Back-door Criterion을 항상 만족합니다.\n\n\\[P(y|do(x)) = \\sum_{pa_X} P(y | x, pa_X) P(pa_X)\\]\n\n하지만 모든 부모 변수를 관측하는 것은 현실적으로 어려울 수 있습니다.\n그렇다면, 부모가 아닌 Back-door Criterion을 만족하는 임의의 집합 \\(Z\\)를 통제해도 왜 동일한 결과가 나올까요?\n아래 증명은 Direct Parents Adjustment 공식에서 시작하여 Back-door Adjustment 공식으로 유도되는 과정을 보여줍니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#example-1-sprinkler-rain-and-wet",
-    "href": "posts/causal-inference-04-part-03/index.html#example-1-sprinkler-rain-and-wet",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "3.1 Example 1: Sprinkler, Rain, and Wet",
-    "text": "3.1 Example 1: Sprinkler, Rain, and Wet\n\n이 개념을 이해하기 위해 고전적인 예제인 “스프링클러와 비” 모델을 살펴봅시다.\n\n\n\n\nFigure 1. Causal Graph for Sprinkler Example\n\n\n\n목표: 스프링클러(\\(X=\\) Sprinkler)가 땅이 젖는 것(\\(Y=\\) Wet)에 미치는 인과 효과 구하기.\nBack-door Path: \\(Sprinkler \\leftarrow Season \\rightarrow Rain \\rightarrow Wet\\)\n\n이 경로는 스프링클러로 들어오는 화살표(\\(Season \\to Sprinkler\\))로 시작하므로 백도어 경로입니다.\n\n여기서 변수 집합 \\(Z = \\{Rain\\}\\)을 고려해 봅시다.\n\n\n조건 (i): Rain은 Sprinkler의 자손이 아닙니다. (만족)\n조건 (ii): Rain은 위 백도어 경로상에 존재하며, Chain 구조(\\(\\dots \\to Rain \\to \\dots\\))에 있으므로 Rain을 조건부로 잡으면(Adjusting) 이 경로는 차단됩니다. (만족)\n\n\n따라서 우리는 Rain을 통해 보정할 수 있습니다.\n\n\\[P(Wet | do(Sprinkler)) = \\sum_{Rain} P(Wet | Sprinkler, Rain) P(Rain)\\]\n\n이 과정은 \\(Season\\)이라는 공통 원인(Back-door Parent)을 직접 관측하지 못하더라도, 경로를 막을 수 있는 다른 변수(\\(Rain\\))를 이용해 보정이 가능함을 보여줍니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#example-2-complex-graph-strategies",
-    "href": "posts/causal-inference-04-part-03/index.html#example-2-complex-graph-strategies",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "3.2 Example 2: Complex Graph & Strategies",
-    "text": "3.2 Example 2: Complex Graph & Strategies\n조금 더 복잡한 그래프에서 적절한 백도어 집합(\\(Z\\))을 찾는 연습을 해봅시다.\n\n\n\nFigure 2. Finding Admissible Sets in a Complex Graph"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#back-door-adjustment-theorem",
-    "href": "posts/causal-inference-04-part-03/index.html#back-door-adjustment-theorem",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "2.2 Back-door Adjustment Theorem",
-    "text": "2.2 Back-door Adjustment Theorem\n\n만약 변수 집합 \\(Z\\)가 \\(X, Y\\)에 대해 Back-door Criterion을 만족한다면, \\(X\\)가 \\(Y\\)에 미치는 인과 효과는 식별 가능(Identifiable)하며 다음과 같이 계산할 수 있습니다.\n\n\\[P(y|do(x)) = \\sum_{z} P(y|x,z)P(z)\\]\n\n이를 Back-door Adjustment Formula라고 합니다. 이 식은 우리가 \\(do(x)\\)라는 가상의 중재를 하지 않고도, 관측된 데이터(\\(P(y|x,z), P(z)\\))만으로 인과 효과를 계산할 수 있게 해줍니다.\n\n\n\n2.2.1 Example 1: Sprinkler, Rain, and Wet\n\n이 개념을 이해하기 위해 고전적인 예제인 “스프링클러와 비” 모델을 살펴봅시다.\n\n\n\n\nFigure 1. Causal Graph for Sprinkler Example\n\n\n\n목표: 스프링클러(\\(X=\\) Sprinkler)가 땅이 젖는 것(\\(Y=\\) Wet)에 미치는 인과 효과 구하기.\nBack-door Path: \\(Sprinkler \\leftarrow Season \\rightarrow Rain \\rightarrow Wet\\)\n\n이 경로는 스프링클러로 들어오는 화살표(\\(Season \\to Sprinkler\\))로 시작하므로 백도어 경로입니다.\n\n여기서 변수 집합 \\(Z = \\{Rain\\}\\)을 고려해 봅시다.\n\n\n조건 (i): Rain은 Sprinkler의 자손이 아닙니다. (만족)\n조건 (ii): Rain은 위 백도어 경로상에 존재하며, Chain 구조(\\(\\dots \\to Rain \\to \\dots\\))에 있으므로 Rain을 조건부로 잡으면(Adjusting) 이 경로는 차단됩니다. (만족)\n\n\n따라서 우리는 Rain을 통해 보정할 수 있습니다.\n\n\\[P(Wet | do(Sprinkler)) = \\sum_{Rain} P(Wet | Sprinkler, Rain) P(Rain)\\]\n\n이 과정은 \\(Season\\)이라는 공통 원인(Back-door Parent)을 직접 관측하지 못하더라도, 경로를 막을 수 있는 다른 변수(\\(Rain\\))를 이용해 보정이 가능함을 보여줍니다.\n\n\n\n\n2.2.2 Example 2: Complex Graph & Strategies\n\n조금 더 복잡한 그래프에서 적절한 백도어 집합(\\(Z\\))을 찾는 연습을 해봅시다.\n\n\n\n\nFigure 2. Finding Admissible Sets in a Complex Graph\n\n\n\n2.2.2.1 분석 포인트\n\n이 그래프에서 \\(X\\)와 \\(Y\\) 사이의 백도어 경로를 차단해야 합니다. \\(X\\)에서 나가는 화살표를 지운 그래프(\\(G_{\\underline{X}}\\))를 상상했을 때 \\(X\\)와 \\(Y\\)가 d-separation 되는지 확인하는 것과 같습니다.\n\n\n\n2.2.2.2 가능한 \\(Z\\) 집합의 예시\n\n\\(Z = \\{Z_4, Z_2\\}\\)\n\\(Z = \\{Z_4, Z_5\\}\\)\n\\(Z = \\{Z_4, Z_2, Z_5\\}\\)\n\n\n\n2.2.2.3 주의할 점: Collider (\\(Z_4\\))\n\n위 그래프에서 \\(Z_4\\)는 \\(Z_1 \\to Z_4 \\leftarrow Z_2\\) 구조를 갖는 Collider입니다.\n만약 \\(Z_4\\)를 집합에 포함하지 않으면, \\(Z_1 - Z_4 - Z_2\\) 경로는 자연스럽게 막혀(Blocked) 있습니다.\n하지만 \\(Z_4\\)를 집합에 포함시켜 조건부로 잡으면(Conditioning), 오히려 \\(Z_1\\)과 \\(Z_2\\) 사이의 경로가 열리게 됩니다\n\n따라서 \\(Z_4\\)를 보정 변수로 사용할 때는, 이로 인해 열리는 다른 경로(\\(Z_1 \\dots Z_2\\))를 막아줄 추가적인 변수(\\(Z_2\\) 등)를 함께 포함해야 합니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#의미-해석",
-    "href": "posts/causal-inference-04-part-03/index.html#의미-해석",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "2.2 의미 해석",
-    "text": "2.2 의미 해석\n\n조건 (i)은 \\(X\\)의 결과(Effect)로 나타나는 변수를 통제하지 말라는 뜻입니다. \\(X\\)의 자손을 통제하면 \\(X\\)가 \\(Y\\)에 미치는 실제 인과 경로를 막아버리거나 새로운 편향을 만들 수 있기 때문입니다.\n조건 (ii)의 “arrow into \\(X\\)”는 소위 백도어 경로(Back-door Path)를 의미합니다. 이는 \\(X\\)의 원인이 되는 변수들에 의해 생성되는 비인과적 상관관계(Spurious Correlation)의 경로입니다. 이 경로를 차단함으로써 우리는 \\(X\\)에서 \\(Y\\)로 나가는 순수한 인과적 경로만 남길 수 있습니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#가능한-z-집합의-예시",
-    "href": "posts/causal-inference-04-part-03/index.html#가능한-z-집합의-예시",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "5.2 가능한 \\(Z\\) 집합의 예시",
-    "text": "5.2 가능한 \\(Z\\) 집합의 예시\n\n\\(Z = \\{Z_4, Z_2\\}\\)\n\\(Z = \\{Z_4, Z_5\\}\\)\n\\(Z = \\{Z_4, Z_2, Z_5\\}\\)"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#주의할-점-collider-z_4",
-    "href": "posts/causal-inference-04-part-03/index.html#주의할-점-collider-z_4",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "5.3 주의할 점: Collider (\\(Z_4\\))",
-    "text": "5.3 주의할 점: Collider (\\(Z_4\\))\n\n위 그래프에서 \\(Z_4\\)는 \\(Z_1 \\to Z_4 \\leftarrow Z_2\\) 구조를 갖는 Collider입니다.\n만약 \\(Z_4\\)를 집합에 포함하지 않으면, \\(Z_1 - Z_4 - Z_2\\) 경로는 자연스럽게 막혀(Blocked) 있습니다.\n하지만 \\(Z_4\\)를 집합에 포함시켜 조건부로 잡으면(Conditioning), 오히려 \\(Z_1\\)과 \\(Z_2\\) 사이의 경로가 열리게 됩니다\n따라서 \\(Z_4\\)를 조정 변수로 사용할 때는, 이로 인해 열리는 다른 경로(\\(Z_1 \\dots Z_2\\))를 막아줄 추가적인 변수(\\(Z_2\\) 등)를 함께 포함해야 합니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-03/index.html#증명-derivation",
-    "href": "posts/causal-inference-04-part-03/index.html#증명-derivation",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 3)",
-    "section": "6.3 증명 (Derivation)",
-    "text": "6.3 증명 (Derivation)\n\n부모 변수를 통한 조정(Adjustment by Direct Parents) 공식에서 시작합니다.\n\n\\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_{pa_X} P(y|x, pa_X)P(pa_X) \\\\\n&= \\sum_{z^-, pa_X} P(y|x, pa_X, z^-)P(z^-|x, pa_X)P(pa_X) && \\because \\text{Expand by } Z^- \\text{ (Total Probability)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-|pa_X)P(pa_X) && \\because \\text{Apply Assumptions Condition (i) \\& (ii)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-, pa_X) && \\because \\text{Chain Rule } P(A|B)P(B) = P(A,B) \\\\\n&= \\sum_{z} P(y|x, z) \\sum_{pa_X \\setminus z} P(z^-, pa_X) && \\because \\text{Rearrange Summation } (Z \\cup (Pa_X \\setminus Z) = \\{Z, Pa_X\\}) \\\\\n&= \\sum_{z} P(y|x, z)P(z) && \\because \\text{Marginalize out } Pa_X \\setminus Z\n\\end{aligned}\n\\]\n\n결론: \n\n\nAdjustment by \\(Z\\) is equivalent to adjustment by direct parents whenever \\(Z\\) is back-door admissible.\n\n\n즉, \\(Z\\)가 Back-door criterion만 만족한다면, 직접적인 부모를 모두 측정하지 못하더라도 \\(Z\\)를 통해 인과 효과를 정확히 계산할 수 있음이 수학적으로 증명됩니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-04/index.html#derivation-adjustment-by-direct-parents-to-back-door-adjustment",
-    "href": "posts/causal-inference-04-part-04/index.html#derivation-adjustment-by-direct-parents-to-back-door-adjustment",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "5.1 1. Derivation: Adjustment by Direct Parents \\(\\to\\) Back-door Adjustment",
-    "text": "5.1 1. Derivation: Adjustment by Direct Parents \\(\\to\\) Back-door Adjustment\n우리는 직관적으로 \\(X\\)의 모든 부모(\\(Pa_X\\))를 통제하면 인과 효과를 구할 수 있음을 알고 있습니다. 이 정리는 Back-door Criterion을 만족하는 임의의 집합 \\(Z\\)를 통제하는 것이 왜 부모 변수를 통제하는 것과 수학적으로 동치(Equivalent)인지 증명합니다.\n\n5.1.1 가정 (Assumptions)\n집합 \\(Z\\)가 Back-door criterion을 만족한다고 가정합니다. 편의를 위해 \\(Z^- = Z \\setminus Pa_X\\) (부모 변수를 제외한 \\(Z\\)의 나머지)라고 정의합니다.\n\nCondition (i): \\(Z\\)의 노드는 \\(X\\)의 자손이 아님. \\[\\Rightarrow X \\perp (Z \\setminus Pa_X) \\mid Pa_X\\]\nCondition (ii): \\(Z\\)는 \\(X\\)로 들어오는 모든 뒷문 경로를 차단함. \\[\\Rightarrow Y \\perp (Pa_X \\setminus Z) \\mid Z, X\\]\n\n\n\n5.1.2 증명 (Proof)\n[cite_start]부모 변수 보정 공식에서 시작하여, \\(Z\\)를 이용한 보정 공식으로 유도해 나갑니다. [cite: 1]\n\\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_{pa_X} P(y|x, pa_X)P(pa_X) \\\\\n&= \\sum_{z^-, pa_X} P(y|x, pa_X, z^-)P(z^-|x, pa_X)P(pa_X) && \\text{Expand by } Z^- \\text{ (Total Probability)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-|pa_X)P(pa_X) && \\text{Apply Assumptions (i) \\& (ii)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-, pa_X) && \\text{Def. of Conditional Prob.} \\\\\n&= \\sum_{z} P(y|x, z) \\sum_{pa_X \\setminus z} P(z^-, pa_X) && \\text{Rearrange Summation} \\\\\n&= \\sum_{z} P(y|x, z)P(z) && \\text{Marginalize out } Pa_X \\setminus Z\n\\end{aligned}\n\\]\n\n의미: \\(Z\\)가 Back-door 조건만 만족한다면, 굳이 모든 부모 변수를 알지 못해도 \\(Z\\)만으로 완벽한 인과 효과 추정이 가능합니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-04/index.html#derivation-inverse-probability-weighting-ipw-from-samples",
-    "href": "posts/causal-inference-04-part-04/index.html#derivation-inverse-probability-weighting-ipw-from-samples",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "5.2 2. Derivation: Inverse Probability Weighting (IPW) from Samples",
-    "text": "5.2 2. Derivation: Inverse Probability Weighting (IPW) from Samples\n이론적인 Back-door 식을 실제 데이터(\\(N\\)개의 샘플)에서 계산하려면 어떻게 해야 할까요? 고차원의 \\(Z\\)에 대해 모든 확률을 합하는 것은 불가능하므로, 샘플 평균(Sample Mean) 형태로 근사합니다.\n\n5.2.1 [cite_start]수식 유도 (Derivation) [cite: 2]\n우선 이론적 식을 결합 확률 분포 형태로 변형합니다. \\[P(y|do(x)) = \\sum_{z} \\frac{P(y, x, z)}{P(x|z)}\\]\n이제 이를 \\(N\\)개의 샘플 데이터를 이용해 근사(Approximation)해 봅시다. 여기서 \\(g(z) = P(x|z)\\)는 Propensity Score입니다.\n\\[\n\\begin{aligned}\nP(y|do(x)) &\\approx \\sum_{z} \\frac{\\frac{1}{N} \\sum_{i=1}^{N} \\mathbb{1}(y_i=y, x_i=x, z_i=z)}{g(z)} \\\\\n&= \\frac{1}{N} \\sum_{i=1}^{N} \\sum_{z} \\frac{\\mathbb{1}(y_i=y, x_i=x, z_i=z)}{g(z)} && \\text{Swap Summation} \\\\\n&= \\frac{1}{N} \\sum_{i=1}^{N} \\frac{\\mathbb{1}(y_i=y, x_i=x)}{g(z_i)} && \\text{Collapse Sum over } Z\n\\end{aligned}\n\\]\n\n\n5.2.2 핵심 포인트\n\n\\(\\mathbb{1}(\\cdot)\\) (Indicator Function): 조건이 참이면 1, 거짓이면 0을 반환하는 함수입니다.\n시간 복잡도 \\(O(N)\\): 가장 마지막 식을 보면, 더 이상 \\(Z\\)의 모든 조합에 대해 합을 구할 필요가 없습니다. 단순히 관측된 \\(N\\)개의 데이터 샘플을 한 번씩만 순회하며 가중치(\\(1/g(z_i)\\))를 더하면 계산이 끝납니다. 이것이 IPW가 강력한 이유입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
-    "href": "posts/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "4.2 시간 복잡도의 개선",
-    "text": "4.2 시간 복잡도의 개선\n\n이 방식의 가장 큰 장점은 계산 효율성입니다.\n고차원 \\(Z\\)에 대해 적분하거나 합을 구하는 대신, 샘플 수 \\(N\\)에 비례하는 선형 시간(\\(O(N)\\)) 만에 계산이 가능합니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-04/index.html#수식-유도-derivation",
-    "href": "posts/causal-inference-04-part-04/index.html#수식-유도-derivation",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "4.1 수식 유도 (Derivation)",
-    "text": "4.1 수식 유도 (Derivation)\n\n우선 이론적 식을 결합 확률 분포 형태로 변형합니다.\n\n\\[P(y|do(x)) = \\sum_{z} \\frac{P(y, x, z)}{P(x|z)}\\]\n\n이제 이를 \\(N\\)개의 샘플 데이터를 이용해 근사(Approximation)해 봅시다. 여기서 \\(g(z) = P(x|z)\\)는 Propensity Score입니다.\n\n\n4.1.1 핵심 포인트\n\n\\(\\mathbb{1}(\\cdot)\\) (Indicator Function): 조건이 참이면 1, 거짓이면 0을 반환하는 함수입니다.\n시간 복잡도 \\(O(N)\\): 가장 마지막 식을 보면, 더 이상 \\(Z\\)의 모든 조합에 대해 합을 구할 필요가 없습니다. 단순히 관측된 \\(N\\)개의 데이터 샘플을 한 번씩만 순회하며 가중치(\\(1/g(z_i)\\))를 더하면 계산이 끝납니다. 이것이 IPW가 강력한 이유입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-04/index.html#핵심-포인트",
-    "href": "posts/causal-inference-04-part-04/index.html#핵심-포인트",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "4.1 핵심 포인트",
-    "text": "4.1 핵심 포인트\n\n\\(\\mathbb{1}(\\cdot)\\) (Indicator Function): 조건이 참이면 1, 거짓이면 0을 반환하는 함수입니다.\n시간 복잡도 \\(O(N)\\): 가장 마지막 식을 보면, 더 이상 \\(Z\\)의 모든 조합에 대해 합을 구할 필요가 없습니다. 단순히 관측된 \\(N\\)개의 데이터 샘플을 한 번씩만 순회하며 가중치(\\(1/g(z_i)\\))를 더하면 계산이 끝납니다. 이것이 IPW가 강력한 이유입니다."
-  },
-  {
     "objectID": "Untitled.html",
     "href": "Untitled.html",
     "title": "shsha0110.github.io",
@@ -427,52 +273,10 @@
     "text": "import numpy as np\nimport pandas as pd\nimport dowhy\nfrom dowhy import CausalModel\nimport matplotlib.pyplot as plt\nimport seaborn as sns\nimport statsmodels.api as sm\nfrom scipy import stats\n\n\nimport numpy as np\nimport pandas as pd\nimport dowhy\nfrom dowhy import CausalModel\nimport matplotlib.pyplot as plt\nimport seaborn as sns\n\n# 재현성을 위한 시드 설정\nnp.random.seed(42)\n\n# 데이터 생성 (N=1000)\nN = 1000\n\n# 1. Confounder: 나이 (Age)\n# 20세~70세\nage = np.random.randint(20, 70, size=N)\n\n# 2. Treatment: 운동량 (Exercise)\n# 나이가 많을수록 운동을 많이 함 (Z -&gt; X)\nexercise = 0.5 * age + np.random.normal(10, 5, size=N)\n\n# 3. Outcome: 콜레스테롤 수치 (Cholesterol)\n# 나이가 많을수록 높음 (Z -&gt; Y), 운동을 많이 할수록 낮아짐 (X -&gt; Y)\n# True Causal Effect: 운동 계수는 -1.5 (운동이 1단위 늘면 콜레스테롤 1.5 감소)\ncholesterol = 2.0 * age - 1.5 * exercise + np.random.normal(150, 10, size=N)\n\n# DataFrame 생성\ndf = pd.DataFrame({\n    'Age': age,\n    'Exercise': exercise,\n    'Cholesterol': cholesterol\n})\n\nprint(df.head())\n\n   Age  Exercise  Cholesterol\n0   58         0   269.653010\n1   48         1   250.020721\n2   34         0   198.060692\n3   62         1   276.183373\n4   27         0   178.849615\n\n\n\nnp.random.seed(42)\nN = 1000\n\n# 1. Confounder: 나이 (Age)\n# 20세~70세\nage = np.random.randint(20, 70, size=N)\n\n# 2. Treatment: 운동량 (Exercise)\n# 나이가 많을수록 운동을 많이 함 (Z -&gt; X)\nexercise = 0.5 * age + np.random.normal(10, 5, size=N)\nprob_exercise = 1 / (1 + np.exp(-(age - 45) / 10))\nexercise = np.random.binomial(1, prob_exercise)\n\n# 3. Outcome: 콜레스테롤 수치 (Cholesterol)\n# 나이가 많을수록 높음 (Z -&gt; Y), 운동을 많이 할수록 낮아짐 (X -&gt; Y)\n# True Causal Effect: 운동 계수는 -1.5 (운동이 1단위 늘면 콜레스테롤 1.5 감소)\ncholesterol = 2.0 * age - 1.5 * exercise + np.random.normal(150, 10, size=N)\n\n# DataFrame 생성\ndf = pd.DataFrame({\n    'Age': age,\n    'Exercise': exercise,\n    'Exercise Prob': prob_exercise,\n    'Cholesterol': cholesterol\n})\n\nprint(df.head())\n\n   Age  Exercise  Exercise Prob  Cholesterol\n0   58         1       0.785835   269.253660\n1   48         0       0.574443   244.536576\n2   34         1       0.249740   207.255028\n3   62         1       0.845535   275.801668\n4   27         0       0.141851   218.567100\n\n\n\n# 단순 상관계수 확인\ncorrelation = df['Exercise Prob'].corr(df['Cholesterol'])\nprint(f\"Naive Correlation between Exercise and Cholesterol: {correlation:.4f}\")\n\n# 시각화 (Simpson's Paradox)\nsns.regplot(x='Exercise Prob', y='Cholesterol', data=df, scatter_kws={'alpha':0.3}, line_kws={'color':'red'})\nplt.title(\"Naive Observation: More Exercise -&gt; Higher Cholesterol?\")\nplt.show()\n\nNaive Correlation between Exercise and Cholesterol: 0.9400\n\n\n\n\n\n\n\n\n\n\nplt.figure(figsize=(8, 6))\n\nsns.scatterplot(\n    x='Exercise Prob', \n    y='Cholesterol', \n    data=df, \n    hue='Age', \n    palette='viridis', \n    alpha=0.6\n)\n\nplt.title(\"Exercise vs Cholesterol (Colored by Age)\")\nplt.legend(title='Age')\nplt.show()\n\n\n\n\n\n\n\n\n\n# 인과 모델 정의\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age'] # 교란 변수 명시\n)\n\n# 모델 시각화\nmodel.view_model()\n\n\n\n\n\n\n\n\n\n# 인과 효과 식별\nidentified_estimand = model.identify_effect()\n\nprint(identified_estimand)\n\nEstimand type: EstimandType.NONPARAMETRIC_ATE\n\n### Estimand : 1\nEstimand name: backdoor\nEstimand expression:\n     d                         \n───────────(E[Cholesterol|Age])\nd[Exercise]                    \nEstimand assumption 1, Unconfoundedness: If U→{Exercise} and U→Cholesterol then P(Cholesterol|Exercise,Age,U) = P(Cholesterol|Exercise,Age)\n\n### Estimand : 2\nEstimand name: iv\nNo such variable(s) found!\n\n### Estimand : 3\nEstimand name: frontdoor\nNo such variable(s) found!\n\n\n\n\n# ---------------------------------------------------------\n# 방법 1: 선형 회귀 (Back-door Adjustment)\n# ---------------------------------------------------------\n\nestimate_reg = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.linear_regression\"\n)\n\nprint(f\"Causal Estimate (Linear Regression): {estimate_reg.value:.4f}\")\n\nCausal Estimate (Linear Regression): -2.4422\n\n\n\n# IPW (Inverse Probability Weighting)\nestimate_ipw = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\"\n)\n\nprint(f\"Causal Estimate (Linear Regression): {estimate_reg.value:.4f}\")\nprint(f\"Causal Estimate (IPW): {estimate_ipw.value:.4f}\")\nprint(f\"True Causal Effect: -1.5\")\n\nCausal Estimate (Linear Regression): -2.4422\nCausal Estimate (IPW): -2.0181\nTrue Causal Effect: -1.5\n\n\n\n# Placebo Treatment Refuter: 가짜 처리를 주었을 때 효과가 0이 나와야 함\nrefute_results = model.refute_estimate(\n    identified_estimand,\n    estimate_reg,\n    method_name=\"placebo_treatment_refuter\"\n)\n\nprint(refute_results)\n\nRefute: Use a Placebo Treatment\nEstimated effect:-2.442194715216118\nNew effect:0.04782312921316787\np value:1.0"
   },
   {
-    "objectID": "Untitled1.html",
-    "href": "Untitled1.html",
+    "objectID": "index.html",
+    "href": "index.html",
     "title": "shsha0110.github.io",
     "section": "",
-    "text": "import numpy as np\nimport pandas as pd\nimport dowhy\nfrom dowhy import CausalModel\nimport matplotlib.pyplot as plt\nimport seaborn as sns\n\n\nimport numpy as np\nimport pandas as pd\nimport matplotlib.pyplot as plt\nimport seaborn as sns\nimport scipy.stats as stats  # 확률 계산용\n\nnp.random.seed(42)\nN = 1000\n\n# ---------------------------------------------------------\n# 1. 데이터 생성 (기존 코드와 동일)\n# ---------------------------------------------------------\n# Confounder: Age\nage = np.random.randint(20, 70, size=N)\n\n# Threshold Calculation\nthreshold = 0.5 * (age - 20) \n\n# Latent Variable (Personal Will) ~ N(12.5, 10)\nmu = 12.5\nsigma = 10\npersonal_will = np.random.normal(mu, sigma, size=N)\n\n# Treatment Assignment\nexercise = (personal_will &gt; threshold).astype(int)\n\n# Outcome: Cholesterol\ncholesterol = 2.0 * age - 10 * exercise + np.random.normal(150, 10, size=N)\n\ndf_threshold = pd.DataFrame({\n    'Age': age, \n    'Threshold': threshold, \n    'Personal_Will': personal_will, \n    'Exercise': exercise, \n    'Cholesterol': cholesterol\n})\n\n# ---------------------------------------------------------\n# 2. 처치 확률(Propensity Score) 역산 및 나이대 그룹화\n# ---------------------------------------------------------\n\n# (1) 확률 계산: P(Will &gt; Threshold)\n# stats.norm.sf(x, loc, scale)은 P(X &gt; x)를 구해줍니다.\ndf_threshold['Propensity_Score'] = stats.norm.sf(df_threshold['Threshold'], loc=mu, scale=sigma)\n\n# (2) 나이대(Age Group) 생성 (시각화 색상용)\n# 10살 단위로 끊어서 그룹화 (20s, 30s, ..., 60s)\nbins = [20, 30, 40, 50, 60, 71]\nlabels = ['20s', '30s', '40s', '50s', '60s']\ndf_threshold['Age_Group'] = pd.cut(df_threshold['Age'], bins=bins, labels=labels, right=False)\n\n# ---------------------------------------------------------\n# 3. 요청하신 시각화\n# X: 처치 확률, Y: 콜레스테롤, Color: 나이대\n# ---------------------------------------------------------\nplt.figure(figsize=(12, 8))\n\n# Scatter Plot\nsns.scatterplot(\n    x='Propensity_Score', \n    y='Cholesterol', \n    hue='Age_Group',   # 나이대별 다른 색\n    style='Exercise',  # 운동 여부는 모양(O/X)으로 구분 (인과 효과 확인용)\n    data=df_threshold,\n    palette='viridis_r', # 나이가 많을수록(확률 낮음) 보라색 계열\n    s=60,              # 점 크기\n    alpha=0.7\n)\n\nplt.title(\"Cholesterol vs Propensity Score (Colored by Age Group)\")\nplt.xlabel(\"Probability of Exercise (Propensity Score)\")\nplt.ylabel(\"Cholesterol Level\")\nplt.grid(True, linestyle='--', alpha=0.5)\n\n# ---------------------------------------------------------\n# 시각적 해석을 돕기 위한 보조선 (True Effect)\n# ---------------------------------------------------------\n# 확률 0.5 근처인 사람들의 평균 차이를 화살표로 표시\nmid_prop = 0.5\nsubset = df_threshold[(df_threshold['Propensity_Score'] &gt; 0.45) & (df_threshold['Propensity_Score'] &lt; 0.55)]\nmean_exerciser = subset[subset['Exercise'] == 1]['Cholesterol'].mean()\nmean_non_exerciser = subset[subset['Exercise'] == 0]['Cholesterol'].mean()\n\nif not np.isnan(mean_exerciser) and not np.isnan(mean_non_exerciser):\n    plt.annotate(\n        f'Causal Effect\\n(Gap ≈ {mean_exerciser - mean_non_exerciser:.1f})', \n        xy=(mid_prop, mean_exerciser), \n        xytext=(mid_prop + 0.1, (mean_exerciser + mean_non_exerciser)/2),\n        arrowprops=dict(arrowstyle='-&gt;', color='red', lw=2),\n        fontsize=11, color='red', fontweight='bold'\n    )\n    # 실제 갭을 보여주는 수직선\n    plt.vlines(x=mid_prop, ymin=mean_exerciser, ymax=mean_non_exerciser, color='red', linestyle=':', lw=2)\n\nplt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')\nplt.tight_layout()\nplt.show()\n\n# 데이터 샘플 확인 (확률 컬럼 추가됨)\nprint(df_threshold[['Age', 'Threshold', 'Propensity_Score']].head())\n\n\n\n\n\n\n\n\n   Age  Threshold  Propensity_Score\n0   58       19.0          0.257846\n1   48       14.0          0.440382\n2   34        7.0          0.708840\n3   62       21.0          0.197663\n4   27        3.5          0.815940\n\n\n\nnp.random.seed(42)\nN = 1000\n\n# 1. Confounder: Age\nage = np.random.randint(20, 70, size=N)\n\n# 2. Treatment Assignment (Threshold 방식)\n# 아이디어: \"운동을 하기 위한 진입장벽(Threshold)\"은 나이가 들수록 높아진다.\n# Threshold = 나이에 비례하는 어떤 값\nthreshold = 0.5 * (age - 20) # 예: 20세=0, 70세=25\n\n# 개인의 운동 의지 (Latent Exercise Tendency)\n# 평균은 12.5 정도지만, 사람마다 편차(표준편차 10)가 큼\n# 이 '개인차(Noise)'가 있어야 overlap이 확보됨!\npersonal_will = np.random.normal(12.5, 10, size=N)\n\n# 처치 할당: 개인의 의지가 나이로 인한 장벽(Threshold)을 넘었는가?\nexercise = (personal_will &gt; threshold).astype(int)\n\n# 3. Outcome: Cholesterol\n# 나이가 많을수록 높음, 운동하면 낮아짐(-10)\ncholesterol = 2.0 * age - 10 * exercise + np.random.normal(150, 10, size=N)\n\ndf_threshold = pd.DataFrame({\n    'Age': age, \n    'Threshold': threshold, \n    'Personal_Will': personal_will, \n    'Exercise': exercise, \n    'Cholesterol': cholesterol\n})\n\n# ---------------------------------------------------------\n# 시각화: Threshold 모델의 작동 원리 확인\n# ---------------------------------------------------------\nplt.figure(figsize=(10, 6))\n\n# 운동 한 사람(1)과 안 한 사람(0) 시각화\nsns.scatterplot(\n    x='Age', \n    y='Personal_Will', \n    hue='Exercise', \n    data=df_threshold, \n    palette={0: 'blue', 1: 'red'},\n    alpha=0.6\n)\n\n# 기준선(Threshold) 그리기\n# 이 선보다 위에 있는 점은 빨강(운동 O), 아래는 파랑(운동 X)\nplt.plot(age, threshold, color='black', linewidth=2, linestyle='--', label='Exercise Threshold')\n\nplt.title(\"Treatment Assignment by Age-Dependent Threshold\")\nplt.xlabel(\"Age (Confounder)\")\nplt.ylabel(\"Latent Exercise Tendency (Personal Will)\")\nplt.legend(title='Exercise')\nplt.grid(True, alpha=0.3)\nplt.show()\n\n# 데이터 확인\nprint(df_threshold.head())\n\n\n\n\n\n\n\n\n   Age  Threshold  Personal_Will  Exercise  Cholesterol\n0   58       19.0       6.329096         0   276.675993\n1   48       14.0      -0.088420         0   254.483295\n2   34        7.0      24.388010         1   208.815630\n3   62       21.0      12.086916         0   287.065575\n4   27        3.5      14.239663         1   184.954853\n\n\n\n# # ---------------------------------------------------------\n# # 1. 데이터 생성 (Binary Treatment)\n# # ---------------------------------------------------------\n# np.random.seed(42)\n# N = 1000\n\n# # Confounder: Age\n# age = np.random.randint(20, 70, size=N)\n\n# # Treatment: Exercise (Binary: 0 or 1)\n# # 나이가 많을수록 운동할 확률(Propensity)이 높아짐 (교란 발생)\n# exercise_threshold = 0.2 * (age - 20) + 0.5\n\n# prob_exercise = 1 / (1 + np.exp(-(age - 45) / 20))\n# exercise = np.random.binomial(1, prob_exercise)\n\n# # Outcome: Cholesterol\n# # 나이가 많을수록 높음 (+2.0 * Age)\n# # 운동을 하면 낮아짐 (True Causal Effect = -10)\n# cholesterol = 2.0 * age - 10 * exercise + np.random.normal(150, 10, size=N)\n\n# df = pd.DataFrame({'Age': age, 'Exercise': exercise, 'prob_exercise': prob_exercise, 'Cholesterol': cholesterol})\n\n\nplt.figure(figsize=(8, 6))\n\n# 1. 점 찍기 (색상 기준: Age)\n# palette='viridis': 나이가 적을수록 보라색, 많을수록 노란색 계열\nsns.scatterplot(\n    x='exercise', \n    y='Cholesterol', \n    data=df, \n    hue='Age', \n    palette='viridis', \n    alpha=0.6\n)\n\n# 2. 전체적인 (잘못된) 추세선 그리기\n# scatter=False로 설정하여 점은 중복해서 찍지 않고 선만 그림\nsns.regplot(\n    x='prob_exercise', \n    y='Cholesterol', \n    data=df, \n    scatter=False, \n    line_kws={'color': 'red', 'label': 'Naive Trend (Positive)'}\n)\n\nplt.title(\"Exercise vs Cholesterol (Colored by Age)\")\nplt.legend(title='Age')\nplt.show()\n\n\n# ---------------------------------------------------------\n# 2. 단순 비교 (Naive Estimate)\n# ---------------------------------------------------------\nnaive_diff = df[df['Exercise']==1]['Cholesterol'].mean() - df[df['Exercise']==0]['Cholesterol'].mean()\nprint(f\"Naive Difference (Exercise 1 - 0): {naive_diff:.4f}\")\n\n\n# ---------------------------------------------------------\n# 3. DoWhy 모델링 및 층화(Stratification) 분석\n# ---------------------------------------------------------\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age']\n)\n\nidentified_estimand = model.identify_effect()\n\n# Stratification 적용\n# num_strata=50: 데이터를 성향 점수(나이)에 따라 50개(나이 개수) 구간으로 나눔\nestimate_strat = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\",\n    method_params={\n        'num_strata': 5\n    }\n)\n\nprint(\"-\" * 30)\nprint(f\"Causal Estimate (Stratification): {estimate_strat.value:.4f}\")\nprint(f\"True Causal Effect: -10.0\")\nprint(\"-\" * 30)\n\n\n# 50개 구간으로 나누기\nnum_strata = 50\n\n# [수정] duplicates='drop' 옵션 추가\n# 경계가 겹치면 중복되는 구간을 하나로 합쳐서 에러를 방지합니다.\ndf['strata_50'] = pd.qcut(\n    df['propensity_score'], \n    q=num_strata, \n    labels=False, \n    duplicates='drop'\n)\n\nplt.figure(figsize=(15, 6))\nsns.boxplot(x='strata_50', y='Age', data=df, color=\"skyblue\")\n\nplt.xticks(rotation=90, fontsize=8) \nplt.title(f\"Age Distribution per Strata (Exact Matching Check)\")\nplt.xlabel(\"Propensity Score Strata\")\nplt.ylabel(\"Age\")\nplt.show()\n\n# 실제로 생성된 구간 개수 확인\nprint(f\"Requested strata: {num_strata}\")\nprint(f\"Actual strata created: {df['strata_50'].nunique()}\")\n\n\n# ---------------------------------------------------------\n# 5. 결과 검증 (Refutation Test)\n# ---------------------------------------------------------\n# 우리가 구한 인과 효과가 정말 믿을만한지 테스트합니다.\n\nprint(\"\\n=== Refutation 1: Placebo Treatment (가짜 처치) ===\")\n# 처치(Exercise)를 무작위로 섞어서 모델에 넣습니다.\n# 기대 결과: 인과 효과가 0에 가까워야 함 (운동을 랜덤으로 배정하면 효과가 없어야 하므로)\n\nrefute_placebo = model.refute_estimate(\n    identified_estimand,\n    estimate_strat,\n    method_name=\"placebo_treatment_refuter\",\n    method_params={\"placebo_type\": \"permute_treatment\"}\n)\n\nprint(refute_placebo)\n\nprint(\"\\n=== Refutation 2: Add Random Common Cause (랜덤 변수 추가) ===\")\n# 데이터에 아무 상관 없는 랜덤 변수를 추가해서 다시 분석합니다.\n# 기대 결과: 원래 구한 인과 효과(-10.0 근처)가 크게 변하지 않아야 함\n\nrefute_random = model.refute_estimate(\n    identified_estimand,\n    estimate_strat,\n    method_name=\"random_common_cause\"\n)\n\nprint(refute_random)"
-  },
-  {
-    "objectID": "Untitled2.html",
-    "href": "Untitled2.html",
-    "title": "shsha0110.github.io",
-    "section": "",
-    "text": "import numpy as np\nimport pandas as pd\nimport dowhy\nfrom dowhy import CausalModel\nimport matplotlib.pyplot as plt\nimport seaborn as sns\n\n# ---------------------------------------------------------\n# 1. 데이터 생성 (Data Generation)\n# ---------------------------------------------------------\nnp.random.seed(42)\nN = 1000\n\n# (1) 교란 변수: 나이 (Age)\nage = np.random.randint(20, 70, size=N)\n\n# (2) 처치 변수: 운동 여부 (Exercise, 0 or 1)\n# 나이가 많을수록 운동할 확률이 높아짐\nprob_exercise = 1 / (1 + np.exp(-(age - 45) / 20))\nexercise = np.random.binomial(1, prob_exercise)\n\n# (3) 결과 변수: 콜레스테롤 (Cholesterol)\n# 나이가 많으면 콜레스테롤 증가 (+2.0 * Age)\n# 운동을 하면 콜레스테롤 감소 (True Effect = -10)\ncholesterol = 2.0 * age - 10 * exercise + np.random.normal(150, 10, size=N)\n\ndf = pd.DataFrame({'Age': age, 'Exercise': exercise, 'Exercise_Prob': prob_exercise, 'Cholesterol': cholesterol})\n\nplt.figure(figsize=(8, 6))\nsns.scatterplot(\n    x='Exercise_Prob', \n    y='Cholesterol', \n    data=df, \n    hue='Age', \n    palette='viridis', \n    alpha=0.6\n)\nplt.title(\"Exercise vs Cholesterol (Colored by Age)\")\nplt.legend(title='Age')\nplt.show()\n# ---------------------------------------------------------\n# 2. 단순 비교 (Naive Comparison)\n# ---------------------------------------------------------\n# 단순히 운동한 사람과 안 한 사람의 평균만 비교\nmean_exercise = df[df['Exercise'] == 1]['Cholesterol'].mean()\nmean_no_exercise = df[df['Exercise'] == 0]['Cholesterol'].mean()\nnaive_effect = mean_exercise - mean_no_exercise\n\nprint(\"\\n\" + \"=\"*50)\nprint(f\"1. 단순 평균 비교 (Naive Estimate): {naive_effect:.4f}\")\nprint(\"   -&gt; 운동한 사람의 콜레스테롤이 더 높게 나옴(심슨의 역설)\")\nprint(\"=\"*50)\n\n# ---------------------------------------------------------\n# 3. DoWhy를 이용한 인과 추론 (Causal Inference)\n# ---------------------------------------------------------\n\n# 단계 1: 모델 정의 (Causal Graph 생성)\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age'] # 교란 변수 지정\n)\n\n# 단계 2: 식별 (Identification) - 인과 효과를 구할 수 있는지 확인\nidentified_estimand = model.identify_effect()\n\n# 단계 3: 추정 (Estimation) - 성향 점수 층화법 사용\nestimate = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\",\n    method_params={'num_strata': 5, 'clipping_threshold': 5}\n)\n\nprint(\"\\n\" + \"=\"*50)\nprint(f\"2. 인과 효과 추정 (Causal Estimate): {estimate.value:.4f}\")\nprint(f\"   -&gt; 실제 효과 (-10.0)에 매우 근접함\")\nprint(\"=\"*50)\n\n# ---------------------------------------------------------\n# 4. 결과 검증 (Refutation)\n# ---------------------------------------------------------\nprint(\"\\n[검증 시작] 모델이 얼마나 튼튼한지 테스트합니다...\")\n\n# (1) 가짜 처치 검증 (Placebo Treatment)\n# 운동 여부를 랜덤으로 섞으면 효과가 0이 나와야 함\nrefute_placebo = model.refute_estimate(\n    identified_estimand,\n    estimate,\n    method_name=\"placebo_treatment_refuter\",\n    method_params={\"placebo_type\": \"permute_treatment\"}\n)\nprint(f\"\\n- Placebo Test (Expected 0): {refute_placebo.new_effect:.4f}\")\n\n# (2) 랜덤 공통 원인 검증 (Random Common Cause)\n# 아무 상관 없는 랜덤 변수를 추가해도 원래 효과(-10)가 유지되어야 함\nrefute_random = model.refute_estimate(\n    identified_estimand,\n    estimate,\n    method_name=\"random_common_cause\"\n)\nprint(f\"- Random Cause Test (Expected ~ -10): {refute_random.new_effect:.4f}\")\n\n# ---------------------------------------------------------\n# 5. 시각화 (Visualization)\n# ---------------------------------------------------------\nplt.figure(figsize=(12, 5))\n\n# (왼쪽) 단순 비교 시각화\nplt.subplot(1, 2, 1)\nsns.boxplot(x='Exercise', y='Cholesterol', data=df)\nplt.title(f\"Naive Comparison\\n(Effect: {naive_effect:.2f})\")\n\n# (오른쪽) 나이 통제 후 시각화 (회귀선)\nplt.subplot(1, 2, 2)\nsns.scatterplot(x='Age', y='Cholesterol', hue='Exercise', data=df, alpha=0.5)\n# 운동 O/X 별 추세선\nsns.regplot(x='Age', y='Cholesterol', data=df[df['Exercise']==0], scatter=False, label='No Exercise', color='blue')\nsns.regplot(x='Age', y='Cholesterol', data=df[df['Exercise']==1], scatter=False, label='Exercise', color='orange')\nplt.title(f\"Controlled Comparison by Age\\n(True Effect: -10.0)\")\nplt.legend()\n\nplt.tight_layout()\nplt.show()\n\n\n\n\n운동 여부에 따른 콜레스테롤 인과 효과 추정 전체 프로세스\n\n\n\n\n\n==================================================\n1. 단순 평균 비교 (Naive Estimate): 11.5646\n   -&gt; 운동한 사람의 콜레스테롤이 더 높게 나옴 (오해!)\n==================================================\n\n==================================================\n2. 인과 효과 추정 (Causal Estimate): -9.1264\n   -&gt; 실제 효과 (-10.0)에 매우 근접함\n==================================================\n\n[검증 시작] 모델이 얼마나 튼튼한지 테스트합니다...\n\n\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: divide by zero encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: overflow encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: invalid value encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n\n\n\n- Placebo Test (Expected 0): 0.0059\n- Random Cause Test (Expected ~ -10): -9.1264"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-05/index.html#derivation-adjustment-by-direct-parents-to-back-door-adjustment",
-    "href": "posts/causal-inference-04-part-05/index.html#derivation-adjustment-by-direct-parents-to-back-door-adjustment",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "2.1 1. Derivation: Adjustment by Direct Parents \\(\\to\\) Back-door Adjustment",
-    "text": "2.1 1. Derivation: Adjustment by Direct Parents \\(\\to\\) Back-door Adjustment\n\n우리는 직관적으로 \\(X\\)의 모든 부모(\\(Pa_X\\))를 통제하면 인과 효과를 구할 수 있음을 알고 있습니다. 이 정리는 Back-door Criterion을 만족하는 임의의 집합 \\(Z\\)를 통제하는 것이 왜 부모 변수를 통제하는 것과 수학적으로 동치(Equivalent)인지 증명합니다.\n\n\n2.1.1 가정 (Assumptions)\n\n집합 \\(Z\\)가 Back-door criterion을 만족한다고 가정합니다. 편의를 위해 \\(Z^- = Z \\setminus Pa_X\\) (부모 변수를 제외한 \\(Z\\)의 나머지)라고 정의합니다.\n\n\nCondition (i): \\(Z\\)의 노드는 \\(X\\)의 자손이 아님. \\[\\Rightarrow X \\perp (Z \\setminus Pa_X) \\mid Pa_X\\]\nCondition (ii): \\(Z\\)는 \\(X\\)로 들어오는 모든 뒷문 경로를 차단함. \\[\\Rightarrow Y \\perp (Pa_X \\setminus Z) \\mid Z, X\\]\n\n\n\n2.1.2 증명 (Proof)\n\n부모 변수 보정 공식에서 시작하여, \\(Z\\)를 이용한 보정 공식으로 유도해 나갑니다.\n\n\\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_{pa_X} P(y|x, pa_X)P(pa_X) \\\\\n&= \\sum_{z^-, pa_X} P(y|x, pa_X, z^-)P(z^-|x, pa_X)P(pa_X) && \\text{Expand by } Z^- \\text{ (Total Probability)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-|pa_X)P(pa_X) && \\text{Apply Assumptions (i) \\& (ii)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-, pa_X) && \\text{Def. of Conditional Prob.} \\\\\n&= \\sum_{z} P(y|x, z) \\sum_{pa_X \\setminus z} P(z^-, pa_X) && \\text{Rearrange Summation} \\\\\n&= \\sum_{z} P(y|x, z)P(z) && \\text{Marginalize out } Pa_X \\setminus Z\n\\end{aligned}\n\\]\n\n의미: \\(Z\\)가 Back-door 조건만 만족한다면, 굳이 모든 부모 변수를 알지 못해도 \\(Z\\)만으로 완벽한 인과 효과 추정이 가능합니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-05/index.html#derivation-inverse-probability-weighting-ipw-from-samples",
-    "href": "posts/causal-inference-04-part-05/index.html#derivation-inverse-probability-weighting-ipw-from-samples",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "2.2 2. Derivation: Inverse Probability Weighting (IPW) from Samples",
-    "text": "2.2 2. Derivation: Inverse Probability Weighting (IPW) from Samples\n이론적인 Back-door 식을 실제 데이터(\\(N\\)개의 샘플)에서 계산하려면 어떻게 해야 할까요? [cite_start]고차원의 \\(Z\\)에 대해 모든 확률을 합하는 것은 불가능하므로, 샘플 평균(Sample Mean) 형태로 근사합니다. [cite: 2]\n\n2.2.1 수식 유도 (Derivation)\n우선 이론적 식을 결합 확률 분포 형태로 변형합니다. \\[P(y|do(x)) = \\sum_{z} \\frac{P(y, x, z)}{P(x|z)}\\]\n이제 이를 \\(N\\)개의 샘플 데이터를 이용해 근사(Approximation)해 봅시다. 여기서 \\(g(z) = P(x|z)\\)는 Propensity Score입니다.\n\\[\n\\begin{aligned}\nP(y|do(x)) &\\approx \\sum_{z} \\frac{\\frac{1}{N} \\sum_{i=1}^{N} \\mathbb{1}(y_i=y, x_i=x, z_i=z)}{g(z)} \\\\\n&= \\frac{1}{N} \\sum_{i=1}^{N} \\sum_{z} \\frac{\\mathbb{1}(y_i=y, x_i=x, z_i=z)}{g(z)} && \\text{Swap Summation} \\\\\n&= \\frac{1}{N} \\sum_{i=1}^{N} \\frac{\\mathbb{1}(y_i=y, x_i=x)}{g(z_i)} && \\text{Collapse Sum over } Z\n\\end{aligned}\n\\]\n[cite_start][cite: 2]"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-05/index.html#데이터-생성-data-generation",
-    "href": "posts/causal-inference-04-part-05/index.html#데이터-생성-data-generation",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "2.1 1. 데이터 생성 (Data Generation)",
-    "text": "2.1 1. 데이터 생성 (Data Generation)\n나이(Age)가 운동(Exercise)과 콜레스테롤(Cholesterol) 모두에 영향을 주어, 단순 관찰 시 역설적인 결과가 나오도록 데이터를 생성합니다.\n\n\nCode\nimport numpy as np\nimport pandas as pd\nimport dowhy\nfrom dowhy import CausalModel\nimport matplotlib.pyplot as plt\nimport seaborn as sns\n\nnp.random.seed(42)\nN = 1000\n\n# (1) 교란 변수: 나이 (Age)\nage = np.random.randint(20, 70, size=N)\n\n# (2) 처치 변수: 운동 여부 (Exercise, 0 or 1)\n# 나이가 많을수록 운동할 확률이 높아짐 (교란 발생)\nprob_exercise = 1 / (1 + np.exp(-(age - 45) / 20))\nexercise = np.random.binomial(1, prob_exercise)\n\n# (3) 결과 변수: 콜레스테롤 (Cholesterol)\n# 나이가 많으면 콜레스테롤 증가 (+2.0 * Age)\n# 운동을 하면 콜레스테롤 감소 (True Effect = -10)\ncholesterol = 2.0 * age - 10 * exercise + np.random.normal(150, 10, size=N)\n\ndf = pd.DataFrame({\n    'Age': age, \n    'Exercise': exercise, \n    'Exercise_Prob': prob_exercise, \n    'Cholesterol': cholesterol\n})\n\n# 데이터 분포 확인 (나이에 따른 색상 구분)\nplt.figure(figsize=(8, 6))\nsns.scatterplot(\n    x='Exercise_Prob', \n    y='Cholesterol', \n    data=df, \n    hue='Age', \n    palette='viridis', \n    alpha=0.6\n)\nplt.title(\"Exercise Probability vs Cholesterol (Colored by Age)\")\nplt.xlabel(\"Probability of Exercise\")\nplt.legend(title='Age')\nplt.show()\n\n\n\n\n\n\n\n\n\n\n\nCode\nmean_exercise = df[df['Exercise'] == 1]['Cholesterol'].mean()\nmean_no_exercise = df[df['Exercise'] == 0]['Cholesterol'].mean()\nnaive_effect = mean_exercise - mean_no_exercise\n\nprint(\"=\"*50)\nprint(f\"1. 단순 평균 비교 (Naive Estimate): {naive_effect:.4f}\")\nprint(\"   -&gt; 운동한 사람의 콜레스테롤이 더 높게 나옴 (심슨의 역설)\")\nprint(\"=\"*50)\n\n\n==================================================\n1. 단순 평균 비교 (Naive Estimate): 11.5646\n   -&gt; 운동한 사람의 콜레스테롤이 더 높게 나옴 (심슨의 역설)\n==================================================\n\n\n\n\nCode\n# 단계 1: 모델 정의 (Causal Graph 생성)\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age'] # 교란 변수 지정\n)\n\n# 단계 2: 식별 (Identification)\nidentified_estimand = model.identify_effect()\nprint(identified_estimand)\n\n\nEstimand type: EstimandType.NONPARAMETRIC_ATE\n\n### Estimand : 1\nEstimand name: backdoor\nEstimand expression:\n     d                         \n───────────(E[Cholesterol|Age])\nd[Exercise]                    \nEstimand assumption 1, Unconfoundedness: If U→{Exercise} and U→Cholesterol then P(Cholesterol|Exercise,Age,U) = P(Cholesterol|Exercise,Age)\n\n### Estimand : 2\nEstimand name: iv\nNo such variable(s) found!\n\n### Estimand : 3\nEstimand name: frontdoor\nNo such variable(s) found!\n\n\n\n\n\nCode\n# 단계 3: 추정 (Estimation)\n# num_strata=5: 데이터를 성향 점수에 따라 5개 구간으로 나눔\nestimate = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\",\n    method_params={'num_strata': 5, 'clipping_threshold': 5}\n)\n\nprint(\"=\"*50)\nprint(f\"2. 인과 효과 추정 (Causal Estimate): {estimate.value:.4f}\")\nprint(f\"   -&gt; 실제 효과 (-10.0)에 매우 근접함\")\nprint(\"=\"*50)\n\n\n==================================================\n2. 인과 효과 추정 (Causal Estimate): -9.1264\n   -&gt; 실제 효과 (-10.0)에 매우 근접함\n==================================================\n\n\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: divide by zero encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: overflow encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: invalid value encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n\n\n\n\nCode\nprint(\"\\n[검증 시작] 모델이 얼마나 튼튼한지 테스트합니다...\")\n\n# (1) 가짜 처치 검증 (Placebo Treatment)\n# 운동 여부를 랜덤으로 섞으면 효과가 0이 나와야 함\nrefute_placebo = model.refute_estimate(\n    identified_estimand,\n    estimate,\n    method_name=\"placebo_treatment_refuter\",\n    method_params={\"placebo_type\": \"permute_treatment\"}\n)\nprint(f\"\\n- Placebo Test (Expected 0): {refute_placebo.new_effect:.4f}\")\n\n# (2) 랜덤 공통 원인 검증 (Random Common Cause)\n# 아무 상관 없는 랜덤 변수를 추가해도 원래 효과(-10)가 유지되어야 함\nrefute_random = model.refute_estimate(\n    identified_estimand,\n    estimate,\n    method_name=\"random_common_cause\"\n)\nprint(f\"- Random Cause Test (Expected ~ -10): {refute_random.new_effect:.4f}\")\n\n\n\n[검증 시작] 모델이 얼마나 튼튼한지 테스트합니다...\n\n- Placebo Test (Expected 0): 0.0059\n- Random Cause Test (Expected ~ -10): -9.1264\n\n\n\n\nCode\nplt.figure(figsize=(12, 5))\n\n# (왼쪽) 단순 비교 시각화\nplt.subplot(1, 2, 1)\nsns.boxplot(x='Exercise', y='Cholesterol', data=df)\nplt.title(f\"Naive Comparison\\n(Effect: {naive_effect:.2f})\")\n\n# (오른쪽) 나이 통제 후 시각화 (회귀선)\nplt.subplot(1, 2, 2)\nsns.scatterplot(x='Age', y='Cholesterol', hue='Exercise', data=df, alpha=0.5)\n\n# 운동 O/X 별 추세선\nsns.regplot(x='Age', y='Cholesterol', data=df[df['Exercise']==0], \n            scatter=False, label='No Exercise', color='blue')\nsns.regplot(x='Age', y='Cholesterol', data=df[df['Exercise']==1], \n            scatter=False, label='Exercise', color='orange')\n\nplt.title(f\"Controlled Comparison by Age\\n(True Effect: -10.0)\")\nplt.legend()\n\nplt.tight_layout()\nplt.show()\n\n\n\n\n\nLeft: Naive View (Simpson’s Paradox), Right: Controlled View (True Effect)"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
-    "href": "posts/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "5.1 모델 정의 및 식별 (Modeling & Identification)",
-    "text": "5.1 모델 정의 및 식별 (Modeling & Identification)\n\n인과 그래프(Graph)를 정의하고 Back-door 기준을 통해 식별 가능성을 확인합니다.\n\n\n\nCode\n# 단계 1: 모델 정의 (Causal Graph 생성)\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age'] # 교란 변수 지정\n)\n\n# 단계 2: 식별 (Identification)\nidentified_estimand = model.identify_effect()\nprint(identified_estimand)\n\n\nEstimand type: EstimandType.NONPARAMETRIC_ATE\n\n### Estimand : 1\nEstimand name: backdoor\nEstimand expression:\n     d                         \n───────────(E[Cholesterol|Age])\nd[Exercise]                    \nEstimand assumption 1, Unconfoundedness: If U→{Exercise} and U→Cholesterol then P(Cholesterol|Exercise,Age,U) = P(Cholesterol|Exercise,Age)\n\n### Estimand : 2\nEstimand name: iv\nNo such variable(s) found!\n\n### Estimand : 3\nEstimand name: frontdoor\nNo such variable(s) found!"
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
-    "href": "posts/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "5.2 인과 효과 추정 (Estimation: Stratification)",
-    "text": "5.2 인과 효과 추정 (Estimation: Stratification)\n\n여기서는 성향 점수 층화(Propensity Score Stratification) 방법을 사용합니다. 나이가 비슷하여 운동할 확률(성향 점수)이 유사한 사람들끼리 묶어서 비교하는 방식입니다.\n\n\n\nCode\n# 단계 3: 추정 (Estimation)\n# num_strata=5: 데이터를 성향 점수에 따라 5개 구간으로 나눔\nestimate = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\",\n    method_params={'num_strata': 5, 'clipping_threshold': 5}\n)\n\nprint(\"=\"*50)\nprint(f\"2. 인과 효과 추정 (Causal Estimate): {estimate.value:.4f}\")\nprint(f\"   -&gt; 실제 효과 (-10.0)에 매우 근접함\")\nprint(\"=\"*50)\n\n\n==================================================\n2. 인과 효과 추정 (Causal Estimate): -9.1264\n   -&gt; 실제 효과 (-10.0)에 매우 근접함\n==================================================\n\n\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: divide by zero encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: overflow encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: invalid value encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights"
+    "text": "[Causal Inference] 4. Confounding and Backdoor (Part 5)\n\n\n\nCausal Inference\n\n\n\nSimpson’s Paradox Simulation Using DoWhy: Stratification & Refutation\n\n\n\n\n\nJan 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 4)\n\n\n\nCausal Inference\n\n\n\nInverse Probability Weighting\n\n\n\n\n\nJan 7, 2026\n\n\nYour Name\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 3)\n\n\n\nCausal Inference\n\n\n\nBack-door Criterion\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 2)\n\n\n\nCausal Inference\n\n\n\nCounfounding Bias\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 1)\n\n\n\nCausal Inference\n\nStatistics\n\nResearch\n\n\n\nIndentifiable and Non-identifiable Effects\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 1. Introduction\n\n\n\nCausal Inference\n\n\n\n\n\n\n\n\n\nJan 6, 2026\n\n\nSunghyun Yoo\n\n\n\n\n\nNo matching items"
   }
 ]

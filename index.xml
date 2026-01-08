@@ -10,7 +10,1427 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>A blog built with Quarto</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Mon, 05 Jan 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Wed, 07 Jan 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>[Causal Inference] 4. Confounding and Backdoor (Part 5)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/causal-inference-04-part-05/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> Introduction</h1>
+<ul>
+<li>이전 포스트들에서 배운 교란(Confounding)과 Back-door Criterion을 실제 코드로 구현해 보는 시간입니다.</li>
+<li>특히 <strong>심슨의 역설(Simpson’s Paradox)</strong> 상황을 시뮬레이션하고, <code>DoWhy</code> 라이브러리의 <strong>성향 점수 층화(Propensity Score Stratification)</strong> 방법을 통해 올바른 인과 효과를 추정해 봅니다.</li>
+</ul>
+</section>
+<section id="python-practice-dowhy-simulation" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> Python Practice: DoWhy Simulation</h1>
+<p>이제 위 이론을 바탕으로 <code>DoWhy</code> 라이브러리를 사용해 인과 추론 프로세스를 단계별로 구현해 봅니다.</p>
+</section>
+<section id="데이터-생성-data-generation" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> 데이터 생성 (Data Generation)</h1>
+<p>나이(Age)가 운동(Exercise)과 콜레스테롤(Cholesterol) 모두에 영향을 주어, 단순 관찰 시 역설적인 결과가 나오도록 데이터를 생성합니다.</p>
+<div id="cell-data-generation" class="cell" data-execution_count="1">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">import</span> numpy <span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">as</span> np</span>
+<span id="cb1-2"><span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">import</span> pandas <span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">as</span> pd</span>
+<span id="cb1-3"><span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">import</span> dowhy</span>
+<span id="cb1-4"><span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">from</span> dowhy <span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">import</span> CausalModel</span>
+<span id="cb1-5"><span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">import</span> matplotlib.pyplot <span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">as</span> plt</span>
+<span id="cb1-6"><span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">import</span> seaborn <span class="im" style="color: #00769E;
+background-color: null;
+font-style: inherit;">as</span> sns</span>
+<span id="cb1-7"></span>
+<span id="cb1-8">np.random.seed(<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">42</span>)</span>
+<span id="cb1-9">N <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1000</span></span>
+<span id="cb1-10"></span>
+<span id="cb1-11"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># (1) 교란 변수: 나이 (Age)</span></span>
+<span id="cb1-12">age <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> np.random.randint(<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">20</span>, <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">70</span>, size<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>N)</span>
+<span id="cb1-13"></span>
+<span id="cb1-14"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># (2) 처치 변수: 운동 여부 (Exercise, 0 or 1)</span></span>
+<span id="cb1-15"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># 나이가 많을수록 운동할 확률이 높아짐 (교란 발생)</span></span>
+<span id="cb1-16">prob_exercise <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">/</span> (<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span> np.exp(<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">-</span>(age <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">-</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">45</span>) <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">/</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">20</span>))</span>
+<span id="cb1-17">exercise <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> np.random.binomial(<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>, prob_exercise)</span>
+<span id="cb1-18"></span>
+<span id="cb1-19"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># (3) 결과 변수: 콜레스테롤 (Cholesterol)</span></span>
+<span id="cb1-20"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># 나이가 많으면 콜레스테롤 증가 (+2.0 * Age)</span></span>
+<span id="cb1-21"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># 운동을 하면 콜레스테롤 감소 (True Effect = -10)</span></span>
+<span id="cb1-22">cholesterol <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> <span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">2.0</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">*</span> age <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">-</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">10</span> <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">*</span> exercise <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">+</span> np.random.normal(<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">150</span>, <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">10</span>, size<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>N)</span>
+<span id="cb1-23"></span>
+<span id="cb1-24">df <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> pd.DataFrame({</span>
+<span id="cb1-25">    <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Age'</span>: age, </span>
+<span id="cb1-26">    <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Exercise'</span>: exercise, </span>
+<span id="cb1-27">    <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Exercise_Prob'</span>: prob_exercise, </span>
+<span id="cb1-28">    <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Cholesterol'</span>: cholesterol</span>
+<span id="cb1-29">})</span>
+<span id="cb1-30"></span>
+<span id="cb1-31"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># 데이터 분포 확인 (나이에 따른 색상 구분)</span></span>
+<span id="cb1-32">plt.figure(figsize<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>(<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">8</span>, <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">6</span>))</span>
+<span id="cb1-33">sns.scatterplot(</span>
+<span id="cb1-34">    x<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Exercise_Prob'</span>, </span>
+<span id="cb1-35">    y<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Cholesterol'</span>, </span>
+<span id="cb1-36">    data<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>df, </span>
+<span id="cb1-37">    hue<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Age'</span>, </span>
+<span id="cb1-38">    palette<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'viridis'</span>, </span>
+<span id="cb1-39">    alpha<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0.6</span></span>
+<span id="cb1-40">)</span>
+<span id="cb1-41">plt.title(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"Exercise Probability vs Cholesterol (Colored by Age)"</span>)</span>
+<span id="cb1-42">plt.xlabel(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"Probability of Exercise"</span>)</span>
+<span id="cb1-43">plt.legend(title<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Age'</span>)</span>
+<span id="cb1-44">plt.show()</span></code></pre></div></div>
+</details>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-05/index_files/figure-html/data-generation-output-1.png" id="data-generation" width="668" height="523" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="단순-비교-naive-comparison" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> 단순 비교 (Naive Comparison)</h1>
+<ul>
+<li>교란 변수를 고려하지 않고 단순히 운동한 사람과 안 한 사람의 평균 콜레스테롤을 비교해 봅니다.</li>
+</ul>
+<div id="naive-estimation" class="cell" data-execution_count="2">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1">mean_exercise <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> df[df[<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Exercise'</span>] <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>][<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Cholesterol'</span>].mean()</span>
+<span id="cb2-2">mean_no_exercise <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> df[df[<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Exercise'</span>] <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span> <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0</span>][<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Cholesterol'</span>].mean()</span>
+<span id="cb2-3">naive_effect <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> mean_exercise <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">-</span> mean_no_exercise</span>
+<span id="cb2-4"></span>
+<span id="cb2-5"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"="</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">*</span><span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">50</span>)</span>
+<span id="cb2-6"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(<span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">f"1. 단순 평균 비교 (Naive Estimate): </span><span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">{</span>naive_effect<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:.4f}</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"</span>)</span>
+<span id="cb2-7"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"   -&gt; 운동한 사람의 콜레스테롤이 더 높게 나옴 (심슨의 역설)"</span>)</span>
+<span id="cb2-8"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"="</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">*</span><span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">50</span>)</span></code></pre></div></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>==================================================
+1. 단순 평균 비교 (Naive Estimate): 11.5646
+   -&gt; 운동한 사람의 콜레스테롤이 더 높게 나옴 (심슨의 역설)
+==================================================</code></pre>
+</div>
+</div>
+</section>
+<section id="dowhy를-이용한-인과-추론" class="level1" data-number="5">
+<h1 data-number="5"><span class="header-section-number">5</span> DoWhy를 이용한 인과 추론</h1>
+<section id="모델-정의-및-식별-modeling-identification" class="level2" data-number="5.1">
+<h2 data-number="5.1" class="anchored" data-anchor-id="모델-정의-및-식별-modeling-identification"><span class="header-section-number">5.1</span> 모델 정의 및 식별 (Modeling &amp; Identification)</h2>
+<ul>
+<li>인과 그래프(Graph)를 정의하고 Back-door 기준을 통해 식별 가능성을 확인합니다.</li>
+</ul>
+<div id="dowhy-modeling" class="cell" data-execution_count="3">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># 단계 1: 모델 정의 (Causal Graph 생성)</span></span>
+<span id="cb4-2">model <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> CausalModel(</span>
+<span id="cb4-3">    data<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>df,</span>
+<span id="cb4-4">    treatment<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Exercise'</span>,</span>
+<span id="cb4-5">    outcome<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Cholesterol'</span>,</span>
+<span id="cb4-6">    common_causes<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>[<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Age'</span>] <span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># 교란 변수 지정</span></span>
+<span id="cb4-7">)</span>
+<span id="cb4-8"></span>
+<span id="cb4-9"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># 단계 2: 식별 (Identification)</span></span>
+<span id="cb4-10">identified_estimand <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> model.identify_effect()</span>
+<span id="cb4-11"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(identified_estimand)</span></code></pre></div></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Estimand type: EstimandType.NONPARAMETRIC_ATE
+
+### Estimand : 1
+Estimand name: backdoor
+Estimand expression:
+     d                         
+───────────(E[Cholesterol|Age])
+d[Exercise]                    
+Estimand assumption 1, Unconfoundedness: If U→{Exercise} and U→Cholesterol then P(Cholesterol|Exercise,Age,U) = P(Cholesterol|Exercise,Age)
+
+### Estimand : 2
+Estimand name: iv
+No such variable(s) found!
+
+### Estimand : 3
+Estimand name: frontdoor
+No such variable(s) found!
+</code></pre>
+</div>
+</div>
+</section>
+<section id="인과-효과-추정-estimation-stratification" class="level2" data-number="5.2">
+<h2 data-number="5.2" class="anchored" data-anchor-id="인과-효과-추정-estimation-stratification"><span class="header-section-number">5.2</span> 인과 효과 추정 (Estimation: Stratification)</h2>
+<ul>
+<li>여기서는 성향 점수 층화(Propensity Score Stratification) 방법을 사용합니다. 나이가 비슷하여 운동할 확률(성향 점수)이 유사한 사람들끼리 묶어서 비교하는 방식입니다.</li>
+</ul>
+<div id="dowhy-estimation" class="cell" data-execution_count="4">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># 단계 3: 추정 (Estimation)</span></span>
+<span id="cb6-2"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># num_strata=5: 데이터를 성향 점수에 따라 5개 구간으로 나눔</span></span>
+<span id="cb6-3">estimate <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> model.estimate_effect(</span>
+<span id="cb6-4">    identified_estimand,</span>
+<span id="cb6-5">    method_name<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"backdoor.propensity_score_stratification"</span>,</span>
+<span id="cb6-6">    method_params<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>{<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'num_strata'</span>: <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">5</span>, <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'clipping_threshold'</span>: <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">5</span>}</span>
+<span id="cb6-7">)</span>
+<span id="cb6-8"></span>
+<span id="cb6-9"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"="</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">*</span><span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">50</span>)</span>
+<span id="cb6-10"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(<span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">f"2. 인과 효과 추정 (Causal Estimate): </span><span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">{</span>estimate<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">.</span>value<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:.4f}</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"</span>)</span>
+<span id="cb6-11"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(<span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">f"   -&gt; 실제 효과 (-10.0)에 매우 근접함"</span>)</span>
+<span id="cb6-12"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"="</span><span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">*</span><span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">50</span>)</span></code></pre></div></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>==================================================
+2. 인과 효과 추정 (Causal Estimate): -9.1264
+   -&gt; 실제 효과 (-10.0)에 매우 근접함
+==================================================</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: divide by zero encountered in matmul
+  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights
+/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: overflow encountered in matmul
+  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights
+/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: invalid value encountered in matmul
+  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="결과-검증-refutation" class="level1" data-number="6">
+<h1 data-number="6"><span class="header-section-number">6</span> 결과 검증 (Refutation)</h1>
+<ul>
+<li>구해진 인과 효과가 통계적으로 유의미하고 견고한지 검증하기 위해 <strong>가짜 처치(Placebo)</strong>와 랜덤 변수 추가(Random Common Cause) 테스트를 수행합니다.</li>
+</ul>
+<div id="refutation" class="cell" data-execution_count="5">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"</span><span class="ch" style="color: #20794D;
+background-color: null;
+font-style: inherit;">\n</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">[검증 시작] 모델이 얼마나 튼튼한지 테스트합니다..."</span>)</span>
+<span id="cb9-2"></span>
+<span id="cb9-3"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># (1) 가짜 처치 검증 (Placebo Treatment)</span></span>
+<span id="cb9-4"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># 운동 여부를 랜덤으로 섞으면 효과가 0이 나와야 함</span></span>
+<span id="cb9-5">refute_placebo <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> model.refute_estimate(</span>
+<span id="cb9-6">    identified_estimand,</span>
+<span id="cb9-7">    estimate,</span>
+<span id="cb9-8">    method_name<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"placebo_treatment_refuter"</span>,</span>
+<span id="cb9-9">    method_params<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>{<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"placebo_type"</span>: <span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"permute_treatment"</span>}</span>
+<span id="cb9-10">)</span>
+<span id="cb9-11"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(<span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">f"</span><span class="ch" style="color: #20794D;
+background-color: null;
+font-style: inherit;">\n</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">- Placebo Test (Expected 0): </span><span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">{</span>refute_placebo<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">.</span>new_effect<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:.4f}</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"</span>)</span>
+<span id="cb9-12"></span>
+<span id="cb9-13"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># (2) 랜덤 공통 원인 검증 (Random Common Cause)</span></span>
+<span id="cb9-14"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># 아무 상관 없는 랜덤 변수를 추가해도 원래 효과(-10)가 유지되어야 함</span></span>
+<span id="cb9-15">refute_random <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> model.refute_estimate(</span>
+<span id="cb9-16">    identified_estimand,</span>
+<span id="cb9-17">    estimate,</span>
+<span id="cb9-18">    method_name<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"random_common_cause"</span></span>
+<span id="cb9-19">)</span>
+<span id="cb9-20"><span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">print</span>(<span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">f"- Random Cause Test (Expected ~ -10): </span><span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">{</span>refute_random<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">.</span>new_effect<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:.4f}</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">"</span>)</span></code></pre></div></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+[검증 시작] 모델이 얼마나 튼튼한지 테스트합니다...
+
+- Placebo Test (Expected 0): 0.0059
+- Random Cause Test (Expected ~ -10): -9.1264</code></pre>
+</div>
+</div>
+</section>
+<section id="최종-시각화-visualization" class="level1" data-number="7">
+<h1 data-number="7"><span class="header-section-number">7</span> 최종 시각화 (Visualization)</h1>
+<ul>
+<li>단순 비교했을 때와 교란 변수를 통제했을 때의 차이를 시각적으로 확인합니다.</li>
+</ul>
+<div id="cell-final-visualization" class="cell" data-execution_count="6">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1">plt.figure(figsize<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>(<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">12</span>, <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">5</span>))</span>
+<span id="cb11-2"></span>
+<span id="cb11-3"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># (왼쪽) 단순 비교 시각화</span></span>
+<span id="cb11-4">plt.subplot(<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>, <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">2</span>, <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>)</span>
+<span id="cb11-5">sns.boxplot(x<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Exercise'</span>, y<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Cholesterol'</span>, data<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>df)</span>
+<span id="cb11-6">plt.title(<span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">f"Naive Comparison</span><span class="ch" style="color: #20794D;
+background-color: null;
+font-style: inherit;">\n</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">(Effect: </span><span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">{</span>naive_effect<span class="sc" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">:.2f}</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">)"</span>)</span>
+<span id="cb11-7"></span>
+<span id="cb11-8"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># (오른쪽) 나이 통제 후 시각화 (회귀선)</span></span>
+<span id="cb11-9">plt.subplot(<span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>, <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">2</span>, <span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">2</span>)</span>
+<span id="cb11-10">sns.scatterplot(x<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Age'</span>, y<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Cholesterol'</span>, hue<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Exercise'</span>, data<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>df, alpha<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="fl" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0.5</span>)</span>
+<span id="cb11-11"></span>
+<span id="cb11-12"><span class="co" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;"># 운동 O/X 별 추세선</span></span>
+<span id="cb11-13">sns.regplot(x<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Age'</span>, y<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Cholesterol'</span>, data<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>df[df[<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Exercise'</span>]<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span><span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">0</span>], </span>
+<span id="cb11-14">            scatter<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="va" style="color: #111111;
+background-color: null;
+font-style: inherit;">False</span>, label<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'No Exercise'</span>, color<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'blue'</span>)</span>
+<span id="cb11-15">sns.regplot(x<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Age'</span>, y<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Cholesterol'</span>, data<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span>df[df[<span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Exercise'</span>]<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">==</span><span class="dv" style="color: #AD0000;
+background-color: null;
+font-style: inherit;">1</span>], </span>
+<span id="cb11-16">            scatter<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="va" style="color: #111111;
+background-color: null;
+font-style: inherit;">False</span>, label<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'Exercise'</span>, color<span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span><span class="st" style="color: #20794D;
+background-color: null;
+font-style: inherit;">'orange'</span>)</span>
+<span id="cb11-17"></span>
+<span id="cb11-18">plt.title(<span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">f"Controlled Comparison by Age</span><span class="ch" style="color: #20794D;
+background-color: null;
+font-style: inherit;">\n</span><span class="ss" style="color: #20794D;
+background-color: null;
+font-style: inherit;">(True Effect: -10.0)"</span>)</span>
+<span id="cb11-19">plt.legend()</span>
+<span id="cb11-20"></span>
+<span id="cb11-21">plt.tight_layout()</span>
+<span id="cb11-22">plt.show()</span></code></pre></div></div>
+</details>
+<div class="cell-output cell-output-display">
+<div id="final-visualization" class="quarto-figure quarto-figure-center anchored">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-05/index_files/figure-html/final-visualization-output-1.png" width="1142" height="471" class="figure-img"></p>
+<figcaption>Left: Naive View (Simpson’s Paradox), Right: Controlled View (True Effect)</figcaption>
+</figure>
+</div>
+</div>
+</div>
+
+
+</section>
+
+ ]]></description>
+  <category>Causal Inference</category>
+  <guid>https://shsha0110.github.io/posts/causal-inference-04-part-05/</guid>
+  <pubDate>Wed, 07 Jan 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Causal Inference] 4. Confounding and Backdoor (Part 4)</title>
+  <dc:creator>Your Name</dc:creator>
+  <link>https://shsha0110.github.io/posts/causal-inference-04-part-04/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="overview" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> Overview</h1>
+<ul>
+<li>지난 포스트에서는 <strong>Back-door Criterion</strong>을 통해 어떤 공변량 집합 <img src="https://latex.codecogs.com/png.latex?Z">를 보정(Adjustment)해야 인과 효과 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">를 식별할 수 있는지 알아보았습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))%20=%20%5Csum_%7Bz%7D%20P(y%7Cx,z)P(z)"></p>
+<ul>
+<li>이번 포스트에서는 이 식을 <strong>실제 데이터(Practice)</strong>에서 어떻게 평가하고 계산하는지, 특히 <strong>계산 복잡도 문제</strong>를 해결하기 위한 <strong>Inverse Probability Weighting (IPW)</strong> 기법에 대해 다룹니다.</li>
+</ul>
+<hr>
+</section>
+<section id="the-challenge-of-evaluation" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> The Challenge of Evaluation</h1>
+<ul>
+<li>Back-door criterion을 만족하는 집합 <img src="https://latex.codecogs.com/png.latex?Z">를 찾았다면, 이론적으로는 위의 식을 통해 인과 효과를 계산할 수 있습니다.</li>
+<li>하지만 실제 적용 시에는 두 가지 큰 난관에 부딪힙니다.</li>
+</ul>
+<ol type="1">
+<li><strong>Estimation:</strong> <img src="https://latex.codecogs.com/png.latex?P(y%7Cx,z)">와 <img src="https://latex.codecogs.com/png.latex?P(z)">와 같은 분포들을 데이터로부터 각각 추정해야 합니다.</li>
+<li><strong>Computational Complexity:</strong> 만약 보정해야 할 변수 집합 <img src="https://latex.codecogs.com/png.latex?Z">가 고차원(High-dimensional)이라면, <img src="https://latex.codecogs.com/png.latex?Z">의 모든 조합에 대해 합(Summation)을 구하는 것은 매우 어렵습니다. <img src="https://latex.codecogs.com/png.latex?Z">의 차원이 늘어날수록 계산 복잡도는 지수적으로 증가(<img src="https://latex.codecogs.com/png.latex?O(exp(%7CZ%7C))">)하기 때문입니다.</li>
+</ol>
+<ul>
+<li>이 문제를 해결하기 위해 우리는 식을 변형하여 <strong>IPW (Inverse Probability Weighting)</strong> 방식을 도입합니다.</li>
+</ul>
+<hr>
+</section>
+<section id="inverse-probability-weighting-ipw" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> Inverse Probability Weighting (IPW)</h1>
+<section id="derivation" class="level2" data-number="3.1">
+<h2 data-number="3.1" class="anchored" data-anchor-id="derivation"><span class="header-section-number">3.1</span> Derivation</h2>
+<ul>
+<li>기존의 Back-door Adjustment 식을 베이즈 정리와 결합 확률 법칙을 이용해 재구성해 봅시다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Balign%7D%0AP(y%7Cdo(x))%20&amp;=%20%5Csum_%7Bz%7D%20P(y%7Cx,z)P(z)%20%5C%5C%0A&amp;=%20%5Csum_%7Bz%7D%20%5Cfrac%7BP(y,x,z)%7D%7BP(x,z)%7D%20P(z)%20%5C%5C%0A&amp;=%20%5Csum_%7Bz%7D%20%5Cfrac%7BP(y,x,z)%7D%7BP(x%7Cz)P(z)%7D%20P(z)%20%5C%5C%0A&amp;=%20%5Csum_%7Bz%7D%20%5Cfrac%7BP(y,x,z)%7D%7BP(x%7Cz)%7D%20%5Cquad%0A%5Cend%7Balign%7D%0A"></p>
+<ul>
+<li>이제 우리는 <img src="https://latex.codecogs.com/png.latex?P(z)">를 따로 추정하거나 모든 <img src="https://latex.codecogs.com/png.latex?z">에 대해 합을 구할 필요 없이, 결합 확률 <img src="https://latex.codecogs.com/png.latex?P(y,x,z)">를 <strong><img src="https://latex.codecogs.com/png.latex?P(x%7Cz)"></strong>로 나눈 형태로 식을 단순화했습니다.</li>
+</ul>
+</section>
+<section id="propensity-score-gz" class="level2" data-number="3.2">
+<h2 data-number="3.2" class="anchored" data-anchor-id="propensity-score-gz"><span class="header-section-number">3.2</span> Propensity Score <img src="https://latex.codecogs.com/png.latex?g(z)"></h2>
+<ul>
+<li>위 식의 분모에 있는 <strong><img src="https://latex.codecogs.com/png.latex?P(x%7Cz)"></strong>는 공변량 <img src="https://latex.codecogs.com/png.latex?Z">가 주어졌을 때 원인 변수 <img src="https://latex.codecogs.com/png.latex?X">가 할당될 확률을 의미하며, 이를 <strong>Propensity Score</strong>라고 부릅니다.</li>
+<li>보통 <img src="https://latex.codecogs.com/png.latex?g(z)">로 표기하며 로지스틱 회귀(Logistic Regression) 등의 모델을 사용하여 추정합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?g(z)%20=%20P(X=x%7CZ=z)"></p>
+<hr>
+</section>
+</section>
+<section id="estimating-from-samples" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> Estimating from Samples</h1>
+<ul>
+<li>이제 <img src="https://latex.codecogs.com/png.latex?N">개의 관측 데이터 샘플이 주어졌을 때, 위 식을 표본 평균(Sample Mean) 형태로 근사해 보겠습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0AP(y%7Cdo(x))%20&amp;%5Capprox%20%5Csum_%7Bz%7D%20%5Cfrac%7B%5Cfrac%7B1%7D%7BN%7D%20%5Csum_%7Bi=1%7D%5E%7BN%7D%20%5Cmathbb%7B1%7D(y_i=y,%20x_i=x,%20z_i=z)%7D%7Bg(z)%7D%20%5C%5C%0A&amp;=%20%5Cfrac%7B1%7D%7BN%7D%20%5Csum_%7Bi=1%7D%5E%7BN%7D%20%5Csum_%7Bz%7D%20%5Cfrac%7B%5Cmathbb%7B1%7D(y_i=y,%20x_i=x,%20z_i=z)%7D%7Bg(z)%7D%20&amp;&amp;%20%5Ctext%7BSwap%20Summation%7D%20%5C%5C%0A&amp;=%20%5Cfrac%7B1%7D%7BN%7D%20%5Csum_%7Bi=1%7D%5E%7BN%7D%20%5Cfrac%7B%5Cmathbb%7B1%7D(y_i=y,%20x_i=x)%7D%7Bg(z_i)%7D%20&amp;&amp;%20%5Ctext%7BCollapse%20Sum%20over%20%7D%20Z%0A%5Cend%7Baligned%7D%0A"></p>
+<ul>
+<li><p>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7B1%7D(%5Ccdot)">은 지시 함수(Indicator function)로, 괄호 안의 조건이 참이면 1, 거짓이면 0을 반환합니다.</p></li>
+<li><p>기대값(Expectation) 관점에서 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D%5BY%7Cdo(x)%5D">를 구한다면 식은 다음과 같이 정리됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmathbb%7BE%7D%5BY%7Cdo(x)%5D%20&amp;=%20%5Csum_%7Bz,%20y%7D%20%5Cfrac%7By%20%5Ccdot%20P(y,%20x,%20z)%7D%7BP(x%7Cz)%7D%20%5C%5C%0A&amp;%5Capprox%20%5Csum_%7Bz,%20y%7D%20%5Cfrac%7By%20%5Ccdot%20%5Cfrac%7B1%7D%7BN%7D%20%5Csum_%7Bi=1%7D%5E%7BN%7D%20%5Cmathbb%7B1%7D(y_i=y,%20x_i=x,%20z_i=z)%7D%7Bg(z)%7D%20%5C%5C%0A&amp;=%20%5Cfrac%7B1%7D%7BN%7D%20%5Csum_%7Bi=1%7D%5E%7BN%7D%20%5Csum_%7Bz,%20y%7D%20%5Cfrac%7By%20%5Ccdot%20%5Cmathbb%7B1%7D(y_i=y,%20x_i=x,%20z_i=z)%7D%7Bg(z)%7D%20&amp;&amp;%20%5Ctext%7BSwap%20Summation%7D%20%5C%5C%0A&amp;=%20%5Cfrac%7B1%7D%7BN%7D%20%5Csum_%7Bi=1%7D%5E%7BN%7D%20y_i%20%5Cfrac%7B%5Cmathbb%7B1%7D(x_i=x)%7D%7Bg(z_i)%7D%20&amp;&amp;%20%5Ctext%7BCollapse%20Sum%20over%20%7D%20Z,%20Y%0A%5Cend%7Baligned%7D%0A"></p>
+<section id="핵심-포인트" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="핵심-포인트"><span class="header-section-number">4.1</span> 핵심 포인트</h2>
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7B1%7D(%5Ccdot)"> (Indicator Function):</strong> 조건이 참이면 1, 거짓이면 0을 반환하는 함수입니다.</li>
+<li><strong>시간 복잡도 <img src="https://latex.codecogs.com/png.latex?O(N)">:</strong> 가장 마지막 식을 보면, 더 이상 <img src="https://latex.codecogs.com/png.latex?Z">의 모든 조합에 대해 합을 구할 필요가 없습니다. 단순히 <strong>관측된 <img src="https://latex.codecogs.com/png.latex?N">개의 데이터 샘플</strong>을 한 번씩만 순회하며 가중치(<img src="https://latex.codecogs.com/png.latex?1/g(z_i)">)를 더하면 계산이 끝납니다. 이것이 IPW가 강력한 이유입니다.</li>
+</ul>
+</section>
+<section id="시간-복잡도의-개선" class="level2" data-number="4.2">
+<h2 data-number="4.2" class="anchored" data-anchor-id="시간-복잡도의-개선"><span class="header-section-number">4.2</span> 시간 복잡도의 개선</h2>
+<ul>
+<li>이 방식의 가장 큰 장점은 계산 효율성입니다.</li>
+<li>고차원 <img src="https://latex.codecogs.com/png.latex?Z">에 대해 적분하거나 합을 구하는 대신, <strong>샘플 수 <img src="https://latex.codecogs.com/png.latex?N">에 비례하는 선형 시간(<img src="https://latex.codecogs.com/png.latex?O(N)">)</strong> 만에 계산이 가능합니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="average-treatment-effect-ate-with-ipw" class="level1" data-number="5">
+<h1 data-number="5"><span class="header-section-number">5</span> Average Treatment Effect (ATE) with IPW</h1>
+<ul>
+<li>일반적으로 우리가 가장 관심을 가지는 것은 처치(Treatment, <img src="https://latex.codecogs.com/png.latex?X=1">)와 통제(Control, <img src="https://latex.codecogs.com/png.latex?X=0">) 간의 평균적인 차이인 <strong>ATE</strong>입니다.</li>
+<li>IPW를 이용한 ATE 추정량은 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Balign%7D%0A%5Chat%7BATE%7D%20&amp;=%20%5Chat%7B%5Cmathbb%7BE%7D%7D%5BY%7Cdo(X=1)%5D%20-%20%5Chat%7B%5Cmathbb%7BE%7D%7D%5BY%7Cdo(X=0)%5D%20%5C%5C%0A&amp;=%20%5Cfrac%7B1%7D%7BN%7D%20%5Csum_%7Bi=1%7D%5E%7BN%7D%20%5Cleft(%20%5Cfrac%7By_i%20x_i%7D%7Bg(z_i)%7D%20-%20%5Cfrac%7By_i%20(1-x_i)%7D%7B1%20-%20g(z_i)%7D%20%5Cright)%0A%5Cend%7Balign%7D%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?X_i=1">인 샘플(Treatment group)은 <img src="https://latex.codecogs.com/png.latex?1/g(z_i)">의 가중치를 갖습니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?X_i=0">인 샘플(Control group)은 <img src="https://latex.codecogs.com/png.latex?1/(1-g(z_i))">의 가중치를 갖습니다.</li>
+</ul>
+<hr>
+</section>
+<section id="intuition-pseudo-causal-samples" class="level1" data-number="6">
+<h1 data-number="6"><span class="header-section-number">6</span> Intuition: Pseudo Causal Samples</h1>
+<ul>
+<li>IPW가 작동하는 원리를 직관적으로 이해하기 위해 “가상의 인과 샘플(Pseudo Causal Samples)” 개념을 살펴봅시다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-04/images/ipw_concept.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1. Concept of Inverse Probability Weighting</figcaption>
+</figure>
+</div>
+<ol type="1">
+<li><strong>Observational Data:</strong> 현실 데이터에서는 <img src="https://latex.codecogs.com/png.latex?Z">의 특성에 따라 <img src="https://latex.codecogs.com/png.latex?X">를 선택할 확률(<img src="https://latex.codecogs.com/png.latex?P(x%7Cz)">)이 다릅니다 (Selection Bias).</li>
+<li><strong>Weighting:</strong> <img src="https://latex.codecogs.com/png.latex?X">가 일어날 확률이 낮았던(<img src="https://latex.codecogs.com/png.latex?P(x%7Cz)">가 작은) 샘플일수록, 역수(<img src="https://latex.codecogs.com/png.latex?1/P(x%7Cz)">)를 취하면 가중치가 커집니다.
+<ul>
+<li>예를 들어, <img src="https://latex.codecogs.com/png.latex?P(x_1%7Cz_1)%20=%201/3">이었다면, 이 샘플은 가중치를 통해 <strong>3배</strong>로 부풀려집니다.</li>
+</ul></li>
+<li><strong>Pseudo Population:</strong> 이렇게 가중치를 적용하면, 마치 모든 샘플이 편향 없이 고르게 처리(<img src="https://latex.codecogs.com/png.latex?X">)를 받은 것과 같은 <strong>가상의 모집단</strong>이 형성됩니다.</li>
+</ol>
+<ul>
+<li>결과적으로 IPW는 교란 변수 <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?X">에 미치는 영향을 역확률 가중치로 상쇄시켜, <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?Z">의 연결 고리를 끊어내는(Do-operator와 유사한) 효과를 냅니다.</li>
+</ul>
+<hr>
+<p><strong>Summary:</strong> 복잡한 인과 그래프에서 Back-door criterion을 만족하는 변수들을 찾아냈다면, <strong>IPW</strong>는 이를 실제로 계산 가능하게 만들어주는 강력한 도구입니다. Propensity Score <img src="https://latex.codecogs.com/png.latex?g(z)">만 정확히 모델링할 수 있다면, 우리는 선형 시간 내에 인과 효과를 추정할 수 있습니다.</p>
+
+
+</section>
+
+ ]]></description>
+  <category>Causal Inference</category>
+  <guid>https://shsha0110.github.io/posts/causal-inference-04-part-04/</guid>
+  <pubDate>Tue, 06 Jan 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Causal Inference] 4. Confounding and Backdoor (Part 3)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/causal-inference-04-part-03/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="overview" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> Overview</h1>
+<ul>
+<li>지난 포스트에서는 교란 편향(Confounding Bias)이 인과 효과 추정을 방해하는 주된 요인임을 살펴보았습니다.</li>
+<li>그렇다면 우리는 복잡한 인과 그래프(DAG)에서 <strong>어떤 변수들의 집합(<img src="https://latex.codecogs.com/png.latex?Z">)을 조절(Control/Adjustment)</strong>해야 이 편향을 제거할 수 있을까요?</li>
+<li>이번 포스트에서는 그 해답이 되는 <strong>Back-door Criterion(백도어 기준)</strong>의 정의와 이를 이용한 보정 공식을 다룹니다.</li>
+</ul>
+<hr>
+</section>
+<section id="back-door-criterion" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> Back-door Criterion</h1>
+<section id="definition" class="level2" data-number="2.1">
+<h2 data-number="2.1" class="anchored" data-anchor-id="definition"><span class="header-section-number">2.1</span> Definition</h2>
+<ul>
+<li>주어진 인과 그래프 <img src="https://latex.codecogs.com/png.latex?G">에서 변수 <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?Y">에 대해, 변수들의 집합 <img src="https://latex.codecogs.com/png.latex?Z">가 다음 두 가지 조건을 만족할 때, <img src="https://latex.codecogs.com/png.latex?Z">는 <strong>Back-door Criterion</strong>을 만족한다고 정의합니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>(i) No node in <img src="https://latex.codecogs.com/png.latex?Z"> is a descendant of <img src="https://latex.codecogs.com/png.latex?X">.</strong> (<img src="https://latex.codecogs.com/png.latex?Z">에 속한 어떤 변수도 <img src="https://latex.codecogs.com/png.latex?X">의 자손이 아니어야 합니다.)</p>
+<p><strong>(ii) <img src="https://latex.codecogs.com/png.latex?Z"> blocks every path between <img src="https://latex.codecogs.com/png.latex?X"> and <img src="https://latex.codecogs.com/png.latex?Y"> that contains an arrow into <img src="https://latex.codecogs.com/png.latex?X">.</strong> (<img src="https://latex.codecogs.com/png.latex?Z">는 <img src="https://latex.codecogs.com/png.latex?X">로 들어오는 화살표를 포함하는 <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?Y"> 사이의 모든 경로를 차단해야 합니다.)</p>
+</blockquote>
+</section>
+<section id="의미-해석" class="level2" data-number="2.2">
+<h2 data-number="2.2" class="anchored" data-anchor-id="의미-해석"><span class="header-section-number">2.2</span> 의미 해석</h2>
+<ol type="1">
+<li><strong>조건 (i)</strong>은 <img src="https://latex.codecogs.com/png.latex?X">의 결과(Effect)로 나타나는 변수를 통제하지 말라는 뜻입니다. <img src="https://latex.codecogs.com/png.latex?X">의 자손을 통제하면 <img src="https://latex.codecogs.com/png.latex?X">가 <img src="https://latex.codecogs.com/png.latex?Y">에 미치는 실제 인과 경로를 막아버리거나 새로운 편향을 만들 수 있기 때문입니다.</li>
+<li><strong>조건 (ii)</strong>의 “arrow into <img src="https://latex.codecogs.com/png.latex?X">”는 소위 <strong>백도어 경로(Back-door Path)</strong>를 의미합니다. 이는 <img src="https://latex.codecogs.com/png.latex?X">의 원인이 되는 변수들에 의해 생성되는 비인과적 상관관계(Spurious Correlation)의 경로입니다. 이 경로를 차단함으로써 우리는 <img src="https://latex.codecogs.com/png.latex?X">에서 <img src="https://latex.codecogs.com/png.latex?Y">로 나가는 순수한 인과적 경로만 남길 수 있습니다.</li>
+</ol>
+<hr>
+</section>
+</section>
+<section id="back-door-adjustment-theorem" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> Back-door Adjustment Theorem</h1>
+<ul>
+<li>만약 변수 집합 <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?X,%20Y">에 대해 Back-door Criterion을 만족한다면, <img src="https://latex.codecogs.com/png.latex?X">가 <img src="https://latex.codecogs.com/png.latex?Y">에 미치는 인과 효과는 식별 가능(Identifiable)하며 다음과 같이 계산할 수 있습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))%20=%20%5Csum_%7Bz%7D%20P(y%7Cx,z)P(z)"></p>
+<ul>
+<li>이를 <strong>Back-door Adjustment Formula</strong>라고 합니다. 이 식은 우리가 <img src="https://latex.codecogs.com/png.latex?do(x)">라는 가상의 중재를 하지 않고도, 관측된 데이터(<img src="https://latex.codecogs.com/png.latex?P(y%7Cx,z),%20P(z)">)만으로 인과 효과를 계산할 수 있게 해줍니다.</li>
+</ul>
+<hr>
+</section>
+<section id="example-1-sprinkler-rain-and-wet" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> Example 1: Sprinkler, Rain, and Wet</h1>
+<ul>
+<li>이 개념을 이해하기 위해 고전적인 예제인 “스프링클러와 비” 모델을 살펴봅시다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-03/images/sprinkler_dag.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1. Causal Graph for Sprinkler Example</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>목표:</strong> 스프링클러(<img src="https://latex.codecogs.com/png.latex?X="> Sprinkler)가 땅이 젖는 것(<img src="https://latex.codecogs.com/png.latex?Y="> Wet)에 미치는 인과 효과 구하기.</li>
+<li><strong>Back-door Path:</strong> <img src="https://latex.codecogs.com/png.latex?Sprinkler%20%5Cleftarrow%20Season%20%5Crightarrow%20Rain%20%5Crightarrow%20Wet">
+<ul>
+<li>이 경로는 스프링클러로 들어오는 화살표(<img src="https://latex.codecogs.com/png.latex?Season%20%5Cto%20Sprinkler">)로 시작하므로 백도어 경로입니다.</li>
+</ul></li>
+<li>여기서 변수 집합 <strong><img src="https://latex.codecogs.com/png.latex?Z%20=%20%5C%7BRain%5C%7D"></strong>을 고려해 봅시다.</li>
+</ul>
+<ol type="1">
+<li><strong>조건 (i):</strong> Rain은 Sprinkler의 자손이 아닙니다. (만족)</li>
+<li><strong>조건 (ii):</strong> Rain은 위 백도어 경로상에 존재하며, Chain 구조(<img src="https://latex.codecogs.com/png.latex?%5Cdots%20%5Cto%20Rain%20%5Cto%20%5Cdots">)에 있으므로 Rain을 조건부로 잡으면(Adjusting) 이 경로는 차단됩니다. (만족)</li>
+</ol>
+<ul>
+<li>따라서 우리는 Rain을 통해 보정할 수 있습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?P(Wet%20%7C%20do(Sprinkler))%20=%20%5Csum_%7BRain%7D%20P(Wet%20%7C%20Sprinkler,%20Rain)%20P(Rain)"></p>
+<ul>
+<li>이 과정은 <img src="https://latex.codecogs.com/png.latex?Season">이라는 공통 원인(Back-door Parent)을 직접 관측하지 못하더라도, 경로를 막을 수 있는 다른 변수(<img src="https://latex.codecogs.com/png.latex?Rain">)를 이용해 보정이 가능함을 보여줍니다.</li>
+</ul>
+<hr>
+</section>
+<section id="example-2-complex-graph-strategies" class="level1" data-number="5">
+<h1 data-number="5"><span class="header-section-number">5</span> Example 2: Complex Graph &amp; Strategies</h1>
+<ul>
+<li>조금 더 복잡한 그래프에서 적절한 백도어 집합(<img src="https://latex.codecogs.com/png.latex?Z">)을 찾는 연습을 해봅시다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-03/images/complex_dag_exercise.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2. Finding Admissible Sets in a Complex Graph</figcaption>
+</figure>
+</div>
+<section id="분석-포인트" class="level2" data-number="5.1">
+<h2 data-number="5.1" class="anchored" data-anchor-id="분석-포인트"><span class="header-section-number">5.1</span> 분석 포인트</h2>
+<ul>
+<li>이 그래프에서 <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?Y"> 사이의 백도어 경로를 차단해야 합니다. <img src="https://latex.codecogs.com/png.latex?X">에서 나가는 화살표를 지운 그래프(<img src="https://latex.codecogs.com/png.latex?G_%7B%5Cunderline%7BX%7D%7D">)를 상상했을 때 <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?Y">가 d-separation 되는지 확인하는 것과 같습니다.</li>
+</ul>
+</section>
+<section id="가능한-z-집합의-예시" class="level2" data-number="5.2">
+<h2 data-number="5.2" class="anchored" data-anchor-id="가능한-z-집합의-예시"><span class="header-section-number">5.2</span> 가능한 <img src="https://latex.codecogs.com/png.latex?Z"> 집합의 예시</h2>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?Z%20=%20%5C%7BZ_4,%20Z_2%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?Z%20=%20%5C%7BZ_4,%20Z_5%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?Z%20=%20%5C%7BZ_4,%20Z_2,%20Z_5%5C%7D"></li>
+</ul>
+</section>
+<section id="주의할-점-collider-z_4" class="level2" data-number="5.3">
+<h2 data-number="5.3" class="anchored" data-anchor-id="주의할-점-collider-z_4"><span class="header-section-number">5.3</span> 주의할 점: Collider (<img src="https://latex.codecogs.com/png.latex?Z_4">)</h2>
+<ul>
+<li><p>위 그래프에서 <img src="https://latex.codecogs.com/png.latex?Z_4">는 <img src="https://latex.codecogs.com/png.latex?Z_1%20%5Cto%20Z_4%20%5Cleftarrow%20Z_2"> 구조를 갖는 <strong>Collider</strong>입니다.</p></li>
+<li><p>만약 <img src="https://latex.codecogs.com/png.latex?Z_4">를 집합에 포함하지 않으면, <img src="https://latex.codecogs.com/png.latex?Z_1%20-%20Z_4%20-%20Z_2"> 경로는 자연스럽게 막혀(Blocked) 있습니다.</p></li>
+<li><p>하지만 <img src="https://latex.codecogs.com/png.latex?Z_4">를 집합에 포함시켜 조건부로 잡으면(Conditioning), 오히려 <img src="https://latex.codecogs.com/png.latex?Z_1">과 <img src="https://latex.codecogs.com/png.latex?Z_2"> 사이의 경로가 열리게 됩니다</p></li>
+<li><p>따라서 <img src="https://latex.codecogs.com/png.latex?Z_4">를 조정 변수로 사용할 때는, 이로 인해 열리는 다른 경로(<img src="https://latex.codecogs.com/png.latex?Z_1%20%5Cdots%20Z_2">)를 막아줄 추가적인 변수(<img src="https://latex.codecogs.com/png.latex?Z_2"> 등)를 함께 포함해야 합니다.</p></li>
+</ul>
+</section>
+<section id="case-z-emptyset-no-confounding" class="level2" data-number="5.4">
+<h2 data-number="5.4" class="anchored" data-anchor-id="case-z-emptyset-no-confounding"><span class="header-section-number">5.4</span> Case: <img src="https://latex.codecogs.com/png.latex?Z%20=%20%5Cemptyset"> (No Confounding)</h2>
+<ul>
+<li>만약 <img src="https://latex.codecogs.com/png.latex?X">로 들어오는 백도어 경로가 아예 없는 그래프라면 어떨까요?</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-03/images/no_confounding_dag.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3. Case where no adjustment is needed</figcaption>
+</figure>
+</div>
+<ul>
+<li>이 경우 공집합 <img src="https://latex.codecogs.com/png.latex?Z%20=%20%5Cemptyset">도 Back-door Criterion을 만족합니다.</li>
+<li>즉, 별도의 조정 없이 관측된 조건부 확률이 곧 인과 효과가 됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cx)%20=%20P(y%7Cdo(x))"></p>
+<ul>
+<li>이것이 바로 “교란이 없으면 상관관계는 인과관계이다(Correlation is Causation)”가 성립하는 유일한 순간입니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="derivation-adjustment-by-direct-parents-to-back-door-adjustment" class="level1" data-number="6">
+<h1 data-number="6"><span class="header-section-number">6</span> Derivation: Adjustment by Direct Parents <img src="https://latex.codecogs.com/png.latex?%5Cto"> Back-door Adjustment</h1>
+<section id="recap-adjustment-by-direct-parents" class="level2" data-number="6.1">
+<h2 data-number="6.1" class="anchored" data-anchor-id="recap-adjustment-by-direct-parents"><span class="header-section-number">6.1</span> Recap: Adjustment by Direct Parents</h2>
+<ul>
+<li>일반적으로 <img src="https://latex.codecogs.com/png.latex?X">의 모든 <strong>직접적인 부모(Direct Parents, <img src="https://latex.codecogs.com/png.latex?Pa_X">)</strong>를 통제하면 Back-door Criterion을 항상 만족합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))%20=%20%5Csum_%7Bpa_X%7D%20P(y%20%7C%20x,%20pa_X)%20P(pa_X)"></p>
+<ul>
+<li>하지만 모든 부모 변수를 관측하는 것은 현실적으로 어려울 수 있습니다.</li>
+<li>그렇다면, 부모가 아닌 <strong>Back-door Criterion을 만족하는 임의의 집합 <img src="https://latex.codecogs.com/png.latex?Z"></strong>를 통제해도 왜 동일한 결과가 나올까요?</li>
+<li>아래 증명은 <strong>Direct Parents Adjustment</strong> 공식에서 시작하여 <strong>Back-door Adjustment</strong> 공식으로 유도되는 과정을 보여줍니다.</li>
+</ul>
+<hr>
+</section>
+<section id="가정-assumptions" class="level2" data-number="6.2">
+<h2 data-number="6.2" class="anchored" data-anchor-id="가정-assumptions"><span class="header-section-number">6.2</span> 가정 (Assumptions)</h2>
+<ul>
+<li>집합 <img src="https://latex.codecogs.com/png.latex?Z">가 Back-door criterion을 만족한다고 가정합시다.</li>
+<li>Let <img src="https://latex.codecogs.com/png.latex?Z%5E-%20=%20Z%20%5Csetminus%20Pa_X"> (부모 변수를 제외한 나머지 <img src="https://latex.codecogs.com/png.latex?Z">의 요소들).</li>
+</ul>
+<ol type="1">
+<li><strong>Condition (i):</strong> <img src="https://latex.codecogs.com/png.latex?Z">의 어떤 노드도 <img src="https://latex.codecogs.com/png.latex?X">의 자손이 아님. <img src="https://latex.codecogs.com/png.latex?%5CRightarrow%20X%20%5Cperp%20(Z%20%5Csetminus%20Pa_X)%20%5Cmid%20Pa_X"> <img src="https://latex.codecogs.com/png.latex?%5CRightarrow%20P(z%5E%7B-%7D%20%7C%20x,%20pa_%7BX%7D)%20=%20P(z%5E%7B-%7D%20%7C%20x,%20pa_%7BX%7D)">
+<ul>
+<li><strong>“미래는 과거를 바꿀 수 없다”</strong>는 원리입니다.</li>
+<li>인과 그래프에서 부모(<img src="https://latex.codecogs.com/png.latex?Pa_%7BX%7D">)와 <img src="https://latex.codecogs.com/png.latex?Z">는 <img src="https://latex.codecogs.com/png.latex?X">보다 먼저 일어난 일(또는 원인)이고, <img src="https://latex.codecogs.com/png.latex?X">는 그 결과입니다.</li>
+<li>이미 부모(<img src="https://latex.codecogs.com/png.latex?Pa_%7BX%7D">)의 상태를 다 알고 있다면, 결과인 <img src="https://latex.codecogs.com/png.latex?X">가 무엇이든 간에 그 원인이나 별개의 사건인 <img src="https://latex.codecogs.com/png.latex?Z">의 확률은 변하지 않습니다.</li>
+</ul></li>
+<li><strong>Condition (ii):</strong> <img src="https://latex.codecogs.com/png.latex?Z">는 <img src="https://latex.codecogs.com/png.latex?X">로 들어오는 모든 뒷문 경로를 차단함. <img src="https://latex.codecogs.com/png.latex?%5CRightarrow%20Y%20%5Cperp%20(Pa_X%20%5Csetminus%20Z)%20%5Cmid%20Z,%20X"> <img src="https://latex.codecogs.com/png.latex?%5CRightarrow%20P(y%20%7C%20x,%20pa_%7BX%7D,%20z%5E%7B-%7D)%20=%20P(y%20%7C%20x,%20z)"> <em>(<img src="https://latex.codecogs.com/png.latex?Z">와 <img src="https://latex.codecogs.com/png.latex?X">가 주어졌을 때, <img src="https://latex.codecogs.com/png.latex?Y">는 <img src="https://latex.codecogs.com/png.latex?Z">에 포함되지 않은 나머지 부모들과 독립이다)</em>
+<ul>
+<li><strong>“Z가 이미 충분한 정보를 담고 있다”</strong>는 원리입니다.</li>
+<li>원래 <img src="https://latex.codecogs.com/png.latex?Y">를 예측하려면 교란 요인인 모든 부모들(<img src="https://latex.codecogs.com/png.latex?Pa_%7BX%7D">)을 다 봐야 합니다. 하지만 <img src="https://latex.codecogs.com/png.latex?Z">가 ’백도어 기준’을 만족한다는 것은, <img src="https://latex.codecogs.com/png.latex?Z">가 부모들이 <img src="https://latex.codecogs.com/png.latex?Y">에 미치는 교란을 대신해서 다 막아주고 있다는 뜻입니다.</li>
+<li>따라서 일단 <img src="https://latex.codecogs.com/png.latex?Z">를 알고 나면, 굳이 <img src="https://latex.codecogs.com/png.latex?Z">에 포함되지 않은 나머지 부모들(<img src="https://latex.codecogs.com/png.latex?Pa_%7BX%7D">)을 추가로 더 안다고 해서 <img src="https://latex.codecogs.com/png.latex?Y">에 대한 예측이 달라지지 않습니다. <img src="https://latex.codecogs.com/png.latex?Z">가 그 역할을 완벽히 대체했기 때문입니다.</li>
+</ul></li>
+</ol>
+</section>
+<section id="증명-derivation" class="level2" data-number="6.3">
+<h2 data-number="6.3" class="anchored" data-anchor-id="증명-derivation"><span class="header-section-number">6.3</span> 증명 (Derivation)</h2>
+<ul>
+<li>부모 변수를 통한 조정(Adjustment by Direct Parents) 공식에서 시작합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0AP(y%7Cdo(x))%20&amp;=%20%5Csum_%7Bpa_X%7D%20P(y%7Cx,%20pa_X)P(pa_X)%20%5C%5C%0A&amp;=%20%5Csum_%7Bz%5E-,%20pa_X%7D%20P(y%7Cx,%20pa_X,%20z%5E-)P(z%5E-%7Cx,%20pa_X)P(pa_X)%20&amp;&amp;%20%5Cbecause%20%5Ctext%7BExpand%20by%20%7D%20Z%5E-%20%5Ctext%7B%20(Total%20Probability)%7D%20%5C%5C%0A&amp;=%20%5Csum_%7Bz%5E-,%20pa_X%7D%20P(y%7Cx,%20z)P(z%5E-%7Cpa_X)P(pa_X)%20&amp;&amp;%20%5Cbecause%20%5Ctext%7BApply%20Assumptions%20Condition%20(i)%20%5C&amp;%20(ii)%7D%20%5C%5C%0A&amp;=%20%5Csum_%7Bz%5E-,%20pa_X%7D%20P(y%7Cx,%20z)P(z%5E-,%20pa_X)%20&amp;&amp;%20%5Cbecause%20%5Ctext%7BChain%20Rule%20%7D%20P(A%7CB)P(B)%20=%20P(A,B)%20%5C%5C%0A&amp;=%20%5Csum_%7Bz%7D%20P(y%7Cx,%20z)%20%5Csum_%7Bpa_X%20%5Csetminus%20z%7D%20P(z%5E-,%20pa_X)%20&amp;&amp;%20%5Cbecause%20%5Ctext%7BRearrange%20Summation%20%7D%20(Z%20%5Ccup%20(Pa_X%20%5Csetminus%20Z)%20=%20%5C%7BZ,%20Pa_X%5C%7D)%20%5C%5C%0A&amp;=%20%5Csum_%7Bz%7D%20P(y%7Cx,%20z)P(z)%20&amp;&amp;%20%5Cbecause%20%5Ctext%7BMarginalize%20out%20%7D%20Pa_X%20%5Csetminus%20Z%0A%5Cend%7Baligned%7D%0A"></p>
+<ul>
+<li><strong>결론:</strong> <br></li>
+</ul>
+<blockquote class="blockquote">
+<p>Adjustment by <img src="https://latex.codecogs.com/png.latex?Z"> is equivalent to adjustment by direct parents whenever <img src="https://latex.codecogs.com/png.latex?Z"> is back-door admissible.</p>
+</blockquote>
+<ul>
+<li>즉, <img src="https://latex.codecogs.com/png.latex?Z">가 Back-door criterion만 만족한다면, 직접적인 부모를 모두 측정하지 못하더라도 <img src="https://latex.codecogs.com/png.latex?Z">를 통해 인과 효과를 정확히 계산할 수 있음이 수학적으로 증명됩니다.</li>
+</ul>
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Causal Inference</category>
+  <guid>https://shsha0110.github.io/posts/causal-inference-04-part-03/</guid>
+  <pubDate>Tue, 06 Jan 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Causal Inference] 4. Confounding and Backdoor (Part 2)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/causal-inference-04-part-02/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="overview" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> Overview</h1>
+<ul>
+<li>지난 포스트에서는 인과 효과의 <strong>식별 가능성(Identifiability)</strong>에 대해 다루었습니다. 이번에는 현실 데이터 분석에서 가장 빈번하게 마주치는 문제이자, 인과추론이 필요한 가장 큰 이유 중 하나인 <strong>교란 편향(Confounding Bias)</strong>에 대해 구체적인 예시를 통해 알아보겠습니다.</li>
+</ul>
+<hr>
+</section>
+<section id="the-problem-of-confounding-exercise-and-cholesterol" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> The Problem of Confounding: Exercise and Cholesterol</h1>
+<ul>
+<li>우리가 운동(<img src="https://latex.codecogs.com/png.latex?X">)이 콜레스테롤 수치(<img src="https://latex.codecogs.com/png.latex?Y">)에 미치는 인과 효과를 알고 싶다고 가정해 봅시다. 이를 위해 사람들의 운동 시간과 콜레스테롤 수치를 측정하여 데이터를 수집했습니다.</li>
+</ul>
+<section id="단순-관측-직관과-반대되는-결과" class="level2" data-number="2.1">
+<h2 data-number="2.1" class="anchored" data-anchor-id="단순-관측-직관과-반대되는-결과"><span class="header-section-number">2.1</span> 1. 단순 관측: 직관과 반대되는 결과</h2>
+<ul>
+<li>수집한 데이터를 단순히 산점도(Scatter Plot)로 그려보았더니 놀라운 결과가 나타났습니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-02/images/exercise_cholesterol_scatter.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1. Observed Correlation between Exercise and Cholesterol</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>관측 결과:</strong> 운동을 많이 하는 사람일수록 콜레스테롤 수치가 더 높게 나타납니다.</li>
+<li><strong>의문:</strong> <img src="https://latex.codecogs.com/png.latex?P(%5Ctext%7Bcholesterol%7D%20%7C%20%5Ctext%7Bexercise%7D)">를 보면, 운동이 콜레스테롤을 높이는 것처럼 보입니다. 과연 “더 많은 운동 <img src="https://latex.codecogs.com/png.latex?%5CRightarrow"> 콜레스테롤 증가”라고 결론 내릴 수 있을까요?</li>
+</ul>
+</section>
+<section id="교란-변수의-발견-나이age" class="level2" data-number="2.2">
+<h2 data-number="2.2" class="anchored" data-anchor-id="교란-변수의-발견-나이age"><span class="header-section-number">2.2</span> 2. 교란 변수의 발견: 나이(Age)</h2>
+<ul>
+<li>이 이상한 현상을 이해하기 위해, 우리는 데이터에 숨겨진 제3의 변수인 <strong>‘나이(Age)’</strong>를 색상으로 구분하여 다시 시각화해보았습니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-02/images/exercise_cholesterol_age.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2. Scatter Plot Stratified by Age</figcaption>
+</figure>
+</div>
+<ul>
+<li>그래프를 자세히 보면 다음과 같은 패턴이 드러납니다:
+<ol type="1">
+<li><strong>나이와 운동:</strong> 나이가 많은 사람(노란색 계열)들이 건강 관리를 위해 운동을 더 많이 하는 경향이 있습니다.</li>
+<li><strong>나이와 콜레스테롤:</strong> 동시에, 나이가 많을수록 자연적으로 콜레스테롤 수치가 높습니다.</li>
+</ol></li>
+<li>즉, <strong>‘나이’</strong>가 운동량(<img src="https://latex.codecogs.com/png.latex?X">)과 콜레스테롤(<img src="https://latex.codecogs.com/png.latex?Y">) 모두에 영향을 미치는 <strong>교란 변수(Confounder)</strong>로 작용하고 있었던 것입니다.</li>
+</ul>
+</section>
+<section id="계층별-분석-인과-효과의-확인" class="level2" data-number="2.3">
+<h2 data-number="2.3" class="anchored" data-anchor-id="계층별-분석-인과-효과의-확인"><span class="header-section-number">2.3</span> 3. 계층별 분석: 인과 효과의 확인</h2>
+<ul>
+<li>이제 나이(Age)를 고정한 상태에서 운동과 콜레스테롤의 관계를 다시 살펴봅시다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-02/images/exercise_cholesterol_stratified.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3. True Causal Effect within Age Groups</figcaption>
+</figure>
+</div>
+<ul>
+<li>각 연령대 그룹(같은 색깔) 내부를 들여다보면, 운동을 많이 할수록 콜레스테롤 수치가 <strong>낮아지는</strong> 것을 명확히 볼 수 있습니다.</li>
+<li><strong>결론:</strong> 운동의 진짜 인과 효과는 콜레스테롤을 낮추는 것입니다. (<img src="https://latex.codecogs.com/png.latex?More%5C%20exercise%20%5CRightarrow%20Lower%5C%20Cholesterol">)</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="confounding-bias-definition" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> Confounding Bias Definition</h1>
+<ul>
+<li><p>위의 예시는 <strong>교란 편향(Confounding Bias)</strong>이 무엇인지 명확하게 보여줍니다.</p>
+<ul>
+<li><strong>Association (관측된 상관관계):</strong> <img src="https://latex.codecogs.com/png.latex?P(y%7Cx)">
+<ul>
+<li>데이터 전체를 그냥 보았을 때의 분포입니다. 여기서는 “운동을 하면 콜레스테롤이 높다”였습니다.</li>
+</ul></li>
+<li><strong>Causation (인과 효과):</strong> <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">
+<ul>
+<li>우리가 알고 싶은 진짜 효과입니다. “운동을 시키면(<img src="https://latex.codecogs.com/png.latex?do">) 콜레스테롤이 낮아진다”입니다.</li>
+</ul></li>
+</ul></li>
+<li><p>이 둘의 차이가 바로 편향입니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cx)%20%5Cneq%20P(y%7Cdo(x))"></p>
+<ul>
+<li>이 차이는 인과추론과 해석 가능성(Interpretability)을 가로막는 가장 큰 장애물 중 하나입니다.</li>
+</ul>
+<hr>
+</section>
+<section id="is-confounding-bias-removable" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> Is Confounding Bias Removable?</h1>
+<ul>
+<li>그렇다면 이러한 교란 편향은 어떻게 제거할 수 있을까요?</li>
+<li>위의 예시처럼 ’나이’라는 변수가 명확하다면 조정(Adjustment)하면 되지만, 변수 관계가 복잡해지면 어떤 변수를 통제해야 할지 결정하기가 쉽지 않습니다.</li>
+</ul>
+<section id="복잡한-인과-그래프에서의-문제" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="복잡한-인과-그래프에서의-문제"><span class="header-section-number">4.1</span> 복잡한 인과 그래프에서의 문제</h2>
+<ul>
+<li>다음과 같이 복잡한 인과 그래프를 고려해 봅시다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-02/images/complex_dag.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 4. A Complex Causal Graph</figcaption>
+</figure>
+</div>
+<ul>
+<li><p><strong>Goal:</strong> 변수 <img src="https://latex.codecogs.com/png.latex?Z_1,%20...,%20Z_k">가 측정되었을 때, <img src="https://latex.codecogs.com/png.latex?X">가 <img src="https://latex.codecogs.com/png.latex?Y">에 미치는 인과 효과 <img src="https://latex.codecogs.com/png.latex?Q%20=%20P(y%7Cdo(x))">를 찾아내는 것.</p></li>
+<li><p>여기서 중요한 질문이 생깁니다.</p>
+<ul>
+<li><strong>“부모 변수(Parents) 중 일부만 관측되었을 때, 타겟 인과 효과 <img src="https://latex.codecogs.com/png.latex?Q">를 식별할 수 있는가?”</strong></li>
+</ul></li>
+</ul>
+</section>
+<section id="주의해야-할-구조-collider" class="level2" data-number="4.2">
+<h2 data-number="4.2" class="anchored" data-anchor-id="주의해야-할-구조-collider"><span class="header-section-number">4.2</span> 주의해야 할 구조: Collider</h2>
+<ul>
+<li>그래프 분석 시 주의해야 할 점은 단순히 모든 변수를 통제(Conditioning)한다고 좋은 것이 아니라는 점입니다.</li>
+<li>예를 들어 위 그래프에서 <strong><img src="https://latex.codecogs.com/png.latex?Z_4"></strong>와 같은 변수를 살펴봅시다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>Note:</strong> <img src="https://latex.codecogs.com/png.latex?Z_4">는 <img src="https://latex.codecogs.com/png.latex?Z_1">과 <img src="https://latex.codecogs.com/png.latex?Z_2">의 화살표를 동시에 받는 <strong>Collider</strong> (<img src="https://latex.codecogs.com/png.latex?Z_1%20%5Crightarrow%20Z_4%20%5Cleftarrow%20Z_2">)입니다. <img src="https://latex.codecogs.com/png.latex?Z_4">를 조건부(given)로 잡을 경우, 오히려 <img src="https://latex.codecogs.com/png.latex?Z_1">과 <img src="https://latex.codecogs.com/png.latex?Z_2"> 사이에 길이 뚫리는 현상이 발생하여 새로운 편향을 만들 수 있습니다.</p>
+</blockquote>
+<ul>
+<li>따라서 우리는 어떤 변수를 조정 집합(Adjustment Set)에 넣어야 편향을 제거하고 올바른 인과 효과를 구할 수 있는지 판단하는 체계적인 기준이 필요합니다. 이것이 바로 다음 포스트에서 다룰 <strong>Back-door Criterion</strong>입니다.</li>
+</ul>
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Causal Inference</category>
+  <guid>https://shsha0110.github.io/posts/causal-inference-04-part-02/</guid>
+  <pubDate>Tue, 06 Jan 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Causal Inference] 4. Confounding and Backdoor (Part 1)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/causal-inference-04-part-01/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="overview" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> Overview</h1>
+<p>이번 포스트에서는 인과추론에서 가장 핵심적인 개념 중 하나인 <strong>교란(Confounding)</strong>과 이를 해결하기 위한 <strong>백도어 기준(Back-door Criterion)</strong>으로 나아가기 전, <strong>식별 가능성(Identification Problem)</strong>에 대해 다시 한번 짚어보고자 합니다.</p>
+<p>강의 자료는 서울대학교 데이터사이언스대학원 이상학 교수님의 “Confounding and Backdoor” 수업 자료를 바탕으로 합니다</p>
+<section id="목차" class="level2" data-number="1.1">
+<h2 data-number="1.1" class="anchored" data-anchor-id="목차"><span class="header-section-number">1.1</span> 목차</h2>
+<ol type="1">
+<li>Recap(Identification Problem) and Example of Identifiable and Non-identifiable Effects</li>
+<li>Confounding Bias</li>
+<li>Back-door Criterion</li>
+<li>Evaluation</li>
+</ol>
+<hr>
+</section>
+</section>
+<section id="recap-identification-problem" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> Recap: Identification Problem</h1>
+<p>인과추론의 궁극적인 목표는 우리가 관측할 수 없는 <strong>인과 효과(Causal Effect)</strong>, 즉 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">를 관측 가능한 데이터 <img src="https://latex.codecogs.com/png.latex?P(v)">와 가정한 인과 그래프(Causal Graph) <img src="https://latex.codecogs.com/png.latex?G">를 통해 계산해낼 수 있는지 확인하는 것입니다.</p>
+<ul>
+<li><strong>Identifiable (식별 가능):</strong> 관측 분포 <img src="https://latex.codecogs.com/png.latex?P(v)">와 그래프 <img src="https://latex.codecogs.com/png.latex?G">가 주어졌을 때, 유일한 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">가 도출되는 경우.</li>
+<li><strong>Non-identifiable (식별 불가능):</strong> 동일한 <img src="https://latex.codecogs.com/png.latex?P(v)">와 <img src="https://latex.codecogs.com/png.latex?G">를 만족함에도 불구하고, 서로 다른 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))"> 값을 갖는 모델이 두 개 이상 존재하는 경우</li>
+</ul>
+<hr>
+</section>
+<section id="example-1-identifiable-effect" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> Example 1: Identifiable Effect</h1>
+<p>먼저, 인과 효과가 식별 가능한(Identifiable) 경우를 살펴보겠습니다. 아래와 같은 인과 그래프를 가정해 봅시다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-01/images/identifiable_graph.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1. Causal Graph where effect is identifiable</figcaption>
+</figure>
+</div>
+<p>이 구조에서 관측 분포 <img src="https://latex.codecogs.com/png.latex?P(v)">는 다음과 같이 factorization 됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?P(v)%20=%20P(z)P(x%7Cz)P(y%7Cx,z)"></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-01/images/identifiable_graph_intervened.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2. Causal Graph where effect is identifiable</figcaption>
+</figure>
+</div>
+<p>우리가 구하고자 하는 개입(Intervention) 분포 <img src="https://latex.codecogs.com/png.latex?P(v'%7Cdo(x))">는 <img src="https://latex.codecogs.com/png.latex?x">로 들어오는 화살표를 끊어낸 그래프에서의 분포이므로 다음과 같습니다</p>
+<p><img src="https://latex.codecogs.com/png.latex?P(v'%7Cdo(x))%20=%20P(z)P(y%7Cx,z)"></p>
+<p>따라서, <img src="https://latex.codecogs.com/png.latex?Y">에 대한 Marginal Distribution를 구하면 <strong>Back-door Adjustment Formula</strong>와 동일한 결과를 얻게 됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))%20=%20%5Csum_%7Bz%7D%20P(z)P(y%7Cx,z)"></p>
+<p>이 식의 중요한 점은 우변의 모든 항(<img src="https://latex.codecogs.com/png.latex?P(z)">, <img src="https://latex.codecogs.com/png.latex?P(y%7Cx,z)">)이 <strong>관측 데이터(Observational Data)</strong>로부터 추정할 수 있다는 것입니다. 즉, <img src="https://latex.codecogs.com/png.latex?P(v)">가 동일한 모든 모델은 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">에 대해서도 동일한 값을 내놓으므로, 이 효과는 <strong>식별 가능(Identifiable)</strong>합니다</p>
+<hr>
+</section>
+<section id="example-2-non-identifiable-effect" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> Example 2: Non-identifiable Effect</h1>
+<p>그렇다면 식별 불가능한 경우는 어떤 모습일까요? 이를 증명하기 위해, <strong>동일한 그래프와 동일한 관측 분포 <img src="https://latex.codecogs.com/png.latex?P(v)">를 가지지만, 서로 다른 인과 효과 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">를 나타내는 두 개의 모델(<img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D%5E%7B(1)%7D">, <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D%5E%7B(2)%7D">)</strong>을 구성해 보겠습니다</p>
+<section id="설정-setup" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="설정-setup"><span class="header-section-number">4.1</span> 설정 (Setup)</h2>
+<p>아래와 같은 “Bow-tie” 형태의 그래프를 고려합니다. 여기서 <img src="https://latex.codecogs.com/png.latex?U_%7BXY%7D">는 <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?Y">에 동시에 영향을 주는 관측되지 않은 교란 변수(Unobserved Confounder)입니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-01/images/non_identifiable_graph.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3. Causal Graph with Unobserved Confounder</figcaption>
+</figure>
+</div>
+<p>두 모델 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D%5E%7B(1)%7D">과 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D%5E%7B(2)%7D">는 다음과 같은 구조적 방정식(Structural Equations)을 갖습니다. 여기서 <img src="https://latex.codecogs.com/png.latex?U_Y,%20U_%7BXY%7D">는 모두 베르누이 분포(동전 던지기, <img src="https://latex.codecogs.com/png.latex?p=0.5">)를 따릅니다.</p>
+<section id="model-1-mathcalh1" class="level3" data-number="4.1.1">
+<h3 data-number="4.1.1" class="anchored" data-anchor-id="model-1-mathcalh1"><span class="header-section-number">4.1.1</span> Model 1 (<img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D%5E%7B(1)%7D">)</h3>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bcases%7D%0AX%20%5Cleftarrow%20U_%7BXY%7D%20%5C%5C%0AY%20%5Cleftarrow%20(X%20%5Coplus%20U_%7BXY%7D)%20%5Clor%20U_Y%0A%5Cend%7Bcases%7D%0A"> * 여기서 <img src="https://latex.codecogs.com/png.latex?%5Coplus">는 XOR 연산, <img src="https://latex.codecogs.com/png.latex?%5Clor">는 OR 연산을 의미합니다.</p>
+</section>
+<section id="model-2-mathcalh2" class="level3" data-number="4.1.2">
+<h3 data-number="4.1.2" class="anchored" data-anchor-id="model-2-mathcalh2"><span class="header-section-number">4.1.2</span> Model 2 (<img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D%5E%7B(2)%7D">)</h3>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bcases%7D%0AX%20%5Cleftarrow%20U_%7BXY%7D%20%5C%5C%0AY%20%5Cleftarrow%20U_Y%0A%5Cend%7Bcases%7D%0A"> * 모델 2에서는 <img src="https://latex.codecogs.com/png.latex?X">가 <img src="https://latex.codecogs.com/png.latex?Y">에 아무런 영향을 주지 않습니다 (끊어진 인과 관계).</p>
+</section>
+</section>
+<section id="관측-분포의-일치-observational-equivalence" class="level2" data-number="4.2">
+<h2 data-number="4.2" class="anchored" data-anchor-id="관측-분포의-일치-observational-equivalence"><span class="header-section-number">4.2</span> 관측 분포의 일치 (Observational Equivalence)</h2>
+<p>놀랍게도 두 모델은 <strong>관측 데이터 상으로는 완벽하게 동일</strong>합니다.</p>
+<ol type="1">
+<li><p><strong>Model 1의 경우:</strong> 구조 방정식을 보면 <img src="https://latex.codecogs.com/png.latex?X">는 <img src="https://latex.codecogs.com/png.latex?U_%7BXY%7D">와 같습니다. 따라서 <img src="https://latex.codecogs.com/png.latex?X%20%5Coplus%20U_%7BXY%7D">는 항상 <img src="https://latex.codecogs.com/png.latex?0">이 됩니다 (<img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?U_%7BXY%7D">가 같으므로). <img src="https://latex.codecogs.com/png.latex?Y%20=%200%20%5Clor%20U_Y%20=%20U_Y"> 결국 관측 환경에서는 <img src="https://latex.codecogs.com/png.latex?Y">가 오직 <img src="https://latex.codecogs.com/png.latex?U_Y">에 의해서만 결정됩니다</p></li>
+<li><p><strong>Model 2의 경우:</strong> 정의상 <img src="https://latex.codecogs.com/png.latex?Y%20%5Cleftarrow%20U_Y">이므로, 역시 <img src="https://latex.codecogs.com/png.latex?Y">는 <img src="https://latex.codecogs.com/png.latex?U_Y">에 의해 결정됩니다.</p></li>
+</ol>
+<p>결과적으로 두 모델 모두 <img src="https://latex.codecogs.com/png.latex?P(Y=1)%20=%20P(U_Y=1)%20=%200.5">이며, <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?Y">의 결합 분포 표(Truth Table)도 완전히 일치합니다</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?U_Y"></th>
+<th style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?U_%7BXY%7D"> (<img src="https://latex.codecogs.com/png.latex?=X">)</th>
+<th style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?Y%5E%7B(1)%7D"> (Model 1)</th>
+<th style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?Y%5E%7B(2)%7D"> (Model 2)</th>
+<th style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?P(u)"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: center;">0</td>
+<td style="text-align: center;">0</td>
+<td style="text-align: center;">0</td>
+<td style="text-align: center;">0</td>
+<td style="text-align: center;">1/4</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">0</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">0</td>
+<td style="text-align: center;">0</td>
+<td style="text-align: center;">1/4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">0</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1/4</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1/4</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="인과-효과의-불일치-interventional-differences" class="level2" data-number="4.3">
+<h2 data-number="4.3" class="anchored" data-anchor-id="인과-효과의-불일치-interventional-differences"><span class="header-section-number">4.3</span> 인과 효과의 불일치 (Interventional Differences)</h2>
+<p>이제 <img src="https://latex.codecogs.com/png.latex?do(x)"> 연산을 통해 실제로 인과 효과를 계산해 보면 두 모델의 차이가 드러납니다. <img src="https://latex.codecogs.com/png.latex?do(x)">는 <img src="https://latex.codecogs.com/png.latex?X">를 강제로 특정 값으로 고정하는 것이므로, 더 이상 <img src="https://latex.codecogs.com/png.latex?X">는 <img src="https://latex.codecogs.com/png.latex?U_%7BXY%7D">의 영향을 받지 않습니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-04-part-01/images/non_identifiable_graph_intervened.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 4. Causal Graph with Unobserved Confounder</figcaption>
+</figure>
+</div>
+<p>우리는 <strong><img src="https://latex.codecogs.com/png.latex?P(y=1%20%7C%20do(x=0))"></strong>을 계산해 보겠습니다</p>
+<section id="case-1-model-mathcalh1" class="level3" data-number="4.3.1">
+<h3 data-number="4.3.1" class="anchored" data-anchor-id="case-1-model-mathcalh1"><span class="header-section-number">4.3.1</span> Case 1: Model <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D%5E%7B(1)%7D"></h3>
+<p>구조 방정식: <img src="https://latex.codecogs.com/png.latex?Y%20%5Cleftarrow%20(x%20%5Coplus%20U_%7BXY%7D)%20%5Clor%20U_Y">. 여기서 <img src="https://latex.codecogs.com/png.latex?x=0">으로 고정했습니다.</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?U_%7BXY%7D=0,%20U_Y=0%20%5CRightarrow%20Y%20=%20(0%20%5Coplus%200)%20%5Clor%200%20=%200"></li>
+<li><img src="https://latex.codecogs.com/png.latex?U_%7BXY%7D=0,%20U_Y=1%20%5CRightarrow%20Y%20=%20(0%20%5Coplus%200)%20%5Clor%201%20=%201"> (<img src="https://latex.codecogs.com/png.latex?U_Y=1"> 이면 어차피 <img src="https://latex.codecogs.com/png.latex?Y=1">)</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?U_%7BXY%7D=1,%20U_Y=0%20%5CRightarrow%20Y%20=%20(0%20%5Coplus%201)%20%5Clor%200%20=%201"></strong> (<img src="https://latex.codecogs.com/png.latex?U_%7BXY%7D=1%20%5CnRightarrow%20X=1"> 이므로, 여기서 차이 발생!)</li>
+<li><img src="https://latex.codecogs.com/png.latex?U_%7BXY%7D=1,%20U_Y=1%20%5CRightarrow%20Y%20=%20(0%20%5Coplus%201)%20%5Clor%201%20=%201"> (<img src="https://latex.codecogs.com/png.latex?U_Y=1"> 이면 어차피 <img src="https://latex.codecogs.com/png.latex?Y=1">)</li>
+</ul>
+<p>4가지 경우 중 3가지 경우에 <img src="https://latex.codecogs.com/png.latex?Y=1">이 됩니다. <img src="https://latex.codecogs.com/png.latex?%5Ctherefore%20P%5E%7B(1)%7D(y=1%7Cdo(x=0))%20=%20%5Cfrac%7B3%7D%7B4%7D"></p>
+</section>
+<section id="case-2-model-mathcalh2" class="level3" data-number="4.3.2">
+<h3 data-number="4.3.2" class="anchored" data-anchor-id="case-2-model-mathcalh2"><span class="header-section-number">4.3.2</span> Case 2: Model <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D%5E%7B(2)%7D"></h3>
+<p>구조 방정식: <img src="https://latex.codecogs.com/png.latex?Y%20%5Cleftarrow%20U_Y">. <img src="https://latex.codecogs.com/png.latex?X">의 값과 상관없이 <img src="https://latex.codecogs.com/png.latex?Y">는 <img src="https://latex.codecogs.com/png.latex?U_Y">를 따릅니다.</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?U_Y=0%20%5CRightarrow%20Y=0"></li>
+<li><img src="https://latex.codecogs.com/png.latex?U_Y=1%20%5CRightarrow%20Y=1"></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Ctherefore%20P%5E%7B(2)%7D(y=1%7Cdo(x=0))%20=%20%5Cfrac%7B1%7D%7B2%7D"></p>
+</section>
+</section>
+<section id="결론" class="level2" data-number="4.4">
+<h2 data-number="4.4" class="anchored" data-anchor-id="결론"><span class="header-section-number">4.4</span> 결론</h2>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?Y"></th>
+<th style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?P%5E%7B(1)%7D(Y%7Cdo(x))"></th>
+<th style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?P%5E%7B(2)%7D(Y%7Cdo(x))"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: center;">0</td>
+<td style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B4%7D"></td>
+<td style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B2%7D"></td>
+</tr>
+<tr class="even">
+<td style="text-align: center;">1</td>
+<td style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B3%7D%7B4%7D"></td>
+<td style="text-align: center;"><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B2%7D"></td>
+</tr>
+</tbody>
+</table>
+<p>두 모델은 <strong>동일한 인과 그래프</strong>와 <strong>동일한 관측 분포 <img src="https://latex.codecogs.com/png.latex?P(v)"></strong>를 가지지만, 계산된 인과 효과 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">는 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B3%7D%7B4%7D">와 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B2%7D">로 서로 다릅니다</p>
+<blockquote class="blockquote">
+<p><strong>Even though both models induce <img src="https://latex.codecogs.com/png.latex?I"> (Graph) and have the same <img src="https://latex.codecogs.com/png.latex?P(v)">, the effect <img src="https://latex.codecogs.com/png.latex?P%5E%7B(1)%7D(y%7Cdo(x))%20%5Cneq%20P%5E%7B(2)%7D(y%7Cdo(x))">.</strong></p>
+</blockquote>
+<p>이는 주어진 그래프 구조(Unobserved Confounder가 존재하는 경우)만으로는 데이터에서 인과 효과를 유일하게 식별해낼 수 없음을(Non-identifiable) 의미합니다. 이러한 경우, 추가적인 가정이나 데이터를 통한 식별 전략이 필요합니다.</p>
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Causal Inference</category>
+  <category>Statistics</category>
+  <category>Research</category>
+  <guid>https://shsha0110.github.io/posts/causal-inference-04-part-01/</guid>
+  <pubDate>Tue, 06 Jan 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>[Causal Inference] 1. Introduction</title>
   <dc:creator>Sunghyun Yoo</dc:creator>
@@ -129,8 +1549,6 @@
 
  ]]></description>
   <category>Causal Inference</category>
-  <category>Study</category>
-  <category>GSDS</category>
   <guid>https://shsha0110.github.io/posts/causal-inference-01/</guid>
   <pubDate>Mon, 05 Jan 2026 15:00:00 GMT</pubDate>
   <media:content url="https://shsha0110.github.io/posts/causal-inference-01/image.png" medium="image" type="image/png" height="63" width="144"/>

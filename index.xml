@@ -46,7 +46,7 @@
 <ul>
 <li>실습에 필요한 라이브러리를 불러옵니다. <code>scipy.optimize.linprog</code>는 Balke-Pearl Bounds를 계산하는 데 사용되며, <code>dowhy</code>는 인과 추론을 위한 라이브러리입니다.</li>
 </ul>
-<div id="0dd6e322" class="cell" data-execution_count="1">
+<div id="ac5401cd" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><span class="im" style="color: #00769E;
@@ -84,7 +84,7 @@ font-style: inherit;">import</span> CausalModel</span></code></pre></div></div>
 <li>인구 집단은 <strong>Compliance Type</strong>(순응 유형: Never-taker, Complier, Defier, Always-taker)과 <strong>Response Type</strong>(반응 유형: Never-recover, Helped, Hurt, Always-recover)의 조합인 총 16가지 유형으로 구성됩니다.</li>
 <li>각 유형별 비율(<code>probs</code>)을 설정하고, 이에 따라 데이터를 생성한 뒤 실제 참값인 <strong>True ATE</strong>를 계산합니다.</li>
 </ul>
-<div id="155259d2" class="cell" data-execution_count="2">
+<div id="9dc5c6c8" class="cell" data-execution_count="2">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><span class="co" style="color: #5E5E5E;
@@ -315,9 +315,21 @@ font-style: inherit;">return</span> df, true_ate, probs</span></code></pre></div
 <section id="point-estimate-late-by-dowhy" class="level1">
 <h1>3. Point Estimate: LATE (by DoWhy)</h1>
 <ul>
-<li><code>DoWhy</code> 라이브러리를 사용하여 점 추정치를 계산합니다. 여기서 <img src="https://latex.codecogs.com/png.latex?Z">를 도구변수(Instrument)로 사용하여 <strong>LATE (Local Average Treatment Effect)</strong>, 즉 Complier 집단에 대한 효과를 추정합니다.</li>
+<li><code>DoWhy</code> 라이브러리를 사용하여 점 추정치를 계산합니다.</li>
+<li>앞서 Partial Identification에서는 효과의 범위를 구했지만, 여기서는 <strong>단조성(Monotonicity)</strong> 가정을 도입하여 <strong>LATE (Local Average Treatment Effect)</strong>, Complier 집단에 대한 효과를 하나의 점(Point)으로 추정합니다.</li>
 </ul>
-<div id="6eed746e" class="cell" data-execution_count="3">
+<section id="왜-점-추정이-가능한가-단조성-가정-the-role-of-monotonicity" class="level2">
+<h2 class="anchored" data-anchor-id="왜-점-추정이-가능한가-단조성-가정-the-role-of-monotonicity">왜 점 추정이 가능한가? (단조성 가정, The Role of Monotonicity)</h2>
+<ul>
+<li>일반적인 도구변수 추정량(Wald Estimator)은 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbeta_%7BIV%7D%20=%20%5Cfrac%7BE%5BY%7CZ=1%5D%20-%20E%5BY%7CZ=0%5D%7D%7BE%5BX%7CZ=1%5D%20-%20E%5BX%7CZ=0%5D%7D%0A"></p>
+<ul>
+<li><p>이 수식이 인과 효과로 해석되려면 <strong>Defiers</strong>가 없어야 합니다.</p></li>
+<li><p>즉, (처방)일 때 (미복용)이고, (미처방)일 때 (복용)인 사람이 없다는 <strong>단조성 가정(<img src="https://latex.codecogs.com/png.latex?X_%7Bi%7D(1)%20%5Cge%20X_%7Bi%7D(0)">)</strong>이 필요합니다.</p></li>
+<li><p>이 가정이 성립할 때, 추정량은 <strong>Compliers(순응자)</strong> 집단의 평균 처치 효과로 식별됩니다.</p></li>
+</ul>
+<div id="9b04365e" class="cell" data-execution_count="3">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><span class="co" style="color: #5E5E5E;
@@ -416,13 +428,48 @@ font-style: inherit;">return</span> estimate.value</span></code></pre></div></di
 </details>
 </div>
 </section>
+</section>
 <section id="interval-estimate-balke-pearl-bounds-lp" class="level1">
 <h1>4. Interval Estimate: Balke-Pearl Bounds (LP)</h1>
 <ul>
 <li>Partial Identification의 핵심인 <strong>Balke-Pearl Bounds</strong>를 계산합니다.</li>
 <li>이는 관측된 확률 분포 <img src="https://latex.codecogs.com/png.latex?P(X,%20Y%20%7C%20Z)">와 IV 가정(Exclusion Restriction, Random Assignment 등)을 만족하는 모든 가능한 잠재 변수 분포를 고려하여, ATE의 최소값과 최대값을 <strong>선형 계획법(Linear Programming)</strong>으로 찾아냅니다.</li>
 </ul>
-<div id="a820a62b" class="cell" data-execution_count="4">
+<section id="linear-programming-formulation-the-matrix-view" class="level2">
+<h2 class="anchored" data-anchor-id="linear-programming-formulation-the-matrix-view">Linear Programming Formulation: The Matrix View</h2>
+<ul>
+<li><p>우리가 작성한 <code>solve_lp</code> 함수는 수학적으로 <strong>거대한 연립방정식(<img src="https://latex.codecogs.com/png.latex?A%5Cmathbf%7Bx%7D%20=%20%5Cmathbf%7Bb%7D">)</strong>을 조립하여 푸는 과정입니다.</p></li>
+<li><p>이를 행렬식으로 시각화하면 다음과 같습니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cunderbrace%7B%0A%5Cbegin%7Bbmatrix%7D%0A1%20&amp;%201%20&amp;%201%20&amp;%20%5Cdots%20&amp;%201%20%5C%5C%0A%5Chdashline%0A1%20&amp;%200%20&amp;%200%20&amp;%20%5Cdots%20&amp;%200%20%5C%5C%0A0%20&amp;%201%20&amp;%201%20&amp;%20%5Cdots%20&amp;%200%20%5C%5C%0A%5Cvdots%20&amp;%20%5Cvdots%20&amp;%20%5Cvdots%20&amp;%20%5Cddots%20&amp;%20%5Cvdots%20%5C%5C%0A0%20&amp;%200%20&amp;%200%20&amp;%20%5Cdots%20&amp;%201%0A%5Cend%7Bbmatrix%7D%0A%7D_%7BA_%7Beq%7D%20%5C;%20(9%20%5Ctimes%2016)%7D%0A%5Ctimes%0A%5Cunderbrace%7B%0A%5Cbegin%7Bbmatrix%7D%0Aq_%7B00%7D%20%5C%5C%0Aq_%7B01%7D%20%5C%5C%0Aq_%7B02%7D%20%5C%5C%0A%5Cvdots%20%5C%5C%0Aq_%7B33%7D%0A%5Cend%7Bbmatrix%7D%0A%7D_%7B%5Cmathbf%7Bq%7D%20%5C;%20(16%20%5Ctimes%201)%7D%0A=%0A%5Cunderbrace%7B%0A%5Cbegin%7Bbmatrix%7D%0A1%20%5C%5C%0A%5Chdashline%0AP(y=0,%20x=0%20%7C%20z=0)%20%5C%5C%0AP(y=0,%20x=0%20%7C%20z=1)%20%5C%5C%0A%5Cvdots%20%5C%5C%0AP(y=1,%20x=1%20%7C%20z=1)%0A%5Cend%7Bbmatrix%7D%0A%7D_%7B%5Cmathbf%7Bb%7D_%7Beq%7D%20%5C;%20(9%20%5Ctimes%201)%7D%0A"></p>
+</section>
+<section id="구성-요소-상세-설명" class="level2">
+<h2 class="anchored" data-anchor-id="구성-요소-상세-설명">구성 요소 상세 설명</h2>
+<section id="미지수-벡터-mathbfq-the-unknowns" class="level3">
+<h3 class="anchored" data-anchor-id="미지수-벡터-mathbfq-the-unknowns">1. 미지수 벡터 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7Bq%7D"> (The Unknowns)</h3>
+<p>우리가 찾고 싶은 <strong>16가지 잠재 유형(Canonical Types)의 비율</strong>입니다. <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7Bq%7D%20=%20%5Bq_%7B00%7D,%20q_%7B01%7D,%20%5Cdots,%20q_%7B33%7D%5D%5ET"> 현실에서는 관측할 수 없지만, 이 값들이 모여서 실제 데이터를 만들어냅니다.</p>
+</section>
+<section id="계수-행렬-a_eq-the-logic" class="level3">
+<h3 class="anchored" data-anchor-id="계수-행렬-a_eq-the-logic">2. 계수 행렬 <img src="https://latex.codecogs.com/png.latex?A_%7Beq%7D"> (The Logic)</h3>
+<p>우리가 세운 <strong>Canonical Model의 논리</strong>를 담고 있는 “출석부”입니다. <img src="https://latex.codecogs.com/png.latex?A_%7Beq%7D%20%5Cin%20%5C%7B0,%201%5C%7D%5E%7B9%20%5Ctimes%2016%7D"></p>
+<ul>
+<li><strong>1행 (Sum Constraint):</strong> “모든 <img src="https://latex.codecogs.com/png.latex?q">의 합은 1이어야 한다.” (모두 1)</li>
+<li><strong>2~9행 (Model Constraint):</strong> “특정 관측 상황(<img src="https://latex.codecogs.com/png.latex?Z,%20X,%20Y">)을 만들어내는 유형(<img src="https://latex.codecogs.com/png.latex?q">)들만 1로 표시한다.”
+<ul>
+<li>예: <img src="https://latex.codecogs.com/png.latex?Z=0">일 때 <img src="https://latex.codecogs.com/png.latex?X=0,%20Y=0">이 되려면, <img src="https://latex.codecogs.com/png.latex?q_%7B00%7D"> (Never-taker &amp; Never-recover) 등이 참여해야 함.</li>
+</ul></li>
+</ul>
+</section>
+<section id="상수-벡터-mathbfb_eq-the-data" class="level3">
+<h3 class="anchored" data-anchor-id="상수-벡터-mathbfb_eq-the-data">3. 상수 벡터 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7Bb%7D_%7Beq%7D"> (The Data)</h3>
+<p>우리가 수집한 <strong>실제 관측 데이터(Observed Probabilities)</strong>입니다. <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7Bb%7D_%7Beq%7D%20=%20%5B1,%20%5Chat%7BP%7D_%7B00.0%7D,%20%5Cdots,%20%5Chat%7BP%7D_%7B11.1%7D%5D%5ET"> 이 값들이 연립방정식의 <strong>“정답지(Target)”</strong> 역할을 하여, 미지수 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7Bq%7D">가 현실과 동떨어지지 않게 붙잡아줍니다.</p>
+</section>
+<section id="최적화-목표-objective-function" class="level3">
+<h3 class="anchored" data-anchor-id="최적화-목표-objective-function">최적화 목표 (Objective Function)</h3>
+<p>이 제약조건(<img src="https://latex.codecogs.com/png.latex?A_%7Beq%7D%5Cmathbf%7Bq%7D%20=%20%5Cmathbf%7Bb%7D_%7Beq%7D">)을 만족하는 수많은 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7Bq%7D"> 중에서, 다음을 최소화(또는 최대화)하는 조합을 찾습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%5Cmin_%7B%5Cmathbf%7Bq%7D%7D%20%5C;%20(%20%5Cmathbf%7Bc%7D%5ET%20%5Cmathbf%7Bq%7D%20)%20=%20%5Cmin%20%5Csum_%7Bj,k%7D%20c_%7Bjk%7D%20q_%7Bjk%7D"></p>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7Bc%7D">는 인과 효과(ATE)를 계산하는 가중치 벡터입니다. <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7Bc%7D%20=%20%5B%5Cdots,%20%5Cunderbrace%7B+1%7D_%7B%5Ctext%7BHelped%7D%7D,%20%5Cdots,%20%5Cunderbrace%7B-1%7D_%7B%5Ctext%7BHurt%7D%7D,%20%5Cdots%5D"></p>
+<div id="42aba466" class="cell" data-execution_count="4">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><span class="co" style="color: #5E5E5E;
@@ -760,6 +807,8 @@ font-weight: bold;
 font-style: inherit;">return</span> min_ate, max_ate</span></code></pre></div></div>
 </details>
 </div>
+</section>
+</section>
 <section id="natural-bounds" class="level2">
 <h2 class="anchored" data-anchor-id="natural-bounds">5. Natural Bounds</h2>
 <p>비교를 위해 더 넓은 구간을 가지는 Natural Bounds를 계산합니다.</p>
@@ -767,7 +816,7 @@ font-style: inherit;">return</span> min_ate, max_ate</span></code></pre></div></
 <li><strong>IV Natural Bounds</strong>: 도구변수가 있을 때의 최악의 경우(Worst-case) 구간</li>
 <li><strong>Pure Manski Bounds</strong>: 도구변수 없이 관측 데이터 <img src="https://latex.codecogs.com/png.latex?P(Y,%20X)">만으로 계산한 구간 (가장 넓음)</li>
 </ol>
-<div id="86aad66f" class="cell" data-execution_count="5">
+<div id="211a61d8" class="cell" data-execution_count="5">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><span class="co" style="color: #5E5E5E;
@@ -1060,20 +1109,14 @@ font-style: inherit;">1</span>)</span>
 <span id="cb5-51">    <span class="co" style="color: #5E5E5E;
 background-color: null;
 font-style: inherit;"># 2. P(Y=1 | do(X=0)) Bounds </span></span>
-<span id="cb5-52">    <span class="co" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;"># a = P(y, x)</span></span>
-<span id="cb5-53">    <span class="co" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;"># b = P(y, x) + 1 - P(x)</span></span>
-<span id="cb5-54">    lower_do0 <span class="op" style="color: #5E5E5E;
+<span id="cb5-52">    lower_do0 <span class="op" style="color: #5E5E5E;
 background-color: null;
 font-style: inherit;">=</span> get_p_xy(<span class="dv" style="color: #AD0000;
 background-color: null;
 font-style: inherit;">1</span>, <span class="dv" style="color: #AD0000;
 background-color: null;
 font-style: inherit;">0</span>)</span>
-<span id="cb5-55">    upper_do0 <span class="op" style="color: #5E5E5E;
+<span id="cb5-53">    upper_do0 <span class="op" style="color: #5E5E5E;
 background-color: null;
 font-style: inherit;">=</span> get_p_xy(<span class="dv" style="color: #AD0000;
 background-color: null;
@@ -1088,31 +1131,31 @@ background-color: null;
 font-style: inherit;">-</span> get_p_x(<span class="dv" style="color: #AD0000;
 background-color: null;
 font-style: inherit;">0</span>)</span>
-<span id="cb5-56">    </span>
-<span id="cb5-57">    <span class="co" style="color: #5E5E5E;
+<span id="cb5-54">    </span>
+<span id="cb5-55">    <span class="co" style="color: #5E5E5E;
 background-color: null;
 font-style: inherit;"># 3. ATE Bounds (Worst Case)</span></span>
-<span id="cb5-58">    <span class="co" style="color: #5E5E5E;
+<span id="cb5-56">    <span class="co" style="color: #5E5E5E;
 background-color: null;
 font-style: inherit;"># ATE = do(1) - do(0)</span></span>
-<span id="cb5-59">    <span class="co" style="color: #5E5E5E;
+<span id="cb5-57">    <span class="co" style="color: #5E5E5E;
 background-color: null;
 font-style: inherit;"># Min ATE = Min(do1) - Max(do0)</span></span>
-<span id="cb5-60">    <span class="co" style="color: #5E5E5E;
+<span id="cb5-58">    <span class="co" style="color: #5E5E5E;
 background-color: null;
 font-style: inherit;"># Max ATE = Max(do1) - Min(do0)</span></span>
-<span id="cb5-61">    nat_min <span class="op" style="color: #5E5E5E;
+<span id="cb5-59">    nat_min <span class="op" style="color: #5E5E5E;
 background-color: null;
 font-style: inherit;">=</span> lower_do1 <span class="op" style="color: #5E5E5E;
 background-color: null;
 font-style: inherit;">-</span> upper_do0</span>
-<span id="cb5-62">    nat_max <span class="op" style="color: #5E5E5E;
+<span id="cb5-60">    nat_max <span class="op" style="color: #5E5E5E;
 background-color: null;
 font-style: inherit;">=</span> upper_do1 <span class="op" style="color: #5E5E5E;
 background-color: null;
 font-style: inherit;">-</span> lower_do0</span>
-<span id="cb5-63">    </span>
-<span id="cb5-64">    <span class="cf" style="color: #003B4F;
+<span id="cb5-61">    </span>
+<span id="cb5-62">    <span class="cf" style="color: #003B4F;
 background-color: null;
 font-weight: bold;
 font-style: inherit;">return</span> nat_min, nat_max</span></code></pre></div></div>
@@ -1126,7 +1169,7 @@ font-style: inherit;">return</span> nat_min, nat_max</span></code></pre></div></
 <li>마지막으로 계산된 모든 추정치와 구간을 시각화하여 비교합니다.</li>
 <li><code>Naive Estimate</code>는 단순히 <img src="https://latex.codecogs.com/png.latex?E%5BY%7CX=1%5D%20-%20E%5BY%7CX=0%5D">으로 계산되어 편향(Bias)이 존재함을 확인할 수 있습니다.</li>
 </ul>
-<div id="9a8d6ed2" class="cell" data-execution_count="6">
+<div id="74c77820" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><span class="kw" style="color: #003B4F;
@@ -2159,7 +2202,7 @@ font-style: inherit;">)"</span>)</span></code></pre></div></div>
 <li>Complier의 비율이 약 80%로 매우 높고, Never-taker나 Defier의 비율이 낮습니다.</li>
 <li>즉, 의사의 처방(Z)이 실제 복용 여부(X)를 매우 강력하게 결정합니다.</li>
 </ul>
-<div id="b511fb01" class="cell" data-execution_count="7">
+<div id="82c5face" class="cell" data-execution_count="7">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><span class="co" style="color: #5E5E5E;
@@ -2307,7 +2350,7 @@ DoWhy Estimate: 0.6853
 <li>Complier의 비율이 5%로 극히 낮고, Never-taker(약 35%)와 Always-taker(약 40%)의 비율이 매우 높습니다.</li>
 <li>즉, 의사가 처방을 하든 말든(Z), 사람들은 대부분 자기 맘대로 행동하므로 도구변수가 무력합니다.</li>
 </ul>
-<div id="b9472877" class="cell" data-execution_count="8">
+<div id="344bf7f5" class="cell" data-execution_count="8">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><span class="co" style="color: #5E5E5E;
@@ -2648,6 +2691,12 @@ DoWhy Estimate: -0.1393
 <li><p><strong>주요 결과 (<img src="https://latex.codecogs.com/png.latex?Y">):</strong> 결과 변수 (Primary Outcome)</p></li>
 <li><p><strong>외생 변수 (<img src="https://latex.codecogs.com/png.latex?U">):</strong> 비관측 교란 변수 (Exogenous Variables)</p></li>
 </ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-08-part-02/images/iv_graph.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: IV Model Graph. 도구변수가 포함된 모델의 그래프.</figcaption>
+</figure>
+</div>
 <section id="natural-bounds-iv-모델" class="level2" data-number="2.1">
 <h2 data-number="2.1" class="anchored" data-anchor-id="natural-bounds-iv-모델"><span class="header-section-number">2.1</span> Natural Bounds (IV 모델)</h2>
 <ul>
@@ -2657,9 +2706,21 @@ DoWhy Estimate: -0.1393
 <ul>
 <li>모델 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BM%7D_z">에 Natural Bounds를 적용하면 아래와 같습니다.
 <ul>
-<li>우선 Natural Bounds 식에서 시작합니다. <img src="https://latex.codecogs.com/png.latex?%0AP(y%7Cdo(x))%20%5Cle%20P(y,%20x)%20+%201%20-%20P(x)%0A"></li>
-<li><img src="https://latex.codecogs.com/png.latex?do(z)">를 한 그래프에서도 Natural Bounds는 성립하므로, <img src="https://latex.codecogs.com/png.latex?%0AP(y%7Cdo(x,z))%20%5Cle%20P(y,%20x%7Cdo(z))%20+%201%20-%20P(x%7Cdo(z))%0A"></li>
+<li>우선 Natural Bounds 식에서 시작합니다. <img src="https://latex.codecogs.com/png.latex?%0AP(y,%20x)%20%5Cle%20P(y%7Cdo(x))%20%5Cle%20P(y,%20x)%20+%201%20-%20P(x)%0A"></li>
+<li><img src="https://latex.codecogs.com/png.latex?do(z)">를 한 그래프에서도 Natural Bounds는 성립하므로, <img src="https://latex.codecogs.com/png.latex?%0AP(y,%20x%7Cdo(z))%20%5Cle%20P(y%7Cdo(x,z))%20%5Cle%20P(y,%20x%7Cdo(z))%20+%201%20-%20P(x%7Cdo(z))%0A"></li>
+<li>Rule 2에 의해 <img src="https://latex.codecogs.com/png.latex?Z">에 대한 개입은 관찰과 같으므로 특정 <img src="https://latex.codecogs.com/png.latex?z">값에 대해 다음 부등식이 성립합니다.</li>
+<li>추가로 <img src="https://latex.codecogs.com/png.latex?X">에 대한 개입이 이루어진 상황에서 도구변수 <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?Y">에 직접적인 영향을 주지 않으므로 <img src="https://latex.codecogs.com/png.latex?P(y%E2%88%A3do(x),z)=P(y%E2%88%A3do(x))"> 입니다.</li>
+<li>어떤 <img src="https://latex.codecogs.com/png.latex?z">값을 택하든 인과 효과는 동일해야 한다는 것입니다. <img src="https://latex.codecogs.com/png.latex?%0AP(y,%20x%7Cz)%20%5Cle%20P(y%7Cdo(x))%20%5Cle%20P(y,%20x%7Cz)%20+%201%20-%20P(x%7Cz)%0A"></li>
+<li>따라서 도구변수 값에 따른 Bounds의 교집합(intersection)이 Natural Bounds가 됩니다.</li>
 </ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/causal-inference-08-part-02/images/natural_bounds_iv.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: Natural Bounds of IV Model. 도구변수의 값에 따른 인과효과 범위의 교집합이 Natural Bounds가 됩니다.</figcaption>
+</figure>
+</div>
+<ul>
 <li>하지만 Natural Bounds는 이론적 한계까지 <strong>좁혀지지 않은 상태(Not Tight)</strong>입니다.</li>
 </ul>
 </section>
@@ -2735,7 +2796,7 @@ DoWhy Estimate: -0.1393
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="https://shsha0110.github.io/posts/causal-inference-08-part-02/images/partition_u.jpeg" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: Partition of U. U의 공간이 Rx와 Ry의 조합(총 16가지)에 의해 분할되는 모습을 나타낸 그림.</figcaption>
+<figcaption>Figure 3: Partition of U. U의 공간이 Rx와 Ry의 조합(총 16가지)에 의해 분할되는 모습을 나타낸 그림.</figcaption>
 </figure>
 </div>
 <ul>
@@ -2747,7 +2808,7 @@ DoWhy Estimate: -0.1393
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="https://shsha0110.github.io/posts/causal-inference-08-part-02/images/equivalence_theorem.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: IV Model and Canonical Model. IV 모델에 대응되는 Canonical 모델의 모습.</figcaption>
+<figcaption>Figure 4: IV Model and Canonical Model. IV 모델에 대응되는 Canonical 모델의 모습.</figcaption>
 </figure>
 </div>
 <blockquote class="blockquote">

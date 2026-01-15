@@ -1,0 +1,563 @@
+---
+title: "[Causal Inference] 8. Partial Identification (Part 4)"
+description: "Non-Compliance Simulation"
+author: "유성현"
+date: "2026-01-13"
+categories: [Causal Inference]
+format:
+  html:
+    code-fold: true
+    toc: true
+jupyter: python3
+---
+
+# Overview 
+
+* 이번 포스트에서는 실험 설계에서 흔히 발생하는 **비순응(Non-compliance)** 문제를 다룹니다.
+* 할당된 처치($Z$)와 실제 받은 처치($X$)가 일치하지 않는 상황에서, 인과 효과(ATE)를 식별하고 추정하는 다양한 방법들을 코드로 구현하고 비교해 봅니다.
+
+* 주요 내용은 다음과 같습니다.
+
+1.  **데이터 생성 (Data Generation):** Compliance Type과 Response Type을 기반으로 가상 데이터 생성
+2.  **점 추정 (Point Estimate):** 도구변수(IV)를 활용한 LATE 추정 (DoWhy 라이브러리 활용)
+3.  **구간 추정 (Interval Estimate):**
+    * **Natural Bounds (Manski):** 가정 없이 관측 데이터만으로 도출한 구간
+    * **IV Natural Bounds:** 도구변수 가정을 추가했을 때의 구간
+    * **Balke-Pearl Bounds (LP):** 선형 계획법(Linear Programming)을 이용한 최적 구간
+4.  **결과 비교 및 시각화**
+
+---
+
+# 1. 라이브러리 임포트
+
+* 실습에 필요한 라이브러리를 불러옵니다. `scipy.optimize.linprog`는 Balke-Pearl Bounds를 계산하는 데 사용되며, `dowhy`는 인과 추론을 위한 라이브러리입니다.
+
+```{python}
+import numpy as np
+import pandas as pd
+from scipy.optimize import linprog
+import matplotlib.pyplot as plt
+from dowhy import CausalModel
+
+```
+
+# 2. 데이터 생성 (Data Generation)
+
+* 가상의 시나리오를 생성합니다. 
+* 인구 집단은 **Compliance Type**(순응 유형: Never-taker, Complier, Defier, Always-taker)과 **Response Type**(반응 유형: Never-recover, Helped, Hurt, Always-recover)의 조합인 총 16가지 유형으로 구성됩니다.
+* 각 유형별 비율(`probs`)을 설정하고, 이에 따라 데이터를 생성한 뒤 실제 참값인 **True ATE**를 계산합니다.
+
+```{python}
+# ---------------------------------------------------------
+# 1. 데이터 생성 (Data Generation)
+# ---------------------------------------------------------
+def generate_class_scenario_data(probs, n=10000, seed=42):
+    np.random.seed(seed)
+    
+    probs = probs / probs.sum()
+    
+    # 샘플 생성
+    flat_probs = probs.flatten()
+    types_idx = np.random.choice(16, size=n, p=flat_probs)
+    r_x = types_idx // 4  # Compliance Type
+    r_y = types_idx % 4   # Response Type
+    
+    # 구조 방정식 (Structural Equations)
+    z = np.random.binomial(1, 0.5, size=n) # Z는 무작위
+    
+    x = np.zeros(n, dtype=int)      # Never-taker
+    x[r_x == 1] = z[r_x == 1]       # Complier
+    x[r_x == 2] = 1 - z[r_x == 2]   # Defier
+    x[r_x == 3] = 1                 # Always-taker
+    
+    y = np.zeros(n, dtype=int)      # Never-recover
+    y[r_y == 1] = x[r_y == 1]       # Helped
+    y[r_y == 2] = 1 - x[r_y == 2]   # Hurt
+    y[r_y == 3] = 1                 # Always-recover
+    
+    df = pd.DataFrame({'Z': z, 'X': x, 'Y': y})
+    
+    # True ATE 계산
+    # True ATE = P(Y = 1 | do(X = 1)) - P(Y = 1 | do(X = 0))
+    #          = {P(Helped) + P(Always-recover)} - {P(Hurt) + P(Always-recover)}
+    #          = P(Helped) - P(Hurt)
+    true_ate = probs[:, 1].sum() - probs[:, 2].sum()
+    
+    return df, true_ate, probs
+```
+
+# 3. Point Estimate: LATE (by DoWhy)
+
+* `DoWhy` 라이브러리를 사용하여 점 추정치를 계산합니다. 
+* 앞서 Partial Identification에서는 효과의 범위를 구했지만, 여기서는 **단조성(Monotonicity)** 가정을 도입하여 **LATE (Local Average Treatment Effect)**, Complier 집단에 대한 효과를 하나의 점(Point)으로 추정합니다.
+
+## 왜 점 추정이 가능한가? (단조성 가정, The Role of Monotonicity)
+
+* 일반적인 도구변수 추정량(Wald Estimator)은 다음과 같습니다.
+
+$$
+\beta_{IV} = \frac{E[Y|Z=1] - E[Y|Z=0]}{E[X|Z=1] - E[X|Z=0]}
+$$
+
+* 이 수식이 인과 효과로 해석되려면 **Defiers**가 없어야 합니다. 
+* 즉, (처방)일 때 (미복용)이고, (미처방)일 때 (복용)인 사람이 없다는 **단조성 가정($X_{i}(1) \ge X_{i}(0)$)**이 필요합니다.
+
+* 이 가정이 성립할 때, 추정량은 **Compliers(순응자)** 집단의 평균 처치 효과로 식별됩니다.
+
+```{python}
+# ==============================================================================
+# 2. Point Estimate: DoWhy를 이용한 LATE 추정
+# ==============================================================================
+def point_estimate(df):
+    """
+    DoWhy 라이브러리를 사용하여 IV(도구변수) 추정량을 계산합니다.
+    """
+    # 1. Causal Model 정의 (Graph)
+    # Z -> X -> Y, U -> X, U -> Y (U는 Unobserved Confounder)
+    model = CausalModel(
+        data=df,            # 데이터
+        treatment='X',      # 원인 변수 (약 복용 여부)
+        outcome='Y',        # 결과 변수 (완치 여부)
+        instruments=['Z'],  # 도구 변수 (의사 처방)
+        common_causes=[]    # 공통 원인 (교란 변수 U)
+    )
+    
+    # 2. 식별 (Identification)
+    identified_estimand = model.identify_effect(proceed_when_unidentifiable=True)
+    
+    # 3. 추정 (Estimation) - Wald Estimator (IV 방식)
+    estimate = model.estimate_effect(
+        identified_estimand,
+        method_name="iv.instrumental_variable"
+    )
+    
+    return estimate.value
+```
+
+# 4. Interval Estimate: Balke-Pearl Bounds (LP)
+
+* Partial Identification의 핵심인 **Balke-Pearl Bounds**를 계산합니다. 
+* 이는 관측된 확률 분포 $P(X, Y | Z)$와 IV 가정(Exclusion Restriction, Random Assignment 등)을 만족하는 모든 가능한 잠재 변수 분포를 고려하여, ATE의 최소값과 최대값을 **선형 계획법(Linear Programming)**으로 찾아냅니다.
+
+## Linear Programming Formulation: The Matrix View
+
+* 우리가 작성한 `solve_lp` 함수는 수학적으로 **거대한 연립방정식($A\mathbf{x} = \mathbf{b}$)**을 조립하여 푸는 과정입니다. 
+
+* 이를 행렬식으로 시각화하면 다음과 같습니다.
+
+$$
+\underbrace{
+\begin{bmatrix}
+1 & 1 & 1 & \dots & 1 \\
+\hdashline
+1 & 0 & 0 & \dots & 0 \\
+0 & 1 & 1 & \dots & 0 \\
+\vdots & \vdots & \vdots & \ddots & \vdots \\
+0 & 0 & 0 & \dots & 1
+\end{bmatrix}
+}_{A_{eq} \; (9 \times 16)}
+\times
+\underbrace{
+\begin{bmatrix}
+q_{00} \\
+q_{01} \\
+q_{02} \\
+\vdots \\
+q_{33}
+\end{bmatrix}
+}_{\mathbf{q} \; (16 \times 1)}
+=
+\underbrace{
+\begin{bmatrix}
+1 \\
+\hdashline
+P(y=0, x=0 | z=0) \\
+P(y=0, x=0 | z=1) \\
+\vdots \\
+P(y=1, x=1 | z=1)
+\end{bmatrix}
+}_{\mathbf{b}_{eq} \; (9 \times 1)}
+$$
+
+## 구성 요소 상세 설명
+
+### 1. 미지수 벡터 $\mathbf{q}$ (The Unknowns)
+우리가 찾고 싶은 **16가지 잠재 유형(Canonical Types)의 비율**입니다.
+$$\mathbf{q} = [q_{00}, q_{01}, \dots, q_{33}]^T$$
+현실에서는 관측할 수 없지만, 이 값들이 모여서 실제 데이터를 만들어냅니다.
+
+### 2. 계수 행렬 $A_{eq}$ (The Logic)
+우리가 세운 **Canonical Model의 논리**를 담고 있는 "출석부"입니다.
+$$A_{eq} \in \{0, 1\}^{9 \times 16}$$
+
+* **1행 (Sum Constraint):** "모든 $q$의 합은 1이어야 한다." (모두 1)
+* **2~9행 (Model Constraint):** "특정 관측 상황($Z, X, Y$)을 만들어내는 유형($q$)들만 1로 표시한다."
+    * 예: $Z=0$일 때 $X=0, Y=0$이 되려면, $q_{00}$ (Never-taker & Never-recover) 등이 참여해야 함.
+
+### 3. 상수 벡터 $\mathbf{b}_{eq}$ (The Data)
+우리가 수집한 **실제 관측 데이터(Observed Probabilities)**입니다.
+$$\mathbf{b}_{eq} = [1, \hat{P}_{00.0}, \dots, \hat{P}_{11.1}]^T$$
+이 값들이 연립방정식의 **"정답지(Target)"** 역할을 하여, 미지수 $\mathbf{q}$가 현실과 동떨어지지 않게 붙잡아줍니다.
+
+### 최적화 목표 (Objective Function)
+
+이 제약조건($A_{eq}\mathbf{q} = \mathbf{b}_{eq}$)을 만족하는 수많은 $\mathbf{q}$ 중에서, 다음을 최소화(또는 최대화)하는 조합을 찾습니다.
+
+$$\min_{\mathbf{q}} \; ( \mathbf{c}^T \mathbf{q} ) = \min \sum_{j,k} c_{jk} q_{jk}$$
+
+여기서 $\mathbf{c}$는 인과 효과(ATE)를 계산하는 가중치 벡터입니다.
+$$\mathbf{c} = [\dots, \underbrace{+1}_{\text{Helped}}, \dots, \underbrace{-1}_{\text{Hurt}}, \dots]$$
+
+
+```{python}
+# ==============================================================================
+# 3. Interval Estimate: Linear Programming (Balke-Pearl Bounds)
+# ==============================================================================
+def lp_bounds(df):
+    # 1. 관측 확률 계산
+    # p_yx.z = P(X = x, Y = y | Z = z) 가 계산됨.
+    p_obs = df.groupby(['Y', 'X', 'Z']).size() / df.groupby('Z').size()
+    p_obs_dict = {idx: val for idx, val in p_obs.items()}
+    
+    # 2. 최적화 함수 정의 (앞서 작성한 로직)
+    def solve_lp(objective_coef):
+        num_vars = 16
+        
+        # 제약조건 A_eq(좌변), b_eq(우변) 생성
+        A_eq = []
+        b_eq = []
+        
+        # (1) 확률 총합 = 1
+        A_eq.append([1] * num_vars)
+        b_eq.append(1)
+        
+        # (2) 관측 데이터 정합성 (8개 방정식)
+        for z in [0, 1]:
+            for x in [0, 1]:
+                for y in [0, 1]:
+                    row = [0] * num_vars
+                    target_prob = p_obs_dict.get((y, x, z), 0)
+                    
+                    # 16개 유형에 대해 Canonical Model 매핑
+                    for j in range(4): # Compliance
+                        for k in range(4): # Response
+                            rx = [j//2, j%2] # [X|Z=0, X|Z=1]
+                            ry = [k//2, k%2] # [Y|X=0, Y|X=1]
+                            if (rx[z] == x) and (ry[x] == y) :
+                                row[4 * j + k] = 1
+                                
+                    A_eq.append(row)
+                    b_eq.append(target_prob)
+                    
+        # LP 실행
+        bounds = [(0, 1) for _ in range(num_vars)]
+        res = linprog(objective_coef, A_eq=A_eq, b_eq=b_eq, bounds=bounds)
+        return res.fun
+
+    # 3. 목적 함수 설정 (ATE = Helped - Hurt)
+    # ATE = P(Y = 1 | do(X = 1)) - P(Y = 1 | do(X = 0))
+    #     = {P(Helped) + P(Always-recover)} - {P(Hurt) + P(Always-recover)}
+    #     = P(Helped) - P(Hurt)
+    coef_ate_min = []
+    coef_ate_max = []
+    for j in range(4):
+        for k in range(4):
+            val = 1 if k==1 else (-1 if k==2 else 0)
+            coef_ate_min.append(val)
+            coef_ate_max.append(-val)
+            
+    # 4. 결과 도출
+    min_ate = solve_lp(coef_ate_min)
+    max_ate = -solve_lp(coef_ate_max) # 부호 원복
+    
+    return min_ate, max_ate
+```
+
+## 5. Natural Bounds
+
+비교를 위해 더 넓은 구간을 가지는 Natural Bounds를 계산합니다.
+
+1. **IV Natural Bounds**: 도구변수가 있을 때의 최악의 경우(Worst-case) 구간
+2. **Pure Manski Bounds**: 도구변수 없이 관측 데이터 $P(Y, X)$만으로 계산한 구간 (가장 넓음)
+
+```{python}
+# ==============================================================================
+# 4.1 Natural Bounds
+# ==============================================================================
+def calculate_natural_bounds_iv(df):
+    p_xy_z = df.groupby(['Y', 'X', 'Z']).size() / df.groupby('Z').size()
+    
+    def get_p_xy_z(y, x, z):
+        return p_xy_z.get((y, x, z), 0)
+    
+    def get_p_x_z(x, z):
+        return get_p_xy_z(0, x, z) + get_p_xy_z(1, x, z)
+
+    # 1. P(Y=1 | do(X=1)) Bounds 
+    # a = max_z P(y, x | z)
+    # b = min_z P(y, x | z) + 1 - P(x | z)
+    lower_do1 = max(get_p_xy_z(1, 1, 0), get_p_xy_z(1, 1, 1))
+    upper_do1 = min(get_p_xy_z(1, 1, 0) + 1 - get_p_x_z(1, 0), 
+                    get_p_xy_z(1, 1, 1) + 1 - get_p_x_z(1, 1))
+    
+    # 2. P(Y=1 | do(X=0)) Bounds
+    lower_do0 = max(get_p_xy_z(1, 0, 0), get_p_xy_z(1, 0, 1))
+    upper_do0 = min(get_p_xy_z(1, 0, 0) + 1 - get_p_x_z(0, 0), 
+                    get_p_xy_z(1, 0, 1) + 1 - get_p_x_z(0, 1))
+    
+    # 3. ATE Bounds (Worst Case)
+    # ATE = do(1) - do(0)
+    # Min ATE = Min(do1) - Max(do0)
+    # Max ATE = Max(do1) - Min(do0)
+    nat_min = lower_do1 - upper_do0
+    nat_max = upper_do1 - lower_do0
+    
+    return nat_min, nat_max
+
+# ==============================================================================
+# 4.2 Natural Bounds
+# ==============================================================================
+def calculate_natural_bounds(df):
+    p_xy = df.groupby(['Y', 'X']).size() / len(df)
+    
+    def get_p_xy(y, x):
+        return p_xy.get((y, x), 0)
+
+    def get_p_x(x):
+        return get_p_xy(0, x) + get_p_xy(1, x)
+        
+    # 1. P(Y=1 | do(X=1)) Bounds 
+    # a = P(y, x)
+    # b = P(y, x) + 1 - P(x)
+    lower_do1 = get_p_xy(1, 1)
+    upper_do1 = get_p_xy(1, 1) + 1 - get_p_x(1)
+    # 2. P(Y=1 | do(X=0)) Bounds 
+    lower_do0 = get_p_xy(1, 0)
+    upper_do0 = get_p_xy(1, 0) + 1 - get_p_x(0)
+    
+    # 3. ATE Bounds (Worst Case)
+    # ATE = do(1) - do(0)
+    # Min ATE = Min(do1) - Max(do0)
+    # Max ATE = Max(do1) - Min(do0)
+    nat_min = lower_do1 - upper_do0
+    nat_max = upper_do1 - lower_do0
+    
+    return nat_min, nat_max
+```
+
+# 6. 시각화 및 비교 (Comparision)
+
+* 마지막으로 계산된 모든 추정치와 구간을 시각화하여 비교합니다.
+* `Naive Estimate`는 단순히 $E[Y|X=1] - E[Y|X=0]$으로 계산되어 편향(Bias)이 존재함을 확인할 수 있습니다.
+
+```{python}
+def compare_and_visualize(df, true_ate, point_est, lp_bounds, nat_bounds, manski_bounds, probs_matrix):
+    # ---------------------------
+    # 1. 데이터 전처리
+    # ---------------------------
+    # 관측 확률 P(Y, X | Z) 계산 (Bar Chart용)
+    p_obs = df.groupby(['Y', 'X', 'Z']).size() / df.groupby('Z').size()
+    p_obs_dict = {idx: val for idx, val in p_obs.items()}
+    
+    # Naive Estimate (단순 평균 차이) - 편향 확인용
+    naive_ate = df[df['X']==1]['Y'].mean() - df[df['X']==0]['Y'].mean()
+
+    # ---------------------------
+    # 2. 캔버스 설정
+    # ---------------------------
+    fig = plt.figure(figsize=(16, 10))
+    plt.suptitle("Causal Effect Analysis: Partial Identification (IV)", fontsize=18, fontweight='bold', y=0.95)
+    gs = fig.add_gridspec(2, 2, height_ratios=[1, 1])
+    
+    # ---------------------------
+    # [Plot 1] 관측 데이터 분포 P(Y, X | Z)
+    # ---------------------------
+    ax1 = fig.add_subplot(gs[0, 0])
+    scenarios = ['Z=0\n(No Prescription)', 'Z=1\n(Prescription)']
+    x_loc = np.arange(len(scenarios))
+    width = 0.2
+
+    p_00 = [p_obs_dict.get((0,0,0),0), p_obs_dict.get((0,0,1),0)]
+    p_10 = [p_obs_dict.get((1,0,0),0), p_obs_dict.get((1,0,1),0)]
+    p_01 = [p_obs_dict.get((0,1,0),0), p_obs_dict.get((0,1,1),0)]
+    p_11 = [p_obs_dict.get((1,1,0),0), p_obs_dict.get((1,1,1),0)]
+
+    ax1.bar(x_loc - 1.5*width, p_00, width, label='Y=0, X=0', alpha=0.8)
+    ax1.bar(x_loc - 0.5*width, p_10, width, label='Y=1, X=0', alpha=0.8)
+    ax1.bar(x_loc + 0.5*width, p_01, width, label='Y=0, X=1', alpha=0.8)
+    ax1.bar(x_loc + 1.5*width, p_11, width, label='Y=1, X=1', alpha=0.8)
+
+    ax1.set_ylabel('Probability')
+    ax1.set_title('1. Observational Distribution $P(Y, X | Z)$', fontsize=12, fontweight='bold')
+    ax1.set_xticks(x_loc)
+    ax1.set_xticklabels(scenarios)
+    ax1.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize='small')
+    ax1.set_ylim(0, 1.0)
+    ax1.grid(axis='y', linestyle='--', alpha=0.3)
+
+    # ---------------------------
+    # [Plot 2] 숨겨진 유형 분포 (Latent Compliance Types)
+    # ---------------------------
+    ax2 = fig.add_subplot(gs[0, 1])
+    comp_labels = ['Never-taker', 'Complier', 'Defier', 'Always-taker']
+    comp_probs = probs_matrix.sum(axis=1)
+    colors = ['#d3d3d3', '#66b3ff', '#ff9999', '#ffcc99']
+    
+    ax2.pie(comp_probs, labels=comp_labels, autopct='%1.1f%%', startangle=90, colors=colors, 
+            wedgeprops=dict(width=0.6, edgecolor='w'))
+    ax2.set_title('2. Latent Compliance Types (Unobserved U)', fontsize=12, fontweight='bold')
+    
+    # ---------------------------
+    # [Plot 3] Bounds Comparison
+    # ---------------------------
+    ax3 = fig.add_subplot(gs[1, :])
+    y_pos = 1.0
+    
+    # 3-1. Pure Manski Bounds (가장 넓은 구간) - 매우 연한 회색
+    ax3.plot([manski_bounds[0], manski_bounds[1]], [y_pos, y_pos], color='#e0e0e0', linewidth=16, label='Pure Manski (No Z)')
+    ax3.plot([manski_bounds[0], manski_bounds[0]], [y_pos-0.1, y_pos+0.1], color='#e0e0e0', linewidth=2)
+    ax3.plot([manski_bounds[1], manski_bounds[1]], [y_pos-0.1, y_pos+0.1], color='#e0e0e0', linewidth=2)
+
+    # 3-2. IV Natural Bounds (중간 구간) - 회색 (강의자료 Bounds)
+    ax3.plot(nat_bounds, [y_pos, y_pos], color='gray', linewidth=8, alpha=0.7, label='IV Natural Bounds')
+    
+    # 3-3. LP Bounds (좁은 구간) - 파란색
+    ax3.plot(lp_bounds, [y_pos, y_pos], color='blue', linewidth=4, label='Balke-Pearl LP Bounds')
+    
+    # 3-4. Estimates (점)
+    ax3.scatter(true_ate, y_pos, color='green', s=150, zorder=6, edgecolors='black', label=f'True ATE ({true_ate:.3f})')
+    ax3.scatter(point_est, y_pos, color='red', s=120, zorder=6, edgecolors='black', marker='o', label=f'DoWhy Estimate ({point_est:.3f})')
+    ax3.scatter(naive_ate, y_pos - 0.15, color='orange', s=100, zorder=5, marker='x', label=f'Naive Estimate ({naive_ate:.3f})')
+
+    # 3-5. 텍스트 주석
+    ax3.text(lp_bounds[0], y_pos + 0.12, f'{lp_bounds[0]:.3f}', ha='center', fontsize=10, color='blue', fontweight='bold')
+    ax3.text(lp_bounds[1], y_pos + 0.12, f'{lp_bounds[1]:.3f}', ha='center', fontsize=10, color='blue', fontweight='bold')
+    
+    ax3.text(manski_bounds[0], y_pos - 0.12, f'{manski_bounds[0]:.2f}', ha='center', fontsize=9, color='gray')
+    ax3.text(manski_bounds[1], y_pos - 0.12, f'{manski_bounds[1]:.2f}', ha='center', fontsize=9, color='gray')
+    
+    ax3.text(naive_ate, y_pos - 0.22, 'Biased Naive', ha='center', fontsize=9, color='orange')
+
+    # 설정
+    ax3.set_title('3. Comparison: Point Estimate vs. Bounds (Manski > IV Natural > LP)', fontsize=12, fontweight='bold')
+    ax3.set_xlabel("Average Treatment Effect (ATE)", fontsize=11)
+    ax3.set_yticks([])
+    ax3.set_ylim(0.7, 1.3)
+    
+    margin = (manski_bounds[1] - manski_bounds[0]) * 0.1
+    ax3.set_xlim(manski_bounds[0] - margin, manski_bounds[1] + margin)
+    
+    ax3.legend(loc='upper right', framealpha=0.9, fontsize='small')
+    ax3.grid(True, axis='x', linestyle='--', alpha=0.5)
+
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.90)
+    plt.show()
+
+    # 텍스트 출력
+    print(f"True ATE      : {true_ate:.4f}")
+    print(f"DoWhy Estimate: {point_est:.4f}")
+    print("-" * 30)
+    print(f"1. Pure Manski (No Z) : [{manski_bounds[0]:.4f}, {manski_bounds[1]:.4f}] (Width: {manski_bounds[1]-manski_bounds[0]:.4f})")
+    print(f"2. IV Natural (With Z) : [{nat_bounds[0]:.4f}, {nat_bounds[1]:.4f}] (Width: {nat_bounds[1]-nat_bounds[0]:.4f})")
+    print(f"3. Balke-Pearl (LP)   : [{lp_bounds[0]:.4f}, {lp_bounds[1]:.4f}] (Width: {lp_bounds[1]-lp_bounds[0]:.4f})")
+```
+
+# 7. 실행 (Execution)
+* 서로 다른 도구변수 강도(Strength of IV)를 가진 두 가지 시나리오를 실행하여 결과를 비교합니다.
+
+## 7.1 Strong IV Scenario
+
+* 첫 번째는 Strong IV 상황입니다. 
+* Complier의 비율이 약 80%로 매우 높고, Never-taker나 Defier의 비율이 낮습니다. 
+* 즉, 의사의 처방(Z)이 실제 복용 여부(X)를 매우 강력하게 결정합니다.
+
+```{python}
+# 1. Data Generation
+probs = np.array([
+    # Ry=0(Never) Ry=1(Helped) Ry=2(Hurt) Ry=3(Always)
+    # -------------------------------------------------------
+    [0.05,        0.05,        0.00,      0.00],   # Never-taker (Rx=0)
+    [0.10,        0.60,        0.05,      0.05],   # Complier (Rx=1)
+    [0.00,        0.00,        0.00,      0.00],   # Defier (Rx=2)
+    [0.05,        0.05,        0.00,      0.00]    # Always-taker (Rx=3)
+])
+
+df, true_ate, probs = generate_class_scenario_data(probs) 
+
+# 2. Point Estimate
+point_est = point_estimate(df)
+
+# 3. Interval Estimate (LP)
+lp_min, lp_max = lp_bounds(df)
+
+# 4. Natural Bounds
+nat_min, nat_max = calculate_natural_bounds_iv(df)
+manski_min, manski_max = calculate_natural_bounds(df)
+
+# 5. Visualization
+compare_and_visualize(
+    df=df, 
+    true_ate=true_ate, 
+    point_est=point_est, 
+    lp_bounds=(lp_min, lp_max), 
+    nat_bounds=(nat_min, nat_max), 
+    manski_bounds=(manski_min, manski_max),
+    probs_matrix=probs
+)
+```
+* 해석
+
+    * **Complier 비중:** 약 80%로, 도구변수 $Z$가 $X$를 강력하게 설명합니다.
+
+    * **LP Bounds:** 너비가 약 0.20으로 매우 좁게 형성되었습니다. 이는 관측 데이터만으로도 True ATE의 범위를 상당히 좁힐 수 있음을 의미합니다.
+
+    * **Estimates:** Point Estimate (LATE)가 True ATE에 매우 근접해 있습니다.
+
+## 7.2 Weak IV Scenario
+* 두 번째는 Weak IV 상황입니다. 
+* Complier의 비율이 5%로 극히 낮고, Never-taker(약 35%)와 Always-taker(약 40%)의 비율이 매우 높습니다. 
+* 즉, 의사가 처방을 하든 말든(Z), 사람들은 대부분 자기 맘대로 행동하므로 도구변수가 무력합니다.
+
+```{python}
+# 1. Data Generation
+probs = np.array([
+    # Ry=0(Never) Ry=1(Helped) Ry=2(Hurt) Ry=3(Always)
+    # -------------------------------------------------------
+    [0.10,        0.10,        0.05,      0.10],   # Never-taker (Rx=0)
+    [0.01,        0.02,        0.01,      0.01],   # Complier (Rx=1)
+    [0.05,        0.05,        0.05,      0.05],   # Defier (Rx=2)
+    [0.10,        0.10,        0.10,      0.10]    # Always-taker (Rx=3)
+])
+
+df, true_ate, probs = generate_class_scenario_data(probs) 
+
+# 2. Point Estimate
+point_est = point_estimate(df)
+
+# 3. Interval Estimate (LP)
+lp_min, lp_max = lp_bounds(df)
+
+# 4. Natural Bounds
+nat_min, nat_max = calculate_natural_bounds_iv(df)
+manski_min, manski_max = calculate_natural_bounds(df)
+
+# 5. Visualization
+compare_and_visualize(
+    df=df, 
+    true_ate=true_ate, 
+    point_est=point_est, 
+    lp_bounds=(lp_min, lp_max), 
+    nat_bounds=(nat_min, nat_max), 
+    manski_bounds=(manski_min, manski_max),
+    probs_matrix=probs
+)
+```
+
+* 해석
+
+    * **Complier 비중:** 5%에 불과하여 $Z$와 $X$의 상관관계가 매우 약합니다.
+
+    * **LP Bounds:** 너비가 0.84로 매우 넓습니다. 이는 1.0(전체 가능한 범위)에 가까운 수치로, 도구변수 가정을 도입했음에도 불구하고 ATE에 대해 "거의 아무것도 모르는 상태"와 다를 바 없습니다.
+
+    * **Estimates:** Point Estimate (LATE)가 True ATE와 큰 차이를 보이고, 부호가 다르다. 이는 분모($E[X∣Z=1]−E[X∣Z=0]$)가 0에 가까워지면서 추정량이 불안정해지기 때문입니다.

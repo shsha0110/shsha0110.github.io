@@ -1,0 +1,121 @@
+---
+title: "[Causal Inference] 8. Partial Identification (Part 3)"
+description: "Bounds on Partially-observed Covariates"
+author: "유성현"
+date: "2026-01-13"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: true
+    code-fold: true
+    latex: true
+---
+
+# 개요 (Overview)
+
+* 지난 포스트들에서 우리는 **Natural Bounds**와 **도구 변수(IV)**를 활용한 식별 범위 추정에 대해 알아보았습니다. 
+* 이번 포스트에서는 Partial Identification 시리즈의 마지막으로, **Backdoor 기준을 만족하는 변수들이 부분적으로만 관측될 때(Partially-observed)** 어떻게 인과 효과의 범위를 구할 수 있는지 살펴봅니다.
+* 이는 데이터가 서로 다른 소스에서 수집되어 결합 분포(Joint Distribution)를 완전히 알 수 없는 현실적인 상황(예: $X, Y$ 데이터와 $U$ 데이터가 따로 있을 때)에서 매우 유용한 접근법입니다.
+
+---
+
+# 그래프 구조
+
+* 다음과 같은 인과 그래프를 가정해 봅시다.
+
+![Figure 1: Backdoor Graph with W and U. W와 U는 X와 Y의 공통 원인(Backdoor path)입니다.](./images/partially_observed_graph.png)
+
+* **$X$**: 처치 (Treatment)
+* **$Y$**: 결과 (Outcome)
+* **$\{W, U\}$**: Backdoor Admissible Set. 즉, 이 두 변수를 통제하면 $X \to Y$ 인과 효과를 식별할 수 있습니다.
+
+# 데이터의 제약 (Data Constraints)
+
+* 이상적인 상황이라면 우리는 전체 결합 분포 $P(X, Y, W, U)$를 관측하여 다음과 같이 Backdoor adjustment를 수행하면 됩니다.
+
+$$
+P(y|do(x)) = \sum_{w, u} P(y|x, w, u)P(w, u)
+$$
+
+* 하지만 현실에서는 **데이터의 제약**이 있을 수 있습니다. 
+* 예를 들어:
+  * **관측 가능:** $P(X, Y, W)$ (실험 데이터), $P(U)$ (외부 센서스 데이터 등)
+  * **관측 불가능:** $P(X, Y, W, U)$ (전체 결합 분포)
+
+* 이때 우리는 $U$가 $X, Y, W$와 어떻게 얽혀있는지(Joint distribution)를 모르기 때문에, 점 추정(Point Identification)이 불가능합니다. 
+* 우리의 목표는 주어진 주변 분포(Marginal distributions) 정보를 최대한 활용하여 $P(y|do(x))$의 **Bound**를 구하는 것입니다.
+
+# 최적화 문제로의 변환 (Optimization Perspective)
+
+* Li and Pearl (2022)의 연구에서는 이 문제를 **제약 조건이 있는 최적화 문제**로 변환하여 해결합니다.
+
+## 목표 식 재구성
+
+* Backdoor 공식을 조건부 확률 정의에 따라 풀어쓰면 다음과 같습니다.
+
+$$
+\begin{aligned}
+P(y|do(x)) &= \sum_{w, u} P(y|x, w, u)P(w, u) \\
+&= \sum_{w, u} \frac{P(x, y, w, u)P(w, u)}{P(x, w, u)}
+\end{aligned}
+$$
+
+* 이 식의 구성 요소들을 각각 미지수로 정의하여 최적화 문제를 설계합니다.
+
+## 파라미터 정의
+
+* 각 $(w, u)$ 조합에 대해 다음 세 가지 변수를 정의합니다.
+
+  * 1.  **$a_{w,u} = P(x, y, w, u)$**: 전체 결합 확률의 일부
+  * 2.  **$b_{w,u} = P(w, u)$**: 교란 변수들의 결합 확률
+  * 3.  **$c_{w,u} = P(x, w, u)$**: 처치와 교란 변수들의 결합 확률
+
+* 이제 우리의 목표 함수(Objective Function)는 다음과 같습니다.
+
+$$
+\text{min / max } \sum_{w, u} \frac{a_{w,u} \cdot b_{w,u}}{c_{w,u}}
+$$
+
+## 제약 조건 (Constraints)
+
+* 우리가 관측한 데이터($P(X,Y,W)$와 $P(U)$)는 이 미지수들의 합으로 표현되어야 합니다. 이것이 최적화 문제의 제약 조건이 됩니다.
+
+* 1.  **관측 데이터와의 일치:**
+    * $\sum_u a_{w,u} = P(x, y, w)$
+    * $\sum_u b_{w,u} = P(w)$
+    * $\sum_u c_{w,u} = P(x, w)$
+
+* 2.  **확률의 기본 성질 (Fréchet Inequalities):**
+    * $P(w, u) = \sum_x P(x, w, u) = \sum_x \sum_y P(x, y, w, u)$이므로
+        $$b_{w, u} \ge c_{w,u} \ge a_{w, u}$$
+    * 결합 확률은 개별 확률보다 클 수 없고, 합집합 확률보다 작을 수 없다는 성질을 이용해 각 파라미터의 범위를 제한합니다.
+    * $a_{w,u} = P(x, y, w, u)$의 경우,
+        $$\max\{0, P(x, y, w) + P(u) - 1\} \le a_{w,u} \le \min\{P(x, y, w), P(u)\}$$
+    * $b_{w,u} = P(w, u)$의 경우,
+        $$\max\{0, P(w) + P(u) - 1\} \le b_{w,u} \le \min\{P(w), P(u)\}$$
+    * $c_{w, u} = P(x, w, u)$의 경우,
+        $$\max\{0, P(x, w) + P(u) - 1\} \le c_{w,u} \le \min\{P(x, w), P(u)\}$$
+
+* 이러한 제약 조건 하에서 목표 함수를 최적화하면, Natural Bounds보다 좁은 범위(Valid Bounds)를 얻을 수 있습니다.
+
+---
+
+# 결론
+* 관측 데이터만으로는 인과 효과를 정확히 알 수 없을 때(Non-identifiable), **범위(Bounds)**를 추정하는 다양한 방법들을 살펴보았습니다.
+
+## 요약
+  * 1.  **Natural Bounds:** 그래프 구조에 대한 최소한의 가정만으로 구하는 가장 넓은 범위.
+  * 2.  **Canonical Type Model (IV):** 도구 변수가 있을 때, 비관측 변수 $U$를 유한한 반응 유형(Response Types)으로 나누어 선형 계획법(LP)으로 해결.
+  * 3.  **Partially-observed Covariates:** 데이터가 파편화되어 있을 때, 확률 분포의 제약 조건을 이용한 최적화 문제로 해결.
+
+## 추가적인 연구 주제들
+
+* Partial Identification은 여전히 활발히 연구되고 있는 분야입니다. 더 깊이 있는 학습을 위해 다음 논문들을 참고할 수 있습니다.
+    * 1. **연속 변수(Continuous variables)에서의 Bound:** Zhang and Bareinboim (2022)
+    * 2. **High Dimensional Data:** Li and Pearl (2022)
+    * 3. **비순응(Non-Compliance) 분석:** Balke and Pearl (1997), Chickering and Pearl (1996)
+
+        * Note: 더 복잡한 구조(예: 또 다른 Canonical Type Model)에서도 유사한 방식의 접근이 가능합니다.
+
+* 식별 불가능하다고 해서 분석을 멈추는 것이 아니라, **"데이터가 허용하는 한계 내에서 최선의 정보"**를 뽑아내는 것이 바로 Partial Identification의 핵심입니다.

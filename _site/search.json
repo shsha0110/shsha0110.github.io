@@ -161,25 +161,221 @@
     "text": "4.4 결론\n\n\n\n\\(Y\\)\n\\(P^{(1)}(Y|do(x))\\)\n\\(P^{(2)}(Y|do(x))\\)\n\n\n\n\n0\n\\(\\frac{1}{4}\\)\n\\(\\frac{1}{2}\\)\n\n\n1\n\\(\\frac{3}{4}\\)\n\\(\\frac{1}{2}\\)\n\n\n\n두 모델은 동일한 인과 그래프와 동일한 관측 분포 \\(P(v)\\)를 가지지만, 계산된 인과 효과 \\(P(y|do(x))\\)는 \\(\\frac{3}{4}\\)와 \\(\\frac{1}{2}\\)로 서로 다릅니다\n\nEven though both models induce \\(I\\) (Graph) and have the same \\(P(v)\\), the effect \\(P^{(1)}(y|do(x)) \\neq P^{(2)}(y|do(x))\\).\n\n이는 주어진 그래프 구조(Unobserved Confounder가 존재하는 경우)만으로는 데이터에서 인과 효과를 유일하게 식별해낼 수 없음을(Non-identifiable) 의미합니다. 이러한 경우, 추가적인 가정이나 데이터를 통한 식별 전략이 필요합니다."
   },
   {
-    "objectID": "posts/causal-inference-04-part-05/index.html",
-    "href": "posts/causal-inference-04-part-05/index.html",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
+    "objectID": "posts/causal-inference-08-part-01/index.html",
+    "href": "posts/causal-inference-08-part-01/index.html",
+    "title": "[Causal Inference] 8. Partial Identification (Part 1)",
     "section": "",
-    "text": "이전 포스트들에서 배운 교란(Confounding)과 Back-door Criterion을 실제 코드로 구현해 보는 시간입니다.\n특히 심슨의 역설(Simpson’s Paradox) 상황을 시뮬레이션하고, DoWhy 라이브러리의 성향 점수 층화(Propensity Score Stratification) 방법을 통해 올바른 인과 효과를 추정해 봅니다."
+    "text": "이전까지 우리는 인과 효과 \\(P(y|do(x))\\)를 관측 데이터 \\(P(v)\\)로부터 정확한 하나의 값(Point estimate)으로 계산할 수 있는지, 즉 식별 가능성(Identifiability)을 따졌습니다.\n하지만 현실의 많은 문제에서는 그래프 구조상 식별이 불가능한 경우(Non-identifiable)가 많습니다.\n이때 우리는 포기하는 대신 “그렇다면 인과 효과가 존재할 수 있는 범위(Bound)라도 알 수 없을까?”라는 질문을 던지게 됩니다.\n이것이 바로 부분 식별(Partial Identification) 문제입니다.\n\n\n\n\nFigure 1: Identification Process Flowchart. 식별 엔진이 ’No’를 반환했을 때, 구간 [a, b]를 찾는 과정으로 넘어가는 흐름도.\n\n\n\nNote: 식별 불가능(No) 판정이 났을 때, 우리는 0과 1 사이의 어딘가에 존재하는 구간 \\([a(y;x), b(y;x)]\\)를 찾게 됩니다. *"
   },
   {
-    "objectID": "posts/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
-    "href": "posts/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "5.1 모델 정의 및 식별 (Modeling & Identification)",
-    "text": "5.1 모델 정의 및 식별 (Modeling & Identification)\n\n인과 그래프(Graph)를 정의하고 Back-door 기준을 통해 식별 가능성을 확인합니다.\n\n\n\nCode\n# 단계 1: 모델 정의 (Causal Graph 생성)\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age'] # 교란 변수 지정\n)\n\n# 단계 2: 식별 (Identification)\nidentified_estimand = model.identify_effect()\nprint(identified_estimand)\n\n\nEstimand type: EstimandType.NONPARAMETRIC_ATE\n\n### Estimand : 1\nEstimand name: backdoor\nEstimand expression:\n     d                         \n───────────(E[Cholesterol|Age])\nd[Exercise]                    \nEstimand assumption 1, Unconfoundedness: If U→{Exercise} and U→Cholesterol then P(Cholesterol|Exercise,Age,U) = P(Cholesterol|Exercise,Age)\n\n### Estimand : 2\nEstimand name: iv\nNo such variable(s) found!\n\n### Estimand : 3\nEstimand name: frontdoor\nNo such variable(s) found!"
+    "objectID": "posts/causal-inference-08-part-01/index.html#문제-설정",
+    "href": "posts/causal-inference-08-part-01/index.html#문제-설정",
+    "title": "[Causal Inference] 8. Partial Identification (Part 1)",
+    "section": "3.1 문제 설정",
+    "text": "3.1 문제 설정\n다음과 같이 \\(X\\)와 \\(Y\\) 사이에 비관측 교란 변수 \\(U\\)가 존재하는 가장 일반적인 그래프를 가정해 봅시다.\n\n\n\nFigure 2: Basic Confounded Graph. X와 Y가 U에 의해 교란된 구조.\n\n\n\n우리의 목표는 \\(P(x, y)\\)가 주어졌을 때, \\(P(y|do(x))\\)의 범위를 구하는 것입니다."
   },
   {
-    "objectID": "posts/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
-    "href": "posts/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
-    "section": "5.2 인과 효과 추정 (Estimation: Stratification)",
-    "text": "5.2 인과 효과 추정 (Estimation: Stratification)\n\n여기서는 성향 점수 층화(Propensity Score Stratification) 방법을 사용합니다. 나이가 비슷하여 운동할 확률(성향 점수)이 유사한 사람들끼리 묶어서 비교하는 방식입니다.\n\n\n\nCode\n# 단계 3: 추정 (Estimation)\n# num_strata=5: 데이터를 성향 점수에 따라 5개 구간으로 나눔\nestimate = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\",\n    method_params={'num_strata': 5, 'clipping_threshold': 5}\n)\n\nprint(\"=\"*50)\nprint(f\"2. 인과 효과 추정 (Causal Estimate): {estimate.value:.4f}\")\nprint(f\"   -&gt; 실제 효과 (-10.0)에 매우 근접함\")\nprint(\"=\"*50)\n\n\n==================================================\n2. 인과 효과 추정 (Causal Estimate): -9.1264\n   -&gt; 실제 효과 (-10.0)에 매우 근접함\n==================================================\n\n\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: divide by zero encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: overflow encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: invalid value encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights"
+    "objectID": "posts/causal-inference-08-part-01/index.html#theorem",
+    "href": "posts/causal-inference-08-part-01/index.html#theorem",
+    "title": "[Causal Inference] 8. Partial Identification (Part 1)",
+    "section": "3.2 Theorem",
+    "text": "3.2 Theorem\n\n관측 분포 \\(P(x, y)\\)가 주어졌을 때, 인과 효과 \\(P(y|do(x))\\)는 다음 구간 안에 존재합니다.\n\n\\[\nP(y, x) \\le P(y|do(x)) \\le P(y, x) + 1 - P(x)\n\\]\n\n하한 (Lower Bound): \\(a(y;x) = P(y, x)\\)\n상한 (Upper Bound): \\(b(y;x) = P(y, x) + 1 - P(x)\\)\n\n직관적 해석\n\n이 수식은 데이터를 통해 “확실히 아는 것”과 “모르는 것”을 구분하는 것으로 이해할 수 있습니다.\n우리가 \\(do(x)\\)를 했을 때, 원래 자연스럽게 \\(X=x\\)를 선택했던 사람들은 관측 데이터 \\(P(y, x)\\)와 똑같이 행동할 것입니다. 이는 최소한 보장되는 비율입니다 (하한).\n반면, 원래 \\(X \\ne x\\)였던 사람들(처치를 받지 않은 비율 \\(P(x')\\))이 강제로 처치를 받았을 때 어떻게 행동할지는 데이터로 알 수 없습니다.\n상한의 논리: “처치 받지 않은 비율(\\(P(x')\\))에 속하는 사람들이 강제로 처치를 받았을 때, 모두가 \\(Y=y\\)로 변화한다(성공한다)”고 가장 긍정적으로 가정하면 최댓값이 됩니다."
+  },
+  {
+    "objectID": "posts/causal-inference-08-part-01/index.html#유도-과정-derivation",
+    "href": "posts/causal-inference-08-part-01/index.html#유도-과정-derivation",
+    "title": "[Causal Inference] 8. Partial Identification (Part 1)",
+    "section": "3.3 유도 과정 (Derivation)",
+    "text": "3.3 유도 과정 (Derivation)\n\n왜 저런 범위가 나오는지 수식으로 살펴봅시다. 구조적 인과 모델(SCM)에서 \\(P(y|do(x))\\)는 다음과 같이 정의됩니다.\n\n\\[\nP(y|do(x)) = \\sum_u P(y|x, u)P(u)\n\\]\n\n확률의 성질을 이용하여 \\(P(u)\\)를 두 부분으로 나눌 수 있습니다: \\(P(u) = P(u, x) + \\{P(u) - P(u, x)\\}\\). 이를 식에 대입하면:\n\n\\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_u P(y|x, u) [P(u, x) + \\{P(u) - P(u, x)\\}] \\\\\n&= \\underbrace{\\sum_u P(y|x, u)P(u, x)}_{\\text{Part A}} + \\underbrace{\\sum_u P(y|x, u)\\{P(u) - P(u, x)\\}}_{\\text{Part B}}\n\\end{aligned}\n\\]\n\n여기서 Part A를 정리하면:\n\n\\[\n\\text{Part A} = \\sum_u P(y|x, u)P(x|u)P(u) = \\sum_u P(y, x, u) = P(y, x)\n\\]\n\n즉, Part A는 우리가 관측 가능한 데이터 \\(P(y, x)\\)와 같습니다. 이제 Part B 때문에 범위가 생깁니다.\n\n\n3.3.1 하한 (Lower Bound) 유도\n\n\\(P(y|x, u)\\)는 확률이므로 \\(0 \\le P(y|x, u) \\le 1\\).\n\\(P(u) = \\sum_x P(u, x)\\)이므로 \\(P(u) \\ge P(u, x)\\).\n\n\\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_u P(y|x, u)P(u, x) + \\sum_u P(y|x, u)\\{P(u) - P(u, x)\\} \\\\\n&= P(y,x) + \\sum_u P(y|x, u)\\{P(u) - P(u, x)\\} \\\\\n&\\ge P(y, x) + 0 = P(y, x) \\\\\n\\end{aligned}\n\\]\n\n\n3.3.2 상한 (Upper Bound) 유도\n\n\\(P(y|x, u)\\)는 확률이므로 \\(0 \\le P(y|x, u) \\le 1\\).\n\nPart B의 조건부 확률이 모두 1일 때 전체 값은 최대가 됩니다. \\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_u P(y|x, u)P(u, x) + \\sum_u P(y|x, u)\\{P(u) - P(u, x)\\} \\\\\n&= P(y,x) + \\sum_u P(y|x, u)\\{P(u) - P(u, x)\\} \\\\\n&\\le P(y, x) + \\sum_u \\{P(u) - P(u, x)\\} \\\\\n&= P(y, x) + 1 - P(x)\n\\end{aligned}\n\\]"
+  },
+  {
+    "objectID": "posts/causal-inference-08-part-01/index.html#범위의-타당성-증명-tightness",
+    "href": "posts/causal-inference-08-part-01/index.html#범위의-타당성-증명-tightness",
+    "title": "[Causal Inference] 8. Partial Identification (Part 1)",
+    "section": "3.4 범위의 타당성 증명 (Tightness)",
+    "text": "3.4 범위의 타당성 증명 (Tightness)\n\n구한 범위 \\([P(y, x), P(y, x) + 1 - P(x)]\\)가 Tight하다는 것은, 추가적인 가정 없이는 이 범위를 더 좁힐 수 없음을 의미합니다.\n이를 증명하기 위해, 관측 데이터 \\(P(x, y)\\)와 완벽히 일치하면서(Compatible), 인과 효과가 각각 하한값과 상한값을 갖는 두 개의 가상 모델(\\(M^{(1)}, M^{(2)}\\))을 만들어낼 수 있음을 보이면 됩니다.\n\n\n3.4.1 모델 설계 전략\n\n두 모델 모두 \\(U \\sim P(u)\\)와 \\(X \\leftarrow f_X(u)\\)는 동일하게 두고, \\(Y\\)를 결정하는 함수 \\(f_Y(x, u)\\)만 다르게 설정합니다.\n\n\\[\nf_Y(x, u) =\n\\begin{cases}\nf_Y^{\\text{observation}}(x, u) & \\text{if } x = f_X(u) \\quad \\text{(관측된 경우)} \\\\\nf_Y^{\\text{counterfactual}}(x, u) & \\text{if } x \\ne f_X(u) \\quad \\text{(반사실적 경우)}\n\\end{cases}\n\\]\n\n\n3.4.2 Case 분류\n\n우리는 상황을 두 가지 케이스로 나눌 수 있습니다.\n\nCase 1 (Observation): \\(x = f_X(u)\\).\n\n즉, 개인이 원래 \\(x\\)를 선택하려던 경우입니다.\n이 경우 모델은 관측 데이터와 일치해야 하므로 선택의 여지가 없습니다.\n\nCase 2 (Counterfactual): \\(x \\ne f_X(u)\\).\n\n즉, 원래 다른 것을 하려던 사람에게 억지로 \\(x\\)를 시킬 때입니다.\n이 부분은 데이터로 관측되지 않으므로, 우리가 임의로 0(실패) 또는 1(성공)을 부여하여 범위를 만듭니다.\n\n\n\n\n\n3.4.3 두 모델의 구성\n\n모델 \\(\\mathcal{M}_x^{(1)}\\) (하한 모델):\n\nCase 2일 때 무조건 \\(Y=0\\)을 출력하게 설정합니다.\n인과 효과: \\(P^{(1)}(y=1|do(x)) = P(y=1, x) + 0 = \\text{Lower Bound}\\)\n\n모델 \\(\\mathcal{M}_x^{(2)}\\) (상한 모델):\n\nCase 2일 때 무조건 \\(Y=1\\)을 출력하게 설정합니다.\n인과 효과: \\(P^{(2)}(y=1|do(x)) = P(y=1, x) + 1- P(x) = \\text{Upper Bound}\\)\n\n\n\n두 모델 모두 관측 상황(Case 1)에서는 동일하게 작동하므로 \\(P(x, y)\\) 분포는 같습니다.\n하지만 \\(do(x)\\) 개입 시(Case 2), \\(U\\)와 \\(X\\)가 일치할 필요가 없으므로 \\(\\mathcal{M}_x^{(1)}\\)와 \\(\\mathcal{M}_x^{(2)}\\)가 \\(Y = 1\\) 일 때, 다른 확률을 가질 수 있습니다.\n\n\\[\n\\begin{aligned}\nP^{(i)}(Y = 1|do(x)) &= \\sum_{u} P^{(i)}(Y = 1|do(x), u)P(u|do(x)) \\\\\n&= \\sum_{u} P^{(i)}(Y = 1|x, u)P(u) && \\because \\text{Rule 2, Rule 3}\\\\\n&= P^{(i)}(Y = 1|x, f_X(U) = x)P(f_X(U) = x) \\\\\n&\\quad + P^{(i)}(Y = 1|x, f_X(U) \\neq x)P(f_X(U) \\neq x) \\\\\n&= P^{(i)}(Y = 1|x)P(x) + \\mathbf{1}[i = 2]\\{1 - P(x)\\} \\\\\n&= P^{(i)}(x, Y = 1) + \\mathbf{1}[i = 2](1 - P(x))\n\\end{aligned}\n\\]\n\\[\n\\begin{aligned}\nP^{(1)}(Y = 1|do(x)) &= a(y;x) = P(y = 1, x) \\quad \\text{while} \\\\\nP^{(2)}(Y = 1|do(x)) &= b(y;x) = P(y = 1, x) + 1 - P(x)\n\\end{aligned}\n\\]"
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-02/index.html",
+    "href": "posts/causal-inference-04-part-02/index.html",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
+    "section": "",
+    "text": "지난 포스트에서는 인과 효과의 식별 가능성(Identifiability)에 대해 다루었습니다. 이번에는 현실 데이터 분석에서 가장 빈번하게 마주치는 문제이자, 인과추론이 필요한 가장 큰 이유 중 하나인 교란 편향(Confounding Bias)에 대해 구체적인 예시를 통해 알아보겠습니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-02/index.html#단순-관측-직관과-반대되는-결과",
+    "href": "posts/causal-inference-04-part-02/index.html#단순-관측-직관과-반대되는-결과",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
+    "section": "2.1 1. 단순 관측: 직관과 반대되는 결과",
+    "text": "2.1 1. 단순 관측: 직관과 반대되는 결과\n\n수집한 데이터를 단순히 산점도(Scatter Plot)로 그려보았더니 놀라운 결과가 나타났습니다.\n\n\n\n\nFigure 1. Observed Correlation between Exercise and Cholesterol\n\n\n\n관측 결과: 운동을 많이 하는 사람일수록 콜레스테롤 수치가 더 높게 나타납니다.\n의문: \\(P(\\text{cholesterol} | \\text{exercise})\\)를 보면, 운동이 콜레스테롤을 높이는 것처럼 보입니다. 과연 “더 많은 운동 \\(\\Rightarrow\\) 콜레스테롤 증가”라고 결론 내릴 수 있을까요?"
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-02/index.html#교란-변수의-발견-나이age",
+    "href": "posts/causal-inference-04-part-02/index.html#교란-변수의-발견-나이age",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
+    "section": "2.2 2. 교란 변수의 발견: 나이(Age)",
+    "text": "2.2 2. 교란 변수의 발견: 나이(Age)\n\n이 이상한 현상을 이해하기 위해, 우리는 데이터에 숨겨진 제3의 변수인 ‘나이(Age)’를 색상으로 구분하여 다시 시각화해보았습니다.\n\n\n\n\nFigure 2. Scatter Plot Stratified by Age\n\n\n\n그래프를 자세히 보면 다음과 같은 패턴이 드러납니다:\n\n나이와 운동: 나이가 많은 사람(노란색 계열)들이 건강 관리를 위해 운동을 더 많이 하는 경향이 있습니다.\n나이와 콜레스테롤: 동시에, 나이가 많을수록 자연적으로 콜레스테롤 수치가 높습니다.\n\n즉, ‘나이’가 운동량(\\(X\\))과 콜레스테롤(\\(Y\\)) 모두에 영향을 미치는 교란 변수(Confounder)로 작용하고 있었던 것입니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-02/index.html#계층별-분석-인과-효과의-확인",
+    "href": "posts/causal-inference-04-part-02/index.html#계층별-분석-인과-효과의-확인",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
+    "section": "2.3 3. 계층별 분석: 인과 효과의 확인",
+    "text": "2.3 3. 계층별 분석: 인과 효과의 확인\n\n이제 나이(Age)를 고정한 상태에서 운동과 콜레스테롤의 관계를 다시 살펴봅시다.\n\n\n\n\nFigure 3. True Causal Effect within Age Groups\n\n\n\n각 연령대 그룹(같은 색깔) 내부를 들여다보면, 운동을 많이 할수록 콜레스테롤 수치가 낮아지는 것을 명확히 볼 수 있습니다.\n결론: 운동의 진짜 인과 효과는 콜레스테롤을 낮추는 것입니다. (\\(More\\ exercise \\Rightarrow Lower\\ Cholesterol\\))"
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-02/index.html#복잡한-인과-그래프에서의-문제",
+    "href": "posts/causal-inference-04-part-02/index.html#복잡한-인과-그래프에서의-문제",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
+    "section": "4.1 복잡한 인과 그래프에서의 문제",
+    "text": "4.1 복잡한 인과 그래프에서의 문제\n\n다음과 같이 복잡한 인과 그래프를 고려해 봅시다.\n\n\n\n\nFigure 4. A Complex Causal Graph\n\n\n\nGoal: 변수 \\(Z_1, ..., Z_k\\)가 측정되었을 때, \\(X\\)가 \\(Y\\)에 미치는 인과 효과 \\(Q = P(y|do(x))\\)를 찾아내는 것.\n여기서 중요한 질문이 생깁니다.\n\n“부모 변수(Parents) 중 일부만 관측되었을 때, 타겟 인과 효과 \\(Q\\)를 식별할 수 있는가?”"
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
+    "href": "posts/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
+    "section": "4.2 주의해야 할 구조: Collider",
+    "text": "4.2 주의해야 할 구조: Collider\n\n그래프 분석 시 주의해야 할 점은 단순히 모든 변수를 통제(Conditioning)한다고 좋은 것이 아니라는 점입니다.\n예를 들어 위 그래프에서 \\(Z_4\\)와 같은 변수를 살펴봅시다.\n\n\nNote: \\(Z_4\\)는 \\(Z_1\\)과 \\(Z_2\\)의 화살표를 동시에 받는 Collider (\\(Z_1 \\rightarrow Z_4 \\leftarrow Z_2\\))입니다. \\(Z_4\\)를 조건부(given)로 잡을 경우, 오히려 \\(Z_1\\)과 \\(Z_2\\) 사이에 길이 뚫리는 현상이 발생하여 새로운 편향을 만들 수 있습니다.\n\n\n따라서 우리는 어떤 변수를 조정 집합(Adjustment Set)에 넣어야 편향을 제거하고 올바른 인과 효과를 구할 수 있는지 판단하는 체계적인 기준이 필요합니다. 이것이 바로 다음 포스트에서 다룰 Back-door Criterion입니다."
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html",
+    "href": "posts/causal-inference-13-part-01/index.html",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "",
+    "text": "인과추론에서 우리가 관심을 가지는 것은 처치(Treatment, \\(X\\))가 결과(Outcome, \\(Y\\))에 미치는 인과적 효과(\\(\\beta_1\\))를 추정하는 것입니다.\n하지만 많은 경우 관찰되지 않은 교란 요인(Unobserved Confounder)이 존재하여 단순한 회귀분석(OLS)으로는 편향된 추정치를 얻게 됩니다.\n이때 사용할 수 있는 강력한 도구가 바로 도구변수(Instrumental Variable, IV)입니다.\n이 글에서는 선형 가정(Linear Assumption) 하에서의 IV, 특히 2SLS (Two-Stage Least Squares) 접근법과 그 유도 과정을 다룹니다."
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#인과-모형-causal-graph",
+    "href": "posts/causal-inference-13-part-01/index.html#인과-모형-causal-graph",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "2.1. 인과 모형 (Causal Graph)",
+    "text": "2.1. 인과 모형 (Causal Graph)\n\n우선 변수들 간의 관계를 DAG(Directed Acyclic Graph)로 표현하면 다음과 같습니다.\n\n\n\n\nFigure 1: IV Causal Graph. Z는 도구변수, X는 처치, Y는 결과, W는 공변량, ε는 관찰되지 않은 오차항을 의미합니다.\n\n\n\n\\(Z\\): 도구변수 (Instrument)\n\\(X\\): 처치변수 (Treatment) - Endogenous (내생적)\n\\(Y\\): 결과변수 (Outcome)\n\\(W\\): 공변량 (Covariates) - Exogenous (외생적)\n\\(\\epsilon\\): 오차항 (Error term/Unobserved Confounders)"
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#선형-모형과-ols의-한계",
+    "href": "posts/causal-inference-13-part-01/index.html#선형-모형과-ols의-한계",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "2.2. 선형 모형과 OLS의 한계",
+    "text": "2.2. 선형 모형과 OLS의 한계\n\n전통적인 선형 모형은 다음과 같이 설정됩니다.\n\n\\[Y_i = \\beta_0 + \\beta_1 X_i + \\beta_2 W_i + \\epsilon_i\\]\n\n여기서 우리의 관심 추정량(estimand)은 \\(X_i\\)의 계수인 \\(\\beta_1\\)입니다.\n하지만 Challenge가 발생합니다.\n오차항 \\(\\epsilon_i\\)가 처치 변수 \\(X_i\\)와 상관관계를 가질 때(Dependent/Confounded), 이를 내생성(Endogeneity)이 있다고 합니다.\n\n\nNote:\n\nEndogenous (내생변수): \\(Y\\)와 관련된 교란요인(confounder)과 상관관계가 있는 변수 (\\(X\\))\nExogenous (외생변수): 교란요인과 상관관계가 없는 변수 (\\(W\\))\n\n\n\n만약 \\(X\\)가 내생적이라면, \\(\\beta_1\\)에 대한 직접적인 OLS(Ordinary Least Squares) 추정량은 편향(Biased)됩니다.\n즉, \\(Cov(X, \\epsilon) \\neq 0\\)인 상황입니다."
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#iv의-조건",
+    "href": "posts/causal-inference-13-part-01/index.html#iv의-조건",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "3.1. IV의 조건",
+    "text": "3.1. IV의 조건\n\n이 문제를 해결하기 위해 도입하는 도구변수 벡터 \\(Z\\) (\\(K\\)차원)는 다음 두 가지 조건을 만족해야 합니다.\n\n\nRelevance (관련성): 도구변수 \\(Z\\)는 처치 \\(X\\)와 관련이 있어야 합니다. (그래프 상에서 \\(Z \\rightarrow X\\) 경로 존재)\nExclusion Restriction (배제 제약) & Independence: 도구변수 \\(Z\\)는 오직 \\(X\\)를 통해서만 \\(Y\\)에 영향을 미쳐야 하며, 교란요인 \\(\\epsilon\\)과 독립이어야 합니다.\n\n\\(\\epsilon_i \\perp W_i\\)\n\\(\\epsilon_i \\perp Z_i | W_i\\)\n즉, \\(\\epsilon_i \\perp (Z_i, W_i)\\)"
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#식별-identification",
+    "href": "posts/causal-inference-13-part-01/index.html#식별-identification",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "3.2. 식별 (Identification)",
+    "text": "3.2. 식별 (Identification)\n도구변수의 개수(\\(K\\))와 내생변수의 개수에 따라 모델의 식별 상태가 달라집니다.\n\nOver-identified (과잉 식별): \\(K &gt; 1\\) (도구변수가 내생변수보다 많음)\nJust-identified (적정 식별): \\(K = 1\\) (도구변수와 내생변수 개수가 같음)"
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#just-indentified-no-covariates",
+    "href": "posts/causal-inference-13-part-01/index.html#just-indentified-no-covariates",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "4.1. Just-indentified, No Covariates",
+    "text": "4.1. Just-indentified, No Covariates\n\nJust-identified 케이스 (\\(K=1\\))를 기준으로 세 가지 해석 방식을 살펴보겠습니다.\n이때 공변량(W)는 없다고 가정합니다.\n결론적으로 이 세 가지는 모두 동일한 \\(\\beta_1\\) 값을 도출합니다.\n\n\n4.1.1. 공분산의 비율 (Ratio of Covariance)\n\n가장 직관적인 IV 추정량은 \\(Y\\)와 \\(Z\\)의 공분산을 \\(X\\)와 \\(Z\\)의 공분산으로 나눈 것입니다.\n\n\\[\\hat{\\beta}_{1, iv} = \\frac{\\widehat{Cov}(Y_i, Z_i)}{\\widehat{Cov}(X_i, Z_i)} = \\frac{\\frac{1}{N}\\sum(Y_i - \\bar{Y})(Z_i - \\bar{Z})}{\\frac{1}{N}\\sum(X_i - \\bar{X})(Z_i - \\bar{Z})}\\]\n\nWald Estimator (Binary IV의 경우):\n\n만약 도구변수 \\(Z\\)가 0과 1만 가지는 이진 변수라면, 이는 Wald Estimator가 됩니다. \\[\\hat{\\beta}_{1, iv} = \\frac{\\bar{Y}_1 - \\bar{Y}_0}{\\bar{X}_1 - \\bar{X}_0}\\]\n여기서 \\(\\bar{Y}_z, \\bar{X}_z\\)는 \\(Z=z\\)인 그룹 내에서의 평균을 의미합니다.\n\n\n\n\n4.1.2. 간접 최소제곱법 (Indirect Least Squares, ILS)\n\nILS는 두 개의 축약형(Reduced form) 회귀식을 이용하는 방식입니다.\n\n\nReduced Form 1 (\\(Y\\) on \\(Z\\)): \\(Y_i = \\pi_{10} + \\pi_{11} Z_i + \\epsilon_{1i}\\)\nReduced Form 2 (\\(X\\) on \\(Z\\)): \\(X_i = \\pi_{20} + \\pi_{21} Z_i + \\epsilon_{2i}\\)\n\n\nILS 추정량은 두 회귀계수의 비율로 정의됩니다.\n\n\\[\\hat{\\beta}_{1, ils} = \\frac{\\hat{\\pi}_{11}}{\\hat{\\pi}_{21}}\\]\n\n\n4.1.3. 2단계 최소제곱법 (Two Stage Least Squares, 2SLS)\n\n가장 널리 쓰이는 직관적인 방법으로, \\(X\\)에서 내생성을 제거한 후 회귀분석을 수행하는 방식입니다.\nStage 1: 내생변수 \\(X\\)를 도구변수 \\(Z\\)로 예측합니다. (OLS 수행) \\[X_i = \\pi_0 + \\pi_1 Z_i + \\epsilon_i\\] \\[\\Longrightarrow \\hat{X}_i = \\hat{\\pi}_0 + \\hat{\\pi}_1 Z_i\\]\nStage 2: 원래의 \\(X\\) 대신 예측된 \\(\\hat{X}\\)를 사용하여 결과 모형을 추정합니다. \\[Y_i = \\pi_2 + \\pi_3 \\hat{X}_i + \\epsilon_i\\] 여기서 구해진 \\(\\hat{\\pi}_3\\)가 바로 2SLS 추정량 \\(\\hat{\\beta}_{1, 2sls}\\)입니다.\n\n\nIntuition:\n1단계를 통해 \\(X\\)의 변동 중 \\(Z\\)에 의해 설명되는 부분(즉, 오차항 \\(\\epsilon\\)과 상관없는 “unconfounded portion”)만을 추출하여 2단계에서 인과 효과를 추정하는 것입니다.\n\n\n\n4.1.4. 결론\n\n위의 세 방식에 따른 추정치는 모두 동일합니다.\n\n\\[\\hat{\\beta}_{1, iv} = \\hat{\\beta}_{1, ils} = \\hat{\\beta}_{1, 2sls}\\]"
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#just-indentified-with-covariates",
+    "href": "posts/causal-inference-13-part-01/index.html#just-indentified-with-covariates",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "4.2. Just-indentified, With Covariates",
+    "text": "4.2. Just-indentified, With Covariates\n\nJust-identified 케이스 (\\(K=1\\))를 기준으로 두 가지 해석 방식을 살펴보겠습니다.\n이때 공변량(W)을 함께 고려합니다.\n결론적으로 이 두 가지는 모두 동일한 \\(\\beta_1\\) 값을 도출합니다.\n\n\n4.2.2. 간접 최소제곱법 (Indirect Least Squares, ILS)\n\nILS는 두 개의 축약형(Reduced form) 회귀식을 이용하는 방식입니다.\n\n\nReduced Form 1 (\\(Y\\) on \\(Z\\)): \\(Y_i = \\pi_{10} + \\pi_{11} Z_i + \\pi_{12} W_i + \\epsilon_{1i}\\)\nReduced Form 2 (\\(X\\) on \\(Z\\)): \\(X_i = \\pi_{20} + \\pi_{21} Z_i + \\pi_{22} Z_i + \\epsilon_{2i}\\)\n\n\nILS 추정량은 두 회귀계수의 비율로 정의됩니다.\n\n\\[\\hat{\\beta}_{1, ils} = \\frac{\\hat{\\pi}_{11}}{\\hat{\\pi}_{21}}\\]\n\n\n4.2.2. 2단계 최소제곱법 (Two Stage Least Squares, 2SLS)\n\n가장 널리 쓰이는 직관적인 방법으로, \\(X\\)에서 내생성을 제거한 후 회귀분석을 수행하는 방식입니다.\nStage 1: 내생변수 \\(X\\)를 도구변수 \\(Z\\)로 예측합니다. (OLS 수행) \\[X_i = \\pi_0 + \\pi_1 Z_i + \\pi_2 W_i + \\epsilon_{1i}\\] \\[\\Longrightarrow \\hat{X}_i = \\hat{\\pi}_0 + \\hat{\\pi}_1 Z_i + \\hat{\\pi}_2 W_i \\]\nStage 2: 원래의 \\(X\\) 대신 예측된 \\(\\hat{X}\\)를 사용하여 결과 모형을 추정합니다. \\[Y_i = \\beta_0 + \\beta_1 \\hat{X}_i + \\beta_2 \\hat{W}_i + \\epsilon_{2i}\\] 여기서 구해진 \\(\\hat{\\beta}_1\\)이 바로 2SLS 추정량 \\(\\hat{\\beta}_{1, 2sls}\\)입니다."
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#설정-setup",
+    "href": "posts/causal-inference-13-part-01/index.html#설정-setup",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "5.1. 설정 (Setup)",
+    "text": "5.1. 설정 (Setup)\n\n우리는 다음 두 식을 관찰할 수 있습니다.\n\n\nFirst Stage (X에 대한 식): \\[X_i = \\pi_0 + \\pi_1 Z_i + \\pi_2 W_i + \\epsilon_{1i}\\]\nStructural Model (Y에 대한 식): \\[Y_i = \\beta_0 + \\beta_1 {X}_i + \\underbrace{\\beta_2 {W}_i + \\epsilon_{2i}}_{\\eta_{i}}\\]\n\n\n가정: \\(Cov[X_i, \\eta_i] \\neq 0\\) (내생성 존재), 하지만 \\(Cov[\\eta_i, Z_i] = 0\\) (도구변수의 외생성)."
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#iv-estimator-유도-ratio-방식",
+    "href": "posts/causal-inference-13-part-01/index.html#iv-estimator-유도-ratio-방식",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "5.2. IV Estimator 유도 (Ratio 방식)",
+    "text": "5.2. IV Estimator 유도 (Ratio 방식)\n\n\\(Y_i\\) 식의 양변과 \\(Z_i\\)의 공분산을 취해봅시다.\n\n\\[\n\\begin{aligned}\nCov[Y_i, Z_i] &= Cov[\\beta_0 + \\beta_1 X_i + \\eta_i, \\; Z_i] \\\\\n&= \\beta_1 Cov[X_i, Z_i] + \\underbrace{Cov[\\eta_i, Z_i]}_{0 \\text{ (by assumption)}} \\\\\n&= \\beta_1 Cov[X_i, Z_i]\n\\end{aligned}\n\\]\n\n따라서, \\(\\beta_1\\)에 대해 정리하면 다음과 같습니다.\n\n\\[\\beta_1 = \\frac{Cov[Y_i, Z_i]}{Cov[X_i, Z_i]} = \\frac{Cov[Y_i, Z_i] / Var[Z_i]}{Cov[X_i, Z_i] / Var[Z_i]} = \\frac{\\text{Reduced form slope}}{\\text{First stage slope}}\\]\n\n이 유도 과정은 ILS 방식(\\(\\pi_{11}/\\pi_{21}\\))과 정확히 일치함을 보여줍니다."
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#sls-estimator-유도-substitution-방식",
+    "href": "posts/causal-inference-13-part-01/index.html#sls-estimator-유도-substitution-방식",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "5.3. 2SLS Estimator 유도 (Substitution 방식)",
+    "text": "5.3. 2SLS Estimator 유도 (Substitution 방식)\n\n2SLS가 어떻게 작동하는지 수식 대입을 통해 확인해 봅시다.\n\\(Y\\) 식의 \\(X_i\\) 자리에 First Stage 식(\\(\\pi_0 + \\pi_1 Z_i + \\pi_2 W_i + \\epsilon_{1i}\\))을 대입합니다.\n\n\\[\n\\begin{aligned}\nY_i &= \\beta_0 + \\beta_1 {X}_i + \\beta_2 {W}_i + \\epsilon_{2i} \\\\\n&= \\beta_0 + \\beta_1(\\pi_0 + \\pi_1 Z_i + \\pi_2 W_i + \\epsilon_{1i}) + \\beta_2 {W}_i + \\epsilon_{2i} \\\\\n&= \\beta_0 + \\beta_1 (\\pi_0 + \\pi_1 Z_i + \\pi_2 {W}_i) + \\beta_2 {W}_i + \\underbrace{\\beta_1 \\epsilon_{1i} + \\epsilon_{2i}}_{\\xi_i} \\\\\n\\end{aligned}\n\\]\n\n이를 다시 정리하면, \\(\\pi_0 + \\pi_1 Z_i + \\pi_2 {W}_i\\) 부분은 \\(E[X_i | W_i, Z_i]\\) 즉, \\(\\hat{X}_i\\)의 핵심 부분임을 알 수 있습니다.\n\n\\[Y_i = \\beta_0 + \\underbrace{\\beta_1 E[X_i | W_i, Z_i]}_{\\hat{X_i}} + \\beta_2 W_i + \\xi_i\\]\n\n결국 \\(Y\\)를 \\(\\hat{X}\\)와 \\(W\\)에 대해 회귀분석하는 형태가 되며, 이때 \\(\\hat{X}\\)의 계수는 원래 식의 \\(\\beta_1\\)이 됩니다."
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#recap-matrix-notation-for-ols-regression",
+    "href": "posts/causal-inference-13-part-01/index.html#recap-matrix-notation-for-ols-regression",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "6.1. Recap (Matrix Notation for OLS Regression)",
+    "text": "6.1. Recap (Matrix Notation for OLS Regression)\n\n6.1.1. 선형 회귀 모형의 행렬 표현\n\n먼저, 선형 회귀 모형을 행렬 형태로 정의해 봅시다. 기본 식은 다음과 같습니다.\n\n\\[\ny = X\\beta + u\n\\]\n\n여기서 각 변수가 의미하는 바를 구체적인 행렬로 풀어서 쓰면 다음과 같습니다. \\(X\\)는 \\(n \\times k\\) 행렬(matrix)입니다.\n\n\\[\ny = \\begin{pmatrix} y_1 \\\\ \\vdots \\\\ y_n \\end{pmatrix}, \\quad\nX = \\begin{pmatrix} x'_1 \\\\ \\vdots \\\\ x'_n \\end{pmatrix}\n= \\begin{pmatrix}\n1 & x_{12} & \\cdots & x_{1k} \\\\\n\\vdots & \\vdots & \\vdots & \\vdots \\\\\n1 & x_{n2} & \\cdots & x_{nk}\n\\end{pmatrix}, \\quad\nu = \\begin{pmatrix} u_1 \\\\ \\vdots \\\\ u_n \\end{pmatrix}\n\\]\n\n\n\n6.1.2. 최소자승법(OLS) 추정량\n\n우리의 목표는 오차의 제곱합을 최소화하는 \\(\\beta\\)의 추정량, 즉 \\(b\\)를 찾는 것입니다.\n이를 위해 목적 함수 \\(S(b)\\)를 다음과 같이 정의합니다.\n이는 관측값(\\(y\\))과 예측값(\\(Xb\\)) 차이의 제곱합입니다.\n\n\\[\nS(b) = (y - Xb)'(y - Xb)\n\\]\n\nOLS 추정량 \\(\\hat{\\beta}\\)는 이 \\(S(b)\\)를 최소화하는 값입니다.\n\n\\[\n\\hat{\\beta} = \\underset{b \\in \\mathbb{R}^k}{\\arg \\min} \\, S(b) = (X'X)^{-1}X'y\n\\]\n\n\n6.1.3. 유도 과정 (Derivation)\n\n\\(S(b)\\)를 최소화하기 위해 \\(b\\)에 대해 미분을 수행합니다.\n\n\n1단계: 1계 조건 (First Order Condition, FOC)\n\n목적 함수를 \\(b\\)로 미분했을 때 0이 되어야 합니다.\n행렬 미분 공식을 적용하면 다음과 같습니다.\n\n\\[\n\\begin{aligned}\n\\text{FOC : } \\quad \\frac{\\partial S(b)}{\\partial b} &= -2X'y + 2X'Xb \\\\\n&= -2X'(y - Xb) = 0\n\\end{aligned}\n\\]\n\n\n2단계: 정규 방정식 (Normal Equation)과 해 구하기\n\n1계 조건(FOC)에 따라, 최적의 추정량 \\(\\hat{\\beta}\\)는 다음의 정규 방정식(Normal Equation)을 만족해야 합니다.\n\n\\[\nX'(y - X\\hat{\\beta}) = 0\n\\]\n\n이 식을 \\(\\hat{\\beta}\\)에 대해 정리해 봅시다.\n\\(X\\)가 Full Rank를 가진다고 가정하면, 역행렬이 존재하므로 유일한 해(unique solution)를 구할 수 있습니다.\n\n\\[\n\\begin{aligned}\nX'y - X'X\\hat{\\beta} &= 0 \\\\\nX'X\\hat{\\beta} &= X'y \\\\\n\\therefore \\quad \\hat{\\beta} &= (X'X)^{-1}X'y\n\\end{aligned}\n\\]\n\n\n\n6.1.4 기하학적 해석 (Geometric Interpretation)\n\n행렬 \\(X\\)를 열 벡터(column vector)들의 집합으로 생각해보겠습니다.\n\n\\[\nX = (x_1, ..., x_k)\n\\]\n\n여기서 \\(x_i\\)는 \\(X\\)의 \\(i\\)번째 열 벡터를 의미합니다.\n이때 종속변수 벡터 \\(y\\)와 설명변수 벡터들 \\(x_1, ..., x_k\\)는 모두 \\(n\\)차원 유클리드 공간 \\(\\mathbb{R}^n\\) 상의 점(혹은 벡터)들입니다.\n\n\n1. Range Space (열공간)의 정의\n\n\\(X\\)의 Range Space (또는 Column Space, 열공간)인 \\(\\mathcal{R}(X)\\)는 다음과 같이 정의됩니다.\n\n\\[\n\\begin{aligned}\n\\mathcal{R}(X) &= \\{ c \\in \\mathbb{R}^n : c = Xb \\text{ for } b \\in \\mathbb{R}^k \\} \\\\\n&= \\{ c \\in \\mathbb{R}^n : c = x_1b_1 + \\cdots + x_kb_k, \\quad b = (b_1, ..., b_k)' \\in \\mathbb{R}^k \\}\n\\end{aligned}\n\\]\n\n즉, \\(\\mathcal{R}(X)\\)는 \\(X\\)의 열 벡터(\\(x_1, ..., x_k\\))들의 선형 결합(linear combination)으로 만들 수 있는 모든 가능한 벡터들의 집합을 의미합니다.\n수학적으로는 \\(X\\)의 열들에 의해 생성(span)된 \\(\\mathbb{R}^n\\)의 선형 부분공간(linear subspace)입니다.\n\n\n\n2. 회귀분석(Regression)에서의 의미\n\n이 기하학적 정의는 회귀분석의 목표를 명확하게 보여줍니다.\n우리가 구하고자 하는 예측값 \\(\\hat{y} = Xb\\)는 정의상 반드시 \\(\\mathcal{R}(X)\\) 안에 존재해야 합니다.\n하지만 실제 관측값 \\(y\\)는 오차(error) 때문에 일반적으로 \\(\\mathcal{R}(X)\\) 바깥에 위치합니다.\n따라서 회귀분석(Regression Problem)은 기하학적으로 다음과 같이 해석됩니다:\n\n\n“\\(\\mathcal{R}(X)\\) 공간 안에 있는 수많은 점들 중에서, 실제 데이터 \\(y\\)와 가장 가까운 점(closest point)을 찾는 과정”\n\n\n이 ’가장 가까운 점’을 찾기 위해 우리는 수직 투영(Orthogonal Projection)을 사용하게 되며, 이것이 바로 최소자승법(OLS)의 원리입니다."
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#estimating-2sls-models",
+    "href": "posts/causal-inference-13-part-01/index.html#estimating-2sls-models",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "6.2. Estimating 2SLS Models",
+    "text": "6.2. Estimating 2SLS Models\n\n1. 모형 설정 및 변수 정의\n\n2SLS(Two-Stage Least Squares) 모형을 추정하기 위해 변수들을 다음과 같이 정의합니다.\n\\(\\mathbf{y}\\): 종속 변수 벡터 (\\(n \\times 1\\))\n\\(\\mathbf{X}\\): 내생 변수(Endogenous variables) 행렬 (\\(n \\times k_1\\))\n\\(\\mathbf{W}\\): 외생 변수(Exogenous regressors) 행렬 (\\(n \\times k_2\\))\n\\(\\mathbf{Z}\\): 도구 변수(Instruments) 행렬. 여기에는 외생 변수 \\(\\mathbf{W}\\)가 포함됩니다. (\\(\\mathbf{Z} = [\\mathbf{Z}_1 \\; \\mathbf{W}]\\))\n우리의 목표는 아래의 2SLS 추정량을 유도하는 것입니다.\n\n\\[\n\\hat{\\Gamma}_{2SLS} = \\left( [\\hat{\\mathbf{X}}\\; \\mathbf{W}]' [\\hat{\\mathbf{X}}\\; \\mathbf{W}] \\right)^{-1} [\\hat{\\mathbf{X}}\\; \\mathbf{W}]' \\mathbf{y}\n\\]\n\n여기서 \\([\\hat{\\mathbf{X}}\\; \\mathbf{W}]\\)는 1단계 회귀분석을 통해 예측된 내생변수 \\(\\hat{\\mathbf{X}}\\)와 기존의 외생변수 \\(\\mathbf{W}\\)를 합친 새로운 설명변수 행렬 (\\(n \\times (k_1 + k_2)\\))입니다.\n이를 원소별로 풀어서 쓰면 다음과 같습니다. \\[\n[\\hat{\\mathbf{X}}\\; \\mathbf{W}] =\n\\begin{pmatrix}\n\\hat{x}_{1,1} & \\cdots & \\hat{x}_{1,k_1} & w_{1,1} & \\cdots & w_{1,k_2} \\\\\n\\vdots & \\ddots & \\vdots & \\vdots & \\ddots & \\vdots \\\\\n\\hat{x}_{n,1} & \\cdots & \\hat{x}_{n,k_1} & w_{n,1} & \\cdots & w_{n,k_2}\n\\end{pmatrix}\n\\]\n\n좌측 블록(\\(\\hat{\\mathbf{X}}\\))은 도구변수(\\(\\mathbf{Z}\\))로 예측된 값들로 구성되어 있고, 우측 블록(\\(\\mathbf{W}\\))은 원래의 외생변수 값들이 그대로 들어갑니다.\n\n\n\n\n\n2. 사영 행렬(Projection Matrix) \\(P_Z\\) 의 도입\n\n도구변수 \\(\\mathbf{Z}\\)에 의한 사영 행렬(Projection Matrix)을 \\(P_Z\\)라고 표기하겠습니다.\n\n\\[\nP_Z = \\mathbf{Z}(\\mathbf{Z}'\\mathbf{Z})^{-1}\\mathbf{Z}'\n\\]\n\n이 행렬 \\(P_Z\\)은 다음과 같은 매우 중요한 두 가지 성질을 가집니다.\n\n\n대칭성 (Symmetric): \\(P_Z' = P_Z\\)\n\n\n멱등성 (Idempotent): \\(P_ZP_Z = P_Z\\)"
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#a-부분의-유도-행렬의-곱",
+    "href": "posts/causal-inference-13-part-01/index.html#a-부분의-유도-행렬의-곱",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "3. A 부분의 유도 (행렬의 곱)",
+    "text": "3. A 부분의 유도 (행렬의 곱)\n\n추정량의 앞부분인 역행렬 내부, 즉 \\(A = [\\hat{\\mathbf{X}}\\; \\mathbf{W}]' [\\hat{\\mathbf{X}}\\; \\mathbf{W}]\\)를 정리해 봅시다.\n도구변수 \\(\\mathbf{Z}\\)에 의한 사영 행렬(Projection Matrix)을 \\(P_Z\\)라고 합시다. (\\(P_Z = \\mathbf{Z}(\\mathbf{Z}'\\mathbf{Z})^{-1}\\mathbf{Z}'\\))\n1단계 예측값 \\(\\hat{\\mathbf{X}}\\)는 \\(\\mathbf{X}\\)를 투영한 것이므로 \\(\\hat{\\mathbf{X}} = P_Z\\mathbf{X}\\)입니다.\n외생변수 \\(\\mathbf{W}\\)는 도구변수 \\(\\mathbf{Z}\\)에 포함되므로 투영해도 자신이 됩니다. 즉, \\(P_Z\\mathbf{W} = \\mathbf{W}\\)입니다.\n따라서 전체 설명변수 행렬은 \\(P_Z\\)를 묶어 다음과 같이 쓸 수 있습니다.\n\n\\[\n\\begin{aligned} \\\\\n[\\hat{\\mathbf{X}} \\quad \\mathbf{W}] &= [P_Z\\mathbf{X} \\quad P_Z\\mathbf{W}] \\\\\n&= P_Z [\\mathbf{X} \\quad \\mathbf{W}]\n\\end{aligned}\n\\]\n\n이제 편의상 전체 설명변수 행렬을 \\(\\mathbf{R} = [\\mathbf{X} \\quad \\mathbf{W}]\\)라 정의하고 \\(A\\)를 전개합니다.\n\n\\[\n\\begin{aligned}\nA &= (P_Z\\mathbf{R})' (P_Z\\mathbf{R}) \\\\\n&= \\mathbf{R}' P_Z' P_Z \\mathbf{R} \\\\\n&= \\mathbf{R}' P_Z P_Z \\mathbf{R} \\quad (\\because P_Z' = P_Z) \\\\\n&= \\mathbf{R}' P_Z \\mathbf{R} \\quad (\\because P_Z P_Z = P_Z)\n\\end{aligned}\n\\]"
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#b-부분의-유도-y와의-곱",
+    "href": "posts/causal-inference-13-part-01/index.html#b-부분의-유도-y와의-곱",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "4. B 부분의 유도 (\\(y\\)와의 곱)",
+    "text": "4. B 부분의 유도 (\\(y\\)와의 곱)\n\n추정량의 뒷부분인 \\(B = [\\hat{\\mathbf{X}}\\; \\mathbf{W}]' \\mathbf{y}\\) 도 동일한 방식으로 전개합니다.\n\n\\[\n\\begin{aligned}\nB &= (P_Z\\mathbf{R})' \\mathbf{y} \\\\\n&= \\mathbf{R}' P_Z' \\mathbf{y} \\\\\n&= \\mathbf{R}' P_Z \\mathbf{y} \\quad (\\because P_Z' = P_Z)\n\\end{aligned}\n\\]"
+  },
+  {
+    "objectID": "posts/causal-inference-13-part-01/index.html#최종-결과-2sls-추정량",
+    "href": "posts/causal-inference-13-part-01/index.html#최종-결과-2sls-추정량",
+    "title": "[Causal Inference] 13. IV (Part 1)",
+    "section": "5. 최종 결과: 2SLS 추정량",
+    "text": "5. 최종 결과: 2SLS 추정량\n\n위의 \\(A\\)와 \\(B\\) 결과를 합치면 다음과 같습니다.\n\n\\[\n\\begin{aligned}\n\\hat{\\Gamma}_{2SLS} &= A^{-1} B \\\\\n&= (\\mathbf{R}' P_Z \\mathbf{R})^{-1} \\mathbf{R}' P_Z \\mathbf{y}\n\\end{aligned}\n\\]\n\n이 식은 “원래의 변수 행렬(\\(\\mathbf{R}\\) 혹은 \\(\\mathbf{W}_{all}\\))을 도구변수 공간에 투영(\\(P_Z\\))시킨 뒤, 그 투영된 변수들을 사용하여 OLS를 수행하는 것”과 수학적으로 동일함을 보여줍니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-04/index.html",
+    "href": "posts/causal-inference-04-part-04/index.html",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
+    "section": "",
+    "text": "지난 포스트에서는 Back-door Criterion을 통해 어떤 공변량 집합 \\(Z\\)를 보정(Adjustment)해야 인과 효과 \\(P(y|do(x))\\)를 식별할 수 있는지 알아보았습니다.\n\n\\[P(y|do(x)) = \\sum_{z} P(y|x,z)P(z)\\]\n\n이번 포스트에서는 이 식을 실제 데이터(Practice)에서 어떻게 평가하고 계산하는지, 특히 계산 복잡도 문제를 해결하기 위한 Inverse Probability Weighting (IPW) 기법에 대해 다룹니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-04/index.html#derivation",
+    "href": "posts/causal-inference-04-part-04/index.html#derivation",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
+    "section": "3.1 Derivation",
+    "text": "3.1 Derivation\n\n기존의 Back-door Adjustment 식을 베이즈 정리와 결합 확률 법칙을 이용해 재구성해 봅시다.\n\n\\[\n\\begin{align}\nP(y|do(x)) &= \\sum_{z} P(y|x,z)P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x,z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)P(z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)} \\quad\n\\end{align}\n\\]\n\n이제 우리는 \\(P(z)\\)를 따로 추정하거나 모든 \\(z\\)에 대해 합을 구할 필요 없이, 결합 확률 \\(P(y,x,z)\\)를 \\(P(x|z)\\)로 나눈 형태로 식을 단순화했습니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-04/index.html#propensity-score-gz",
+    "href": "posts/causal-inference-04-part-04/index.html#propensity-score-gz",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
+    "section": "3.2 Propensity Score \\(g(z)\\)",
+    "text": "3.2 Propensity Score \\(g(z)\\)\n\n위 식의 분모에 있는 \\(P(x|z)\\)는 공변량 \\(Z\\)가 주어졌을 때 원인 변수 \\(X\\)가 할당될 확률을 의미하며, 이를 Propensity Score라고 부릅니다.\n보통 \\(g(z)\\)로 표기하며 로지스틱 회귀(Logistic Regression) 등의 모델을 사용하여 추정합니다.\n\n\\[g(z) = P(X=x|Z=z)\\]"
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-04/index.html#핵심-포인트",
+    "href": "posts/causal-inference-04-part-04/index.html#핵심-포인트",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
+    "section": "4.1 핵심 포인트",
+    "text": "4.1 핵심 포인트\n\n\\(\\mathbb{1}(\\cdot)\\) (Indicator Function): 조건이 참이면 1, 거짓이면 0을 반환하는 함수입니다.\n시간 복잡도 \\(O(N)\\): 가장 마지막 식을 보면, 더 이상 \\(Z\\)의 모든 조합에 대해 합을 구할 필요가 없습니다. 단순히 관측된 \\(N\\)개의 데이터 샘플을 한 번씩만 순회하며 가중치(\\(1/g(z_i)\\))를 더하면 계산이 끝납니다. 이것이 IPW가 강력한 이유입니다."
+  },
+  {
+    "objectID": "posts/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
+    "href": "posts/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
+    "section": "4.2 시간 복잡도의 개선",
+    "text": "4.2 시간 복잡도의 개선\n\n이 방식의 가장 큰 장점은 계산 효율성입니다.\n고차원 \\(Z\\)에 대해 적분하거나 합을 구하는 대신, 샘플 수 \\(N\\)에 비례하는 선형 시간(\\(O(N)\\)) 만에 계산이 가능합니다."
   },
   {
     "objectID": "posts/causal-inference-04-part-03/index.html",
@@ -252,116 +448,95 @@
     "text": "6.3 증명 (Derivation)\n\n부모 변수를 통한 조정(Adjustment by Direct Parents) 공식에서 시작합니다.\n\n\\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_{pa_X} P(y|x, pa_X)P(pa_X) \\\\\n&= \\sum_{z^-, pa_X} P(y|x, pa_X, z^-)P(z^-|x, pa_X)P(pa_X) && \\because \\text{Expand by } Z^- \\text{ (Total Probability)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-|pa_X)P(pa_X) && \\because \\text{Apply Assumptions Condition (i) \\& (ii)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-, pa_X) && \\because \\text{Chain Rule } P(A|B)P(B) = P(A,B) \\\\\n&= \\sum_{z} P(y|x, z) \\sum_{pa_X \\setminus z} P(z^-, pa_X) && \\because \\text{Rearrange Summation } (Z \\cup (Pa_X \\setminus Z) = \\{Z, Pa_X\\}) \\\\\n&= \\sum_{z} P(y|x, z)P(z) && \\because \\text{Marginalize out } Pa_X \\setminus Z\n\\end{aligned}\n\\]\n\n결론: \n\n\nAdjustment by \\(Z\\) is equivalent to adjustment by direct parents whenever \\(Z\\) is back-door admissible.\n\n\n즉, \\(Z\\)가 Back-door criterion만 만족한다면, 직접적인 부모를 모두 측정하지 못하더라도 \\(Z\\)를 통해 인과 효과를 정확히 계산할 수 있음이 수학적으로 증명됩니다."
   },
   {
-    "objectID": "posts/causal-inference-04-part-04/index.html",
-    "href": "posts/causal-inference-04-part-04/index.html",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
+    "objectID": "posts/causal-inference-04-part-05/index.html",
+    "href": "posts/causal-inference-04-part-05/index.html",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
     "section": "",
-    "text": "지난 포스트에서는 Back-door Criterion을 통해 어떤 공변량 집합 \\(Z\\)를 보정(Adjustment)해야 인과 효과 \\(P(y|do(x))\\)를 식별할 수 있는지 알아보았습니다.\n\n\\[P(y|do(x)) = \\sum_{z} P(y|x,z)P(z)\\]\n\n이번 포스트에서는 이 식을 실제 데이터(Practice)에서 어떻게 평가하고 계산하는지, 특히 계산 복잡도 문제를 해결하기 위한 Inverse Probability Weighting (IPW) 기법에 대해 다룹니다."
+    "text": "이전 포스트들에서 배운 교란(Confounding)과 Back-door Criterion을 실제 코드로 구현해 보는 시간입니다.\n특히 심슨의 역설(Simpson’s Paradox) 상황을 시뮬레이션하고, DoWhy 라이브러리의 성향 점수 층화(Propensity Score Stratification) 방법을 통해 올바른 인과 효과를 추정해 봅니다."
   },
   {
-    "objectID": "posts/causal-inference-04-part-04/index.html#derivation",
-    "href": "posts/causal-inference-04-part-04/index.html#derivation",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "3.1 Derivation",
-    "text": "3.1 Derivation\n\n기존의 Back-door Adjustment 식을 베이즈 정리와 결합 확률 법칙을 이용해 재구성해 봅시다.\n\n\\[\n\\begin{align}\nP(y|do(x)) &= \\sum_{z} P(y|x,z)P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x,z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)P(z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)} \\quad\n\\end{align}\n\\]\n\n이제 우리는 \\(P(z)\\)를 따로 추정하거나 모든 \\(z\\)에 대해 합을 구할 필요 없이, 결합 확률 \\(P(y,x,z)\\)를 \\(P(x|z)\\)로 나눈 형태로 식을 단순화했습니다."
+    "objectID": "posts/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
+    "href": "posts/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
+    "section": "5.1 모델 정의 및 식별 (Modeling & Identification)",
+    "text": "5.1 모델 정의 및 식별 (Modeling & Identification)\n\n인과 그래프(Graph)를 정의하고 Back-door 기준을 통해 식별 가능성을 확인합니다.\n\n\n\nCode\n# 단계 1: 모델 정의 (Causal Graph 생성)\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age'] # 교란 변수 지정\n)\n\n# 단계 2: 식별 (Identification)\nidentified_estimand = model.identify_effect()\nprint(identified_estimand)\n\n\nEstimand type: EstimandType.NONPARAMETRIC_ATE\n\n### Estimand : 1\nEstimand name: backdoor\nEstimand expression:\n     d                         \n───────────(E[Cholesterol|Age])\nd[Exercise]                    \nEstimand assumption 1, Unconfoundedness: If U→{Exercise} and U→Cholesterol then P(Cholesterol|Exercise,Age,U) = P(Cholesterol|Exercise,Age)\n\n### Estimand : 2\nEstimand name: iv\nNo such variable(s) found!\n\n### Estimand : 3\nEstimand name: frontdoor\nNo such variable(s) found!"
   },
   {
-    "objectID": "posts/causal-inference-04-part-04/index.html#propensity-score-gz",
-    "href": "posts/causal-inference-04-part-04/index.html#propensity-score-gz",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "3.2 Propensity Score \\(g(z)\\)",
-    "text": "3.2 Propensity Score \\(g(z)\\)\n\n위 식의 분모에 있는 \\(P(x|z)\\)는 공변량 \\(Z\\)가 주어졌을 때 원인 변수 \\(X\\)가 할당될 확률을 의미하며, 이를 Propensity Score라고 부릅니다.\n보통 \\(g(z)\\)로 표기하며 로지스틱 회귀(Logistic Regression) 등의 모델을 사용하여 추정합니다.\n\n\\[g(z) = P(X=x|Z=z)\\]"
+    "objectID": "posts/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
+    "href": "posts/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
+    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 5)",
+    "section": "5.2 인과 효과 추정 (Estimation: Stratification)",
+    "text": "5.2 인과 효과 추정 (Estimation: Stratification)\n\n여기서는 성향 점수 층화(Propensity Score Stratification) 방법을 사용합니다. 나이가 비슷하여 운동할 확률(성향 점수)이 유사한 사람들끼리 묶어서 비교하는 방식입니다.\n\n\n\nCode\n# 단계 3: 추정 (Estimation)\n# num_strata=5: 데이터를 성향 점수에 따라 5개 구간으로 나눔\nestimate = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\",\n    method_params={'num_strata': 5, 'clipping_threshold': 5}\n)\n\nprint(\"=\"*50)\nprint(f\"2. 인과 효과 추정 (Causal Estimate): {estimate.value:.4f}\")\nprint(f\"   -&gt; 실제 효과 (-10.0)에 매우 근접함\")\nprint(\"=\"*50)\n\n\n==================================================\n2. 인과 효과 추정 (Causal Estimate): -9.1264\n   -&gt; 실제 효과 (-10.0)에 매우 근접함\n==================================================\n\n\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: divide by zero encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: overflow encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights\n/opt/anaconda3/envs/causal-inference-study/lib/python3.9/site-packages/sklearn/linear_model/_linear_loss.py:330: RuntimeWarning: invalid value encountered in matmul\n  grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights"
   },
   {
-    "objectID": "posts/causal-inference-04-part-04/index.html#핵심-포인트",
-    "href": "posts/causal-inference-04-part-04/index.html#핵심-포인트",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "4.1 핵심 포인트",
-    "text": "4.1 핵심 포인트\n\n\\(\\mathbb{1}(\\cdot)\\) (Indicator Function): 조건이 참이면 1, 거짓이면 0을 반환하는 함수입니다.\n시간 복잡도 \\(O(N)\\): 가장 마지막 식을 보면, 더 이상 \\(Z\\)의 모든 조합에 대해 합을 구할 필요가 없습니다. 단순히 관측된 \\(N\\)개의 데이터 샘플을 한 번씩만 순회하며 가중치(\\(1/g(z_i)\\))를 더하면 계산이 끝납니다. 이것이 IPW가 강력한 이유입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
-    "href": "posts/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 4)",
-    "section": "4.2 시간 복잡도의 개선",
-    "text": "4.2 시간 복잡도의 개선\n\n이 방식의 가장 큰 장점은 계산 효율성입니다.\n고차원 \\(Z\\)에 대해 적분하거나 합을 구하는 대신, 샘플 수 \\(N\\)에 비례하는 선형 시간(\\(O(N)\\)) 만에 계산이 가능합니다."
-  },
-  {
-    "objectID": "posts/causal-inference-04-part-02/index.html",
-    "href": "posts/causal-inference-04-part-02/index.html",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
+    "objectID": "posts/causal-inference-13-part-02/index.html",
+    "href": "posts/causal-inference-13-part-02/index.html",
+    "title": "[Causal Inference] 13. IV (Part 2)",
     "section": "",
-    "text": "지난 포스트에서는 인과 효과의 식별 가능성(Identifiability)에 대해 다루었습니다. 이번에는 현실 데이터 분석에서 가장 빈번하게 마주치는 문제이자, 인과추론이 필요한 가장 큰 이유 중 하나인 교란 편향(Confounding Bias)에 대해 구체적인 예시를 통해 알아보겠습니다."
+    "text": "지난 포스트에서 선형 모형(Linear Model) 가정 하의 IV를 다루었다면, 이번에는 무작위 실험(Randomized Experiment)에서 배정된 처치를 따르지 않는 ’불순응(Noncompliance)’이 발생했을 때의 IV 접근법을 다룹니다.\n경제학에서 도구변수(IV)는 주로 무작위 실험이 아닌 관찰 연구(Observational Study)에서 ’자연 실험(Natural Experiment)’의 일종으로 사용됩니다.\n좋은 도구변수 \\(Z\\)가 되기 위해서는 다음 두 가지 조건을 만족해야 합니다.\n\nRelevance (관련성): 도구변수 \\(Z\\)는 처치 \\(X\\)에 강한 영향을 미쳐야 합니다. (\\(Cov(X,Z)\\)가 커야 함). 그렇지 않으면(Weak IV), 추정량의 분산이 매우 커집니다.\nExclusion Restriction (배제 제약): 도구변수 \\(Z\\)는 결과 \\(Y\\)에 직접적인 영향을 미치지 않아야 하며, 오직 \\(X\\)를 통해서만 영향을 주어야 합니다.\n\n\n\n\n\nFigure 1: IV DAG regarding Noncompliance. Z(배정)가 X(실제 처치)를 통해 Y(결과)에 영향을 미치는 구조입니다. 점선 화살표는 잠재적 교란 요인을 의미합니다."
   },
   {
-    "objectID": "posts/causal-inference-04-part-02/index.html#단순-관측-직관과-반대되는-결과",
-    "href": "posts/causal-inference-04-part-02/index.html#단순-관측-직관과-반대되는-결과",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
-    "section": "2.1 1. 단순 관측: 직관과 반대되는 결과",
-    "text": "2.1 1. 단순 관측: 직관과 반대되는 결과\n\n수집한 데이터를 단순히 산점도(Scatter Plot)로 그려보았더니 놀라운 결과가 나타났습니다.\n\n\n\n\nFigure 1. Observed Correlation between Exercise and Cholesterol\n\n\n\n관측 결과: 운동을 많이 하는 사람일수록 콜레스테롤 수치가 더 높게 나타납니다.\n의문: \\(P(\\text{cholesterol} | \\text{exercise})\\)를 보면, 운동이 콜레스테롤을 높이는 것처럼 보입니다. 과연 “더 많은 운동 \\(\\Rightarrow\\) 콜레스테롤 증가”라고 결론 내릴 수 있을까요?"
+    "objectID": "posts/causal-inference-13-part-02/index.html#변수-정의",
+    "href": "posts/causal-inference-13-part-02/index.html#변수-정의",
+    "title": "[Causal Inference] 13. IV (Part 2)",
+    "section": "2.1. 변수 정의",
+    "text": "2.1. 변수 정의\n\n\\(Z_i\\) (Instrument/Assignment): 처치 배정 여부 (0 또는 1). 무작위 배정(Random Assignment)을 가정합니다.\n\\(X_i\\) (Treatment Received): 실제 처치를 받았는지 여부. \\(Z\\) 이후에 결정되므로(Post-treatment), \\(Z\\)에 따른 잠재적 결과를 가집니다.\n\n\\(X_i(z)\\): \\(Z=z\\)일 때 개인이 받게 될 처치 여부.\n\n\\(Y_i\\) (Outcome): 결과 변수.\n\n\\(Y_i(z, x)\\): 배정이 \\(z\\)이고 실제 처치가 \\(x\\)일 때의 잠재적 결과.\n일반적으로 Exclusion Restriction 가정 하에서 \\(Y_i(z=0, x) = Y_i(z=0, 1)\\)이므로 \\(Y_i(x)\\)로 표기.\n\n우리가 관측하는 데이터는 \\(Z_i, X_i = X_i(Z_i), Y_i = Y_i(Z_i)\\) 입니다."
   },
   {
-    "objectID": "posts/causal-inference-04-part-02/index.html#교란-변수의-발견-나이age",
-    "href": "posts/causal-inference-04-part-02/index.html#교란-변수의-발견-나이age",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
-    "section": "2.2 2. 교란 변수의 발견: 나이(Age)",
-    "text": "2.2 2. 교란 변수의 발견: 나이(Age)\n\n이 이상한 현상을 이해하기 위해, 우리는 데이터에 숨겨진 제3의 변수인 ‘나이(Age)’를 색상으로 구분하여 다시 시각화해보았습니다.\n\n\n\n\nFigure 2. Scatter Plot Stratified by Age\n\n\n\n그래프를 자세히 보면 다음과 같은 패턴이 드러납니다:\n\n나이와 운동: 나이가 많은 사람(노란색 계열)들이 건강 관리를 위해 운동을 더 많이 하는 경향이 있습니다.\n나이와 콜레스테롤: 동시에, 나이가 많을수록 자연적으로 콜레스테롤 수치가 높습니다.\n\n즉, ‘나이’가 운동량(\\(X\\))과 콜레스테롤(\\(Y\\)) 모두에 영향을 미치는 교란 변수(Confounder)로 작용하고 있었던 것입니다."
+    "objectID": "posts/causal-inference-13-part-02/index.html#순응-유형-compliance-types",
+    "href": "posts/causal-inference-13-part-02/index.html#순응-유형-compliance-types",
+    "title": "[Causal Inference] 13. IV (Part 2)",
+    "section": "2.2. 순응 유형 (Compliance Types)",
+    "text": "2.2. 순응 유형 (Compliance Types)\n\n사람들이 처치 배정(\\(Z\\))에 어떻게 반응하여 실제 처치(\\(X\\))를 받는지에 따라 4가지 잠재적 집단(Latent Subgroups)으로 나눌 수 있습니다.\n이를 \\(X_i(0)\\)와 \\(X_i(1)\\)의 조합으로 정의합니다.\n\n\n\n\n\n\n\n\n\n\nType\n\\(X_i(0)\\)\n\\(X_i(1)\\)\nDescription\n\n\n\n\nNever-taker\n0\n0\n배정을 받든 안 받든 처치를 받지 않음\n\n\nComplier\n0\n1\n배정받으면 처치 받고, 안 받으면 안 받음 (순응자)\n\n\nDefier\n1\n0\n배정과 반대로 행동함 (청개구리)\n\n\nAlways-taker\n1\n1\n배정을 받든 안 받든 항상 처치를 받음\n\n\n\n\nNote: 우리는 각 개인의 진짜 Type(\\(S\\))을 완벽하게 알 수 없습니다. 예를 들어 관측된 데이터에서 \\(Z=1, X=1\\)인 사람은 ’Complier’일 수도 있고 ’Always-taker’일 수도 있습니다."
   },
   {
-    "objectID": "posts/causal-inference-04-part-02/index.html#계층별-분석-인과-효과의-확인",
-    "href": "posts/causal-inference-04-part-02/index.html#계층별-분석-인과-효과의-확인",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
-    "section": "2.3 3. 계층별 분석: 인과 효과의 확인",
-    "text": "2.3 3. 계층별 분석: 인과 효과의 확인\n\n이제 나이(Age)를 고정한 상태에서 운동과 콜레스테롤의 관계를 다시 살펴봅시다.\n\n\n\n\nFigure 3. True Causal Effect within Age Groups\n\n\n\n각 연령대 그룹(같은 색깔) 내부를 들여다보면, 운동을 많이 할수록 콜레스테롤 수치가 낮아지는 것을 명확히 볼 수 있습니다.\n결론: 운동의 진짜 인과 효과는 콜레스테롤을 낮추는 것입니다. (\\(More\\ exercise \\Rightarrow Lower\\ Cholesterol\\))"
+    "objectID": "posts/causal-inference-13-part-02/index.html#itt-intent-to-treat-effects",
+    "href": "posts/causal-inference-13-part-02/index.html#itt-intent-to-treat-effects",
+    "title": "[Causal Inference] 13. IV (Part 2)",
+    "section": "3.1. ITT (Intent-To-Treat) Effects",
+    "text": "3.1. ITT (Intent-To-Treat) Effects\n\nITT 효과는 처치 배정(\\(Z\\))이 결과(\\(Y\\))에 미치는 인과적 효과입니다.\n개인의 순응 유형(\\(S\\))은 \\(Z\\)에 따라 변하지 않는 ’Baseline Characteristic’으로 간주할 수 있습니다.\n각 유형 \\(s \\in \\{c, n, a, d\\}\\)에 대한 ITT 효과는 다음과 같습니다. \\[ITT_s = \\mathbb{E}[Y_i(1) - Y_i(0) | S_i = s]\\]\n전체 모집단에 대한 Global ITT는 각 유형별 ITT의 가중 평균으로 표현됩니다.\n\n\\[\n\\begin{aligned}\nITT &= \\mathbb{E_s}[\\mathbb{E}[Y_i(1) - Y_i(0) | S_i = s]] \\\\\n&= \\pi_c ITT_c + \\pi_n ITT_n + \\pi_a ITT_a + \\pi_d ITT_d\n\\end{aligned}\n\\] * 여기서 \\(\\pi_s\\)는 각 유형의 구성 비율입니다."
   },
   {
-    "objectID": "posts/causal-inference-04-part-02/index.html#복잡한-인과-그래프에서의-문제",
-    "href": "posts/causal-inference-04-part-02/index.html#복잡한-인과-그래프에서의-문제",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
-    "section": "4.1 복잡한 인과 그래프에서의 문제",
-    "text": "4.1 복잡한 인과 그래프에서의 문제\n\n다음과 같이 복잡한 인과 그래프를 고려해 봅시다.\n\n\n\n\nFigure 4. A Complex Causal Graph\n\n\n\nGoal: 변수 \\(Z_1, ..., Z_k\\)가 측정되었을 때, \\(X\\)가 \\(Y\\)에 미치는 인과 효과 \\(Q = P(y|do(x))\\)를 찾아내는 것.\n여기서 중요한 질문이 생깁니다.\n\n“부모 변수(Parents) 중 일부만 관측되었을 때, 타겟 인과 효과 \\(Q\\)를 식별할 수 있는가?”"
+    "objectID": "posts/causal-inference-13-part-02/index.html#식별을-위한-가정-assumptions",
+    "href": "posts/causal-inference-13-part-02/index.html#식별을-위한-가정-assumptions",
+    "title": "[Causal Inference] 13. IV (Part 2)",
+    "section": "3.2. 식별을 위한 가정 (Assumptions)",
+    "text": "3.2. 식별을 위한 가정 (Assumptions)\n\n비모수적 식별(Nonparametric Identification)을 위해 다음 3가지 핵심 가정이 필요합니다.\nAssumption 1: Random Assignment (무작위 배정) \\[\\{Y_i(0), Y_i(1), X_i(0), X_i(1)\\} \\perp Z_i\\]\n\n도구변수 \\(Z\\)가 잠재적 결과들과 독립이라는 가정입니다.\n\nAssumption 2: Strong Monotonicity (강한 단조성)\n\n\nNo Defiers:\n\n\n모든 \\(i\\)에 대해 \\(X_i(1) \\ge X_i(0)\\)\n우리의 예시에서는 \\(Z, X \\in \\{0, 1\\}\\) 이므로, \\(X_i(1) = 1 \\ge X_i(0) = 0\\)\n즉, 배정을 받았을 때 처치를 받을 확률이 배정을 안 받았을 때보다 작아지지는 않는다는 것입니다.\n이 가정에 의해 \\(\\pi_d = 0\\)이 됩니다.\n\n\nExistence of Compliers:\n\n\n\\(0 &lt; P(X_i=1 | Z_i=1) &lt; 1\\)\nComplier가 존재해야 합니다.\n\n\nAssumption 3: Exclusion Restriction (ER) for Noncompliers\n\n불순응자(Never-taker, Always-taker)에게는 배정(\\(Z\\)) 자체가 결과(\\(Y\\))에 영향을 주지 않아야 합니다.\n이들은 어차피 \\(Z\\)와 상관없이 동일한 \\(X\\)를 선택하기 때문입니다. \\[Y_i(1) = Y_i(0) \\quad \\text{for } S_i \\in \\{n, a\\}\\]\n\n따라서, \\(ITT_n = 0\\), \\(ITT_a = 0\\) 입니다."
   },
   {
-    "objectID": "posts/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
-    "href": "posts/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
-    "title": "[Causal Inference] 4. Confounding and Backdoor (Part 2)",
-    "section": "4.2 주의해야 할 구조: Collider",
-    "text": "4.2 주의해야 할 구조: Collider\n\n그래프 분석 시 주의해야 할 점은 단순히 모든 변수를 통제(Conditioning)한다고 좋은 것이 아니라는 점입니다.\n예를 들어 위 그래프에서 \\(Z_4\\)와 같은 변수를 살펴봅시다.\n\n\nNote: \\(Z_4\\)는 \\(Z_1\\)과 \\(Z_2\\)의 화살표를 동시에 받는 Collider (\\(Z_1 \\rightarrow Z_4 \\leftarrow Z_2\\))입니다. \\(Z_4\\)를 조건부(given)로 잡을 경우, 오히려 \\(Z_1\\)과 \\(Z_2\\) 사이에 길이 뚫리는 현상이 발생하여 새로운 편향을 만들 수 있습니다.\n\n\n따라서 우리는 어떤 변수를 조정 집합(Adjustment Set)에 넣어야 편향을 제거하고 올바른 인과 효과를 구할 수 있는지 판단하는 체계적인 기준이 필요합니다. 이것이 바로 다음 포스트에서 다룰 Back-door Criterion입니다."
+    "objectID": "posts/causal-inference-13-part-02/index.html#유도-과정",
+    "href": "posts/causal-inference-13-part-02/index.html#유도-과정",
+    "title": "[Causal Inference] 13. IV (Part 2)",
+    "section": "4.1. 유도 과정",
+    "text": "4.1. 유도 과정\n\n원래 식: \\[ITT = \\pi_c ITT_c + \\pi_n ITT_n + \\pi_a ITT_a + \\pi_d ITT_d\\]\n\n\nMonotonicity 가정 적용: Defier가 없으므로 \\(\\pi_d = 0\\). \\[\\Rightarrow ITT = \\pi_c ITT_c + \\pi_n ITT_n + \\pi_a ITT_a\\]\nExclusion Restriction 가정 적용: Noncomplier의 ITT는 0이므로 \\(ITT_n = 0, ITT_a = 0\\). \\[\\Rightarrow ITT = \\pi_c ITT_c\\]\n\n\n결국 전체 ITT 효과는 Complier의 비율(\\(\\pi_c\\)) \\(\\times\\) Complier의 ITT 효과(\\(ITT_c\\))가 됩니다.\n이를 \\(ITT_c\\)에 대해 정리하면 다음과 같습니다.\n\n\\[ITT_c = \\frac{ITT}{\\pi_c}\\]\n\n이때, Complier에게는 \\(Z=X\\)이므로, \\(ITT_c\\)는 곧 Complier가 처치를 받았을 때의 인과 효과인 CACE가 됩니다."
   },
   {
-    "objectID": "posts/causal-inference-08-part-01/index.html",
-    "href": "posts/causal-inference-08-part-01/index.html",
-    "title": "[Causal Inference] 8. Partial Identification (Part 1)",
-    "section": "",
-    "text": "이전까지 우리는 인과 효과 \\(P(y|do(x))\\)를 관측 데이터 \\(P(v)\\)로부터 정확한 하나의 값(Point estimate)으로 계산할 수 있는지, 즉 식별 가능성(Identifiability)을 따졌습니다.\n하지만 현실의 많은 문제에서는 그래프 구조상 식별이 불가능한 경우(Non-identifiable)가 많습니다.\n이때 우리는 포기하는 대신 “그렇다면 인과 효과가 존재할 수 있는 범위(Bound)라도 알 수 없을까?”라는 질문을 던지게 됩니다.\n이것이 바로 부분 식별(Partial Identification) 문제입니다.\n\n\n\n\nFigure 1: Identification Process Flowchart. 식별 엔진이 ’No’를 반환했을 때, 구간 [a, b]를 찾는 과정으로 넘어가는 흐름도.\n\n\n\nNote: 식별 불가능(No) 판정이 났을 때, 우리는 0과 1 사이의 어딘가에 존재하는 구간 \\([a(y;x), b(y;x)]\\)를 찾게 됩니다. *"
+    "objectID": "posts/causal-inference-13-part-02/index.html#complier-비율-pi_c-추정",
+    "href": "posts/causal-inference-13-part-02/index.html#complier-비율-pi_c-추정",
+    "title": "[Causal Inference] 13. IV (Part 2)",
+    "section": "4.2. Complier 비율 (\\(\\pi_c\\)) 추정",
+    "text": "4.2. Complier 비율 (\\(\\pi_c\\)) 추정\n\n관측된 데이터로 \\(\\pi_c\\)를 어떻게 구할까요?\n\n\\[\n\\begin{aligned}\n\\mathbb{E}[X_i | Z_i = 1] &= \\pi_c \\cdot 1 + \\pi_a \\cdot 1 + \\pi_n \\cdot 0 \\quad (\\text{Complier \\& Always-taker}) \\\\\n\\mathbb{E}[X_i | Z_i = 0] &= \\pi_c \\cdot 0 + \\pi_a \\cdot 1 + \\pi_n \\cdot 0 \\quad (\\text{Always-taker only})\n\\end{aligned}\n\\]\n\n두 식을 빼면:\n\n\\[\\mathbb{E}[X_i | Z_i = 1] - \\mathbb{E}[X_i | Z_i = 0] = \\pi_c\\]\n\n이것은 \\(Z\\)가 \\(X\\)에 미치는 ITT 효과(\\(ITT_X\\))와 같습니다.\n\n\\[ITT_X = \\mathbb{E}[X_i(1) - X_i(0)] = \\pi_c\\]"
   },
   {
-    "objectID": "posts/causal-inference-08-part-01/index.html#문제-설정",
-    "href": "posts/causal-inference-08-part-01/index.html#문제-설정",
-    "title": "[Causal Inference] 8. Partial Identification (Part 1)",
-    "section": "3.1 문제 설정",
-    "text": "3.1 문제 설정\n다음과 같이 \\(X\\)와 \\(Y\\) 사이에 비관측 교란 변수 \\(U\\)가 존재하는 가장 일반적인 그래프를 가정해 봅시다.\n\n\n\nFigure 2: Basic Confounded Graph. X와 Y가 U에 의해 교란된 구조.\n\n\n\n우리의 목표는 \\(P(x, y)\\)가 주어졌을 때, \\(P(y|do(x))\\)의 범위를 구하는 것입니다."
+    "objectID": "posts/causal-inference-13-part-02/index.html#cace-late-공식",
+    "href": "posts/causal-inference-13-part-02/index.html#cace-late-공식",
+    "title": "[Causal Inference] 13. IV (Part 2)",
+    "section": "4.3. CACE / LATE 공식",
+    "text": "4.3. CACE / LATE 공식\n\n최종적으로 CACE는 다음과 같이 두 ITT의 비율로 표현됩니다.\n\n\\[CACE \\equiv \\mathbb{E}[Y_i(1) - Y_i(0) | S_i = c] = \\frac{ITT_Y}{ITT_X} = \\frac{\\mathbb{E}[Y|Z=1] - \\mathbb{E}[Y|Z=0]}{\\mathbb{E}[X|Z=1] - \\mathbb{E}[X|Z=0]}\\]\n\n이는 Imbens and Angrist (1994)에서 제시한 LATE (Local Average Treatment Effect)와 동일한 개념입니다. “Local”인 이유는 전체 모집단이 아닌 Complier라는 특정 하위 집단에 대한 효과이기 때문입니다.\n\n\n4.4. 잠재적 결과의 식별 (Identification of Potential Outcomes)\nCACE를 계산하기 위해서는 Complier 집단의 잠재적 결과 평균(\\(\\mathbb{E}[Y_i(1)|c]\\)와 \\(\\mathbb{E}[Y_i(0)|c]\\))을 알아야 합니다. 하지만 우리는 누가 Complier인지 개별적으로 알 수 없습니다.\n대신, 관측 가능한 집단(\\(Z, X\\))의 평균 결과가 어떤 잠재적 집단들의 혼합으로 이루어져 있는지 분해함으로써 이를 역추적할 수 있습니다.\n1. \\(Z=0, X=0\\) 집단 (Compliers + Never-takers) 배정을 받지 않았고 처치도 받지 않은 그룹입니다. 이들은 \\(Z=0\\)일 때 \\(X=0\\)인 Complier와 Never-taker로 구성됩니다. \\[\n\\mathbb{E}[Y_i | X_i = 0, Z_i = 0] = \\frac{\\pi_c}{\\pi_c + \\pi_n} \\cdot \\mathbb{E}[Y_i(0) | \\text{complier}] + \\frac{\\pi_n}{\\pi_c + \\pi_n} \\cdot \\mathbb{E}[Y_i(0) | \\text{never-taker}]\n\\]\n2. \\(Z=1, X=0\\) 집단 (Never-takers Only) 배정을 받았으나(\\(Z=1\\)) 처치를 받지 않은(\\(X=0\\)) 그룹입니다. Complier라면 처치를 받았을 것이므로, 이 그룹은 순수하게 Never-taker들입니다. \\[\n\\mathbb{E}[Y_i | X_i = 0, Z_i = 1] = \\mathbb{E}[Y_i(0) | \\text{never-taker}]\n\\]\n3. \\(Z=0, X=1\\) 집단 (Always-takers Only) 배정을 받지 않았는데도(\\(Z=0\\)) 처치를 받은(\\(X=1\\)) 그룹입니다. Complier라면 처치를 안 받았을 것이므로, 이 그룹은 순수하게 Always-taker들입니다. \\[\n\\mathbb{E}[Y_i | X_i = 1, Z_i = 0] = \\mathbb{E}[Y_i(1) | \\text{always-taker}]\n\\]\n4. \\(Z=1, X=1\\) 집단 (Compliers + Always-takers) 배정을 받았고 처치도 받은 그룹입니다. 이들은 \\(Z=1\\)일 때 \\(X=1\\)인 Complier와 Always-taker로 구성됩니다. \\[\n\\mathbb{E}[Y_i | X_i = 1, Z_i = 1] = \\frac{\\pi_c}{\\pi_c + \\pi_a} \\cdot \\mathbb{E}[Y_i(1) | \\text{complier}] + \\frac{\\pi_a}{\\pi_c + \\pi_a} \\cdot \\mathbb{E}[Y_i(1) | \\text{always-taker}]\n\\]\n\n결론: 위 식들을 연립하면, 관측 가능한 데이터로부터 미지수인 \\(\\mathbb{E}[Y_i(0) | \\text{complier}]\\)와 \\(\\mathbb{E}[Y_i(1) | \\text{complier}]\\)를 비모수적으로 식별(Nonparametrically Identify)할 수 있으며, 이를 통해 최종적으로 CACE를 구할 수 있습니다. # 5. 추정량 (Estimators)"
   },
   {
-    "objectID": "posts/causal-inference-08-part-01/index.html#theorem",
-    "href": "posts/causal-inference-08-part-01/index.html#theorem",
-    "title": "[Causal Inference] 8. Partial Identification (Part 1)",
-    "section": "3.2 Theorem",
-    "text": "3.2 Theorem\n\n관측 분포 \\(P(x, y)\\)가 주어졌을 때, 인과 효과 \\(P(y|do(x))\\)는 다음 구간 안에 존재합니다.\n\n\\[\nP(y, x) \\le P(y|do(x)) \\le P(y, x) + 1 - P(x)\n\\]\n\n하한 (Lower Bound): \\(a(y;x) = P(y, x)\\)\n상한 (Upper Bound): \\(b(y;x) = P(y, x) + 1 - P(x)\\)\n\n직관적 해석\n\n이 수식은 데이터를 통해 “확실히 아는 것”과 “모르는 것”을 구분하는 것으로 이해할 수 있습니다.\n우리가 \\(do(x)\\)를 했을 때, 원래 자연스럽게 \\(X=x\\)를 선택했던 사람들은 관측 데이터 \\(P(y, x)\\)와 똑같이 행동할 것입니다. 이는 최소한 보장되는 비율입니다 (하한).\n반면, 원래 \\(X \\ne x\\)였던 사람들(처치를 받지 않은 비율 \\(P(x')\\))이 강제로 처치를 받았을 때 어떻게 행동할지는 데이터로 알 수 없습니다.\n상한의 논리: “처치 받지 않은 비율(\\(P(x')\\))에 속하는 사람들이 강제로 처치를 받았을 때, 모두가 \\(Y=y\\)로 변화한다(성공한다)”고 가장 긍정적으로 가정하면 최댓값이 됩니다."
+    "objectID": "posts/causal-inference-13-part-02/index.html#one-sided-noncompliance-단측-불순응",
+    "href": "posts/causal-inference-13-part-02/index.html#one-sided-noncompliance-단측-불순응",
+    "title": "[Causal Inference] 13. IV (Part 2)",
+    "section": "5.1. One-sided Noncompliance (단측 불순응)",
+    "text": "5.1. One-sided Noncompliance (단측 불순응)\n\n실험 설계상 통제 집단(\\(Z=0\\))은 절대 처치를 받을 수 없는 경우(예: 신약 임상시험)입니다.\n즉, Always-taker가 없습니다(\\(X_i(0)=0\\)).\n이 경우 \\(\\sum X_i(1-Z_i) = 0\\) 이 되며 공식은 조금 더 단순해집니다.\n\n\\[\n\\begin{aligned}\n\\widehat{CACE} &= \\frac{\\widehat{E}[Y|Z=1] - \\widehat{E}[Y|Z=0]}{\\widehat{E}[X|Z=1]} \\\\\n&= \\frac{\\frac{\\sum Y_i Z_i}{\\sum Z_i} - \\frac{\\sum Y_i (1-Z_i)}{\\sum (1-Z_i)}}{\\frac{\\sum X_i Z_i}{\\sum Z_i}}\n\\end{aligned}\n\\]\n* 분모는 처치 집단 중 실제로 처치를 받은 사람의 비율"
   },
   {
-    "objectID": "posts/causal-inference-08-part-01/index.html#유도-과정-derivation",
-    "href": "posts/causal-inference-08-part-01/index.html#유도-과정-derivation",
-    "title": "[Causal Inference] 8. Partial Identification (Part 1)",
-    "section": "3.3 유도 과정 (Derivation)",
-    "text": "3.3 유도 과정 (Derivation)\n\n왜 저런 범위가 나오는지 수식으로 살펴봅시다. 구조적 인과 모델(SCM)에서 \\(P(y|do(x))\\)는 다음과 같이 정의됩니다.\n\n\\[\nP(y|do(x)) = \\sum_u P(y|x, u)P(u)\n\\]\n\n확률의 성질을 이용하여 \\(P(u)\\)를 두 부분으로 나눌 수 있습니다: \\(P(u) = P(u, x) + \\{P(u) - P(u, x)\\}\\). 이를 식에 대입하면:\n\n\\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_u P(y|x, u) [P(u, x) + \\{P(u) - P(u, x)\\}] \\\\\n&= \\underbrace{\\sum_u P(y|x, u)P(u, x)}_{\\text{Part A}} + \\underbrace{\\sum_u P(y|x, u)\\{P(u) - P(u, x)\\}}_{\\text{Part B}}\n\\end{aligned}\n\\]\n\n여기서 Part A를 정리하면:\n\n\\[\n\\text{Part A} = \\sum_u P(y|x, u)P(x|u)P(u) = \\sum_u P(y, x, u) = P(y, x)\n\\]\n\n즉, Part A는 우리가 관측 가능한 데이터 \\(P(y, x)\\)와 같습니다. 이제 Part B 때문에 범위가 생깁니다.\n\n\n3.3.1 하한 (Lower Bound) 유도\n\n\\(P(y|x, u)\\)는 확률이므로 \\(0 \\le P(y|x, u) \\le 1\\).\n\\(P(u) = \\sum_x P(u, x)\\)이므로 \\(P(u) \\ge P(u, x)\\).\n\n\\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_u P(y|x, u)P(u, x) + \\sum_u P(y|x, u)\\{P(u) - P(u, x)\\} \\\\\n&= P(y,x) + \\sum_u P(y|x, u)\\{P(u) - P(u, x)\\} \\\\\n&\\ge P(y, x) + 0 = P(y, x) \\\\\n\\end{aligned}\n\\]\n\n\n3.3.2 상한 (Upper Bound) 유도\n\n\\(P(y|x, u)\\)는 확률이므로 \\(0 \\le P(y|x, u) \\le 1\\).\n\nPart B의 조건부 확률이 모두 1일 때 전체 값은 최대가 됩니다. \\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_u P(y|x, u)P(u, x) + \\sum_u P(y|x, u)\\{P(u) - P(u, x)\\} \\\\\n&= P(y,x) + \\sum_u P(y|x, u)\\{P(u) - P(u, x)\\} \\\\\n&\\le P(y, x) + \\sum_u \\{P(u) - P(u, x)\\} \\\\\n&= P(y, x) + 1 - P(x)\n\\end{aligned}\n\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-08-part-01/index.html#범위의-타당성-증명-tightness",
-    "href": "posts/causal-inference-08-part-01/index.html#범위의-타당성-증명-tightness",
-    "title": "[Causal Inference] 8. Partial Identification (Part 1)",
-    "section": "3.4 범위의 타당성 증명 (Tightness)",
-    "text": "3.4 범위의 타당성 증명 (Tightness)\n\n구한 범위 \\([P(y, x), P(y, x) + 1 - P(x)]\\)가 Tight하다는 것은, 추가적인 가정 없이는 이 범위를 더 좁힐 수 없음을 의미합니다.\n이를 증명하기 위해, 관측 데이터 \\(P(x, y)\\)와 완벽히 일치하면서(Compatible), 인과 효과가 각각 하한값과 상한값을 갖는 두 개의 가상 모델(\\(M^{(1)}, M^{(2)}\\))을 만들어낼 수 있음을 보이면 됩니다.\n\n\n3.4.1 모델 설계 전략\n\n두 모델 모두 \\(U \\sim P(u)\\)와 \\(X \\leftarrow f_X(u)\\)는 동일하게 두고, \\(Y\\)를 결정하는 함수 \\(f_Y(x, u)\\)만 다르게 설정합니다.\n\n\\[\nf_Y(x, u) =\n\\begin{cases}\nf_Y^{\\text{observation}}(x, u) & \\text{if } x = f_X(u) \\quad \\text{(관측된 경우)} \\\\\nf_Y^{\\text{counterfactual}}(x, u) & \\text{if } x \\ne f_X(u) \\quad \\text{(반사실적 경우)}\n\\end{cases}\n\\]\n\n\n3.4.2 Case 분류\n\n우리는 상황을 두 가지 케이스로 나눌 수 있습니다.\n\nCase 1 (Observation): \\(x = f_X(u)\\).\n\n즉, 개인이 원래 \\(x\\)를 선택하려던 경우입니다.\n이 경우 모델은 관측 데이터와 일치해야 하므로 선택의 여지가 없습니다.\n\nCase 2 (Counterfactual): \\(x \\ne f_X(u)\\).\n\n즉, 원래 다른 것을 하려던 사람에게 억지로 \\(x\\)를 시킬 때입니다.\n이 부분은 데이터로 관측되지 않으므로, 우리가 임의로 0(실패) 또는 1(성공)을 부여하여 범위를 만듭니다.\n\n\n\n\n\n3.4.3 두 모델의 구성\n\n모델 \\(\\mathcal{M}_x^{(1)}\\) (하한 모델):\n\nCase 2일 때 무조건 \\(Y=0\\)을 출력하게 설정합니다.\n인과 효과: \\(P^{(1)}(y=1|do(x)) = P(y=1, x) + 0 = \\text{Lower Bound}\\)\n\n모델 \\(\\mathcal{M}_x^{(2)}\\) (상한 모델):\n\nCase 2일 때 무조건 \\(Y=1\\)을 출력하게 설정합니다.\n인과 효과: \\(P^{(2)}(y=1|do(x)) = P(y=1, x) + 1- P(x) = \\text{Upper Bound}\\)\n\n\n\n두 모델 모두 관측 상황(Case 1)에서는 동일하게 작동하므로 \\(P(x, y)\\) 분포는 같습니다.\n하지만 \\(do(x)\\) 개입 시(Case 2), \\(U\\)와 \\(X\\)가 일치할 필요가 없으므로 \\(\\mathcal{M}_x^{(1)}\\)와 \\(\\mathcal{M}_x^{(2)}\\)가 \\(Y = 1\\) 일 때, 다른 확률을 가질 수 있습니다.\n\n\\[\n\\begin{aligned}\nP^{(i)}(Y = 1|do(x)) &= \\sum_{u} P^{(i)}(Y = 1|do(x), u)P(u|do(x)) \\\\\n&= \\sum_{u} P^{(i)}(Y = 1|x, u)P(u) && \\because \\text{Rule 2, Rule 3}\\\\\n&= P^{(i)}(Y = 1|x, f_X(U) = x)P(f_X(U) = x) \\\\\n&\\quad + P^{(i)}(Y = 1|x, f_X(U) \\neq x)P(f_X(U) \\neq x) \\\\\n&= P^{(i)}(Y = 1|x)P(x) + \\mathbf{1}[i = 2]\\{1 - P(x)\\} \\\\\n&= P^{(i)}(x, Y = 1) + \\mathbf{1}[i = 2](1 - P(x))\n\\end{aligned}\n\\]\n\\[\n\\begin{aligned}\nP^{(1)}(Y = 1|do(x)) &= a(y;x) = P(y = 1, x) \\quad \\text{while} \\\\\nP^{(2)}(Y = 1|do(x)) &= b(y;x) = P(y = 1, x) + 1 - P(x)\n\\end{aligned}\n\\]"
+    "objectID": "posts/causal-inference-13-part-02/index.html#two-sided-noncompliance-양측-불순응",
+    "href": "posts/causal-inference-13-part-02/index.html#two-sided-noncompliance-양측-불순응",
+    "title": "[Causal Inference] 13. IV (Part 2)",
+    "section": "5.2. Two-sided Noncompliance (양측 불순응)",
+    "text": "5.2. Two-sided Noncompliance (양측 불순응)\n\n일반적인 경우(Wald Estimator 형태)입니다.\n\n\\[\\widehat{CACE} = \\frac{\\widehat{E}[Y|Z=1] - \\widehat{E}[Y|Z=0]}{\\widehat{E}[X|Z=1] - \\widehat{E}[X|Z=0]}\\]"
   },
   {
     "objectID": "posts/causal-inference-01/index.html",
@@ -445,363 +620,6 @@
     "href": "index.html",
     "title": "shsha0110.github.io",
     "section": "",
-    "text": "[Causal Inference] 13. IV (Part 2)\n\n\n\n\n\n\nCausal Inference\n\n\n\nRandom Experiment wiht Noncompliance\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 1)\n\n\n\n\n\n\nCausal Inference\n\n\n\nIV under Linear Assumption\n\n\n\n\n\nJan 15, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification\n\n\n1. Conformal Prediction\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 15, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 8. Partial Identification (Part 4)\n\n\n\n\n\n\nCausal Inference\n\n\n\nNon-Compliance Simulation\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 8. Partial Identification (Part 3)\n\n\n\n\n\n\nCausal Inference\n\n\n\nBounds on Partially-observed Covariates\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 8. Partial Identification (Part 2)\n\n\n\n\n\n\nCausal Inference\n\n\n\nPartial Identification Problem: Non-Compliance\n\n\n\n\n\nJan 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 8. Partial Identification (Part 1)\n\n\n\n\n\n\nCausal Inference\n\n\n\nPartial Identification Problem: Natural Bounds\n\n\n\n\n\nJan 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 5)\n\n\n\n\n\n\nCausal Inference\n\n\n\nSimpson’s Paradox Simulation Using DoWhy: Stratification & Refutation\n\n\n\n\n\nJan 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 4)\n\n\n\n\n\n\nCausal Inference\n\n\n\nInverse Probability Weighting\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 3)\n\n\n\n\n\n\nCausal Inference\n\n\n\nBack-door Criterion\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 2)\n\n\n\n\n\n\nCausal Inference\n\n\n\nCounfounding Bias\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 1)\n\n\n\n\n\n\nCausal Inference\n\n\n\nIndentifiable and Non-identifiable Effects\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 1. Introduction\n\n\n\n\n\n\nCausal Inference\n\n\n\nIntroduction to Causal Inference\n\n\n\n\n\nJan 6, 2026\n\n\n유성현\n\n\n\n\n\nNo matching items"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html",
-    "href": "posts/causal-inference-13-part-01/index.html",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "",
-    "text": "인과추론에서 우리가 관심을 가지는 것은 처치(Treatment, \\(X\\))가 결과(Outcome, \\(Y\\))에 미치는 인과적 효과(\\(\\beta_1\\))를 추정하는 것입니다.\n하지만 많은 경우 관찰되지 않은 교란 요인(Unobserved Confounder)이 존재하여 단순한 회귀분석(OLS)으로는 편향된 추정치를 얻게 됩니다.\n이때 사용할 수 있는 강력한 도구가 바로 도구변수(Instrumental Variable, IV)입니다.\n이 글에서는 선형 가정(Linear Assumption) 하에서의 IV, 특히 2SLS (Two-Stage Least Squares) 접근법과 그 유도 과정을 다룹니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#개요-overview",
-    "href": "posts/causal-inference-13-part-01/index.html#개요-overview",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "1 1. 개요 (Overview)",
-    "text": "1 1. 개요 (Overview)\n인과추론에서 우리가 관심을 가지는 것은 처치(Treatment, \\(X\\))가 결과(Outcome, \\(Y\\))에 미치는 인과적 효과(\\(\\beta_1\\))를 추정하는 것입니다. 하지만 많은 경우 관찰되지 않은 교란 요인(Unobserved Confounder)이 존재하여 단순한 회귀분석(OLS)으로는 편향된 추정치를 얻게 됩니다. 이때 사용할 수 있는 강력한 도구가 바로 도구변수(Instrumental Variable, IV)입니다.\n이 글에서는 선형 가정(Linear Assumption) 하에서의 IV, 특히 2SLS (Two-Stage Least Squares) 접근법과 그 유도 과정을 다룹니다. [cite: 6]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#문제-상황-내생성-endogeneity",
-    "href": "posts/causal-inference-13-part-01/index.html#문제-상황-내생성-endogeneity",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "2 2. 문제 상황: 내생성 (Endogeneity)",
-    "text": "2 2. 문제 상황: 내생성 (Endogeneity)\n\n2.1 2.1. 인과 모형 (Causal Graph)\n우선 변수들 간의 관계를 DAG(Directed Acyclic Graph)로 표현하면 다음과 같습니다.\n\n\n\nFigure 1: IV Causal Graph. Z는 도구변수, X는 처치, Y는 결과, W는 공변량, ε는 관찰되지 않은 오차항을 의미합니다.\n\n\n\n\\(Z\\): 도구변수 (Instrument) [cite: 9]\n\\(X\\): 처치변수 (Treatment) - Endogenous (내생적) [cite: 11]\n\\(Y\\): 결과변수 (Outcome) [cite: 14]\n\\(W\\): 공변량 (Covariates) - Exogenous (외생적) [cite: 13]\n\\(\\epsilon\\): 오차항 (Error term/Unobserved Confounders) [cite: 10]\n\n\n\n2.2 2.2. 선형 모형과 OLS의 한계\n전통적인 선형 모형은 다음과 같이 설정됩니다.\n\\[Y_i = \\beta_0 + \\beta_1 X_i + \\beta_2 W_i + \\epsilon_i\\]\n여기서 우리의 관심 추정량(estimand)은 \\(X_i\\)의 계수인 \\(\\beta_1\\)입니다. [cite: 24, 25]\n하지만 Challenge가 발생합니다. 오차항 \\(\\epsilon_i\\)가 처치 변수 \\(X_i\\)와 상관관계를 가질 때(Dependent/Confounded), 이를 내생성(Endogeneity)이 있다고 합니다. [cite: 37]\n\nNote (경제학 용어 정리): [cite: 38]\n\nEndogenous (내생변수): \\(Y\\)와 관련된 교란요인(confounder)과 상관관계가 있는 변수 (\\(X\\))\nExogenous (외생변수): 교란요인과 상관관계가 없는 변수 (\\(W\\))\n\n\n만약 \\(X\\)가 내생적이라면, \\(\\beta_1\\)에 대한 직접적인 OLS(Ordinary Least Squares) 추정량은 편향(Biased)됩니다. 즉, \\(Cov(X, \\epsilon) \\neq 0\\)인 상황입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#도구변수-instrumental-variable",
-    "href": "posts/causal-inference-13-part-01/index.html#도구변수-instrumental-variable",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "3. 도구변수 (Instrumental Variable)",
-    "text": "3. 도구변수 (Instrumental Variable)\n\n3.1. IV의 조건\n이 문제를 해결하기 위해 도입하는 도구변수 벡터 \\(Z\\) (\\(K\\)차원)는 다음 두 가지 조건을 만족해야 합니다. [cite: 47, 48]\n\nRelevance (관련성): 도구변수 \\(Z\\)는 처치 \\(X\\)와 관련이 있어야 합니다. (그래프 상에서 \\(Z \\rightarrow X\\) 경로 존재)\nExclusion Restriction (배제 제약) & Independence: 도구변수 \\(Z\\)는 오직 \\(X\\)를 통해서만 \\(Y\\)에 영향을 미쳐야 하며, 교란요인 \\(\\epsilon\\)과 독립이어야 합니다.\n\n\\(\\epsilon_i \\perp W_i\\)\n\\(\\epsilon_i \\perp Z_i | W_i\\)\n즉, \\(\\epsilon_i \\perp (Z_i, W_i)\\)\n\n\n\n\n3.2. 식별 (Identification)\n도구변수의 개수(\\(K\\))와 내생변수의 개수에 따라 모델의 식별 상태가 달라집니다. [cite: 49]\n\nOver-identified (과잉 식별): \\(K &gt; 1\\) (도구변수가 내생변수보다 많음)\nJust-identified (적정 식별): \\(K = 1\\) (도구변수와 내생변수 개수가 같음)"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#추정-방법-estimation-methods",
-    "href": "posts/causal-inference-13-part-01/index.html#추정-방법-estimation-methods",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "4. 추정 방법 (Estimation Methods)",
-    "text": "4. 추정 방법 (Estimation Methods)\nJust-identified 케이스 (\\(K=1\\))를 기준으로 세 가지 해석 방식을 살펴보겠습니다. 결론적으로 이 세 가지는 모두 동일한 \\(\\beta_1\\) 값을 도출합니다. [cite: 82]\n\n4.1. 공분산의 비율 (Ratio of Covariance)\n가장 직관적인 IV 추정량은 \\(Y\\)와 \\(Z\\)의 공분산을 \\(X\\)와 \\(Z\\)의 공분산으로 나눈 것입니다. [cite: 52, 53]\n\\[\\hat{\\beta}_{1, iv} = \\frac{\\widehat{Cov}(Y_i, Z_i)}{\\widehat{Cov}(X_i, Z_i)} = \\frac{\\frac{1}{N}\\sum(Y_i - \\bar{Y})(Z_i - \\bar{Z})}{\\frac{1}{N}\\sum(X_i - \\bar{X})(Z_i - \\bar{Z})}\\]\nWald Estimator (Binary IV의 경우): 만약 도구변수 \\(Z\\)가 0과 1만 가지는 이진 변수라면, 이는 Wald Estimator가 됩니다. [cite: 55, 56]\n\\[\\hat{\\beta}_{1, iv} = \\frac{\\bar{Y}_1 - \\bar{Y}_0}{\\bar{X}_1 - \\bar{X}_0}\\]\n여기서 \\(\\bar{Y}_z, \\bar{X}_z\\)는 \\(Z=z\\)인 그룹 내에서의 평균을 의미합니다.\n\n\n4.2. 간접 최소제곱법 (Indirect Least Squares, ILS)\nILS는 두 개의 축약형(Reduced form) 회귀식을 이용하는 방식입니다. [cite: 63]\n\nReduced Form 1 (\\(Y\\) on \\(Z\\)): \\(Y_i = \\pi_{10} + \\pi_{11} Z_i + \\epsilon_{1i}\\) [cite: 64]\nReduced Form 2 (\\(X\\) on \\(Z\\)): \\(X_i = \\pi_{20} + \\pi_{21} Z_i + \\epsilon_{2i}\\) [cite: 65]\n\nILS 추정량은 두 회귀계수의 비율로 정의됩니다. [cite: 66]\n\\[\\hat{\\beta}_{1, ils} = \\frac{\\hat{\\pi}_{11}}{\\hat{\\pi}_{21}}\\]\n\n\n4.3. 2단계 최소제곱법 (Two Stage Least Squares, 2SLS)\n가장 널리 쓰이는 직관적인 방법으로, \\(X\\)에서 내생성을 제거한 후 회귀분석을 수행하는 방식입니다. [cite: 69]\n\nStage 1: 내생변수 \\(X\\)를 도구변수 \\(Z\\)로 예측합니다. (OLS 수행) \\[X_i = \\pi_0 + \\pi_1 Z_i + \\epsilon_i\\] 예측값 \\(\\hat{X}_i = \\hat{\\pi}_0 + \\hat{\\pi}_1 Z_i\\)를 구합니다. [cite: 71]\nStage 2: 원래의 \\(X\\) 대신 예측된 \\(\\hat{X}\\)를 사용하여 결과 모형을 추정합니다. \\[Y_i = \\pi_2 + \\pi_3 \\hat{X}_i + \\epsilon_i\\] 여기서 구해진 \\(\\hat{\\pi}_3\\)가 바로 2SLS 추정량 \\(\\hat{\\beta}_{1, 2sls}\\)입니다. [cite: 79, 80]\n\n\nIntuition: 1단계를 통해 \\(X\\)의 변동 중 \\(Z\\)에 의해 설명되는 부분(즉, 오차항 \\(\\epsilon\\)과 상관없는 “unconfounded portion”)만을 추출하여 2단계에서 인과 효과를 추정하는 것입니다. [cite: 81]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#수학적-유도-derivation",
-    "href": "posts/causal-inference-13-part-01/index.html#수학적-유도-derivation",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "5. 수학적 유도 (Derivation)",
-    "text": "5. 수학적 유도 (Derivation)\n강의 자료에 포함된 수학적 증명을 단계별로 상세히 살펴보겠습니다. 공변량 \\(W\\)가 포함된 일반적인 경우를 가정합니다.\n\n5.1. 설정 (Setup)\n우리는 다음 두 식을 관찰할 수 있습니다. [cite: 106]\n\nFirst Stage (X에 대한 식): \\(X_i = \\pi_{20} + \\pi_{21} Z_i + \\pi_{22} W_i + \\epsilon_{2i}\\)\nStructural Model (Y에 대한 식): \\(Y_i = \\beta_0 + \\beta_1 X_i + \\beta_2 W_i + \\eta_i\\)\n\n가정: \\(Cov[X_i, \\eta_i] \\neq 0\\) (내생성 존재), 하지만 \\(Cov[\\eta_i, Z_i] = 0\\) (도구변수의 외생성). [cite: 100, 108]\n\n\n5.2. IV Estimator 유도 (Ratio 방식)\n\\(Y_i\\) 식의 양변과 \\(Z_i\\)의 공분산을 취해봅시다.\n\\[\n\\begin{aligned}\nCov[Y_i, Z_i] &= Cov[\\beta_0 + \\beta_1 X_i + \\beta_2 W_i + \\eta_i, \\; Z_i] \\\\\n&= \\beta_1 Cov[X_i, Z_i] + \\beta_2 \\underbrace{Cov[W_i, Z_i]}_{0 \\text{ (if independent)}} + \\underbrace{Cov[\\eta_i, Z_i]}_{0 \\text{ (by assumption)}}\n\\end{aligned}\n\\] (단, 단순화를 위해 \\(W\\)를 무시하거나 통제했다고 가정하면)\n\\[Cov[Y_i, Z_i] = \\beta_1 Cov[X_i, Z_i]\\]\n따라서, \\(\\beta_1\\)에 대해 정리하면 다음과 같습니다. [cite: 110]\n\\[\\beta_1 = \\frac{Cov[Y_i, Z_i]}{Cov[X_i, Z_i]} = \\frac{Cov[Y_i, Z_i] / Var[Z_i]}{Cov[X_i, Z_i] / Var[Z_i]} = \\frac{\\text{Reduced form slope}}{\\text{First stage slope}}\\]\n이 유도 과정은 ILS 방식(\\(\\pi_{11}/\\pi_{21}\\))과 정확히 일치함을 보여줍니다.\n\n\n5.3. 2SLS Estimator 유도 (Substitution 방식)\n2SLS가 어떻게 작동하는지 수식 대입을 통해 확인해 봅시다. [cite: 112]\nStep 1: \\(Y\\) 식의 \\(X_i\\) 자리에 First Stage 식(\\(\\pi_{10}W_i + \\pi_{11}Z_i + \\pi_{00} + \\epsilon_{xi}\\))을 대입합니다. [cite: 114]\n\\[\n\\begin{aligned}\nY_i &= \\beta_1 (\\pi_{10}W_i + \\pi_{11}Z_i + \\pi_{00} + \\epsilon_{xi}) + \\beta_2 W_i + \\beta_0 + \\epsilon_i \\\\\n&= \\beta_1 \\pi_{11} Z_i + (\\beta_2 + \\beta_1 \\pi_{10}) W_i + \\underbrace{(\\beta_1(\\pi_{00} + \\epsilon_{xi}) + \\beta_0 + \\epsilon_i)}_{\\xi_i \\text{ (Composite Error)}}\n\\end{aligned}\n\\]\nStep 2: 이를 다시 정리하면, \\(\\pi_{10}W_i + \\pi_{11}Z_i\\) 부분은 \\(E[X_i | W_i, Z_i]\\) 즉, \\(\\hat{X}_i\\)의 핵심 부분임을 알 수 있습니다.\n\\[Y_i = \\beta_1 E[X_i | W_i, Z_i] + \\beta_2 W_i + \\xi_i\\]\n결국 \\(Y\\)를 \\(\\hat{X}\\)와 \\(W\\)에 대해 회귀분석하는 형태가 되며, 이때 \\(\\hat{X}\\)의 계수는 원래 식의 \\(\\beta_1\\)이 됩니다. [cite: 116]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#행렬-연산-matrix-notation-for-2sls---optional",
-    "href": "posts/causal-inference-13-part-01/index.html#행렬-연산-matrix-notation-for-2sls---optional",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "6. 행렬 연산 (Matrix Notation for 2SLS) - Optional",
-    "text": "6. 행렬 연산 (Matrix Notation for 2SLS) - Optional\n실제 통계 소프트웨어가 2SLS를 계산할 때는 행렬 연산을 사용합니다. 이 과정은 \\(X\\)를 \\(Z\\)와 \\(W\\) 공간으로 사영(Projection)시키는 것으로 이해할 수 있습니다. [cite: 136, 140]\n\n\\(X\\): 내생변수 행렬\n\\(W\\): 외생 공변량 행렬\n\\(Z\\): 도구변수 행렬\n\\(\\hat{X}\\): 예측된 \\(X\\) 값\n\n2SLS 추정량 \\(\\hat{\\Gamma}_{2SLS}\\)는 다음과 같이 표현됩니다.\n\\[\\hat{\\Gamma}_{2SLS} = ([X W]' P_Z [X W])^{-1} [X W]' P_Z Y\\]\n여기서 \\(P_Z\\)는 도구변수 \\(Z\\) (정확히는 \\([Z, W]\\))에 의한 사영 행렬(Projection Matrix, or Hat Matrix)입니다. 슬라이드에서는 이를 \\(M\\)이라고 표기하기도 했습니다. [cite: 131, 139]\n\\[P_Z = [Z W] ([Z W]' [Z W])^{-1} [Z W]'\\]\n이 수식은 First Stage에서 구한 예측값 \\(\\hat{X}\\)를 사용하여 OLS를 돌리는 것과 수학적으로 동치입니다.\n\\[\\hat{\\Gamma}_{2SLS} \\equiv (W' P_Z W)^{-1} W' P_Z Y\\] (여기서 \\(W\\)는 회귀식의 모든 설명변수 행렬)\n이 행렬식은 복잡해 보이지만, 핵심은 “내생변수 \\(X\\)를 외생적인 도구변수 \\(Z\\)로 설명되는 부분으로 대체하여 편향을 제거한다”는 2SLS의 철학을 수학적으로 엄밀하게 표현한 것입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#인과-모형-causal-graph",
-    "href": "posts/causal-inference-13-part-01/index.html#인과-모형-causal-graph",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "2.1. 인과 모형 (Causal Graph)",
-    "text": "2.1. 인과 모형 (Causal Graph)\n\n우선 변수들 간의 관계를 DAG(Directed Acyclic Graph)로 표현하면 다음과 같습니다.\n\n\n\n\nFigure 1: IV Causal Graph. Z는 도구변수, X는 처치, Y는 결과, W는 공변량, ε는 관찰되지 않은 오차항을 의미합니다.\n\n\n\n\\(Z\\): 도구변수 (Instrument)\n\\(X\\): 처치변수 (Treatment) - Endogenous (내생적)\n\\(Y\\): 결과변수 (Outcome)\n\\(W\\): 공변량 (Covariates) - Exogenous (외생적)\n\\(\\epsilon\\): 오차항 (Error term/Unobserved Confounders)"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#선형-모형과-ols의-한계",
-    "href": "posts/causal-inference-13-part-01/index.html#선형-모형과-ols의-한계",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "2.2. 선형 모형과 OLS의 한계",
-    "text": "2.2. 선형 모형과 OLS의 한계\n\n전통적인 선형 모형은 다음과 같이 설정됩니다.\n\n\\[Y_i = \\beta_0 + \\beta_1 X_i + \\beta_2 W_i + \\epsilon_i\\]\n\n여기서 우리의 관심 추정량(estimand)은 \\(X_i\\)의 계수인 \\(\\beta_1\\)입니다.\n하지만 Challenge가 발생합니다.\n오차항 \\(\\epsilon_i\\)가 처치 변수 \\(X_i\\)와 상관관계를 가질 때(Dependent/Confounded), 이를 내생성(Endogeneity)이 있다고 합니다.\n\n\nNote:\n\nEndogenous (내생변수): \\(Y\\)와 관련된 교란요인(confounder)과 상관관계가 있는 변수 (\\(X\\))\nExogenous (외생변수): 교란요인과 상관관계가 없는 변수 (\\(W\\))\n\n\n\n만약 \\(X\\)가 내생적이라면, \\(\\beta_1\\)에 대한 직접적인 OLS(Ordinary Least Squares) 추정량은 편향(Biased)됩니다.\n즉, \\(Cov(X, \\epsilon) \\neq 0\\)인 상황입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#iv의-조건",
-    "href": "posts/causal-inference-13-part-01/index.html#iv의-조건",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "3.1. IV의 조건",
-    "text": "3.1. IV의 조건\n\n이 문제를 해결하기 위해 도입하는 도구변수 벡터 \\(Z\\) (\\(K\\)차원)는 다음 두 가지 조건을 만족해야 합니다.\n\n\nRelevance (관련성): 도구변수 \\(Z\\)는 처치 \\(X\\)와 관련이 있어야 합니다. (그래프 상에서 \\(Z \\rightarrow X\\) 경로 존재)\nExclusion Restriction (배제 제약) & Independence: 도구변수 \\(Z\\)는 오직 \\(X\\)를 통해서만 \\(Y\\)에 영향을 미쳐야 하며, 교란요인 \\(\\epsilon\\)과 독립이어야 합니다.\n\n\\(\\epsilon_i \\perp W_i\\)\n\\(\\epsilon_i \\perp Z_i | W_i\\)\n즉, \\(\\epsilon_i \\perp (Z_i, W_i)\\)"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#식별-identification",
-    "href": "posts/causal-inference-13-part-01/index.html#식별-identification",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "3.2. 식별 (Identification)",
-    "text": "3.2. 식별 (Identification)\n도구변수의 개수(\\(K\\))와 내생변수의 개수에 따라 모델의 식별 상태가 달라집니다.\n\nOver-identified (과잉 식별): \\(K &gt; 1\\) (도구변수가 내생변수보다 많음)\nJust-identified (적정 식별): \\(K = 1\\) (도구변수와 내생변수 개수가 같음)"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#공분산의-비율-ratio-of-covariance",
-    "href": "posts/causal-inference-13-part-01/index.html#공분산의-비율-ratio-of-covariance",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "4.1. 공분산의 비율 (Ratio of Covariance)",
-    "text": "4.1. 공분산의 비율 (Ratio of Covariance)\n\n가장 직관적인 IV 추정량은 \\(Y\\)와 \\(Z\\)의 공분산을 \\(X\\)와 \\(Z\\)의 공분산으로 나눈 것입니다.\n\n\\[\\hat{\\beta}_{1, iv} = \\frac{\\widehat{Cov}(Y_i, Z_i)}{\\widehat{Cov}(X_i, Z_i)} = \\frac{\\frac{1}{N}\\sum(Y_i - \\bar{Y})(Z_i - \\bar{Z})}{\\frac{1}{N}\\sum(X_i - \\bar{X})(Z_i - \\bar{Z})}\\]\n\nWald Estimator (Binary IV의 경우):\n\n만약 도구변수 \\(Z\\)가 0과 1만 가지는 이진 변수라면, 이는 Wald Estimator가 됩니다. \\[\\hat{\\beta}_{1, iv} = \\frac{\\bar{Y}_1 - \\bar{Y}_0}{\\bar{X}_1 - \\bar{X}_0}\\]\n여기서 \\(\\bar{Y}_z, \\bar{X}_z\\)는 \\(Z=z\\)인 그룹 내에서의 평균을 의미합니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#간접-최소제곱법-indirect-least-squares-ils",
-    "href": "posts/causal-inference-13-part-01/index.html#간접-최소제곱법-indirect-least-squares-ils",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "4.2. 간접 최소제곱법 (Indirect Least Squares, ILS)",
-    "text": "4.2. 간접 최소제곱법 (Indirect Least Squares, ILS)\n\nILS는 두 개의 축약형(Reduced form) 회귀식을 이용하는 방식입니다.\n\n\nReduced Form 1 (\\(Y\\) on \\(Z\\)): \\(Y_i = \\pi_{10} + \\pi_{11} Z_i + \\epsilon_{1i}\\)\nReduced Form 2 (\\(X\\) on \\(Z\\)): \\(X_i = \\pi_{20} + \\pi_{21} Z_i + \\epsilon_{2i}\\)\n\n\nILS 추정량은 두 회귀계수의 비율로 정의됩니다.\n\n\\[\\hat{\\beta}_{1, ils} = \\frac{\\hat{\\pi}_{11}}{\\hat{\\pi}_{21}}\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#단계-최소제곱법-two-stage-least-squares-2sls",
-    "href": "posts/causal-inference-13-part-01/index.html#단계-최소제곱법-two-stage-least-squares-2sls",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "4.3. 2단계 최소제곱법 (Two Stage Least Squares, 2SLS)",
-    "text": "4.3. 2단계 최소제곱법 (Two Stage Least Squares, 2SLS)\n\n가장 널리 쓰이는 직관적인 방법으로, \\(X\\)에서 내생성을 제거한 후 회귀분석을 수행하는 방식입니다.\nStage 1: 내생변수 \\(X\\)를 도구변수 \\(Z\\)로 예측합니다. (OLS 수행) \\[X_i = \\pi_0 + \\pi_1 Z_i + \\epsilon_i\\] \\[\\Longrightarrow \\hat{X}_i = \\hat{\\pi}_0 + \\hat{\\pi}_1 Z_i\\]\nStage 2: 원래의 \\(X\\) 대신 예측된 \\(\\hat{X}\\)를 사용하여 결과 모형을 추정합니다. \\[Y_i = \\pi_2 + \\pi_3 \\hat{X}_i + \\epsilon_i\\] 여기서 구해진 \\(\\hat{\\pi}_3\\)가 바로 2SLS 추정량 \\(\\hat{\\beta}_{1, 2sls}\\)입니다.\n\n\nIntuition:\n1단계를 통해 \\(X\\)의 변동 중 \\(Z\\)에 의해 설명되는 부분(즉, 오차항 \\(\\epsilon\\)과 상관없는 “unconfounded portion”)만을 추출하여 2단계에서 인과 효과를 추정하는 것입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#설정-setup",
-    "href": "posts/causal-inference-13-part-01/index.html#설정-setup",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "5.1. 설정 (Setup)",
-    "text": "5.1. 설정 (Setup)\n\n우리는 다음 두 식을 관찰할 수 있습니다.\n\n\nFirst Stage (X에 대한 식): \\[X_i = \\pi_0 + \\pi_1 Z_i + \\pi_2 W_i + \\epsilon_{1i}\\]\nStructural Model (Y에 대한 식): \\[Y_i = \\beta_0 + \\beta_1 {X}_i + \\underbrace{\\beta_2 {W}_i + \\epsilon_{2i}}_{\\eta_{i}}\\]\n\n\n가정: \\(Cov[X_i, \\eta_i] \\neq 0\\) (내생성 존재), 하지만 \\(Cov[\\eta_i, Z_i] = 0\\) (도구변수의 외생성)."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#iv-estimator-유도-ratio-방식",
-    "href": "posts/causal-inference-13-part-01/index.html#iv-estimator-유도-ratio-방식",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "5.2. IV Estimator 유도 (Ratio 방식)",
-    "text": "5.2. IV Estimator 유도 (Ratio 방식)\n\n\\(Y_i\\) 식의 양변과 \\(Z_i\\)의 공분산을 취해봅시다.\n\n\\[\n\\begin{aligned}\nCov[Y_i, Z_i] &= Cov[\\beta_0 + \\beta_1 X_i + \\eta_i, \\; Z_i] \\\\\n&= \\beta_1 Cov[X_i, Z_i] + \\underbrace{Cov[\\eta_i, Z_i]}_{0 \\text{ (by assumption)}} \\\\\n&= \\beta_1 Cov[X_i, Z_i]\n\\end{aligned}\n\\]\n\n따라서, \\(\\beta_1\\)에 대해 정리하면 다음과 같습니다.\n\n\\[\\beta_1 = \\frac{Cov[Y_i, Z_i]}{Cov[X_i, Z_i]} = \\frac{Cov[Y_i, Z_i] / Var[Z_i]}{Cov[X_i, Z_i] / Var[Z_i]} = \\frac{\\text{Reduced form slope}}{\\text{First stage slope}}\\]\n\n이 유도 과정은 ILS 방식(\\(\\pi_{11}/\\pi_{21}\\))과 정확히 일치함을 보여줍니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#sls-estimator-유도-substitution-방식",
-    "href": "posts/causal-inference-13-part-01/index.html#sls-estimator-유도-substitution-방식",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "5.3. 2SLS Estimator 유도 (Substitution 방식)",
-    "text": "5.3. 2SLS Estimator 유도 (Substitution 방식)\n\n2SLS가 어떻게 작동하는지 수식 대입을 통해 확인해 봅시다.\n\\(Y\\) 식의 \\(X_i\\) 자리에 First Stage 식(\\(\\pi_0 + \\pi_1 Z_i + \\pi_2 W_i + \\epsilon_{1i}\\))을 대입합니다.\n\n\\[\n\\begin{aligned}\nY_i &= \\beta_0 + \\beta_1 {X}_i + \\beta_2 {W}_i + \\epsilon_{2i} \\\\\n&= \\beta_0 + \\beta_1(\\pi_0 + \\pi_1 Z_i + \\pi_2 W_i + \\epsilon_{1i}) + \\beta_2 {W}_i + \\epsilon_{2i} \\\\\n&= \\beta_0 + \\beta_1 (\\pi_0 + \\pi_1 Z_i + \\pi_2 {W}_i) + \\beta_2 {W}_i + \\underbrace{\\beta_1 \\epsilon_{1i} + \\epsilon_{2i}}_{\\xi_i} \\\\\n\\end{aligned}\n\\]\n\n이를 다시 정리하면, \\(\\pi_0 + \\pi_1 Z_i + \\pi_2 {W}_i\\) 부분은 \\(E[X_i | W_i, Z_i]\\) 즉, \\(\\hat{X}_i\\)의 핵심 부분임을 알 수 있습니다.\n\n\\[Y_i = \\beta_0 + \\underbrace{\\beta_1 E[X_i | W_i, Z_i]}_{\\hat{X_i}} + \\beta_2 W_i + \\xi_i\\]\n\n결국 \\(Y\\)를 \\(\\hat{X}\\)와 \\(W\\)에 대해 회귀분석하는 형태가 되며, 이때 \\(\\hat{X}\\)의 계수는 원래 식의 \\(\\beta_1\\)이 됩니다."
-  },
-  {
-    "objectID": "posts/paper/Conformal-Prediction-and-Distribution-Free-Uncertainty-Quantification/index.html",
-    "href": "posts/paper/Conformal-Prediction-and-Distribution-Free-Uncertainty-Quantification/index.html",
-    "title": "A Gentle Introduction to Conformal Prediction (1)",
-    "section": "",
-    "text": "Paper: Angelopoulos, A. N., & Bates, S. (2021). A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification.\n딥러닝과 같은 Black-box 모델은 의료 진단이나 자율 주행과 같은 High-risk 환경에서 점차 많이 사용되고 있습니다. 하지만 모델이 단순히 예측값만 내놓는 것으로는 충분하지 않습니다. [cite_start]우리는 모델이 “얼마나 확신하는지”, 혹은 “언제 틀릴 수 있는지”를 알아야 합니다[cite: 6].\nConformal Prediction(CP)은 이러한 불확실성을 정량화(Uncertainty Quantification)하는 강력하고 사용자 친화적인 방법론입니다. 이번 포스팅에서는 이 논문의 Section 1을 중심으로 CP의 핵심 아이디어와 구현 방법을 정리합니다."
-  },
-  {
-    "objectID": "posts/paper/Conformal-Prediction-and-Distribution-Free-Uncertainty-Quantification/index.html#why-conformal-prediction",
-    "href": "posts/paper/Conformal-Prediction-and-Distribution-Free-Uncertainty-Quantification/index.html#why-conformal-prediction",
-    "title": "A Gentle Introduction to Conformal Prediction (1)",
-    "section": "1. Why Conformal Prediction?",
-    "text": "1. Why Conformal Prediction?\n기존의 딥러닝 모델(예: Softmax를 사용하는 분류기)은 종종 자신의 예측에 대해 과신(Overconfident)하는 경향이 있습니다. [cite_start]Conformal Prediction은 이러한 모델의 출력을 엄밀한 통계적 보장(Statistically rigorous guarantee)을 갖춘 “Prediction Set(예측 집합)”으로 변환해줍니다[cite: 7].\nCP의 가장 큰 장점은 다음과 같습니다:\n\n[cite_start]Distribution-free: 데이터의 분포에 대한 가정(가우시안 등)이 필요 없습니다[cite: 8].\n[cite_start]Model-agnostic: 신경망, Random Forest 등 이미 학습된 어떤 모델에도 적용 가능합니다[cite: 9].\n[cite_start]Guaranteed Coverage: 사용자가 지정한 확률(예: 90%)로 정답이 예측 집합에 포함됨을 보장합니다[cite: 9].\n\n위 그림은 ImageNet 데이터셋에 CP를 적용한 예시입니다. * 쉬운 이미지(왼쪽): 모델이 확신하므로 예측 집합에 ‘Fox Squirrel’ 하나만 들어갑니다. * [cite_start]어려운 이미지(오른쪽): 모델이 헷갈려하므로 정답을 포함하기 위해 예측 집합의 크기가 커집니다 [cite: 22-29].\n이처럼 CP는 적응적(Adaptive)입니다. [cite_start]모델이 불확실할수록 집합의 크기를 키워 정답을 놓치지 않도록 합니다 [cite: 69-70]."
-  },
-  {
-    "objectID": "posts/paper/Conformal-Prediction-and-Distribution-Free-Uncertainty-Quantification/index.html#the-algorithm-3단계-레시피",
-    "href": "posts/paper/Conformal-Prediction-and-Distribution-Free-Uncertainty-Quantification/index.html#the-algorithm-3단계-레시피",
-    "title": "A Gentle Introduction to Conformal Prediction (1)",
-    "section": "2. The Algorithm: 3단계 레시피",
-    "text": "2. The Algorithm: 3단계 레시피\nConformal Prediction을 구현하는 과정은 매우 간단합니다. [cite_start]논문에서는 이를 “Calibration Step”이라고 부르며, 다음과 같은 3단계로 요약할 수 있습니다[cite: 52].\n\n준비물\n\n학습된 모델 \\(\\hat{f}\\)\n[cite_start]학습에 사용되지 않은 소량의 데이터 (Calibration Set, 약 500개 정도) \\((X_1, Y_1), \\dots, (X_n, Y_n)\\) [cite: 38-39]\n사용자가 허용할 에러율 \\(\\alpha\\) (예: \\(\\alpha=0.1\\)이면 90% 커버리지 목표)\n\n\n\nStep 1: Conformal Score 계산\n먼저 Calibration Set의 모든 데이터에 대해 Conformal Score \\(s_i\\)를 계산합니다. 이 점수는 “모델이 얼마나 틀렸는지”를 나타내는 척도입니다. [cite_start]가장 기본적인 분류 문제에서는 다음과 같이 정의할 수 있습니다[cite: 48]:\n\\[s_i = 1 - \\hat{f}(X_i)_{Y_i}\\]\n즉, (1 - 정답 클래스에 대한 Softmax 확률)입니다. [cite_start]모델이 정답을 맞출 확률이 낮을수록(불확실할수록) 점수는 커집니다[cite: 49].\n\n\nStep 2: Quantile 구하기\n[cite_start]계산된 점수들 \\(s_1, \\dots, s_n\\) 중에서 \\(\\lceil(n+1)(1-\\alpha)\\rceil/n\\) 분위수(Quantile)인 \\(\\hat{q}\\)를 찾습니다[cite: 50]. 쉽게 말해, Calibration 데이터의 90%를 커버할 수 있는 에러 점수의 임계값(Threshold)을 찾는 과정입니다.\n\n\nStep 3: Prediction Set 구성\n이제 새로운 테스트 데이터 \\(X_{test}\\)가 들어오면, 모델의 예측값 중 점수가 \\(\\hat{q}\\)보다 작은 클래스들만 모아서 집합을 만듭니다. [cite_start]수식으로는 다음과 같습니다:\n\\[\\mathcal{C}(X_{test}) = \\{ y : \\hat{f}(X_{test})_y \\ge 1 - \\hat{q} \\}\\]\n즉, Softmax 확률이 \\(1-\\hat{q}\\) 이상인 클래스들은 모두 정답 후보로 포함시킵니다."
-  },
-  {
-    "objectID": "posts/paper/Conformal-Prediction-and-Distribution-Free-Uncertainty-Quantification/index.html#python-implementation",
-    "href": "posts/paper/Conformal-Prediction-and-Distribution-Free-Uncertainty-Quantification/index.html#python-implementation",
-    "title": "A Gentle Introduction to Conformal Prediction (1)",
-    "section": "3. Python Implementation",
-    "text": "3. Python Implementation\n위 알고리즘은 단 몇 줄의 파이썬 코드로 구현 가능합니다. (PyTorch 스타일 의사 코드) [cite_start][cite: 61-64]\n```python import numpy as np"
-  },
-  {
-    "objectID": "posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-01-Conformal-Prediction/index.html",
-    "href": "posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-01-Conformal-Prediction/index.html",
-    "title": "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification",
-    "section": "",
-    "text": "딥러닝 모델과 같은 Black-box 머신러닝 모델들은 의료 진단이나 자율 주행과 같은 High-risk 환경에서 일상적으로 사용되고 있습니다.\n하지만 이러한 모델들은 종종 잘못된 예측을 내놓으면서도 높은 확신(Overconfidence)을 보이는 문제가 있습니다.\nConformal Prediction(CP)는 이러한 모델의 예측에 대해 통계적으로 엄밀한 불확실성 구간(Uncertainty Sets/Intervals)을 생성하는 방법론입니다.\nCP의 가장 큰 장점은 다음과 같습니다:\n\nDistribution-free: 데이터의 분포에 대한 가정(가우시안 분포 등)이 필요하지 않습니다.\nModel-agnostic: 뉴럴 네트워크를 포함한 어떤 학습된 모델(Pre-trained model)에도 적용 가능합니다.\nFinite-sample guarantee: 무한한 데이터가 아닌, 유한한 샘플 수에서도 통계적 커버리지(\\(1-\\alpha\\))를 보장합니다.\n\n이 글에서는 논문 “A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification”의 핵심 내용을 바탕으로 CP의 원리와 구현 방법을 정리합니다."
-  },
-  {
-    "objectID": "posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-01-Conformal-Prediction/index.html#step-1-calibration-data-준비",
-    "href": "posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-01-Conformal-Prediction/index.html#step-1-calibration-data-준비",
-    "title": "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification",
-    "section": "Step 1: Calibration Data 준비",
-    "text": "Step 1: Calibration Data 준비\n\n학습에 사용되지 않은 \\(n\\)개의 데이터 쌍 \\((X_1, Y_1), \\dots, (X_n, Y_n)\\)을 준비합니다.\n이 데이터는 교환 가능(Exchangeable), 일반적으로는 i.i.d. 가정만 만족하면 됩니다."
-  },
-  {
-    "objectID": "posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-01-Conformal-Prediction/index.html#step-2-conformal-score-계산",
-    "href": "posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-01-Conformal-Prediction/index.html#step-2-conformal-score-계산",
-    "title": "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification",
-    "section": "Step 2: Conformal Score 계산",
-    "text": "Step 2: Conformal Score 계산\n\n각 Calibration 데이터에 대해 모델이 얼마나 “잘못” 예측했는지를 나타내는 Conformal Score \\(s_i\\)를 계산합니다.\n분류 문제에서 가장 일반적인 점수 함수는 다음과 같습니다:\n\n\\[\ns_i = 1 - \\hat{f}(X_i)_{Y_i}\n\\]\n\n여기서 \\(\\hat{f}(X_i)_{Y_i}\\)는 정답 클래스 \\(Y_i\\)에 대한 모델의 Softmax 확률입니다.\n모델이 정답을 확신할수록 \\(\\hat{f}(X_i)_{Y_i} \\approx 1\\)이므로 점수 \\(s_i\\)는 0에 가까워집니다.\n모델이 틀렸거나 불확실할수록 점수 \\(s_i\\)는 커집니다."
-  },
-  {
-    "objectID": "posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-01-Conformal-Prediction/index.html#step-3-quantile-구하기",
-    "href": "posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-01-Conformal-Prediction/index.html#step-3-quantile-구하기",
-    "title": "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification",
-    "section": "Step 3: Quantile 구하기",
-    "text": "Step 3: Quantile 구하기\n\n우리는 새로운 데이터가 들어왔을 때, 모델의 불확실성(Score)이 어느 수준 이하이어야 안심할 수 있는지를 결정해야 합니다.\n이를 위해 계산된 점수들 \\(s_1, \\dots, s_n\\)의 분포에서 \\(\\hat{q}\\) (Quantile) 값을 찾습니다.\n엄밀한 커버리지를 보장하기 위해 다음과 같은 보정된 분위수(Adjusted Quantile)를 사용합니다:\n\n\\[\n\\hat{q} = \\text{Quantile}\\left( \\frac{\\lceil (n+1)(1-\\alpha) \\rceil}{n} ; \\{s_1, \\dots, s_n\\} \\right)\n\\]\n\n이 \\(\\hat{q}\\) 값은 “전체 데이터의 \\((1-\\alpha)\\) 비율이 이 점수보다 낮다”는 경계선 역할을 합니다."
-  },
-  {
-    "objectID": "posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-01-Conformal-Prediction/index.html#step-4-prediction-set-구성-inference",
-    "href": "posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-01-Conformal-Prediction/index.html#step-4-prediction-set-구성-inference",
-    "title": "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification",
-    "section": "Step 4: Prediction Set 구성 (Inference)",
-    "text": "Step 4: Prediction Set 구성 (Inference)\n\n이제 새로운 테스트 데이터 \\(X_{test}\\)가 들어오면, 예측 집합 \\(\\mathcal{C}(X_{test})\\)를 다음과 같이 구성합니다:\n\n\\[\n\\mathcal{C}(X_{test}) = \\{ y : 1 - \\hat{f}(X_{test})_y \\le \\hat{q} \\} = \\{ y : \\hat{f}(X_{test})_y \\ge 1 - \\hat{q} \\}\n\\]\n\n즉, 모델의 예측 확률이 \\(1-\\hat{q}\\) 이상인 모든 클래스를 후보로 포함시킵니다.\n\n\n\n\nFigure 2: Conformal Prediction의 전체 프로세스 도식화 및 Python 코드 예시. (1) Score 계산, (2) Quantile 계산, (3) Prediction Set 구성의 3단계로 이루어진다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html",
-    "href": "posts/causal-inference-13-part-02/index.html",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "",
-    "text": "지난 포스트에서 선형 모형(Linear Model) 가정 하의 IV를 다루었다면, 이번에는 무작위 실험(Randomized Experiment)에서 배정된 처치를 따르지 않는 ’불순응(Noncompliance)’이 발생했을 때의 IV 접근법을 다룹니다.\n경제학에서 도구변수(IV)는 주로 무작위 실험이 아닌 관찰 연구(Observational Study)에서 ’자연 실험(Natural Experiment)’의 일종으로 사용됩니다.\n좋은 도구변수 \\(Z\\)가 되기 위해서는 다음 두 가지 조건을 만족해야 합니다.\n\nRelevance (관련성): 도구변수 \\(Z\\)는 처치 \\(X\\)에 강한 영향을 미쳐야 합니다. (\\(Cov(X,Z)\\)가 커야 함). 그렇지 않으면(Weak IV), 추정량의 분산이 매우 커집니다.\nExclusion Restriction (배제 제약): 도구변수 \\(Z\\)는 결과 \\(Y\\)에 직접적인 영향을 미치지 않아야 하며, 오직 \\(X\\)를 통해서만 영향을 주어야 합니다.\n\n\n\n\n\nFigure 1: IV DAG regarding Noncompliance. Z(배정)가 X(실제 처치)를 통해 Y(결과)에 영향을 미치는 구조입니다. 점선 화살표는 잠재적 교란 요인을 의미합니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#변수-정의",
-    "href": "posts/causal-inference-13-part-02/index.html#변수-정의",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "2.1. 변수 정의",
-    "text": "2.1. 변수 정의\n\n\\(Z_i\\) (Instrument/Assignment): 처치 배정 여부 (0 또는 1). 무작위 배정(Random Assignment)을 가정합니다.\n\\(X_i\\) (Treatment Received): 실제 처치를 받았는지 여부. \\(Z\\) 이후에 결정되므로(Post-treatment), \\(Z\\)에 따른 잠재적 결과를 가집니다.\n\n\\(X_i(z)\\): \\(Z=z\\)일 때 개인이 받게 될 처치 여부.\n\n\\(Y_i\\) (Outcome): 결과 변수.\n\n\\(Y_i(z, x)\\): 배정이 \\(z\\)이고 실제 처치가 \\(x\\)일 때의 잠재적 결과.\n일반적으로 Exclusion Restriction 가정 하에서 \\(Y_i(z=0, x) = Y_i(z=0, 1)\\)이므로 \\(Y_i(x)\\)로 표기.\n\n우리가 관측하는 데이터는 \\(Z_i, X_i = X_i(Z_i), Y_i = Y_i(Z_i)\\) 입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#인과-효과의-식별-identification",
-    "href": "posts/causal-inference-13-part-02/index.html#인과-효과의-식별-identification",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "3. 인과 효과의 식별 (Identification)",
-    "text": "3. 인과 효과의 식별 (Identification)\n우리의 목표는 인과 효과를 추정하는 것입니다. 이를 위해 ITT(Intent-To-Treat) 효과를 먼저 정의하고, 이를 분해하여 특정 집단의 효과를 구해봅시다.\n\n3.1. ITT (Intent-To-Treat) Effects\nITT 효과는 처치 배정(\\(Z\\))이 결과(\\(Y\\))에 미치는 인과적 효과입니다. 개인의 순응 유형(\\(S\\))은 \\(Z\\)에 따라 변하지 않는 ’Baseline Characteristic’으로 간주할 수 있습니다.\n각 유형 \\(s \\in \\{c, n, a, d\\}\\)에 대한 ITT 효과는 다음과 같습니다. \\[ITT_s = \\mathbb{E}[Y_i(1) - Y_i(0) | \\text{Type } = s]\\]\n전체 모집단에 대한 Global ITT는 각 유형별 ITT의 가중 평균으로 표현됩니다. \\[ITT = \\pi_c ITT_c + \\pi_n ITT_n + \\pi_a ITT_a + \\pi_d ITT_d\\] (여기서 \\(\\pi_s\\)는 각 유형의 구성 비율입니다.)\n\n\n3.2. 식별을 위한 가정 (Assumptions)\n비모수적 식별(Nonparametric Identification)을 위해 다음 3가지 핵심 가정이 필요합니다.\nAssumption 1: Random Assignment (무작위 배정) \\[\\{Y_i(0), Y_i(1), X_i(0), X_i(1)\\} \\perp Z_i\\] 도구변수 \\(Z\\)가 잠재적 결과들과 독립이라는 가정입니다.\nAssumption 2: Strong Monotonicity (강한 단조성) 1. No Defiers: \\(X_i(1) \\ge X_i(0)\\) (모든 \\(i\\)에 대해). 즉, 배정을 받았을 때 처치를 받을 확률이 배정을 안 받았을 때보다 작아지지는 않는다는 것입니다. 이 가정에 의해 \\(\\pi_d = 0\\)이 됩니다. 2. Existence of Compliers: \\(0 &lt; P(X_i=1 | Z_i=1) &lt; 1\\). Complier가 존재해야 합니다.\nAssumption 3: Exclusion Restriction (ER) for Noncompliers 불순응자(Never-taker, Always-taker)에게는 배정(\\(Z\\)) 자체가 결과(\\(Y\\))에 영향을 주지 않아야 합니다. 이들은 어차피 \\(Z\\)와 상관없이 동일한 \\(X\\)를 선택하기 때문입니다. \\[Y_i(1) = Y_i(0) \\quad \\text{for } X_i \\in \\{n, a\\}\\] 따라서, \\(ITT_n = 0\\), \\(ITT_a = 0\\) 입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#cace-late-유도-derivation",
-    "href": "posts/causal-inference-13-part-02/index.html#cace-late-유도-derivation",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "4. CACE / LATE 유도 (Derivation)",
-    "text": "4. CACE / LATE 유도 (Derivation)\n위의 가정들을 \\(ITT\\) 분해 식에 대입하여 Complier Average Causal Effect (CACE)를 유도해 봅시다.\n\n4.1. 유도 과정\n원래 식: \\[ITT = \\pi_c ITT_c + \\pi_n ITT_n + \\pi_a ITT_a + \\pi_d ITT_d\\]\n\nMonotonicity 가정 적용: Defier가 없으므로 \\(\\pi_d = 0\\). \\[\\Rightarrow ITT = \\pi_c ITT_c + \\pi_n ITT_n + \\pi_a ITT_a\\]\nExclusion Restriction 가정 적용: Noncomplier의 ITT는 0이므로 \\(ITT_n = 0, ITT_a = 0\\). \\[\\Rightarrow ITT = \\pi_c ITT_c\\]\n\n결국 전체 ITT 효과는 “Complier의 비율(\\(\\pi_c\\)) \\(\\times\\) Complier의 ITT 효과(\\(ITT_c\\))”가 됩니다. 이를 \\(ITT_c\\)에 대해 정리하면 다음과 같습니다.\n\\[ITT_c = \\frac{ITT}{\\pi_c}\\]\n이때, Complier에게는 \\(Z=X\\)이므로, \\(ITT_c\\)는 곧 Complier가 처치를 받았을 때의 인과 효과인 CACE가 됩니다.\n\n\n4.2. Complier 비율 (\\(\\pi_c\\)) 추정\n관측된 데이터로 \\(\\pi_c\\)를 어떻게 구할까요? \\[\n\\begin{aligned}\n\\mathbb{E}[X_i | Z_i = 1] &= \\pi_c \\cdot 1 + \\pi_a \\cdot 1 + \\pi_n \\cdot 0 \\quad (\\text{Complier & Always-taker}) \\\\\n\\mathbb{E}[X_i | Z_i = 0] &= \\pi_c \\cdot 0 + \\pi_a \\cdot 1 + \\pi_n \\cdot 0 \\quad (\\text{Always-taker only})\n\\end{aligned}\n\\] 두 식을 빼면: \\[\\mathbb{E}[X_i | Z_i = 1] - \\mathbb{E}[X_i | Z_i = 0] = \\pi_c\\] 이것은 \\(Z\\)가 \\(X\\)에 미치는 ITT 효과(\\(ITT_X\\))와 같습니다.\n\n\n4.3. CACE / LATE 공식\n최종적으로 CACE는 다음과 같이 두 ITT의 비율로 표현됩니다.\n\\[CACE \\equiv \\mathbb{E}[Y_i(1) - Y_i(0) | X_i = c] = \\frac{ITT_Y}{ITT_X} = \\frac{\\mathbb{E}[Y|Z=1] - \\mathbb{E}[Y|Z=0]}{\\mathbb{E}[X|Z=1] - \\mathbb{E}[X|Z=0]}\\]\n이는 Imbens and Angrist (1994)에서 제시한 LATE (Local Average Treatment Effect)와 동일한 개념입니다. “Local”인 이유는 전체 모집단이 아닌 Complier라는 특정 하위 집단에 대한 효과이기 때문입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#추정량-estimators",
-    "href": "posts/causal-inference-13-part-02/index.html#추정량-estimators",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "5. 추정량 (Estimators)",
-    "text": "5. 추정량 (Estimators)\n\n5.1. One-sided Noncompliance (단측 불순응)\n실험 설계상 통제 집단(\\(Z=0\\))은 절대 처치를 받을 수 없는 경우(예: 신약 임상시험)입니다. 즉, Always-taker가 없습니다(\\(X_i(0)=0\\)). 이 경우 \\(\\sum X_i(1-Z_i) = 0\\) 이 되며 공식은 조금 더 단순해집니다.\n\\[\\widehat{CACE} = \\frac{\\frac{\\sum Y_i Z_i}{\\sum Z_i} - \\frac{\\sum Y_i (1-Z_i)}{\\sum (1-Z_i)}}{\\frac{\\sum X_i Z_i}{\\sum Z_i}}\\] (분모는 처치 집단 중 실제로 처치를 받은 사람의 비율)\n\n\n5.2. Two-sided Noncompliance (양측 불순응)\n일반적인 경우(Wald Estimator 형태)입니다.\n\\[\\widehat{CACE} = \\frac{\\widehat{E}[Y|Z=1] - \\widehat{E}[Y|Z=0]}{\\widehat{E}[X|Z=1] - \\widehat{E}[X|Z=0]}\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#결론-및-토의-discussion",
-    "href": "posts/causal-inference-13-part-02/index.html#결론-및-토의-discussion",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "6. 결론 및 토의 (Discussion)",
-    "text": "6. 결론 및 토의 (Discussion)\n전통적인 선형 모형과 비교했을 때, Potential Outcome 프레임워크를 이용한 IV 접근법의 특징은 다음과 같습니다.\n\nConstant Treatment Effect 가정 제거: 모든 사람에게 처치 효과가 동일하다는 비현실적인 가정을 하지 않습니다.\nMonotonicity 가정 도입: 대신 단조성이라는 약한 가정을 도입합니다.\n해석의 명확성: 우리가 구한 효과가 전체 인구에 대한 효과(ATE)가 아니라, 도구변수에 반응하여 행동을 바꾼 Complier 집단에 국한된 효과(LATE)임을 명확히 합니다.\n\n\nTip: 만약 Constant Treatment Effect가 성립한다면, LATE는 ATE와 같아집니다. 하지만 현실에서는 Complier에 대한 효과(\\(ITT_c\\))가 전체 평균(\\(ITT\\))보다 큰 경우가 많습니다 (\\(0 &lt; \\pi_c &lt; 1\\) 이므로 \\(ITT &lt; ITT_c\\)). 즉, \\(ITT\\)는 처치 효과를 보수적으로 추정한 값으로 볼 수 있습니다.\n\n\nReferences: * Imbens, G. W., & Angrist, J. D. (1994). Identification and Estimation of Local Average Treatment Effects. Econometrica. * Angrist, J. D., Imbens, G. W., & Rubin, D. B. (1996). Identification of Causal Effects Using Instrumental Variables. Journal of the American Statistical Association."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#순응-유형-compliance-types",
-    "href": "posts/causal-inference-13-part-02/index.html#순응-유형-compliance-types",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "2.2. 순응 유형 (Compliance Types)",
-    "text": "2.2. 순응 유형 (Compliance Types)\n\n사람들이 처치 배정(\\(Z\\))에 어떻게 반응하여 실제 처치(\\(X\\))를 받는지에 따라 4가지 잠재적 집단(Latent Subgroups)으로 나눌 수 있습니다.\n이를 \\(X_i(0)\\)와 \\(X_i(1)\\)의 조합으로 정의합니다.\n\n\n\n\n\n\n\n\n\n\nType\n\\(X_i(0)\\)\n\\(X_i(1)\\)\nDescription\n\n\n\n\nNever-taker\n0\n0\n배정을 받든 안 받든 처치를 받지 않음\n\n\nComplier\n0\n1\n배정받으면 처치 받고, 안 받으면 안 받음 (순응자)\n\n\nDefier\n1\n0\n배정과 반대로 행동함 (청개구리)\n\n\nAlways-taker\n1\n1\n배정을 받든 안 받든 항상 처치를 받음\n\n\n\n\nNote: 우리는 각 개인의 진짜 Type(\\(S\\))을 완벽하게 알 수 없습니다. 예를 들어 관측된 데이터에서 \\(Z=1, X=1\\)인 사람은 ’Complier’일 수도 있고 ’Always-taker’일 수도 있습니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#itt-intent-to-treat-effects",
-    "href": "posts/causal-inference-13-part-02/index.html#itt-intent-to-treat-effects",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "3.1. ITT (Intent-To-Treat) Effects",
-    "text": "3.1. ITT (Intent-To-Treat) Effects\n\nITT 효과는 처치 배정(\\(Z\\))이 결과(\\(Y\\))에 미치는 인과적 효과입니다.\n개인의 순응 유형(\\(S\\))은 \\(Z\\)에 따라 변하지 않는 ’Baseline Characteristic’으로 간주할 수 있습니다.\n각 유형 \\(s \\in \\{c, n, a, d\\}\\)에 대한 ITT 효과는 다음과 같습니다. \\[ITT_s = \\mathbb{E}[Y_i(1) - Y_i(0) | S_i = s]\\]\n전체 모집단에 대한 Global ITT는 각 유형별 ITT의 가중 평균으로 표현됩니다.\n\n\\[\n\\begin{aligned}\nITT &= \\mathbb{E_s}[\\mathbb{E}[Y_i(1) - Y_i(0) | S_i = s]] \\\\\n&= \\pi_c ITT_c + \\pi_n ITT_n + \\pi_a ITT_a + \\pi_d ITT_d\n\\end{aligned}\n\\] * 여기서 \\(\\pi_s\\)는 각 유형의 구성 비율입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#식별을-위한-가정-assumptions",
-    "href": "posts/causal-inference-13-part-02/index.html#식별을-위한-가정-assumptions",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "3.2. 식별을 위한 가정 (Assumptions)",
-    "text": "3.2. 식별을 위한 가정 (Assumptions)\n\n비모수적 식별(Nonparametric Identification)을 위해 다음 3가지 핵심 가정이 필요합니다.\nAssumption 1: Random Assignment (무작위 배정) \\[\\{Y_i(0), Y_i(1), X_i(0), X_i(1)\\} \\perp Z_i\\]\n\n도구변수 \\(Z\\)가 잠재적 결과들과 독립이라는 가정입니다.\n\nAssumption 2: Strong Monotonicity (강한 단조성)\n\n\nNo Defiers:\n\n\n모든 \\(i\\)에 대해 \\(X_i(1) \\ge X_i(0)\\)\n우리의 예시에서는 \\(Z, X \\in \\{0, 1\\}\\) 이므로, \\(X_i(1) = 1 \\ge X_i(0) = 0\\)\n즉, 배정을 받았을 때 처치를 받을 확률이 배정을 안 받았을 때보다 작아지지는 않는다는 것입니다.\n이 가정에 의해 \\(\\pi_d = 0\\)이 됩니다.\n\n\nExistence of Compliers:\n\n\n\\(0 &lt; P(X_i=1 | Z_i=1) &lt; 1\\)\nComplier가 존재해야 합니다.\n\n\nAssumption 3: Exclusion Restriction (ER) for Noncompliers\n\n불순응자(Never-taker, Always-taker)에게는 배정(\\(Z\\)) 자체가 결과(\\(Y\\))에 영향을 주지 않아야 합니다.\n이들은 어차피 \\(Z\\)와 상관없이 동일한 \\(X\\)를 선택하기 때문입니다. \\[Y_i(1) = Y_i(0) \\quad \\text{for } S_i \\in \\{n, a\\}\\]\n\n따라서, \\(ITT_n = 0\\), \\(ITT_a = 0\\) 입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#유도-과정",
-    "href": "posts/causal-inference-13-part-02/index.html#유도-과정",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "4.1. 유도 과정",
-    "text": "4.1. 유도 과정\n\n원래 식: \\[ITT = \\pi_c ITT_c + \\pi_n ITT_n + \\pi_a ITT_a + \\pi_d ITT_d\\]\n\n\nMonotonicity 가정 적용: Defier가 없으므로 \\(\\pi_d = 0\\). \\[\\Rightarrow ITT = \\pi_c ITT_c + \\pi_n ITT_n + \\pi_a ITT_a\\]\nExclusion Restriction 가정 적용: Noncomplier의 ITT는 0이므로 \\(ITT_n = 0, ITT_a = 0\\). \\[\\Rightarrow ITT = \\pi_c ITT_c\\]\n\n\n결국 전체 ITT 효과는 Complier의 비율(\\(\\pi_c\\)) \\(\\times\\) Complier의 ITT 효과(\\(ITT_c\\))가 됩니다.\n이를 \\(ITT_c\\)에 대해 정리하면 다음과 같습니다.\n\n\\[ITT_c = \\frac{ITT}{\\pi_c}\\]\n\n이때, Complier에게는 \\(Z=X\\)이므로, \\(ITT_c\\)는 곧 Complier가 처치를 받았을 때의 인과 효과인 CACE가 됩니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#complier-비율-pi_c-추정",
-    "href": "posts/causal-inference-13-part-02/index.html#complier-비율-pi_c-추정",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "4.2. Complier 비율 (\\(\\pi_c\\)) 추정",
-    "text": "4.2. Complier 비율 (\\(\\pi_c\\)) 추정\n\n관측된 데이터로 \\(\\pi_c\\)를 어떻게 구할까요?\n\n\\[\n\\begin{aligned}\n\\mathbb{E}[X_i | Z_i = 1] &= \\pi_c \\cdot 1 + \\pi_a \\cdot 1 + \\pi_n \\cdot 0 \\quad (\\text{Complier \\& Always-taker}) \\\\\n\\mathbb{E}[X_i | Z_i = 0] &= \\pi_c \\cdot 0 + \\pi_a \\cdot 1 + \\pi_n \\cdot 0 \\quad (\\text{Always-taker only})\n\\end{aligned}\n\\]\n\n두 식을 빼면:\n\n\\[\\mathbb{E}[X_i | Z_i = 1] - \\mathbb{E}[X_i | Z_i = 0] = \\pi_c\\]\n\n이것은 \\(Z\\)가 \\(X\\)에 미치는 ITT 효과(\\(ITT_X\\))와 같습니다.\n\n\\[ITT_X = \\mathbb{E}[X_i(1) - X_i(0)] = \\pi_c\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#cace-late-공식",
-    "href": "posts/causal-inference-13-part-02/index.html#cace-late-공식",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "4.3. CACE / LATE 공식",
-    "text": "4.3. CACE / LATE 공식\n\n최종적으로 CACE는 다음과 같이 두 ITT의 비율로 표현됩니다.\n\n\\[CACE \\equiv \\mathbb{E}[Y_i(1) - Y_i(0) | S_i = c] = \\frac{ITT_Y}{ITT_X} = \\frac{\\mathbb{E}[Y|Z=1] - \\mathbb{E}[Y|Z=0]}{\\mathbb{E}[X|Z=1] - \\mathbb{E}[X|Z=0]}\\]\n\n이는 Imbens and Angrist (1994)에서 제시한 LATE (Local Average Treatment Effect)와 동일한 개념입니다. “Local”인 이유는 전체 모집단이 아닌 Complier라는 특정 하위 집단에 대한 효과이기 때문입니다.\n\n\n4.4. 잠재적 결과의 식별 (Identification of Potential Outcomes)\nCACE를 계산하기 위해서는 Complier 집단의 잠재적 결과 평균(\\(\\mathbb{E}[Y_i(1)|c]\\)와 \\(\\mathbb{E}[Y_i(0)|c]\\))을 알아야 합니다. 하지만 우리는 누가 Complier인지 개별적으로 알 수 없습니다.\n대신, 관측 가능한 집단(\\(Z, X\\))의 평균 결과가 어떤 잠재적 집단들의 혼합으로 이루어져 있는지 분해함으로써 이를 역추적할 수 있습니다.\n1. \\(Z=0, X=0\\) 집단 (Compliers + Never-takers) 배정을 받지 않았고 처치도 받지 않은 그룹입니다. 이들은 \\(Z=0\\)일 때 \\(X=0\\)인 Complier와 Never-taker로 구성됩니다. \\[\n\\mathbb{E}[Y_i | X_i = 0, Z_i = 0] = \\frac{\\pi_c}{\\pi_c + \\pi_n} \\cdot \\mathbb{E}[Y_i(0) | \\text{complier}] + \\frac{\\pi_n}{\\pi_c + \\pi_n} \\cdot \\mathbb{E}[Y_i(0) | \\text{never-taker}]\n\\]\n2. \\(Z=1, X=0\\) 집단 (Never-takers Only) 배정을 받았으나(\\(Z=1\\)) 처치를 받지 않은(\\(X=0\\)) 그룹입니다. Complier라면 처치를 받았을 것이므로, 이 그룹은 순수하게 Never-taker들입니다. \\[\n\\mathbb{E}[Y_i | X_i = 0, Z_i = 1] = \\mathbb{E}[Y_i(0) | \\text{never-taker}]\n\\]\n3. \\(Z=0, X=1\\) 집단 (Always-takers Only) 배정을 받지 않았는데도(\\(Z=0\\)) 처치를 받은(\\(X=1\\)) 그룹입니다. Complier라면 처치를 안 받았을 것이므로, 이 그룹은 순수하게 Always-taker들입니다. \\[\n\\mathbb{E}[Y_i | X_i = 1, Z_i = 0] = \\mathbb{E}[Y_i(1) | \\text{always-taker}]\n\\]\n4. \\(Z=1, X=1\\) 집단 (Compliers + Always-takers) 배정을 받았고 처치도 받은 그룹입니다. 이들은 \\(Z=1\\)일 때 \\(X=1\\)인 Complier와 Always-taker로 구성됩니다. \\[\n\\mathbb{E}[Y_i | X_i = 1, Z_i = 1] = \\frac{\\pi_c}{\\pi_c + \\pi_a} \\cdot \\mathbb{E}[Y_i(1) | \\text{complier}] + \\frac{\\pi_a}{\\pi_c + \\pi_a} \\cdot \\mathbb{E}[Y_i(1) | \\text{always-taker}]\n\\]\n\n결론: 위 식들을 연립하면, 관측 가능한 데이터로부터 미지수인 \\(\\mathbb{E}[Y_i(0) | \\text{complier}]\\)와 \\(\\mathbb{E}[Y_i(1) | \\text{complier}]\\)를 비모수적으로 식별(Nonparametrically Identify)할 수 있으며, 이를 통해 최종적으로 CACE를 구할 수 있습니다. # 5. 추정량 (Estimators)"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#one-sided-noncompliance-단측-불순응",
-    "href": "posts/causal-inference-13-part-02/index.html#one-sided-noncompliance-단측-불순응",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "5.1. One-sided Noncompliance (단측 불순응)",
-    "text": "5.1. One-sided Noncompliance (단측 불순응)\n\n실험 설계상 통제 집단(\\(Z=0\\))은 절대 처치를 받을 수 없는 경우(예: 신약 임상시험)입니다.\n즉, Always-taker가 없습니다(\\(X_i(0)=0\\)).\n이 경우 \\(\\sum X_i(1-Z_i) = 0\\) 이 되며 공식은 조금 더 단순해집니다.\n\n\\[\n\\begin{aligned}\n\\widehat{CACE} &= \\frac{\\widehat{E}[Y|Z=1] - \\widehat{E}[Y|Z=0]}{\\widehat{E}[X|Z=1]} \\\\\n&= \\frac{\\frac{\\sum Y_i Z_i}{\\sum Z_i} - \\frac{\\sum Y_i (1-Z_i)}{\\sum (1-Z_i)}}{\\frac{\\sum X_i Z_i}{\\sum Z_i}}\n\\end{aligned}\n\\]\n* 분모는 처치 집단 중 실제로 처치를 받은 사람의 비율"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-02/index.html#two-sided-noncompliance-양측-불순응",
-    "href": "posts/causal-inference-13-part-02/index.html#two-sided-noncompliance-양측-불순응",
-    "title": "[Causal Inference] 13. IV (Part 2)",
-    "section": "5.2. Two-sided Noncompliance (양측 불순응)",
-    "text": "5.2. Two-sided Noncompliance (양측 불순응)\n\n일반적인 경우(Wald Estimator 형태)입니다.\n\n\\[\\widehat{CACE} = \\frac{\\widehat{E}[Y|Z=1] - \\widehat{E}[Y|Z=0]}{\\widehat{E}[X|Z=1] - \\widehat{E}[X|Z=0]}\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#just-indentified-no-covariates",
-    "href": "posts/causal-inference-13-part-01/index.html#just-indentified-no-covariates",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "4.1. Just-indentified, No Covariates",
-    "text": "4.1. Just-indentified, No Covariates\n\nJust-identified 케이스 (\\(K=1\\))를 기준으로 세 가지 해석 방식을 살펴보겠습니다.\n이때 공변량(W)는 없다고 가정합니다.\n결론적으로 이 세 가지는 모두 동일한 \\(\\beta_1\\) 값을 도출합니다.\n\n\n4.1.1. 공분산의 비율 (Ratio of Covariance)\n\n가장 직관적인 IV 추정량은 \\(Y\\)와 \\(Z\\)의 공분산을 \\(X\\)와 \\(Z\\)의 공분산으로 나눈 것입니다.\n\n\\[\\hat{\\beta}_{1, iv} = \\frac{\\widehat{Cov}(Y_i, Z_i)}{\\widehat{Cov}(X_i, Z_i)} = \\frac{\\frac{1}{N}\\sum(Y_i - \\bar{Y})(Z_i - \\bar{Z})}{\\frac{1}{N}\\sum(X_i - \\bar{X})(Z_i - \\bar{Z})}\\]\n\nWald Estimator (Binary IV의 경우):\n\n만약 도구변수 \\(Z\\)가 0과 1만 가지는 이진 변수라면, 이는 Wald Estimator가 됩니다. \\[\\hat{\\beta}_{1, iv} = \\frac{\\bar{Y}_1 - \\bar{Y}_0}{\\bar{X}_1 - \\bar{X}_0}\\]\n여기서 \\(\\bar{Y}_z, \\bar{X}_z\\)는 \\(Z=z\\)인 그룹 내에서의 평균을 의미합니다.\n\n\n\n\n4.1.2. 간접 최소제곱법 (Indirect Least Squares, ILS)\n\nILS는 두 개의 축약형(Reduced form) 회귀식을 이용하는 방식입니다.\n\n\nReduced Form 1 (\\(Y\\) on \\(Z\\)): \\(Y_i = \\pi_{10} + \\pi_{11} Z_i + \\epsilon_{1i}\\)\nReduced Form 2 (\\(X\\) on \\(Z\\)): \\(X_i = \\pi_{20} + \\pi_{21} Z_i + \\epsilon_{2i}\\)\n\n\nILS 추정량은 두 회귀계수의 비율로 정의됩니다.\n\n\\[\\hat{\\beta}_{1, ils} = \\frac{\\hat{\\pi}_{11}}{\\hat{\\pi}_{21}}\\]\n\n\n4.1.3. 2단계 최소제곱법 (Two Stage Least Squares, 2SLS)\n\n가장 널리 쓰이는 직관적인 방법으로, \\(X\\)에서 내생성을 제거한 후 회귀분석을 수행하는 방식입니다.\nStage 1: 내생변수 \\(X\\)를 도구변수 \\(Z\\)로 예측합니다. (OLS 수행) \\[X_i = \\pi_0 + \\pi_1 Z_i + \\epsilon_i\\] \\[\\Longrightarrow \\hat{X}_i = \\hat{\\pi}_0 + \\hat{\\pi}_1 Z_i\\]\nStage 2: 원래의 \\(X\\) 대신 예측된 \\(\\hat{X}\\)를 사용하여 결과 모형을 추정합니다. \\[Y_i = \\pi_2 + \\pi_3 \\hat{X}_i + \\epsilon_i\\] 여기서 구해진 \\(\\hat{\\pi}_3\\)가 바로 2SLS 추정량 \\(\\hat{\\beta}_{1, 2sls}\\)입니다.\n\n\nIntuition:\n1단계를 통해 \\(X\\)의 변동 중 \\(Z\\)에 의해 설명되는 부분(즉, 오차항 \\(\\epsilon\\)과 상관없는 “unconfounded portion”)만을 추출하여 2단계에서 인과 효과를 추정하는 것입니다.\n\n\n\n4.1.4. 결론\n\n위의 세 방식에 따른 추정치는 모두 동일합니다.\n\n\\[\\hat{\\beta}_{1, iv} = \\hat{\\beta}_{1, ils} = \\hat{\\beta}_{1, 2sls}\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#just-indentified-with-covariates",
-    "href": "posts/causal-inference-13-part-01/index.html#just-indentified-with-covariates",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "4.2. Just-indentified, With Covariates",
-    "text": "4.2. Just-indentified, With Covariates\n\nJust-identified 케이스 (\\(K=1\\))를 기준으로 두 가지 해석 방식을 살펴보겠습니다.\n이때 공변량(W)을 함께 고려합니다.\n결론적으로 이 두 가지는 모두 동일한 \\(\\beta_1\\) 값을 도출합니다.\n\n\n4.2.2. 간접 최소제곱법 (Indirect Least Squares, ILS)\n\nILS는 두 개의 축약형(Reduced form) 회귀식을 이용하는 방식입니다.\n\n\nReduced Form 1 (\\(Y\\) on \\(Z\\)): \\(Y_i = \\pi_{10} + \\pi_{11} Z_i + \\pi_{12} W_i + \\epsilon_{1i}\\)\nReduced Form 2 (\\(X\\) on \\(Z\\)): \\(X_i = \\pi_{20} + \\pi_{21} Z_i + \\pi_{22} Z_i + \\epsilon_{2i}\\)\n\n\nILS 추정량은 두 회귀계수의 비율로 정의됩니다.\n\n\\[\\hat{\\beta}_{1, ils} = \\frac{\\hat{\\pi}_{11}}{\\hat{\\pi}_{21}}\\]\n\n\n4.2.2. 2단계 최소제곱법 (Two Stage Least Squares, 2SLS)\n\n가장 널리 쓰이는 직관적인 방법으로, \\(X\\)에서 내생성을 제거한 후 회귀분석을 수행하는 방식입니다.\nStage 1: 내생변수 \\(X\\)를 도구변수 \\(Z\\)로 예측합니다. (OLS 수행) \\[X_i = \\pi_0 + \\pi_1 Z_i + \\pi_2 W_i + \\epsilon_{1i}\\] \\[\\Longrightarrow \\hat{X}_i = \\hat{\\pi}_0 + \\hat{\\pi}_1 Z_i + \\hat{\\pi}_2 W_i \\]\nStage 2: 원래의 \\(X\\) 대신 예측된 \\(\\hat{X}\\)를 사용하여 결과 모형을 추정합니다. \\[Y_i = \\beta_0 + \\beta_1 \\hat{X}_i + \\beta_2 \\hat{W}_i + \\epsilon_{2i}\\] 여기서 구해진 \\(\\hat{\\beta}_1\\)이 바로 2SLS 추정량 \\(\\hat{\\beta}_{1, 2sls}\\)입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#recap-matrix-notation-for-ols-regression",
-    "href": "posts/causal-inference-13-part-01/index.html#recap-matrix-notation-for-ols-regression",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "6.1. Recap (Matrix Notation for OLS Regression)",
-    "text": "6.1. Recap (Matrix Notation for OLS Regression)\n\n6.1.1. 선형 회귀 모형의 행렬 표현\n\n먼저, 선형 회귀 모형을 행렬 형태로 정의해 봅시다. 기본 식은 다음과 같습니다.\n\n\\[\ny = X\\beta + u\n\\]\n\n여기서 각 변수가 의미하는 바를 구체적인 행렬로 풀어서 쓰면 다음과 같습니다. \\(X\\)는 \\(n \\times k\\) 행렬(matrix)입니다.\n\n\\[\ny = \\begin{pmatrix} y_1 \\\\ \\vdots \\\\ y_n \\end{pmatrix}, \\quad\nX = \\begin{pmatrix} x'_1 \\\\ \\vdots \\\\ x'_n \\end{pmatrix}\n= \\begin{pmatrix}\n1 & x_{12} & \\cdots & x_{1k} \\\\\n\\vdots & \\vdots & \\vdots & \\vdots \\\\\n1 & x_{n2} & \\cdots & x_{nk}\n\\end{pmatrix}, \\quad\nu = \\begin{pmatrix} u_1 \\\\ \\vdots \\\\ u_n \\end{pmatrix}\n\\]\n\n\n\n6.1.2. 최소자승법(OLS) 추정량\n\n우리의 목표는 오차의 제곱합을 최소화하는 \\(\\beta\\)의 추정량, 즉 \\(b\\)를 찾는 것입니다.\n이를 위해 목적 함수 \\(S(b)\\)를 다음과 같이 정의합니다.\n이는 관측값(\\(y\\))과 예측값(\\(Xb\\)) 차이의 제곱합입니다.\n\n\\[\nS(b) = (y - Xb)'(y - Xb)\n\\]\n\nOLS 추정량 \\(\\hat{\\beta}\\)는 이 \\(S(b)\\)를 최소화하는 값입니다.\n\n\\[\n\\hat{\\beta} = \\underset{b \\in \\mathbb{R}^k}{\\arg \\min} \\, S(b) = (X'X)^{-1}X'y\n\\]\n\n\n6.1.3. 유도 과정 (Derivation)\n\n\\(S(b)\\)를 최소화하기 위해 \\(b\\)에 대해 미분을 수행합니다.\n\n\n1단계: 1계 조건 (First Order Condition, FOC)\n\n목적 함수를 \\(b\\)로 미분했을 때 0이 되어야 합니다.\n행렬 미분 공식을 적용하면 다음과 같습니다.\n\n\\[\n\\begin{aligned}\n\\text{FOC : } \\quad \\frac{\\partial S(b)}{\\partial b} &= -2X'y + 2X'Xb \\\\\n&= -2X'(y - Xb) = 0\n\\end{aligned}\n\\]\n\n\n2단계: 정규 방정식 (Normal Equation)과 해 구하기\n\n1계 조건(FOC)에 따라, 최적의 추정량 \\(\\hat{\\beta}\\)는 다음의 정규 방정식(Normal Equation)을 만족해야 합니다.\n\n\\[\nX'(y - X\\hat{\\beta}) = 0\n\\]\n\n이 식을 \\(\\hat{\\beta}\\)에 대해 정리해 봅시다.\n\\(X\\)가 Full Rank를 가진다고 가정하면, 역행렬이 존재하므로 유일한 해(unique solution)를 구할 수 있습니다.\n\n\\[\n\\begin{aligned}\nX'y - X'X\\hat{\\beta} &= 0 \\\\\nX'X\\hat{\\beta} &= X'y \\\\\n\\therefore \\quad \\hat{\\beta} &= (X'X)^{-1}X'y\n\\end{aligned}\n\\]\n\n\n\n6.1.4 기하학적 해석 (Geometric Interpretation)\n\n행렬 \\(X\\)를 열 벡터(column vector)들의 집합으로 생각해보겠습니다.\n\n\\[\nX = (x_1, ..., x_k)\n\\]\n\n여기서 \\(x_i\\)는 \\(X\\)의 \\(i\\)번째 열 벡터를 의미합니다.\n이때 종속변수 벡터 \\(y\\)와 설명변수 벡터들 \\(x_1, ..., x_k\\)는 모두 \\(n\\)차원 유클리드 공간 \\(\\mathbb{R}^n\\) 상의 점(혹은 벡터)들입니다.\n\n\n1. Range Space (열공간)의 정의\n\n\\(X\\)의 Range Space (또는 Column Space, 열공간)인 \\(\\mathcal{R}(X)\\)는 다음과 같이 정의됩니다.\n\n\\[\n\\begin{aligned}\n\\mathcal{R}(X) &= \\{ c \\in \\mathbb{R}^n : c = Xb \\text{ for } b \\in \\mathbb{R}^k \\} \\\\\n&= \\{ c \\in \\mathbb{R}^n : c = x_1b_1 + \\cdots + x_kb_k, \\quad b = (b_1, ..., b_k)' \\in \\mathbb{R}^k \\}\n\\end{aligned}\n\\]\n\n즉, \\(\\mathcal{R}(X)\\)는 \\(X\\)의 열 벡터(\\(x_1, ..., x_k\\))들의 선형 결합(linear combination)으로 만들 수 있는 모든 가능한 벡터들의 집합을 의미합니다.\n수학적으로는 \\(X\\)의 열들에 의해 생성(span)된 \\(\\mathbb{R}^n\\)의 선형 부분공간(linear subspace)입니다.\n\n\n\n2. 회귀분석(Regression)에서의 의미\n\n이 기하학적 정의는 회귀분석의 목표를 명확하게 보여줍니다.\n우리가 구하고자 하는 예측값 \\(\\hat{y} = Xb\\)는 정의상 반드시 \\(\\mathcal{R}(X)\\) 안에 존재해야 합니다.\n하지만 실제 관측값 \\(y\\)는 오차(error) 때문에 일반적으로 \\(\\mathcal{R}(X)\\) 바깥에 위치합니다.\n따라서 회귀분석(Regression Problem)은 기하학적으로 다음과 같이 해석됩니다:\n\n\n“\\(\\mathcal{R}(X)\\) 공간 안에 있는 수많은 점들 중에서, 실제 데이터 \\(y\\)와 가장 가까운 점(closest point)을 찾는 과정”\n\n\n이 ’가장 가까운 점’을 찾기 위해 우리는 수직 투영(Orthogonal Projection)을 사용하게 되며, 이것이 바로 최소자승법(OLS)의 원리입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#유도-과정-derivation",
-    "href": "posts/causal-inference-13-part-01/index.html#유도-과정-derivation",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "3. 유도 과정 (Derivation)",
-    "text": "3. 유도 과정 (Derivation)\n\n\\(S(b)\\)를 최소화하기 위해 \\(b\\)에 대해 미분을 수행합니다.\n\n\n1단계: 1계 조건 (First Order Condition, FOC)\n\n목적 함수를 \\(b\\)로 미분했을 때 0이 되어야 합니다.\n행렬 미분 공식을 적용하면 다음과 같습니다.\n\n\\[\n\\begin{aligned}\n\\text{FOC : } \\quad \\frac{\\partial S(b)}{\\partial b} &= -2X'y + 2X'Xb \\\\\n&= -2X'(y - Xb) = 0\n\\end{aligned}\n\\]\n\n\n2단계: 정규 방정식 (Normal Equation)과 해 구하기\n\n1계 조건(FOC)에 따라, 최적의 추정량 \\(\\hat{\\beta}\\)는 다음의 정규 방정식(Normal Equation)을 만족해야 합니다.\n\n\\[\nX'(y - X\\hat{\\beta}) = 0\n\\]\n\n이 식을 \\(\\hat{\\beta}\\)에 대해 정리해 봅시다.\n\\(X\\)가 Full Rank를 가진다고 가정하면, 역행렬이 존재하므로 유일한 해(unique solution)를 구할 수 있습니다.\n\n\\[\n\\begin{aligned}\nX'y - X'X\\hat{\\beta} &= 0 \\\\\nX'X\\hat{\\beta} &= X'y \\\\\n\\therefore \\quad \\hat{\\beta} &= (X'X)^{-1}X'y\n\\end{aligned}\n\\]\n\n\n2SLS 추정량 \\(\\hat{\\Gamma}_{2SLS}\\)는 다음과 같이 표현됩니다.\n\n\\[\\hat{\\Gamma}_{2SLS} = ([X W]' P_Z [X W])^{-1} [X W]' P_Z Y\\]\n\n여기서 \\(P_Z\\)는 도구변수 \\(Z\\) (정확히는 \\([Z, W]\\))에 의한 사영 행렬(Projection Matrix, or Hat Matrix)입니다. 슬라이드에서는 이를 \\(M\\)이라고 표기하기도 했습니다.\n\n\\[P_Z = [Z W] ([Z W]' [Z W])^{-1} [Z W]'\\]\n\n이 수식은 First Stage에서 구한 예측값 \\(\\hat{X}\\)를 사용하여 OLS를 돌리는 것과 수학적으로 동치입니다.\n\n\\[\\hat{\\Gamma}_{2SLS} \\equiv (W' P_Z W)^{-1} W' P_Z Y\\] (여기서 \\(W\\)는 회귀식의 모든 설명변수 행렬)\n\n이 행렬식은 복잡해 보이지만, 핵심은 “내생변수 \\(X\\)를 외생적인 도구변수 \\(Z\\)로 설명되는 부분으로 대체하여 편향을 제거한다”는 2SLS의 철학을 수학적으로 엄밀하게 표현한 것입니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#estimating-2sls-models",
-    "href": "posts/causal-inference-13-part-01/index.html#estimating-2sls-models",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "6.2. Estimating 2SLS Models",
-    "text": "6.2. Estimating 2SLS Models\n\n1. 모형 설정 및 변수 정의\n\n2SLS(Two-Stage Least Squares) 모형을 추정하기 위해 변수들을 다음과 같이 정의합니다.\n\\(\\mathbf{y}\\): 종속 변수 벡터 (\\(n \\times 1\\))\n\\(\\mathbf{X}\\): 내생 변수(Endogenous variables) 행렬 (\\(n \\times k_1\\))\n\\(\\mathbf{W}\\): 외생 변수(Exogenous regressors) 행렬 (\\(n \\times k_2\\))\n\\(\\mathbf{Z}\\): 도구 변수(Instruments) 행렬. 여기에는 외생 변수 \\(\\mathbf{W}\\)가 포함됩니다. (\\(\\mathbf{Z} = [\\mathbf{Z}_1 \\; \\mathbf{W}]\\))\n우리의 목표는 아래의 2SLS 추정량을 유도하는 것입니다.\n\n\\[\n\\hat{\\Gamma}_{2SLS} = \\left( [\\hat{\\mathbf{X}}\\; \\mathbf{W}]' [\\hat{\\mathbf{X}}\\; \\mathbf{W}] \\right)^{-1} [\\hat{\\mathbf{X}}\\; \\mathbf{W}]' \\mathbf{y}\n\\]\n\n여기서 \\([\\hat{\\mathbf{X}}\\; \\mathbf{W}]\\)는 1단계 회귀분석을 통해 예측된 내생변수 \\(\\hat{\\mathbf{X}}\\)와 기존의 외생변수 \\(\\mathbf{W}\\)를 합친 새로운 설명변수 행렬 (\\(n \\times (k_1 + k_2)\\))입니다.\n이를 원소별로 풀어서 쓰면 다음과 같습니다. \\[\n[\\hat{\\mathbf{X}}\\; \\mathbf{W}] =\n\\begin{pmatrix}\n\\hat{x}_{1,1} & \\cdots & \\hat{x}_{1,k_1} & w_{1,1} & \\cdots & w_{1,k_2} \\\\\n\\vdots & \\ddots & \\vdots & \\vdots & \\ddots & \\vdots \\\\\n\\hat{x}_{n,1} & \\cdots & \\hat{x}_{n,k_1} & w_{n,1} & \\cdots & w_{n,k_2}\n\\end{pmatrix}\n\\]\n\n좌측 블록(\\(\\hat{\\mathbf{X}}\\))은 도구변수(\\(\\mathbf{Z}\\))로 예측된 값들로 구성되어 있고, 우측 블록(\\(\\mathbf{W}\\))은 원래의 외생변수 값들이 그대로 들어갑니다.\n\n\n\n\n\n2. 사영 행렬(Projection Matrix) \\(P_Z\\) 의 도입\n\n도구변수 \\(\\mathbf{Z}\\)에 의한 사영 행렬(Projection Matrix)을 \\(P_Z\\)라고 표기하겠습니다.\n\n\\[\nP_Z = \\mathbf{Z}(\\mathbf{Z}'\\mathbf{Z})^{-1}\\mathbf{Z}'\n\\]\n\n이 행렬 \\(P_Z\\)은 다음과 같은 매우 중요한 두 가지 성질을 가집니다.\n\n\n대칭성 (Symmetric): \\(P_Z' = P_Z\\)\n\n\n멱등성 (Idempotent): \\(P_ZP_Z = P_Z\\)"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#사영-행렬projection-matrix-mathbfm-의-도입",
-    "href": "posts/causal-inference-13-part-01/index.html#사영-행렬projection-matrix-mathbfm-의-도입",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "2. 사영 행렬(Projection Matrix) \\(\\mathbf{M}\\) 의 도입",
-    "text": "2. 사영 행렬(Projection Matrix) \\(\\mathbf{M}\\) 의 도입\n슬라이드에서는 도구변수 \\(\\mathbf{Z}\\)에 의한 사영 행렬(Hat Matrix)을 \\(\\mathbf{M}\\)으로 표기하고 있습니다. (통상적으로 \\(P_Z\\)라고도 씁니다.)\n\\[\n\\mathbf{M} = \\mathbf{Z}(\\mathbf{Z}'\\mathbf{Z})^{-1}\\mathbf{Z}'\n\\]\n이 행렬 \\(\\mathbf{M}\\)은 다음과 같은 매우 중요한 두 가지 성질을 가집니다.\n\n대칭성 (Symmetric): \\(\\mathbf{M}' = \\mathbf{M}\\)\n멱등성 (Idempotent): \\(\\mathbf{M}\\mathbf{M} = \\mathbf{M}\\)\n\n또한, \\(\\mathbf{W}\\)는 도구변수 집합 \\(\\mathbf{Z}\\)의 일부이므로, \\(\\mathbf{W}\\)를 \\(\\mathbf{Z}\\) 공간에 투영해도 자기 자신이 나옵니다. \\[\n\\mathbf{M}\\mathbf{W} = \\mathbf{W}\n\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#a-부분의-유도-행렬의-곱",
-    "href": "posts/causal-inference-13-part-01/index.html#a-부분의-유도-행렬의-곱",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "3. A 부분의 유도 (행렬의 곱)",
-    "text": "3. A 부분의 유도 (행렬의 곱)\n\n추정량의 앞부분인 역행렬 내부, 즉 \\(A = [\\hat{\\mathbf{X}}\\; \\mathbf{W}]' [\\hat{\\mathbf{X}}\\; \\mathbf{W}]\\)를 정리해 봅시다.\n도구변수 \\(\\mathbf{Z}\\)에 의한 사영 행렬(Projection Matrix)을 \\(P_Z\\)라고 합시다. (\\(P_Z = \\mathbf{Z}(\\mathbf{Z}'\\mathbf{Z})^{-1}\\mathbf{Z}'\\))\n1단계 예측값 \\(\\hat{\\mathbf{X}}\\)는 \\(\\mathbf{X}\\)를 투영한 것이므로 \\(\\hat{\\mathbf{X}} = P_Z\\mathbf{X}\\)입니다.\n외생변수 \\(\\mathbf{W}\\)는 도구변수 \\(\\mathbf{Z}\\)에 포함되므로 투영해도 자신이 됩니다. 즉, \\(P_Z\\mathbf{W} = \\mathbf{W}\\)입니다.\n따라서 전체 설명변수 행렬은 \\(P_Z\\)를 묶어 다음과 같이 쓸 수 있습니다.\n\n\\[\n\\begin{aligned} \\\\\n[\\hat{\\mathbf{X}} \\quad \\mathbf{W}] &= [P_Z\\mathbf{X} \\quad P_Z\\mathbf{W}] \\\\\n&= P_Z [\\mathbf{X} \\quad \\mathbf{W}]\n\\end{aligned}\n\\]\n\n이제 편의상 전체 설명변수 행렬을 \\(\\mathbf{R} = [\\mathbf{X} \\quad \\mathbf{W}]\\)라 정의하고 \\(A\\)를 전개합니다.\n\n\\[\n\\begin{aligned}\nA &= (P_Z\\mathbf{R})' (P_Z\\mathbf{R}) \\\\\n&= \\mathbf{R}' P_Z' P_Z \\mathbf{R} \\\\\n&= \\mathbf{R}' P_Z P_Z \\mathbf{R} \\quad (\\because P_Z' = P_Z) \\\\\n&= \\mathbf{R}' P_Z \\mathbf{R} \\quad (\\because P_Z P_Z = P_Z)\n\\end{aligned}\n\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#b-부분의-유도-y와의-곱",
-    "href": "posts/causal-inference-13-part-01/index.html#b-부분의-유도-y와의-곱",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "4. B 부분의 유도 (\\(y\\)와의 곱)",
-    "text": "4. B 부분의 유도 (\\(y\\)와의 곱)\n\n추정량의 뒷부분인 \\(B = [\\hat{\\mathbf{X}}\\; \\mathbf{W}]' \\mathbf{y}\\) 도 동일한 방식으로 전개합니다.\n\n\\[\n\\begin{aligned}\nB &= (P_Z\\mathbf{R})' \\mathbf{y} \\\\\n&= \\mathbf{R}' P_Z' \\mathbf{y} \\\\\n&= \\mathbf{R}' P_Z \\mathbf{y} \\quad (\\because P_Z' = P_Z)\n\\end{aligned}\n\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#최종-결과-2sls-추정량",
-    "href": "posts/causal-inference-13-part-01/index.html#최종-결과-2sls-추정량",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "5. 최종 결과: 2SLS 추정량",
-    "text": "5. 최종 결과: 2SLS 추정량\n\n위의 \\(A\\)와 \\(B\\) 결과를 합치면 다음과 같습니다.\n\n\\[\n\\begin{aligned}\n\\hat{\\Gamma}_{2SLS} &= A^{-1} B \\\\\n&= (\\mathbf{R}' P_Z \\mathbf{R})^{-1} \\mathbf{R}' P_Z \\mathbf{y}\n\\end{aligned}\n\\]\n\n이 식은 “원래의 변수 행렬(\\(\\mathbf{R}\\) 혹은 \\(\\mathbf{W}_{all}\\))을 도구변수 공간에 투영(\\(P_Z\\))시킨 뒤, 그 투영된 변수들을 사용하여 OLS를 수행하는 것”과 수학적으로 동일함을 보여줍니다."
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#사영-행렬projection-matrix-p_z-의-도입",
-    "href": "posts/causal-inference-13-part-01/index.html#사영-행렬projection-matrix-p_z-의-도입",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "2. 사영 행렬(Projection Matrix) \\(P_Z\\) 의 도입",
-    "text": "2. 사영 행렬(Projection Matrix) \\(P_Z\\) 의 도입\n\n도구변수 \\(\\mathbf{Z}\\)에 의한 사영 행렬(Projection Matrix)을 \\(P_Z\\)라고 표기하겠습니다.\n\n\\[\nP_Z = \\mathbf{Z}(\\mathbf{Z}'\\mathbf{Z})^{-1}\\mathbf{Z}'\n\\]\n\n이 행렬 \\(P_Z\\)은 다음과 같은 매우 중요한 두 가지 성질을 가집니다.\n\n\n대칭성 (Symmetric): \\(P_Z' = P_Z\\)\n\n\n멱등성 (Idempotent): \\(P_ZP_Z = P_Z\\)\n\n\n또한, \\(\\mathbf{W}\\)는 도구변수 집합 \\(\\mathbf{Z}\\)의 일부이므로, \\(W \\subset Z\\)\n\\(\\mathbf{W}\\)를 \\(\\mathbf{Z}\\) 공간에 투영해도 자기 자신이 나옵니다, \\(R(W) \\subset R(Z)\\) \\[\nP_Z\\mathbf{W} = \\mathbf{W}\n\\]"
-  },
-  {
-    "objectID": "posts/causal-inference-13-part-01/index.html#기하학적-해석-geometric-interpretation",
-    "href": "posts/causal-inference-13-part-01/index.html#기하학적-해석-geometric-interpretation",
-    "title": "[Causal Inference] 13. IV (Part 1)",
-    "section": "6.1.4 기하학적 해석 (Geometric Interpretation)",
-    "text": "6.1.4 기하학적 해석 (Geometric Interpretation)\n\n행렬 \\(X\\)를 열 벡터(column vector)들의 집합으로 생각해보겠습니다.\n\n\\[\nX = (x_1, ..., x_k)\n\\]\n\n여기서 \\(x_i\\)는 \\(X\\)의 \\(i\\)번째 열 벡터를 의미합니다.\n이때 종속변수 벡터 \\(y\\)와 설명변수 벡터들 \\(x_1, ..., x_k\\)는 모두 \\(n\\)차원 유클리드 공간 \\(\\mathbb{R}^n\\) 상의 점(혹은 벡터)들입니다.\n\n\n1. Range Space (열공간)의 정의\n\n\\(X\\)의 Range Space (또는 Column Space, 열공간)인 \\(\\mathcal{R}(X)\\)는 다음과 같이 정의됩니다.\n\n\\[\n\\begin{aligned}\n\\mathcal{R}(X) &= \\{ c \\in \\mathbb{R}^n : c = Xb \\text{ for } b \\in \\mathbb{R}^k \\} \\\\\n&= \\{ c \\in \\mathbb{R}^n : c = x_1b_1 + \\cdots + x_kb_k, \\quad b = (b_1, ..., b_k)' \\in \\mathbb{R}^k \\}\n\\end{aligned}\n\\]\n\n즉, \\(\\mathcal{R}(X)\\)는 \\(X\\)의 열 벡터(\\(x_1, ..., x_k\\))들의 선형 결합(linear combination)으로 만들 수 있는 모든 가능한 벡터들의 집합을 의미합니다.\n수학적으로는 \\(X\\)의 열들에 의해 생성(span)된 \\(\\mathbb{R}^n\\)의 선형 부분공간(linear subspace)입니다.\n\n\n\n2. 회귀분석(Regression)에서의 의미\n\n이 기하학적 정의는 회귀분석의 목표를 명확하게 보여줍니다.\n우리가 구하고자 하는 예측값 \\(\\hat{y} = Xb\\)는 정의상 반드시 \\(\\mathcal{R}(X)\\) 안에 존재해야 합니다.\n하지만 실제 관측값 \\(y\\)는 오차(error) 때문에 일반적으로 \\(\\mathcal{R}(X)\\) 바깥에 위치합니다.\n따라서 회귀분석(Regression Problem)은 기하학적으로 다음과 같이 해석됩니다:\n\n\n“\\(\\mathcal{R}(X)\\) 공간 안에 있는 수많은 점들 중에서, 실제 데이터 \\(y\\)와 가장 가까운 점(closest point)을 찾는 과정”\n\n\n이 ’가장 가까운 점’을 찾기 위해 우리는 수직 투영(Orthogonal Projection)을 사용하게 되며, 이것이 바로 최소자승법(OLS)의 원리입니다."
+    "text": "[Causal Inference] 13. IV (Part 2)\n\n\n\nCausal Inference\n\n\n\nRandom Experiment wiht Noncompliance\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 1)\n\n\n\nCausal Inference\n\n\n\nIV under Linear Assumption\n\n\n\n\n\nJan 15, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 8. Partial Identification (Part 4)\n\n\n\nCausal Inference\n\n\n\nNon-Compliance Simulation\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 8. Partial Identification (Part 3)\n\n\n\nCausal Inference\n\n\n\nBounds on Partially-observed Covariates\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 8. Partial Identification (Part 2)\n\n\n\nCausal Inference\n\n\n\nPartial Identification Problem: Non-Compliance\n\n\n\n\n\nJan 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 8. Partial Identification (Part 1)\n\n\n\nCausal Inference\n\n\n\nPartial Identification Problem: Natural Bounds\n\n\n\n\n\nJan 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 5)\n\n\n\nCausal Inference\n\n\n\nSimpson’s Paradox Simulation Using DoWhy: Stratification & Refutation\n\n\n\n\n\nJan 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 4)\n\n\n\nCausal Inference\n\n\n\nInverse Probability Weighting\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 3)\n\n\n\nCausal Inference\n\n\n\nBack-door Criterion\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 2)\n\n\n\nCausal Inference\n\n\n\nCounfounding Bias\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 4. Confounding and Backdoor (Part 1)\n\n\n\nCausal Inference\n\n\n\nIndentifiable and Non-identifiable Effects\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 1. Introduction\n\n\n\nCausal Inference\n\n\n\nIntroduction to Causal Inference\n\n\n\n\n\nJan 6, 2026\n\n\n유성현\n\n\n\n\n\nNo matching items"
   }
 ]

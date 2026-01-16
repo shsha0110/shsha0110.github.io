@@ -1,0 +1,87 @@
+---
+title: "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.4)"
+subtitle: "4.4. Outlier Detection"
+author: "유성현"
+date: "2026-01-16"
+categories: [Paper Review]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+---
+
+# Introduction: Unsupervised Setting
+
+이전까지 우리는 입력 $X$와 정답 $Y$가 있는 지도 학습 환경을 다루었습니다.
+하지만 $Y$ 라벨이 없는 경우, 특히 **"정상 데이터 분포에서 벗어난 이상치(Outlier)"**를 탐지해야 하는 상황은 어떻게 해야 할까요?
+
+* 공장 설비의 이상 진동 감지
+* 네트워크 침입 탐지
+* 불량품 검출
+
+[cite_start]이러한 **Outlier Detection (Anomaly Detection)** 문제에서도 Conformal Prediction을 활용하면, **"정상 데이터를 이상치라고 오판할 확률(False Positive Rate)"**을 통계적으로 제어할 수 있습니다[cite: 870, 875].
+
+# Problem Formulation
+
+[cite_start]우리는 오염되지 않은 **깨끗한 데이터(Clean Dataset)** $X_1, \dots, X_n$을 가지고 있습니다[cite: 871]. 이들은 모두 정상(Inlier) 분포에서 나왔다고 가정합니다.
+
+우리의 목표는 새로운 데이터 $X_{test}$가 들어왔을 때, 이것이 정상 분포에서 온 것인지 아니면 이상치인지 판단하는 함수 $\mathcal{C}$를 만드는 것입니다.
+[cite_start]이때, **실제로는 정상인데 이상치라고 잘못 판단할 확률(Type I Error)**을 $\alpha$ 이하로 억제해야 합니다[cite: 876, 877].
+
+$$
+\mathbb{P}(\mathcal{C}(X_{test}) = \text{outlier}) \le \alpha
+$$
+(여기서 확률은 $X_{test}$가 정상 데이터 분포에서 왔을 때의 확률입니다.)
+
+# The Algorithm
+
+[cite_start]알고리즘은 기존의 Conformal Prediction과 매우 유사하지만, $Y$가 없기 때문에 **입력 $X$만으로 계산되는 Score**를 사용합니다[cite: 879, 880].
+
+## Step 1: Define Heuristic Score Function
+[cite_start]비지도 학습 모델(예: One-class SVM, Isolation Forest, Autoencoder의 Reconstruction Error 등)을 사용하여, 데이터 포인트가 이상치일수록 커지는 점수 함수 $s(x)$를 정의합니다[cite: 872, 873].
+
+$$ s(x): \mathcal{X} \rightarrow \mathbb{R} $$
+* $s(x)$가 큼 $\rightarrow$ 이상치(Outlier)일 가능성 높음
+* $s(x)$가 작음 $\rightarrow$ 정상(Inlier)일 가능성 높음
+
+## Step 2: Calibration
+[cite_start]깨끗한 데이터셋 $X_1, \dots, X_n$에 대해 점수들을 계산합니다[cite: 881].
+$$ s_i = s(X_i), \quad i=1, \dots, n $$
+
+[cite_start]그리고 이 점수들의 분포에서 $1-\alpha$ 분위수(Quantile)에 해당하는 임계값 $\hat{q}$를 계산합니다[cite: 884].
+
+$$
+\hat{q} = \text{Quantile}\left( \{s_1, \dots, s_n\} ; \frac{\lceil (n+1)(1-\alpha) \rceil}{n} \right)
+$$
+
+## Step 3: Detection (Inference)
+[cite_start]새로운 테스트 데이터 $X_{test}$가 들어오면 점수 $s(X_{test})$를 계산하고, 임계값 $\hat{q}$와 비교하여 판정합니다[cite: 884].
+
+$$
+\mathcal{C}(x) = \begin{cases} \text{inlier} & \text{if } s(x) \le \hat{q} \\ \text{outlier} & \text{if } s(x) > \hat{q} \end{cases}
+$$
+
+![Concept: Conformal Outlier Detection. 정상 데이터(Clean Data)들의 점수 분포를 통해 임계값 $\hat{q}$를 설정한다. 새로운 데이터의 점수가 이 선을 넘으면 이상치로 간주한다.](images/outlier_detection_concept.png)
+
+# Theoretical Guarantee & Interpretation
+
+이 간단한 절차는 다음 명제에 의해 False Positive Rate를 $\alpha$ 이하로 보장합니다.
+
+> **Proposition 3 (Error control guarantee for outlier detection)**
+>
+> [cite_start]$X_1, \dots, X_n$과 $X_{test}$가 동일한 분포(i.i.d.)에서 추출되었다면, 위 알고리즘은 다음을 만족한다[cite: 887, 888].
+> $$ \mathbb{P}(\mathcal{C}(X_{test}) = \text{outlier}) \le \alpha $$
+
+### Statistical Interpretation
+[cite_start]이 과정은 통계적 **가설 검정(Hypothesis Testing)**과도 연결됩니다[cite: 892].
+* **귀무가설($H_0$)**: $X_{test}$는 정상 데이터 분포(Calibration Data)와 교환 가능하다(Exchangeable).
+* [cite_start]**기각**: 만약 $s(X_{test})$가 상위 $\alpha$ 범위에 들어간다면(즉, p-value < $\alpha$), 우리는 귀무가설을 기각하고 해당 데이터를 이상치로 판단합니다[cite: 893].
+
+# Conclusion
+
+Conformal Outlier Detection은 복잡한 이상탐지 모델의 출력값을 **"신뢰할 수 있는 통계적 판정"**으로 변환해줍니다.
+사용자는 "이 데이터는 점수가 0.8입니다"라는 모호한 말 대신, **"이 데이터는 95% 신뢰수준에서 정상 범위를 벗어났습니다"**라는 명확한 근거를 가지고 의사결정을 내릴 수 있습니다.
+
+---
+**Next Step**: 지금까지는 학습 데이터와 테스트 데이터의 분포가 같다는 가정(i.i.d.) 하에 진행했습니다. 하지만 현실에서는 시간이 지나며 분포가 변하기도 합니다. 다음 포스트에서는 이러한 **Covariate Shift** 환경에서 CP를 적용하는 **Section 4.5 Conformal Prediction Under Covariate Shift**에 대해 알아보겠습니다.

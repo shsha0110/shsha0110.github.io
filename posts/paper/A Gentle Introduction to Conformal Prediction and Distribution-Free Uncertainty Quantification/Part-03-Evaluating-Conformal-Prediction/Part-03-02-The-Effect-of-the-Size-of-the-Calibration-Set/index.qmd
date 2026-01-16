@@ -1,0 +1,93 @@
+---
+title: "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 3.2)"
+subtitle: "3.2. The Effect of the Size of the Calibration Set"
+author: "유성현"
+date: "2026-01-16"
+categories: [Paper Review]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+---
+
+# Introduction
+
+Conformal Prediction(CP)을 실제 서비스에 배포할 때, 엔지니어가 가장 먼저 마주하는 실무적인 질문은 이것입니다.
+
+> **"Calibration Set($n$)의 크기는 얼마나 커야 할까요? 100개면 충분한가요, 아니면 1,000개가 필요한가요?"**
+
+이론적으로 CP의 커버리지 보장($1-\alpha$)은 $n$의 크기와 상관없이 성립합니다(Finite-sample guarantee). 하지만 직관적으로 생각했을 때, 데이터가 많을수록 더 안정적일 것이라 예상할 수 있습니다.
+
+이번 포스트에서는 **Calibration Set의 크기 $n$이 예측 구간의 안정성(Stability)에 미치는 영향**을 수학적으로 분석하고, 실무적인 가이드라인($n \approx 1000$)을 제시합니다.
+
+# Validity vs. Stability
+
+## The Theoretical Guarantee (Validity)
+놀랍게도, CP의 커버리지 보장 정리(Theorem 1)는 **모든 $n$에 대해 성립**합니다.
+Calibration 데이터가 단 10개뿐이라도, 새로운 데이터에 대한 평균 커버리지는 $1-\alpha$를 만족합니다.
+
+## The Catch (Stability)
+하지만 여기에는 중요한 디테일이 숨어 있습니다. 우리가 보장하는 것은 **"Calibration Set을 무한히 새로 뽑았을 때의 평균"**입니다.
+
+하지만 현실에서 우리는 **단 하나의 고정된 Calibration Set**을 사용합니다.
+만약 우리가 운이 나빠서 이상한(Bias된) 데이터가 섞인 Calibration Set을 뽑았다면 어떨까요?
+이 고정된 데이터셋으로 학습된 CP 모델을 무한한 테스트 데이터에 적용했을 때의 실제 커버리지는 $1-\alpha$와 정확히 일치하지 않을 수 있습니다.
+
+즉, **Calibration Set 자체의 무작위성(Randomness)** 때문에 실제 커버리지는 **확률 변수(Random Quantity)**가 됩니다.
+
+# Mathematical Derivation: Beta Distribution
+
+Vladimir Vovk는 고정된 Calibration Set이 주어졌을 때, 무한한 검증 데이터에 대한 커버리지 확률 분포가 **베타 분포(Beta Distribution)**를 따른다는 것을 증명했습니다.
+
+$$
+\mathbb{P}(Y_{test} \in \mathcal{C}(X_{test}) \mid \{(X_i, Y_i)\}_{i=1}^n) \sim \text{Beta}(n+1-l, l)
+$$
+
+여기서 파라미터 $l$은 다음과 같이 정의됩니다:
+$$
+l = \lfloor (n+1)\alpha \rfloor
+$$
+
+* **의미**: 이 식은 $n$이 커질수록 커버리지 확률 분포가 $1-\alpha$를 중심으로 얼마나 뾰족하게(Sharp) 모이는지를 설명합니다.
+* **평균**: 베타 분포의 성질에 의해 이 분포의 기댓값은 정확히 $1-\alpha$가 됩니다 (Validity).
+* **분산**: $n$이 작을수록 분산이 커져서, 실제 커버리지가 목표치 $1-\alpha$에서 크게 벗어날 확률이 높아집니다.
+
+# Visualizing the Effect of $n$
+
+이 현상을 시각적으로 확인해보겠습니다. 아래 그래프는 Calibration Set의 크기 $n$에 따른 커버리지 확률의 밀도 함수를 보여줍니다.
+
+![Figure 11: 무한한 Validation Set에 대한 커버리지 분포. $n$이 100일 때는 분포가 넓게 퍼져 있지만, $n$이 10,000일 때는 $1-\alpha(0.9)$ 근처에 매우 좁게 집중된다. 분포는 $\mathcal{O}(n^{-1/2})$의 속도로 수렴한다.](images/figure11_coverage_distribution.png)
+
+* **$n=100$ (파란색)**: 그래프가 넓게 퍼져 있습니다. 운이 나쁘면 실제 커버리지가 85%나 95%가 될 수도 있습니다.
+* **$n=1,000$ (주황색)**: 그래프가 훨씬 좁아졌습니다. 대부분의 경우 커버리지가 **88% ~ 92%** 사이로 유지됩니다.
+* **$n=10,000$ (초록색)**: 매우 뾰족합니다. 거의 정확하게 90%를 맞춥니다.
+
+# Practical Guideline: The "n=1000" Rule
+
+그렇다면 실무에서는 몇 개를 써야 할까요?
+논문에서는 **$n=1000$ 정도면 대부분의 목적에 충분하다**고 제안합니다.
+
+1.  **안정성 확보**: 위 그래프에서 보듯이, $n=1000$일 때 커버리지는 목표치($1-\alpha$)에서 $\pm 2\%$ 내외의 오차 범위를 가집니다. 이는 대부분의 머신러닝 애플리케이션에서 허용 가능한 수준입니다.
+2.  **비용 효율성**: 데이터를 10,000개까지 늘려도 얻을 수 있는 이득(오차 감소)은 크지 않습니다. (수렴 속도가 $\mathcal{O}(n^{-1/2})$로 느려지기 때문)
+
+## Required Sample Size Calculation
+만약 더 엄격한 기준(예: 99% 확률로 오차 1% 이내)이 필요하다면, 다음 표를 참고하여 필요한 $n$을 역산할 수 있습니다.
+
+| 허용 오차 ($\epsilon$) | 필요한 $n$ (신뢰도 90%) |
+| :--- | :--- |
+| 0.1 (10%) | 22 |
+| 0.05 (5%) | 102 |
+| 0.01 (1%) | 2,491 |
+| 0.005 (0.5%) | 9,812 |
+
+일반적인 기준인 90% 신뢰도($\delta=0.1$)에서 목표 커버리지와의 오차를 1%($\epsilon=0.01$) 이내로 줄이려면 약 **2,500개**의 데이터가 필요합니다. 하지만 5% 오차($\epsilon=0.05$)를 허용한다면 **102개**로도 충분합니다.
+
+# Summary
+
+* Conformal Prediction은 $n$이 작아도 평균적으로는 커버리지를 보장합니다.
+* 하지만 **개별 Calibration Set에 대한 신뢰도(Stability)**를 높이기 위해서는 충분한 $n$이 필요합니다.
+* **Rule of Thumb**: 약 **1,000개**의 Calibration 데이터를 사용하면, 실제 커버리지가 목표치에서 크게 벗어나지 않음(약 $\pm 2\%$)을 확신할 수 있습니다.
+
+---
+**Next Step**: 이제 적절한 Calibration 데이터 크기도 알았으니, 실제로 우리가 구현한 CP 알고리즘이 올바른지 검증하는 구체적인 절차인 **Section 3.3 Checking for Correct Coverage**에 대해 알아보겠습니다.

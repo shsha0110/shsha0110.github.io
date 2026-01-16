@@ -1,0 +1,113 @@
+---
+title: "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 2.4)"
+subtitle: "2.4. Conformalizing Bayes"
+author: "유성현"
+date: "2026-01-16"
+categories: [Paper Review]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+---
+
+# Introduction
+
+Bayesian Neural Network와 같은 베이지안 모델들은 불확실성 정량화(Uncertainty Quantification) 분야에서 매우 매력적인 도구입니다. 이들은 사전 지식(Prior)을 반영할 수 있고, 예측의 결과물로 단일 값이 아닌 분포(Posterior Predictive Density)를 제공하기 때문입니다.
+
+하지만 베이지안 모델에는 치명적인 약점이 있습니다.
+**"모델의 가정(Prior, Likelihood function 등)이 완벽하게 맞아야만"** 예측된 불확실성이 정확하다는 점입니다. 현실의 복잡한 데이터에서 이러한 가정이 완벽히 들어맞기는 어렵습니다.
+
+**Conformalizing Bayes**는 베이지안 모델의 정보량을 그대로 활용하되, **Conformal Prediction을 통해 "가정이 틀렸더라도" 통계적 커버리지를 보장**하는 강력한 방법론입니다.
+
+# The Bayesian Ideal vs. Reality
+
+## Ideal Scenario
+만약 우리가 만든 베이지안 모델 $\hat{f}(y|x)$ (입력 $x$가 주어졌을 때 $y$의 사후 확률 밀도)가 완벽하다면, 최적의 예측 집합 $S(x)$는 단순히 밀도 함수(Density)가 높은 영역을 잘라내어 만들 수 있습니다.
+
+$$
+S(x) = \{ y : \hat{f}(y|x) > t \}
+$$
+
+여기서 임계값 $t$는 해당 영역의 적분값이 $1-\alpha$가 되도록 설정합니다 ($\int_{y \in S(x)} \hat{f}(y|x) dy = 1-\alpha$). 이를 **Highest Posterior Density (HPD) Region**이라고도 합니다.
+
+## Reality
+하지만 우리는 모델 $\hat{f}$가 완벽하다고 보장할 수 없습니다. 따라서 위 방식으로 구한 집합은 실제로는 90%를 커버하지 못할 수도(Under-coverage), 너무 넓을 수도(Over-coverage) 있습니다.
+
+우리는 베이지안 모델의 $\hat{f}(y|x)$를 **"진짜 확률"이 아니라 "유용한 불확실성 점수(Heuristic Score)"로 간주**하고, CP를 적용하여 올바른 임계값(Threshold)을 찾을 것입니다.
+
+# The Algorithm
+
+Conformalizing Bayes의 절차는 우리가 익숙한 CP의 흐름을 그대로 따릅니다.
+
+## Step 1: Define Score Function
+우리는 모델이 예측한 **사후 확률 밀도(Posterior Predictive Density)**가 높을수록 에러가 작다(확실하다)고 봅니다.
+Conformal Score는 "불확실한 정도"를 나타내야 하므로, 밀도 함수의 **음수(Negative)**를 취합니다.
+
+$$
+s(x, y) = - \hat{f}(y|x)
+$$
+
+* $\hat{f}(y|x)$가 높음 (모델이 정답을 확신함) $\rightarrow$ Score $s$는 매우 작은 음수.
+* $\hat{f}(y|x)$가 낮음 (모델이 정답을 예측 못함) $\rightarrow$ Score $s$는 큰 값(0에 가까운 값 혹은 양수).
+
+## Step 2: Calibration (Finding $\hat{q}$)
+Calibration 데이터 $(X_1, Y_1), \dots, (X_n, Y_n)$에 대해 점수들을 계산하고, $1-\alpha$ 분위수 $\hat{q}$를 찾습니다.
+
+$$
+\hat{q} = \text{Quantile}\left( \frac{\lceil (n+1)(1-\alpha) \rceil}{n} ; \{s_1, \dots, s_n\} \right)
+$$
+
+여기서 구한 $\hat{q}$는 **"밀도 함수를 어디서 잘라야(Thresholding) 하는가?"**에 대한 보정된 기준선이 됩니다.
+
+## Step 3: Construct Prediction Set
+새로운 입력 $X_{test}$에 대해, Score가 $\hat{q}$ 이하인(즉, 밀도가 $-\hat{q}$ 이상인) 모든 $y$를 포함합니다.
+
+$$
+\mathcal{C}(x) = \{ y : s(x, y) \le \hat{q} \} = \{ y : -\hat{f}(y|x) \le \hat{q} \}
+$$
+
+이를 정리하면 최종 예측 집합은 다음과 같습니다:
+
+$$
+\mathcal{C}(x) = \{ y : \hat{f}(y|x) \ge -\hat{q} \}
+$$
+
+즉, **보정된 임계값 $-\hat{q}$보다 확률 밀도가 높은 모든 $y$의 집합(Superlevel Set)**을 구성합니다.
+
+![Figure 9: Conformalized Bayes 알고리즘 시각화. 사후 확률 밀도 함수(Posterior Predictive Density) $\hat{f}(y|x)$를 Conformal Prediction으로 구한 임계값 $-\hat{q}$에서 잘라(Slicing), 그 위의 영역을 예측 집합으로 삼는다.](images/figure9_bayes_visualization.png)
+
+# Mathematical Derivation & Validity
+
+이 집합이 왜 유효한지(Valid) 수학적으로 살펴보겠습니다.
+
+1.  **Calibration Guarantee**:
+    Calibration 단계에서 $\hat{q}$를 구했으므로, 새로운 i.i.d. 샘플에 대해 다음이 성립합니다.
+    $$ \mathbb{P}[s(X_{test}, Y_{test}) \le \hat{q}] \ge 1 - \alpha $$
+
+2.  **Substitution**:
+    Score의 정의 $s(x,y) = -\hat{f}(y|x)$를 대입합니다.
+    $$ \mathbb{P}[-\hat{f}(Y_{test} | X_{test}) \le \hat{q}] \ge 1 - \alpha $$
+
+3.  **Inequality Rearrangement**:
+    부등식의 양변에 -1을 곱하여 부등호 방향을 바꿉니다.
+    $$ \mathbb{P}[\hat{f}(Y_{test} | X_{test}) \ge -\hat{q}] \ge 1 - \alpha $$
+
+4.  **Conclusion**:
+    따라서, 예측 집합 $\mathcal{C}(X_{test}) = \{ y : \hat{f}(y|X_{test}) \ge -\hat{q} \}$는 정답 $Y_{test}$를 $1-\alpha$ 확률로 포함합니다.
+
+# Why is this useful? (Bayes Optimality)
+
+이 방법은 단순히 유효할(Valid) 뿐만 아니라, 특정 조건 하에서 **효율적(Efficient)**입니다.
+논문에 따르면, 만약 원래의 베이지안 모델이 (비록 틀렸을지라도) 어느 정도 합리적이라면, 이 방법으로 생성된 예측 집합은 **$1-\alpha$ 커버리지를 만족하는 모든 예측 집합 중에서 평균 크기(Average Size)가 가장 작습니다 (Bayes Optimal).**
+
+이는 Neyman-Pearson Lemma와 유사한 논리로, "가장 확률 밀도가 높은 곳부터 담는 것"이 주어진 확률 질량을 채우면서 집합의 크기(Volume)를 최소화하는 전략이기 때문입니다.
+
+# Summary
+
+* **Conformalizing Bayes**는 베이지안 모델의 확률 밀도 함수를 Score로 사용하여 CP를 적용하는 기법입니다.
+* 결과적으로 **"Superlevel Set of Density"** 형태의 예측 집합을 얻게 됩니다.
+* 이 방법은 베이지안 모델의 가정이 틀려도 **Coverage를 보장**하며, 동시에 베이지안 모델의 정보량을 활용하여 **집합의 크기를 최적화**할 수 있습니다.
+
+---
+**Next Step**: 지금까지 Section 2를 통해 Classification, Regression, Bayesian Model 등 다양한 환경에서의 CP 적용법을 배웠습니다. 다음 포스트에서는 이러한 CP 알고리즘들이 제대로 작동하는지 검증하는 **Section 3. Evaluating Conformal Prediction**에 대해 다루겠습니다.

@@ -1,0 +1,218 @@
+---
+title: "[Causal Inference] 13. IV (Part 2)"
+description: "Random Experiment wiht Noncompliance"
+author: "유성현"
+date: "2026-01-16"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+
+# 1. 개요 (Overview)
+
+* 지난 포스트에서 선형 모형(Linear Model) 가정 하의 IV를 다루었다면, 이번에는 **무작위 실험(Randomized Experiment)에서 배정된 처치를 따르지 않는 '불순응(Noncompliance)'이 발생했을 때**의 IV 접근법을 다룹니다.
+* 경제학에서 도구변수(IV)는 주로 무작위 실험이 아닌 관찰 연구(Observational Study)에서 '자연 실험(Natural Experiment)'의 일종으로 사용됩니다. 
+* 좋은 도구변수 $Z$가 되기 위해서는 다음 두 가지 조건을 만족해야 합니다.
+
+    1.  **Relevance (관련성):** 도구변수 $Z$는 처치 $X$에 강한 영향을 미쳐야 합니다. ($Cov(X,Z)$가 커야 함). 그렇지 않으면(Weak IV), 추정량의 분산이 매우 커집니다.
+    2.  **Exclusion Restriction (배제 제약):** 도구변수 $Z$는 결과 $Y$에 직접적인 영향을 미치지 않아야 하며, 오직 $X$를 통해서만 영향을 주어야 합니다.
+
+![Figure 1: IV DAG regarding Noncompliance. Z(배정)가 X(실제 처치)를 통해 Y(결과)에 영향을 미치는 구조입니다. 점선 화살표는 잠재적 교란 요인을 의미합니다.](./images/iv_noncompliance_dag.png)
+
+# 2. 불순응 문제와 잠재적 결과 (Noncompliance & Potential Outcomes)
+
+* Angrist, Imbens, and Rubin (1996, JASA)은 불순응 문제를 해결하기 위해 **잠재적 결과(Potential Outcomes)** 프레임워크를 도입했습니다.
+
+## 2.1. 변수 정의
+* **$Z_i$ (Instrument/Assignment):** 처치 배정 여부 (0 또는 1). 무작위 배정(Random Assignment)을 가정합니다.
+* **$X_i$ (Treatment Received):** 실제 처치를 받았는지 여부. $Z$ 이후에 결정되므로(Post-treatment), $Z$에 따른 잠재적 결과를 가집니다.
+    * $X_i(z)$: $Z=z$일 때 개인이 받게 될 처치 여부.
+* **$Y_i$ (Outcome):** 결과 변수.
+    * $Y_i(z, x)$: 배정이 $z$이고 실제 처치가 $x$일 때의 잠재적 결과. 
+    * 일반적으로 Exclusion Restriction 가정 하에서 $Y_i(z=0, x) = Y_i(z=0, 1)$이므로 $Y_i(x)$로 표기.
+
+* 우리가 관측하는 데이터는 $Z_i, X_i = X_i(Z_i), Y_i = Y_i(Z_i)$ 입니다.
+
+## 2.2. 순응 유형 (Compliance Types)
+
+* 사람들이 처치 배정($Z$)에 어떻게 반응하여 실제 처치($X$)를 받는지에 따라 **4가지 잠재적 집단(Latent Subgroups)**으로 나눌 수 있습니다. 
+* 이를 $X_i(0)$와 $X_i(1)$의 조합으로 정의합니다.
+
+| Type | $X_i(0)$ | $X_i(1)$ | Description |
+| :--- | :---: | :---: | :--- |
+| **Never-taker** | 0 | 0 | 배정을 받든 안 받든 처치를 받지 않음 |
+| **Complier** | 0 | 1 | 배정받으면 처치 받고, 안 받으면 안 받음 (순응자) |
+| **Defier** | 1 | 0 | 배정과 반대로 행동함 (청개구리) |
+| **Always-taker** | 1 | 1 | 배정을 받든 안 받든 항상 처치를 받음 |
+
+> **Note:** 우리는 각 개인의 진짜 Type($S$)을 완벽하게 알 수 없습니다. 예를 들어 관측된 데이터에서 $Z=1, X=1$인 사람은 'Complier'일 수도 있고 'Always-taker'일 수도 있습니다.
+
+# 3. 인과 효과의 식별 (Identification)
+
+* 우리의 목표는 인과 효과를 추정하는 것입니다. 
+* 이를 위해 **ITT(Intent-To-Treat)** 효과를 먼저 정의하고, 이를 분해하여 특정 집단의 효과를 구해봅시다.
+
+## 3.1. ITT (Intent-To-Treat) Effects
+
+* ITT 효과는 처치 배정($Z$)이 결과($Y$)에 미치는 인과적 효과입니다. 
+* 개인의 순응 유형($S$)은 $Z$에 따라 변하지 않는 'Baseline Characteristic'으로 간주할 수 있습니다.
+
+* 각 유형 $s \in \{c, n, a, d\}$에 대한 ITT 효과는 다음과 같습니다.
+$$ITT_s = \mathbb{E}[Y_i(1) - Y_i(0) | S_i = s]$$
+
+* 전체 모집단에 대한 Global ITT는 각 유형별 ITT의 가중 평균으로 표현됩니다.
+
+$$
+\begin{aligned}
+ITT &= \mathbb{E_s}[\mathbb{E}[Y_i(1) - Y_i(0) | S_i = s]] \\
+&= \pi_c ITT_c + \pi_n ITT_n + \pi_a ITT_a + \pi_d ITT_d
+\end{aligned}
+$$
+    * 여기서 $\pi_s$는 각 유형의 구성 비율입니다.
+
+## 3.2. 식별을 위한 가정 (Assumptions)
+
+* 비모수적 식별(Nonparametric Identification)을 위해 다음 3가지 핵심 가정이 필요합니다.
+
+* **Assumption 1: Random Assignment (무작위 배정)**
+$$\{Y_i(0), Y_i(1), X_i(0), X_i(1)\} \perp Z_i$$
+    * 도구변수 $Z$가 잠재적 결과들과 독립이라는 가정입니다.
+
+* **Assumption 2: Strong Monotonicity (강한 단조성)**
+    * 1.  **No Defiers:** 
+        * 모든 $i$에 대해 $X_i(1) \ge X_i(0)$ 
+        * 우리의 예시에서는 $Z, X \in \{0, 1\}$ 이므로, $X_i(1) = 1 \ge X_i(0) = 0$ 
+        * 즉, 배정을 받았을 때 처치를 받을 확률이 배정을 안 받았을 때보다 작아지지는 않는다는 것입니다. 
+        * 이 가정에 의해 $\pi_d = 0$이 됩니다.
+    * 2. **Existence of Compliers:** 
+        * $0 < P(X_i=1 | Z_i=1) < 1$
+        * Complier가 존재해야 합니다.
+
+* **Assumption 3: Exclusion Restriction (ER) for Noncompliers**
+    * 불순응자(Never-taker, Always-taker)에게는 배정($Z$) 자체가 결과($Y$)에 영향을 주지 않아야 합니다. 
+    * 이들은 어차피 $Z$와 상관없이 동일한 $X$를 선택하기 때문입니다.
+$$Y_i(1) = Y_i(0) \quad \text{for } S_i \in \{n, a\}$$
+
+* 따라서, $ITT_n = 0$, $ITT_a = 0$ 입니다.
+
+# 4. CACE / LATE 유도 (Derivation)
+
+* 위의 가정들을 $ITT$ 분해 식에 대입하여 **Complier Average Causal Effect (CACE)**를 유도해 봅시다.
+
+## 4.1. 유도 과정
+* 원래 식:
+$$ITT = \pi_c ITT_c + \pi_n ITT_n + \pi_a ITT_a + \pi_d ITT_d$$
+
+1.  **Monotonicity 가정 적용:** Defier가 없으므로 $\pi_d = 0$.
+    $$\Rightarrow ITT = \pi_c ITT_c + \pi_n ITT_n + \pi_a ITT_a$$
+2.  **Exclusion Restriction 가정 적용:** Noncomplier의 ITT는 0이므로 $ITT_n = 0, ITT_a = 0$.
+    $$\Rightarrow ITT = \pi_c ITT_c$$
+
+* 결국 전체 ITT 효과는 **Complier의 비율($\pi_c$) $\times$ Complier의 ITT 효과($ITT_c$)**가 됩니다.
+* 이를 $ITT_c$에 대해 정리하면 다음과 같습니다.
+
+$$ITT_c = \frac{ITT}{\pi_c}$$
+
+* 이때, Complier에게는 $Z=X$이므로, $ITT_c$는 곧 Complier가 처치를 받았을 때의 인과 효과인 **CACE**가 됩니다.
+
+## 4.2. Complier 비율 ($\pi_c$) 추정
+* 관측된 데이터로 $\pi_c$를 어떻게 구할까요?
+
+$$
+\begin{aligned}
+\mathbb{E}[X_i | Z_i = 1] &= \pi_c \cdot 1 + \pi_a \cdot 1 + \pi_n \cdot 0 \quad (\text{Complier \& Always-taker}) \\
+\mathbb{E}[X_i | Z_i = 0] &= \pi_c \cdot 0 + \pi_a \cdot 1 + \pi_n \cdot 0 \quad (\text{Always-taker only})
+\end{aligned}
+$$
+
+* 두 식을 빼면:
+
+$$\mathbb{E}[X_i | Z_i = 1] - \mathbb{E}[X_i | Z_i = 0] = \pi_c$$
+
+* 이것은 $Z$가 $X$에 미치는 ITT 효과($ITT_X$)와 같습니다.
+
+$$ITT_X = \mathbb{E}[X_i(1) - X_i(0)] = \pi_c$$
+
+## 4.3. CACE / LATE 공식
+* 최종적으로 CACE는 다음과 같이 두 ITT의 비율로 표현됩니다.
+
+$$CACE \equiv \mathbb{E}[Y_i(1) - Y_i(0) | S_i = c] = \frac{ITT_Y}{ITT_X} = \frac{\mathbb{E}[Y|Z=1] - \mathbb{E}[Y|Z=0]}{\mathbb{E}[X|Z=1] - \mathbb{E}[X|Z=0]}$$
+
+* 이는 Imbens and Angrist (1994)에서 제시한 **LATE (Local Average Treatment Effect)**와 동일한 개념입니다. "Local"인 이유는 전체 모집단이 아닌 **Complier**라는 특정 하위 집단에 대한 효과이기 때문입니다.
+
+### 4.4. 잠재적 결과의 식별 (Identification of Potential Outcomes)
+
+CACE를 계산하기 위해서는 Complier 집단의 잠재적 결과 평균($\mathbb{E}[Y_i(1)|c]$와 $\mathbb{E}[Y_i(0)|c]$)을 알아야 합니다. 하지만 우리는 누가 Complier인지 개별적으로 알 수 없습니다.
+
+대신, 관측 가능한 집단($Z, X$)의 평균 결과가 어떤 잠재적 집단들의 혼합으로 이루어져 있는지 분해함으로써 이를 역추적할 수 있습니다.
+
+**1. $Z=0, X=0$ 집단 (Compliers + Never-takers)**
+배정을 받지 않았고 처치도 받지 않은 그룹입니다. 이들은 $Z=0$일 때 $X=0$인 **Complier**와 **Never-taker**로 구성됩니다.
+$$
+\mathbb{E}[Y_i | X_i = 0, Z_i = 0] = \frac{\pi_c}{\pi_c + \pi_n} \cdot \mathbb{E}[Y_i(0) | \text{complier}] + \frac{\pi_n}{\pi_c + \pi_n} \cdot \mathbb{E}[Y_i(0) | \text{never-taker}]
+$$
+
+**2. $Z=1, X=0$ 집단 (Never-takers Only)**
+배정을 받았으나($Z=1$) 처치를 받지 않은($X=0$) 그룹입니다. Complier라면 처치를 받았을 것이므로, 이 그룹은 순수하게 **Never-taker**들입니다.
+$$
+\mathbb{E}[Y_i | X_i = 0, Z_i = 1] = \mathbb{E}[Y_i(0) | \text{never-taker}]
+$$
+
+**3. $Z=0, X=1$ 집단 (Always-takers Only)**
+배정을 받지 않았는데도($Z=0$) 처치를 받은($X=1$) 그룹입니다. Complier라면 처치를 안 받았을 것이므로, 이 그룹은 순수하게 **Always-taker**들입니다.
+$$
+\mathbb{E}[Y_i | X_i = 1, Z_i = 0] = \mathbb{E}[Y_i(1) | \text{always-taker}]
+$$
+
+**4. $Z=1, X=1$ 집단 (Compliers + Always-takers)**
+배정을 받았고 처치도 받은 그룹입니다. 이들은 $Z=1$일 때 $X=1$인 **Complier**와 **Always-taker**로 구성됩니다.
+$$
+\mathbb{E}[Y_i | X_i = 1, Z_i = 1] = \frac{\pi_c}{\pi_c + \pi_a} \cdot \mathbb{E}[Y_i(1) | \text{complier}] + \frac{\pi_a}{\pi_c + \pi_a} \cdot \mathbb{E}[Y_i(1) | \text{always-taker}]
+$$
+
+> **결론:** 위 식들을 연립하면, 관측 가능한 데이터로부터 미지수인 **$\mathbb{E}[Y_i(0) | \text{complier}]$**와 **$\mathbb{E}[Y_i(1) | \text{complier}]$**를 비모수적으로 식별(Nonparametrically Identify)할 수 있으며, 이를 통해 최종적으로 CACE를 구할 수 있습니다.
+# 5. 추정량 (Estimators)
+
+## 5.1. One-sided Noncompliance (단측 불순응)
+* 실험 설계상 통제 집단($Z=0$)은 절대 처치를 받을 수 없는 경우(예: 신약 임상시험)입니다. 
+* 즉, Always-taker가 없습니다($X_i(0)=0$).
+* 이 경우 $\sum X_i(1-Z_i) = 0$ 이 되며 공식은 조금 더 단순해집니다.
+
+$$
+\begin{aligned}
+\widehat{CACE} &= \frac{\widehat{E}[Y|Z=1] - \widehat{E}[Y|Z=0]}{\widehat{E}[X|Z=1]} \\
+&= \frac{\frac{\sum Y_i Z_i}{\sum Z_i} - \frac{\sum Y_i (1-Z_i)}{\sum (1-Z_i)}}{\frac{\sum X_i Z_i}{\sum Z_i}}
+\end{aligned}
+$$
+
+    
+    * 분모는 처치 집단 중 실제로 처치를 받은 사람의 비율
+
+## 5.2. Two-sided Noncompliance (양측 불순응)
+* 일반적인 경우(Wald Estimator 형태)입니다.
+
+$$\widehat{CACE} = \frac{\widehat{E}[Y|Z=1] - \widehat{E}[Y|Z=0]}{\widehat{E}[X|Z=1] - \widehat{E}[X|Z=0]}$$
+
+# 6. 결론
+
+* 전통적인 선형 모형과 비교했을 때, Potential Outcome 프레임워크를 이용한 IV 접근법의 특징은 다음과 같습니다.
+
+1.  **Constant Treatment Effect 가정 제거:** 
+    * 모든 사람에게 처치 효과가 동일하다는 비현실적인 가정을 하지 않습니다.
+2.  **Monotonicity 가정 도입:** 
+    * 대신 단조성이라는 약한 가정을 도입합니다.
+3.  **해석의 명확성:** 
+    * 우리가 구한 효과가 전체 인구에 대한 효과(ATE)가 아니라, 도구변수에 반응하여 행동을 바꾼 **Complier 집단에 국한된 효과(LATE)**임을 명확히 합니다.
+
+> **Tip:** 만약 Constant Treatment Effect가 성립한다면, LATE는 ATE와 같아집니다. 하지만 현실에서는 Complier에 대한 효과($ITT_c$)가 전체 평균($ITT$)보다 큰 경우가 많습니다 ($0 < \pi_c < 1$ 이므로 $ITT < ITT_c$). 즉, $ITT$는 처치 효과를 보수적으로 추정한 값으로 볼 수 있습니다.
+
+---
+
+**References:**
+* Imbens, G. W., & Angrist, J. D. (1994). Identification and Estimation of Local Average Treatment Effects. *Econometrica*.
+* Angrist, J. D., Imbens, G. W., & Rubin, D. B. (1996). Identification of Causal Effects Using Instrumental Variables. *Journal of the American Statistical Association*.

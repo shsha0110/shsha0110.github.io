@@ -1,0 +1,430 @@
+---
+title: "[Causal Inference] 13. IV (Part 1)"
+description: "IV under Linear Assumption"
+author: "유성현"
+date: "2026-01-15"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. 개요 (Overview)
+
+* 인과추론에서 우리가 관심을 가지는 것은 처치(Treatment, $X$)가 결과(Outcome, $Y$)에 미치는 인과적 효과($\beta_1$)를 추정하는 것입니다. 
+* 하지만 많은 경우 관찰되지 않은 교란 요인(Unobserved Confounder)이 존재하여 단순한 회귀분석(OLS)으로는 편향된 추정치를 얻게 됩니다. 
+* 이때 사용할 수 있는 강력한 도구가 바로 **도구변수(Instrumental Variable, IV)**입니다.
+* 이 글에서는 선형 가정(Linear Assumption) 하에서의 IV, 특히 **2SLS (Two-Stage Least Squares)** 접근법과 그 유도 과정을 다룹니다.
+
+# 2. 문제 상황: 내생성 (Endogeneity)
+
+## 2.1. 인과 모형 (Causal Graph)
+
+* 우선 변수들 간의 관계를 DAG(Directed Acyclic Graph)로 표현하면 다음과 같습니다.
+
+![Figure 1: IV Causal Graph. Z는 도구변수, X는 처치, Y는 결과, W는 공변량, ε는 관찰되지 않은 오차항을 의미합니다.](images/iv_dag.png)
+
+* $Z$: 도구변수 (Instrument)
+* $X$: 처치변수 (Treatment) - **Endogenous (내생적)**
+* $Y$: 결과변수 (Outcome)
+* $W$: 공변량 (Covariates) - **Exogenous (외생적)**
+* $\epsilon$: 오차항 (Error term/Unobserved Confounders)
+
+## 2.2. 선형 모형과 OLS의 한계
+
+* 전통적인 선형 모형은 다음과 같이 설정됩니다.
+
+$$Y_i = \beta_0 + \beta_1 X_i + \beta_2 W_i + \epsilon_i$$
+
+* 여기서 우리의 관심 추정량(estimand)은 $X_i$의 계수인 **$\beta_1$**입니다.
+* 하지만 **Challenge**가 발생합니다. 
+* 오차항 $\epsilon_i$가 처치 변수 $X_i$와 상관관계를 가질 때(Dependent/Confounded), 이를 **내생성(Endogeneity)**이 있다고 합니다.
+
+> **Note:**
+>
+> * **Endogenous (내생변수):** $Y$와 관련된 교란요인(confounder)과 상관관계가 있는 변수 ($X$)
+> * **Exogenous (외생변수):** 교란요인과 상관관계가 없는 변수 ($W$)
+
+* 만약 $X$가 내생적이라면, $\beta_1$에 대한 직접적인 OLS(Ordinary Least Squares) 추정량은 **편향(Biased)**됩니다. 
+* 즉, $Cov(X, \epsilon) \neq 0$인 상황입니다.
+
+# 3. 도구변수 (Instrumental Variable)
+
+## 3.1. IV의 조건
+
+* 이 문제를 해결하기 위해 도입하는 도구변수 벡터 $Z$ ($K$차원)는 다음 두 가지 조건을 만족해야 합니다.
+
+1.  **Relevance (관련성):** 도구변수 $Z$는 처치 $X$와 관련이 있어야 합니다. (그래프 상에서 $Z \rightarrow X$ 경로 존재)
+2.  **Exclusion Restriction (배제 제약) & Independence:** 도구변수 $Z$는 오직 $X$를 통해서만 $Y$에 영향을 미쳐야 하며, 교란요인 $\epsilon$과 독립이어야 합니다.
+    * $\epsilon_i \perp W_i$
+    * $\epsilon_i \perp Z_i | W_i$
+    * 즉, **$\epsilon_i \perp (Z_i, W_i)$**
+
+## 3.2. 식별 (Identification)
+
+도구변수의 개수($K$)와 내생변수의 개수에 따라 모델의 식별 상태가 달라집니다.
+
+* **Over-identified (과잉 식별):** $K > 1$ (도구변수가 내생변수보다 많음)
+* **Just-identified (적정 식별):** $K = 1$ (도구변수와 내생변수 개수가 같음)
+
+# 4. 추정 방법 (Estimation Methods)
+
+## 4.1. Just-indentified, No Covariates
+* Just-identified 케이스 ($K=1$)를 기준으로 세 가지 해석 방식을 살펴보겠습니다. 
+* 이때 공변량(W)는 없다고 가정합니다.
+* 결론적으로 이 세 가지는 모두 동일한 $\beta_1$ 값을 도출합니다.
+
+### 4.1.1. 공분산의 비율 (Ratio of Covariance)
+
+* 가장 직관적인 IV 추정량은 $Y$와 $Z$의 공분산을 $X$와 $Z$의 공분산으로 나눈 것입니다.
+
+$$\hat{\beta}_{1, iv} = \frac{\widehat{Cov}(Y_i, Z_i)}{\widehat{Cov}(X_i, Z_i)} = \frac{\frac{1}{N}\sum(Y_i - \bar{Y})(Z_i - \bar{Z})}{\frac{1}{N}\sum(X_i - \bar{X})(Z_i - \bar{Z})}$$
+
+* **Wald Estimator (Binary IV의 경우):**
+    * 만약 도구변수 $Z$가 0과 1만 가지는 이진 변수라면, 이는 Wald Estimator가 됩니다.
+$$\hat{\beta}_{1, iv} = \frac{\bar{Y}_1 - \bar{Y}_0}{\bar{X}_1 - \bar{X}_0}$$
+    * 여기서 $\bar{Y}_z, \bar{X}_z$는 $Z=z$인 그룹 내에서의 평균을 의미합니다.
+
+
+### 4.1.2. 간접 최소제곱법 (Indirect Least Squares, ILS)
+
+* ILS는 두 개의 축약형(Reduced form) 회귀식을 이용하는 방식입니다.
+
+1.  **Reduced Form 1 ($Y$ on $Z$):** $Y_i = \pi_{10} + \pi_{11} Z_i + \epsilon_{1i}$
+2.  **Reduced Form 2 ($X$ on $Z$):** $X_i = \pi_{20} + \pi_{21} Z_i + \epsilon_{2i}$
+
+* ILS 추정량은 두 회귀계수의 비율로 정의됩니다.
+
+$$\hat{\beta}_{1, ils} = \frac{\hat{\pi}_{11}}{\hat{\pi}_{21}}$$
+
+### 4.1.3. 2단계 최소제곱법 (Two Stage Least Squares, 2SLS)
+
+* 가장 널리 쓰이는 직관적인 방법으로, $X$에서 내생성을 제거한 후 회귀분석을 수행하는 방식입니다.
+
+* **Stage 1:** 내생변수 $X$를 도구변수 $Z$로 예측합니다. (OLS 수행)
+    $$X_i = \pi_0 + \pi_1 Z_i + \epsilon_i$$
+    $$\Longrightarrow \hat{X}_i = \hat{\pi}_0 + \hat{\pi}_1 Z_i$$
+    
+* **Stage 2:** 원래의 $X$ 대신 예측된 $\hat{X}$를 사용하여 결과 모형을 추정합니다.
+    $$Y_i = \pi_2 + \pi_3 \hat{X}_i + \epsilon_i$$
+    여기서 구해진 $\hat{\pi}_3$가 바로 2SLS 추정량 $\hat{\beta}_{1, 2sls}$입니다.
+    
+> **Intuition:**
+>
+> 1단계를 통해 $X$의 변동 중 $Z$에 의해 설명되는 부분(즉, 오차항 $\epsilon$과 상관없는 "unconfounded portion")만을 추출하여 2단계에서 인과 효과를 추정하는 것입니다.
+
+### 4.1.4. 결론
+* 위의 세 방식에 따른 추정치는 모두 동일합니다.
+
+$$\hat{\beta}_{1, iv} = \hat{\beta}_{1, ils} = \hat{\beta}_{1, 2sls}$$
+
+---
+
+## 4.2. Just-indentified, With Covariates
+* Just-identified 케이스 ($K=1$)를 기준으로 두 가지 해석 방식을 살펴보겠습니다. 
+* 이때 공변량(W)을 함께 고려합니다.
+* 결론적으로 이 두 가지는 모두 동일한 $\beta_1$ 값을 도출합니다.
+
+### 4.2.2. 간접 최소제곱법 (Indirect Least Squares, ILS)
+
+* ILS는 두 개의 축약형(Reduced form) 회귀식을 이용하는 방식입니다.
+
+1.  **Reduced Form 1 ($Y$ on $Z$):** $Y_i = \pi_{10} + \pi_{11} Z_i + \pi_{12} W_i + \epsilon_{1i}$
+2.  **Reduced Form 2 ($X$ on $Z$):** $X_i = \pi_{20} + \pi_{21} Z_i + \pi_{22} Z_i + \epsilon_{2i}$
+
+* ILS 추정량은 두 회귀계수의 비율로 정의됩니다.
+
+$$\hat{\beta}_{1, ils} = \frac{\hat{\pi}_{11}}{\hat{\pi}_{21}}$$
+
+### 4.2.2. 2단계 최소제곱법 (Two Stage Least Squares, 2SLS)
+
+* 가장 널리 쓰이는 직관적인 방법으로, $X$에서 내생성을 제거한 후 회귀분석을 수행하는 방식입니다.
+
+* **Stage 1:** 내생변수 $X$를 도구변수 $Z$로 예측합니다. (OLS 수행)
+    $$X_i = \pi_0 + \pi_1 Z_i + \pi_2 W_i + \epsilon_{1i}$$
+    $$\Longrightarrow \hat{X}_i = \hat{\pi}_0 + \hat{\pi}_1 Z_i + \hat{\pi}_2 W_i $$
+    
+* **Stage 2:** 원래의 $X$ 대신 예측된 $\hat{X}$를 사용하여 결과 모형을 추정합니다.
+    $$Y_i = \beta_0 + \beta_1 \hat{X}_i + \beta_2 \hat{W}_i + \epsilon_{2i}$$
+    여기서 구해진 $\hat{\beta}_1$이 바로 2SLS 추정량 $\hat{\beta}_{1, 2sls}$입니다.
+
+---
+
+# 5. 수학적 유도 (Derivation)
+
+* 수학적 증명을 단계별로 상세히 살펴보겠습니다. 
+* 공변량 $W$가 포함된 일반적인 경우를 가정합니다.
+
+## 5.1. 설정 (Setup)
+
+* 우리는 다음 두 식을 관찰할 수 있습니다.
+
+1.  **First Stage (X에 대한 식):**
+$$X_i = \pi_0 + \pi_1 Z_i + \pi_2 W_i + \epsilon_{1i}$$
+2.  **Structural Model (Y에 대한 식):**
+$$Y_i = \beta_0 + \beta_1 {X}_i + \underbrace{\beta_2 {W}_i + \epsilon_{2i}}_{\eta_{i}}$$
+    
+* 가정: $Cov[X_i, \eta_i] \neq 0$ (내생성 존재), 하지만 $Cov[\eta_i, Z_i] = 0$ (도구변수의 외생성).
+
+## 5.2. IV Estimator 유도 (Ratio 방식)
+
+* $Y_i$ 식의 양변과 $Z_i$의 공분산을 취해봅시다.
+
+$$
+\begin{aligned}
+Cov[Y_i, Z_i] &= Cov[\beta_0 + \beta_1 X_i + \eta_i, \; Z_i] \\
+&= \beta_1 Cov[X_i, Z_i] + \underbrace{Cov[\eta_i, Z_i]}_{0 \text{ (by assumption)}} \\
+&= \beta_1 Cov[X_i, Z_i]
+\end{aligned}
+$$
+
+* 따라서, $\beta_1$에 대해 정리하면 다음과 같습니다.
+
+$$\beta_1 = \frac{Cov[Y_i, Z_i]}{Cov[X_i, Z_i]} = \frac{Cov[Y_i, Z_i] / Var[Z_i]}{Cov[X_i, Z_i] / Var[Z_i]} = \frac{\text{Reduced form slope}}{\text{First stage slope}}$$
+
+* 이 유도 과정은 **ILS 방식($\pi_{11}/\pi_{21}$)**과 정확히 일치함을 보여줍니다.
+
+## 5.3. 2SLS Estimator 유도 (Substitution 방식)
+
+* 2SLS가 어떻게 작동하는지 수식 대입을 통해 확인해 봅시다.
+
+* $Y$ 식의 $X_i$ 자리에 First Stage 식($\pi_0 + \pi_1 Z_i + \pi_2 W_i + \epsilon_{1i}$)을 대입합니다.
+
+$$
+\begin{aligned}
+Y_i &= \beta_0 + \beta_1 {X}_i + \beta_2 {W}_i + \epsilon_{2i} \\
+&= \beta_0 + \beta_1(\pi_0 + \pi_1 Z_i + \pi_2 W_i + \epsilon_{1i}) + \beta_2 {W}_i + \epsilon_{2i} \\
+&= \beta_0 + \beta_1 (\pi_0 + \pi_1 Z_i + \pi_2 {W}_i) + \beta_2 {W}_i + \underbrace{\beta_1 \epsilon_{1i} + \epsilon_{2i}}_{\xi_i} \\
+\end{aligned}
+$$
+
+* 이를 다시 정리하면, $\pi_0 + \pi_1 Z_i + \pi_2 {W}_i$ 부분은 $E[X_i | W_i, Z_i]$ 즉, $\hat{X}_i$의 핵심 부분임을 알 수 있습니다.
+
+$$Y_i = \beta_0 + \underbrace{\beta_1 E[X_i | W_i, Z_i]}_{\hat{X_i}} + \beta_2 W_i + \xi_i$$
+
+* 결국 $Y$를 $\hat{X}$와 $W$에 대해 회귀분석하는 형태가 되며, 이때 $\hat{X}$의 계수는 원래 식의 $\beta_1$이 됩니다.
+
+---
+
+# 6. 행렬 연산 (Matrix Notation for 2SLS)
+
+## 6.1. Recap (Matrix Notation for OLS Regression)
+
+### 6.1.1. 선형 회귀 모형의 행렬 표현
+
+* 먼저, 선형 회귀 모형을 행렬 형태로 정의해 봅시다. 기본 식은 다음과 같습니다.
+
+$$
+y = X\beta + u
+$$
+
+* 여기서 각 변수가 의미하는 바를 구체적인 행렬로 풀어서 쓰면 다음과 같습니다. $X$는 $n \times k$ 행렬(matrix)입니다.
+
+$$
+y = \begin{pmatrix} y_1 \\ \vdots \\ y_n \end{pmatrix}, \quad 
+X = \begin{pmatrix} x'_1 \\ \vdots \\ x'_n \end{pmatrix} 
+= \begin{pmatrix} 
+1 & x_{12} & \cdots & x_{1k} \\ 
+\vdots & \vdots & \vdots & \vdots \\ 
+1 & x_{n2} & \cdots & x_{nk} 
+\end{pmatrix}, \quad 
+u = \begin{pmatrix} u_1 \\ \vdots \\ u_n \end{pmatrix}
+$$
+
+---
+
+### 6.1.2. 최소자승법(OLS) 추정량
+
+* 우리의 목표는 오차의 제곱합을 최소화하는 $\beta$의 추정량, 즉 $b$를 찾는 것입니다. 
+* 이를 위해 목적 함수 $S(b)$를 다음과 같이 정의합니다. 
+* 이는 관측값($y$)과 예측값($Xb$) 차이의 제곱합입니다.
+
+$$
+S(b) = (y - Xb)'(y - Xb)
+$$
+
+* OLS 추정량 $\hat{\beta}$는 이 $S(b)$를 최소화하는 값입니다.
+
+$$
+\hat{\beta} = \underset{b \in \mathbb{R}^k}{\arg \min} \, S(b) = (X'X)^{-1}X'y
+$$
+
+### 6.1.3. 유도 과정 (Derivation)
+
+* $S(b)$를 최소화하기 위해 $b$에 대해 미분을 수행합니다.
+
+#### 1단계: 1계 조건 (First Order Condition, FOC)
+
+* 목적 함수를 $b$로 미분했을 때 0이 되어야 합니다. 
+* 행렬 미분 공식을 적용하면 다음과 같습니다.
+
+$$
+\begin{aligned}
+\text{FOC : } \quad \frac{\partial S(b)}{\partial b} &= -2X'y + 2X'Xb \\
+&= -2X'(y - Xb) = 0
+\end{aligned}
+$$
+
+#### 2단계: 정규 방정식 (Normal Equation)과 해 구하기
+
+* 1계 조건(FOC)에 따라, 최적의 추정량 $\hat{\beta}$는 다음의 **정규 방정식(Normal Equation)**을 만족해야 합니다.
+
+$$
+X'(y - X\hat{\beta}) = 0
+$$
+
+* 이 식을 $\hat{\beta}$에 대해 정리해 봅시다. 
+* $X$가 **Full Rank**를 가진다고 가정하면, 역행렬이 존재하므로 유일한 해(unique solution)를 구할 수 있습니다.
+
+$$
+\begin{aligned}
+X'y - X'X\hat{\beta} &= 0 \\
+X'X\hat{\beta} &= X'y \\
+\therefore \quad \hat{\beta} &= (X'X)^{-1}X'y
+\end{aligned}
+$$
+
+
+### 6.1.4 기하학적 해석 (Geometric Interpretation)
+
+* 행렬 $X$를 열 벡터(column vector)들의 집합으로 생각해보겠습니다.
+
+$$
+X = (x_1, ..., x_k)
+$$
+
+* 여기서 $x_i$는 $X$의 $i$번째 열 벡터를 의미합니다. 
+* 이때 종속변수 벡터 $y$와 설명변수 벡터들 $x_1, ..., x_k$는 모두 $n$차원 유클리드 공간 $\mathbb{R}^n$ 상의 점(혹은 벡터)들입니다.
+
+#### 1. Range Space (열공간)의 정의
+
+* $X$의 **Range Space** (또는 Column Space, 열공간)인 $\mathcal{R}(X)$는 다음과 같이 정의됩니다.
+
+$$
+\begin{aligned}
+\mathcal{R}(X) &= \{ c \in \mathbb{R}^n : c = Xb \text{ for } b \in \mathbb{R}^k \} \\
+&= \{ c \in \mathbb{R}^n : c = x_1b_1 + \cdots + x_kb_k, \quad b = (b_1, ..., b_k)' \in \mathbb{R}^k \}
+\end{aligned}
+$$
+
+* 즉, $\mathcal{R}(X)$는 **$X$의 열 벡터($x_1, ..., x_k$)들의 선형 결합(linear combination)으로 만들 수 있는 모든 가능한 벡터들의 집합**을 의미합니다. 
+* 수학적으로는 $X$의 열들에 의해 생성(span)된 $\mathbb{R}^n$의 **선형 부분공간(linear subspace)**입니다.
+
+#### 2. 회귀분석(Regression)에서의 의미
+
+* 이 기하학적 정의는 회귀분석의 목표를 명확하게 보여줍니다.
+
+* 우리가 구하고자 하는 예측값 $\hat{y} = Xb$는 정의상 반드시 $\mathcal{R}(X)$ 안에 존재해야 합니다. 
+* 하지만 실제 관측값 $y$는 오차(error) 때문에 일반적으로 $\mathcal{R}(X)$ 바깥에 위치합니다.
+
+* 따라서 회귀분석(Regression Problem)은 기하학적으로 다음과 같이 해석됩니다:
+
+> **"$\mathcal{R}(X)$ 공간 안에 있는 수많은 점들 중에서, 실제 데이터 $y$와 가장 가까운 점(closest point)을 찾는 과정"**
+
+* 이 '가장 가까운 점'을 찾기 위해 우리는 수직 투영(Orthogonal Projection)을 사용하게 되며, 이것이 바로 최소자승법(OLS)의 원리입니다.
+
+---
+
+## 6.2. Estimating 2SLS Models
+### 1. 모형 설정 및 변수 정의
+
+* 2SLS(Two-Stage Least Squares) 모형을 추정하기 위해 변수들을 다음과 같이 정의합니다.
+
+* $\mathbf{y}$: 종속 변수 벡터 ($n \times 1$)
+* $\mathbf{X}$: 내생 변수(Endogenous variables) 행렬 ($n \times k_1$)
+* $\mathbf{W}$: 외생 변수(Exogenous regressors) 행렬 ($n \times k_2$)
+* $\mathbf{Z}$: 도구 변수(Instruments) 행렬. 여기에는 외생 변수 $\mathbf{W}$가 포함됩니다. ($\mathbf{Z} = [\mathbf{Z}_1 \; \mathbf{W}]$)
+
+* 우리의 목표는 아래의 2SLS 추정량을 유도하는 것입니다.
+
+$$
+\hat{\Gamma}_{2SLS} = \left( [\hat{\mathbf{X}}\; \mathbf{W}]' [\hat{\mathbf{X}}\; \mathbf{W}] \right)^{-1} [\hat{\mathbf{X}}\; \mathbf{W}]' \mathbf{y}
+$$
+
+* 여기서 $[\hat{\mathbf{X}}\; \mathbf{W}]$는 1단계 회귀분석을 통해 예측된 내생변수 $\hat{\mathbf{X}}$와 기존의 외생변수 $\mathbf{W}$를 합친 **새로운 설명변수 행렬** ($n \times (k_1 + k_2)$)입니다. 
+* 이를 원소별로 풀어서 쓰면 다음과 같습니다.
+$$
+[\hat{\mathbf{X}}\; \mathbf{W}] = 
+\begin{pmatrix}
+\hat{x}_{1,1} & \cdots & \hat{x}_{1,k_1} & w_{1,1} & \cdots & w_{1,k_2} \\
+\vdots & \ddots & \vdots & \vdots & \ddots & \vdots \\
+\hat{x}_{n,1} & \cdots & \hat{x}_{n,k_1} & w_{n,1} & \cdots & w_{n,k_2}
+\end{pmatrix}
+$$
+    * 좌측 블록($\hat{\mathbf{X}}$)은 도구변수($\mathbf{Z}$)로 예측된 값들로 구성되어 있고, 우측 블록($\mathbf{W}$)은 원래의 외생변수 값들이 그대로 들어갑니다.
+    
+---
+
+### 2. 사영 행렬(Projection Matrix) $P_Z$ 의 도입
+
+* 도구변수 $\mathbf{Z}$에 의한 사영 행렬(Projection Matrix)을 $P_Z$라고 표기하겠습니다.
+
+$$
+P_Z = \mathbf{Z}(\mathbf{Z}'\mathbf{Z})^{-1}\mathbf{Z}'
+$$
+
+* 이 행렬 $P_Z$은 다음과 같은 매우 중요한 두 가지 성질을 가집니다.
+
+    * 1.  **대칭성 (Symmetric):** $P_Z' = P_Z$
+    * 2.  **멱등성 (Idempotent):** $P_ZP_Z = P_Z$
+
+---
+
+## 3. A 부분의 유도 (행렬의 곱)
+
+* 추정량의 앞부분인 역행렬 내부, 즉 $A = [\hat{\mathbf{X}}\; \mathbf{W}]' [\hat{\mathbf{X}}\; \mathbf{W}]$를 정리해 봅시다.
+* 도구변수 $\mathbf{Z}$에 의한 사영 행렬(Projection Matrix)을 **$P_Z$**라고 합시다. ($P_Z = \mathbf{Z}(\mathbf{Z}'\mathbf{Z})^{-1}\mathbf{Z}'$)
+* 1단계 예측값 $\hat{\mathbf{X}}$는 $\mathbf{X}$를 투영한 것이므로 $\hat{\mathbf{X}} = P_Z\mathbf{X}$입니다.
+* 외생변수 $\mathbf{W}$는 도구변수 $\mathbf{Z}$에 포함되므로 투영해도 자신이 됩니다. 즉, $P_Z\mathbf{W} = \mathbf{W}$입니다.
+
+* 따라서 전체 설명변수 행렬은 $P_Z$를 묶어 다음과 같이 쓸 수 있습니다.
+
+$$
+\begin{aligned} \\
+[\hat{\mathbf{X}} \quad \mathbf{W}] &= [P_Z\mathbf{X} \quad P_Z\mathbf{W}] \\
+&= P_Z [\mathbf{X} \quad \mathbf{W}]
+\end{aligned}
+$$
+
+* 이제 편의상 전체 설명변수 행렬을 $\mathbf{R} = [\mathbf{X} \quad \mathbf{W}]$라 정의하고 $A$를 전개합니다. 
+
+$$
+\begin{aligned}
+A &= (P_Z\mathbf{R})' (P_Z\mathbf{R}) \\
+&= \mathbf{R}' P_Z' P_Z \mathbf{R} \\
+&= \mathbf{R}' P_Z P_Z \mathbf{R} \quad (\because P_Z' = P_Z) \\
+&= \mathbf{R}' P_Z \mathbf{R} \quad (\because P_Z P_Z = P_Z)
+\end{aligned}
+$$
+
+---
+
+## 4. B 부분의 유도 ($y$와의 곱)
+
+* 추정량의 뒷부분인 $B = [\hat{\mathbf{X}}\; \mathbf{W}]' \mathbf{y}$ 도 동일한 방식으로 전개합니다.
+
+$$
+\begin{aligned}
+B &= (P_Z\mathbf{R})' \mathbf{y} \\
+&= \mathbf{R}' P_Z' \mathbf{y} \\
+&= \mathbf{R}' P_Z \mathbf{y} \quad (\because P_Z' = P_Z)
+\end{aligned}
+$$
+
+---
+
+## 5. 최종 결과: 2SLS 추정량
+
+* 위의 $A$와 $B$ 결과를 합치면 다음과 같습니다.
+
+$$
+\begin{aligned}
+\hat{\Gamma}_{2SLS} &= A^{-1} B \\
+&= (\mathbf{R}' P_Z \mathbf{R})^{-1} \mathbf{R}' P_Z \mathbf{y}
+\end{aligned}
+$$
+
+* 이 식은 **"원래의 변수 행렬($\mathbf{R}$ 혹은 $\mathbf{W}_{all}$)을 도구변수 공간에 투영($P_Z$)시킨 뒤, 그 투영된 변수들을 사용하여 OLS를 수행하는 것"**과 수학적으로 동일함을 보여줍니다.

@@ -23,16 +23,36 @@
 
 <section id="introduction-why-adaptive" class="level1">
 <h1>Introduction: Why Adaptive?</h1>
-<p>이전 포스트(Section 1)에서 다룬 기본적인 Conformal Prediction 방법은 단순하고 강력하지만 한 가지 단점이 있습니다. 기존 방식(Naive method)은 단순히 <img src="https://latex.codecogs.com/png.latex?1%20-%20%5Chat%7Bf%7D(x)_y">를 점수로 사용하기 때문에, 모든 클래스에 대해 고정된 임계값(Threshold)을 적용하는 경향이 있습니다.</p>
-<p>이로 인해 다음과 같은 문제가 발생합니다: 1. <strong>Hard Inputs (어려운 이미지)</strong>: 모델이 헷갈려하는 경우에도 예측 집합이 충분히 커지지 않아 정답을 놓칠 수 있습니다 (Under-coverage). 2. <strong>Easy Inputs (쉬운 이미지)</strong>: 모델이 확신하는 경우에도 예측 집합이 불필요하게 클 수 있습니다 (Over-coverage).</p>
-<p>우리는 입력 이미지의 난이도에 따라 <strong>어려우면 집합을 크게, 쉬우면 집합을 작게</strong> 만드는 <strong>Adaptive Prediction Sets (APS)</strong> 기법을 도입하여 이 문제를 해결할 것입니다.</p>
+<ul>
+<li><p>이전 포스트(Section 1)에서 다룬 기본적인 Conformal Prediction 방법은 단순하고 강력하지만 한 가지 단점이 있습니다.</p></li>
+<li><p>기존 방식(Naive method)은 단순히 <img src="https://latex.codecogs.com/png.latex?1%20-%20%5Chat%7Bf%7D(x)_y">를 점수로 사용하기 때문에, 모든 클래스에 대해 고정된 임계값(Threshold)을 적용하는 경향이 있습니다.</p></li>
+<li><p>이로 인해 다음과 같은 문제가 발생합니다:</p>
+<ul>
+<li><ol type="1">
+<li><strong>Hard Inputs (어려운 이미지)</strong>: 모델이 헷갈려하는 경우에도 예측 집합이 충분히 커지지 않아 정답을 놓칠 수 있습니다 (Under-coverage).</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Easy Inputs (쉬운 이미지)</strong>: 모델이 확신하는 경우에도 예측 집합이 불필요하게 클 수 있습니다 (Over-coverage).</li>
+</ol></li>
+</ul></li>
+<li><p>우리는 입력 이미지의 난이도에 따라 <strong>어려우면 집합을 크게, 쉬우면 집합을 작게</strong> 만드는 <strong>Adaptive Prediction Sets (APS)</strong> 기법을 도입하여 이 문제를 해결할 것입니다.</p></li>
+</ul>
 </section>
 <section id="the-intuition-water-filling-approach" class="level1">
 <h1>The Intuition: “Water-filling” Approach</h1>
-<p>APS의 핵심 아이디어는 직관적입니다. 만약 모델의 예측 확률 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)">가 완벽하다면, 우리는 확률이 높은 클래스부터 순서대로 골라 담으면서 그 <strong>확률의 합(Cumulative Sum)이 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> (예: 90%)를 넘기는 순간</strong> 멈추면 됩니다.</p>
+<ul>
+<li>APS의 핵심 아이디어는 직관적입니다.</li>
+<li>만약 모델의 예측 확률 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)">가 완벽하다면, 우리는 확률이 높은 클래스부터 순서대로 골라 담으면서 그 <strong>확률의 합(Cumulative Sum)이 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> (예: 90%)를 넘기는 순간</strong> 멈추면 됩니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A%5Csum_%7Bj=1%7D%5E%7Bk%7D%20%5Chat%7Bf%7D(x)_%7B%5Cpi_j(x)%7D%20%5Cge%201%20-%20%5Calpha%0A"></p>
-<p>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cpi(x)">는 확률이 높은 순서대로 정렬된 클래스의 순열(Permutation)입니다. 이 방식은 “컵에 물(확률)을 <img src="https://latex.codecogs.com/png.latex?90%5C%25">가 찰 때까지 붓는 것”과 유사합니다. * <strong>쉬운 문제</strong>: 확률 분포가 뾰족(Peaked)하므로, 1~2개만 담아도 금방 <img src="https://latex.codecogs.com/png.latex?90%5C%25">가 찹니다. <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Small Set</strong> * <strong>어려운 문제</strong>: 확률 분포가 평평(Flat)하므로, 여러 개를 담아야 <img src="https://latex.codecogs.com/png.latex?90%5C%25">가 찹니다. <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Large Set</strong></p>
-<p>하지만 실제 모델의 확률 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)">는 완벽하지 않으므로(Overconfident/Underconfident), 단순히 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha">에서 끊으면 커버리지를 보장할 수 없습니다. 따라서 <strong>Conformal Prediction을 사용하여 이 “멈추는 지점(Threshold)”을 보정</strong>해야 합니다.</p>
+<ul>
+<li><p>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cpi(x)">는 확률이 높은 순서대로 정렬된 클래스의 순열(Permutation)입니다.</p></li>
+<li><p>이 방식은 “컵에 물(확률)을 <img src="https://latex.codecogs.com/png.latex?90%5C%25">가 찰 때까지 붓는 것”과 유사합니다.</p></li>
+<li><p><strong>쉬운 문제</strong>: 확률 분포가 뾰족(Peaked)하므로, 1~2개만 담아도 금방 <img src="https://latex.codecogs.com/png.latex?90%5C%25">가 찹니다. <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Small Set</strong></p></li>
+<li><p><strong>어려운 문제</strong>: 확률 분포가 평평(Flat)하므로, 여러 개를 담아야 <img src="https://latex.codecogs.com/png.latex?90%5C%25">가 찹니다. <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Large Set</strong></p></li>
+<li><p>하지만 실제 모델의 확률 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)">는 완벽하지 않으므로(Overconfident/Underconfident), 단순히 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha">에서 끊으면 커버리지를 보장할 수 없습니다.</p></li>
+<li><p>따라서 <strong>Conformal Prediction을 사용하여 이 “멈추는 지점(Threshold)”을 보정</strong>해야 합니다.</p></li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-02-Examples-of-Conformal-Procedures/Part-02-01-Classification-wiht-Adaptive-Prediction-Sets/images/figure4_aps_visualization.png" class="img-fluid figure-img"></p>
@@ -42,39 +62,58 @@
 </section>
 <section id="mathematical-formulation" class="level1">
 <h1>Mathematical Formulation</h1>
-<p>이제 이를 수학적으로 엄밀하게 정의해보겠습니다.</p>
+<ul>
+<li>이제 이를 수학적으로 엄밀하게 정의해보겠습니다.</li>
+</ul>
 <section id="defining-the-score-function" class="level2">
 <h2 class="anchored" data-anchor-id="defining-the-score-function">1. Defining the Score Function</h2>
-<p>APS를 위한 Score Function <img src="https://latex.codecogs.com/png.latex?s(x,%20y)">는 <strong>“정답 클래스 <img src="https://latex.codecogs.com/png.latex?y">를 포함시키기 위해, 확률 상위 몇 번째 클래스까지 내려가야 하는가?”</strong>를 누적 확률로 나타냅니다.</p>
-<p>먼저, 입력 <img src="https://latex.codecogs.com/png.latex?x">에 대해 모델이 예측한 확률을 내림차순으로 정렬하는 순열 함수 <img src="https://latex.codecogs.com/png.latex?%5Cpi(x)">를 정의합니다. <img src="https://latex.codecogs.com/png.latex?%20%5Chat%7Bf%7D(x)_%7B%5Cpi_1(x)%7D%20%5Cge%20%5Chat%7Bf%7D(x)_%7B%5Cpi_2(x)%7D%20%5Cge%20%5Cdots%20%5Cge%20%5Chat%7Bf%7D(x)_%7B%5Cpi_K(x)%7D%20"></p>
-<p>이때, 정답 클래스 <img src="https://latex.codecogs.com/png.latex?y">가 정렬된 순서상 <img src="https://latex.codecogs.com/png.latex?k">번째에 위치한다고 가정합시다 (<img src="https://latex.codecogs.com/png.latex?y%20=%20%5Cpi_k(x)">). Score <img src="https://latex.codecogs.com/png.latex?s(x,%20y)">는 <img src="https://latex.codecogs.com/png.latex?y">까지의 누적 확률 질량(Cumulative Probability Mass)으로 정의됩니다:</p>
+<ul>
+<li><p>APS를 위한 Score Function <img src="https://latex.codecogs.com/png.latex?s(x,%20y)">는 <strong>“정답 클래스 <img src="https://latex.codecogs.com/png.latex?y">를 포함시키기 위해, 확률 상위 몇 번째 클래스까지 내려가야 하는가?”</strong>를 누적 확률로 나타냅니다.</p></li>
+<li><p>먼저, 입력 <img src="https://latex.codecogs.com/png.latex?x">에 대해 모델이 예측한 확률을 내림차순으로 정렬하는 순열 함수 <img src="https://latex.codecogs.com/png.latex?%5Cpi(x)">를 정의합니다. <img src="https://latex.codecogs.com/png.latex?%20%5Chat%7Bf%7D(x)_%7B%5Cpi_1(x)%7D%20%5Cge%20%5Chat%7Bf%7D(x)_%7B%5Cpi_2(x)%7D%20%5Cge%20%5Cdots%20%5Cge%20%5Chat%7Bf%7D(x)_%7B%5Cpi_K(x)%7D%20"></p></li>
+<li><p>이때, 정답 클래스 <img src="https://latex.codecogs.com/png.latex?y">가 정렬된 순서상 <img src="https://latex.codecogs.com/png.latex?k">번째에 위치한다고 가정합시다 (<img src="https://latex.codecogs.com/png.latex?y%20=%20%5Cpi_k(x)">).</p></li>
+<li><p>Score <img src="https://latex.codecogs.com/png.latex?s(x,%20y)">는 <img src="https://latex.codecogs.com/png.latex?y">까지의 누적 확률 질량(Cumulative Probability Mass)으로 정의됩니다:</p></li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0As(x,y)%20=%20%5Csum_%7Bj=1%7D%5E%7Bk%7D%20%5Chat%7Bf%7D(x)_%7B%5Cpi_j(x)%7D%0A"></p>
 <ul>
-<li><strong>의미</strong>: “모델이 가장 가능성 높다고 생각하는 것부터 정답 <img src="https://latex.codecogs.com/png.latex?y">가 나올 때까지 확률을 다 더한 값”입니다.</li>
+<li><strong>의미</strong>: “모델이 가장 가능성 높다고 생각하는 것부터 정답 <img src="https://latex.codecogs.com/png.latex?y">가 나올 때까지 확률을 다 더한 값”입니다.
+<ul>
 <li>만약 모델이 정답을 1순위로 예측했다면, <img src="https://latex.codecogs.com/png.latex?s(x,y)">는 작을 것입니다.</li>
 <li>만약 모델이 정답을 하위권으로 예측했다면, <img src="https://latex.codecogs.com/png.latex?s(x,y)">는 1에 가까워질 것입니다.</li>
+</ul></li>
 </ul>
 </section>
 <section id="calibration-finding-hatq" class="level2">
 <h2 class="anchored" data-anchor-id="calibration-finding-hatq">2. Calibration (Finding <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">)</h2>
-<p>이제 Calibration 데이터셋 <img src="https://latex.codecogs.com/png.latex?(X_1,%20Y_1),%20%5Cdots,%20(X_n,%20Y_n)">에 대해 위 점수들을 계산합니다. 그리고 다음 식을 만족하는 분위수(Quantile) <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 찾습니다.</p>
+<ul>
+<li>이제 Calibration 데이터셋 <img src="https://latex.codecogs.com/png.latex?(X_1,%20Y_1),%20%5Cdots,%20(X_n,%20Y_n)">에 대해 위 점수들을 계산합니다.</li>
+<li>그리고 다음 식을 만족하는 분위수(Quantile) <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 찾습니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7Bq%7D%20=%20%5Ctext%7BQuantile%7D%5Cleft(%20%5Cfrac%7B%5Clceil%20(n+1)(1-%5Calpha)%20%5Crceil%7D%7Bn%7D%20;%20%5C%7Bs_1,%20%5Cdots,%20s_n%5C%7D%20%5Cright)%0A"></p>
-<p>이 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">는 “정답을 포함하기 위해 누적 확률을 어디까지 허용해야 하는가?”에 대한 통계적 임계값입니다.</p>
+<ul>
+<li>이 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">는 “정답을 포함하기 위해 누적 확률을 어디까지 허용해야 하는가?”에 대한 통계적 임계값입니다.</li>
+</ul>
 </section>
 <section id="constructing-the-prediction-set" class="level2">
 <h2 class="anchored" data-anchor-id="constructing-the-prediction-set">3. Constructing the Prediction Set</h2>
-<p>새로운 테스트 데이터 <img src="https://latex.codecogs.com/png.latex?X_%7Btest%7D">에 대해 예측 집합 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BC%7D(X_%7Btest%7D)">는 누적 확률이 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 넘어서는 지점까지의 모든 클래스를 포함하여 구성됩니다.</p>
+<ul>
+<li>새로운 테스트 데이터 <img src="https://latex.codecogs.com/png.latex?X_%7Btest%7D">에 대해 예측 집합 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BC%7D(X_%7Btest%7D)">는 누적 확률이 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 넘어서는 지점까지의 모든 클래스를 포함하여 구성됩니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BC%7D(x)%20=%20%5C%7B%20%5Cpi_1(x),%20%5Cdots,%20%5Cpi_k(x)%20%5C%7D%0A"></p>
-<p>여기서 <img src="https://latex.codecogs.com/png.latex?k">는 다음을 만족하는 가장 작은 정수입니다: <img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7Bsup%7D%20%5Cleft%5C%7B%20k'%20:%20%5Csum_%7Bj=1%7D%5E%7Bk'%7D%20%5Chat%7Bf%7D(x)_%7B%5Cpi_j(x)%7D%20%3C%20%5Chat%7Bq%7D%20%5Cright%5C%7D%20+%201%0A"> 즉, 누적 합이 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 초과하는 순간까지 포함합니다. (수식 (3))</p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?k">는 다음을 만족하는 가장 작은 정수입니다: <img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7Bsup%7D%20%5Cleft%5C%7B%20k'%20:%20%5Csum_%7Bj=1%7D%5E%7Bk'%7D%20%5Chat%7Bf%7D(x)_%7B%5Cpi_j(x)%7D%20%3C%20%5Chat%7Bq%7D%20%5Cright%5C%7D%20+%201%0A"></li>
+<li>즉, 누적 합이 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 초과하는 순간까지 포함합니다.</li>
+</ul>
 </section>
 </section>
 <section id="implementation-steps" class="level1">
 <h1>Implementation Steps</h1>
-<p>Python 코드로 구현할 때의 핵심 로직은 다음과 같습니다.</p>
+<ul>
+<li>Python 코드로 구현할 때의 핵심 로직은 다음과 같습니다.</li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-02-Examples-of-Conformal-Procedures/Part-02-01-Classification-wiht-Adaptive-Prediction-Sets/images/figure3_aps_python_code.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: Adaptive Prediction Sets 구현을 위한 Python 코드 예시. <code>argsort</code>를 통해 정렬하고 <code>cumsum</code>을 통해 누적 확률을 계산하는 과정이 포함되어 있다.</figcaption>
+<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-02-Examples-of-Conformal-Procedures/Part-02-01-Classification-wiht-Adaptive-Prediction-Sets/images/figure5_aps_python_code.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 5: Adaptive Prediction Sets 구현을 위한 Python 코드 예시. <code>argsort</code>를 통해 정렬하고 <code>cumsum</code>을 통해 누적 확률을 계산하는 과정이 포함되어 있다.</figcaption>
 </figure>
 </div>
 <ol type="1">
@@ -86,7 +125,12 @@
 </section>
 <section id="summary" class="level1">
 <h1>Summary</h1>
-<p><strong>Adaptive Prediction Sets (APS)</strong>는 불확실성을 더 지능적으로 다루는 방법입니다. * 단순히 모델의 Softmax 값 하나만 보는 것이 아니라, <strong>전체 확률 분포의 형상(Shape)</strong>을 고려합니다. * 그 결과, <strong>쉬운 샘플에는 작은 집합</strong>을, <strong>어려운 샘플에는 큰 집합</strong>을 할당하여 사용자가 모델의 신뢰도를 직관적으로 파악할 수 있게 해줍니다. * 이 모든 과정에서도 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha">라는 통계적 커버리지는 엄격하게 보장됩니다.</p>
+<ul>
+<li><strong>Adaptive Prediction Sets (APS)</strong>는 불확실성을 더 지능적으로 다루는 방법입니다.</li>
+<li>단순히 모델의 Softmax 값 하나만 보는 것이 아니라, <strong>전체 확률 분포의 형상(Shape)</strong>을 고려합니다.</li>
+<li>그 결과, <strong>쉬운 샘플에는 작은 집합</strong>을, <strong>어려운 샘플에는 큰 집합</strong>을 할당하여 사용자가 모델의 신뢰도를 직관적으로 파악할 수 있게 해줍니다.</li>
+<li>이 모든 과정에서도 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha">라는 통계적 커버리지는 엄격하게 보장됩니다.</li>
+</ul>
 <hr>
 <p><strong>Next Step</strong>: 다음 포스트에서는 연속적인 값을 예측하는 회귀(Regression) 문제에서 불확실성 구간을 구하는 <strong>Conformalized Quantile Regression</strong>에 대해 알아보겠습니다.</p>
 
@@ -110,23 +154,36 @@
 
 <section id="introduction" class="level1">
 <h1>Introduction</h1>
-<p>이전 포스트에서는 분류(Classification) 문제에 대한 Conformal Prediction을 다루었습니다. 이번에는 <strong>연속적인 값(Continuous Output)을 예측하는 회귀(Regression)</strong> 문제로 넘어가 보겠습니다.</p>
-<p>회귀 문제에서 우리의 목표는 입력 <img src="https://latex.codecogs.com/png.latex?x">에 대해 단순히 하나의 예측값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7By%7D">를 내놓는 것이 아니라, 정답 <img src="https://latex.codecogs.com/png.latex?y">가 포함될 확률이 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> (예: 90%)인 <strong>예측 구간(Prediction Interval)</strong>을 생성하는 것입니다.</p>
+<ul>
+<li><p>이전 포스트에서는 분류(Classification) 문제에 대한 Conformal Prediction을 다루었습니다.</p></li>
+<li><p>이번에는 <strong>연속적인 값(Continuous Output)을 예측하는 회귀(Regression)</strong> 문제로 넘어가 보겠습니다.</p></li>
+<li><p>회귀 문제에서 우리의 목표는 입력 <img src="https://latex.codecogs.com/png.latex?x">에 대해 단순히 하나의 예측값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7By%7D">를 내놓는 것이 아니라, 정답 <img src="https://latex.codecogs.com/png.latex?y">가 포함될 확률이 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> (예: 90%)인 <strong>예측 구간(Prediction Interval)</strong>을 생성하는 것입니다.</p></li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BC%7D(x)%20=%20%5B%5Ctext%7BLower%20Bound%7D,%20%5Ctext%7BUpper%20Bound%7D%5D%0A"></p>
-<p>이를 위해 가장 효과적인 베이스 모델 중 하나인 <strong>Quantile Regression</strong>을 사용하고, CP를 통해 이를 보정하는 <strong>Conformalized Quantile Regression (CQR)</strong> 기법을 알아보겠습니다.</p>
+<ul>
+<li>이를 위해 가장 효과적인 베이스 모델 중 하나인 <strong>Quantile Regression</strong>을 사용하고, CP를 통해 이를 보정하는 <strong>Conformalized Quantile Regression (CQR)</strong> 기법을 알아보겠습니다.</li>
+</ul>
 </section>
 <section id="base-model-quantile-regression" class="level1">
 <h1>Base Model: Quantile Regression</h1>
 <section id="concept" class="level2">
 <h2 class="anchored" data-anchor-id="concept">Concept</h2>
-<p>일반적인 회귀 모델은 평균(Mean)을 예측(MSE Loss 사용)하지만, <strong>Quantile Regression</strong>은 조건부 분포의 특정 분위수(Quantile)를 예측합니다.</p>
-<p>90%의 커버리지를 목표로 한다면, 우리는 양쪽 꼬리에서 5%씩을 제외한 구간을 알고 싶을 것입니다. 즉, 다음 두 가지 분위수를 학습합니다: * <strong>Lower Quantile</strong>: <img src="https://latex.codecogs.com/png.latex?%5Calpha/2%20=%200.05"> (5% 지점) * <strong>Upper Quantile</strong>: <img src="https://latex.codecogs.com/png.latex?1%20-%20%5Calpha/2%20=%200.95"> (95% 지점)</p>
-<p>모델이 완벽하다면, 정답 <img src="https://latex.codecogs.com/png.latex?y">는 90%의 확률로 이 구간 <img src="https://latex.codecogs.com/png.latex?%5B%5Chat%7Bt%7D_%7B%5Calpha/2%7D(x),%20%5Chat%7Bt%7D_%7B1-%5Calpha/2%7D(x)%5D"> 사이에 존재해야 합니다.</p>
+<ul>
+<li><p>일반적인 회귀 모델은 평균(Mean)을 예측(MSE Loss 사용)하지만, <strong>Quantile Regression</strong>은 조건부 분포의 특정 분위수(Quantile)를 예측합니다.</p></li>
+<li><p>90%의 커버리지를 목표로 한다면, 우리는 양쪽 꼬리에서 5%씩을 제외한 구간을 알고 싶을 것입니다. 즉, 다음 두 가지 분위수를 학습합니다:</p>
+<ul>
+<li><strong>Lower Quantile</strong>: <img src="https://latex.codecogs.com/png.latex?%5Calpha/2%20=%200.05"> (5% 지점)</li>
+<li><strong>Upper Quantile</strong>: <img src="https://latex.codecogs.com/png.latex?1%20-%20%5Calpha/2%20=%200.95"> (95% 지점)</li>
+</ul></li>
+<li><p>모델이 완벽하다면, 정답 <img src="https://latex.codecogs.com/png.latex?y">는 90%의 확률로 이 구간 <img src="https://latex.codecogs.com/png.latex?%5B%5Chat%7Bt%7D_%7B%5Calpha/2%7D(x),%20%5Chat%7Bt%7D_%7B1-%5Calpha/2%7D(x)%5D"> 사이에 존재해야 합니다.</p></li>
+</ul>
 </section>
 <section id="quantile-loss-pinball-loss" class="level2">
 <h2 class="anchored" data-anchor-id="quantile-loss-pinball-loss">Quantile Loss (Pinball Loss)</h2>
-<p>이러한 분위수를 학습하기 위해 <strong>Quantile Loss (Pinball Loss)</strong>를 사용합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AL_%7B%5Cgamma%7D(%5Chat%7Bt%7D_%7B%5Cgamma%7D,%20y)%20=%20(y%20-%20%5Chat%7Bt%7D_%7B%5Cgamma%7D)%5Cgamma%20%5Cmathbb%7BI%7D%5C%7By%20%3E%20%5Chat%7Bt%7D_%7B%5Cgamma%7D%5C%7D%20+%20(%5Chat%7Bt%7D_%7B%5Cgamma%7D%20-%20y)(1-%5Cgamma)%5Cmathbb%7BI%7D%5C%7By%20%5Cle%20%5Chat%7Bt%7D_%7B%5Cgamma%7D%5C%7D%0A"></p>
+<ul>
+<li>이러한 분위수를 학습하기 위해 <strong>Quantile Loss (Pinball Loss)</strong>를 사용합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AL_%7B%5Cgamma%7D(%5Chat%7Bt%7D_%7B%5Cgamma%7D,%20y)%20=%20(y%20-%20%5Chat%7Bt%7D_%7B%5Cgamma%7D)%5Cgamma%20%5Cmathbb%7B1%7D%5C%7By%20%3E%20%5Chat%7Bt%7D_%7B%5Cgamma%7D%5C%7D%20+%20(%5Chat%7Bt%7D_%7B%5Cgamma%7D%20-%20y)(1-%5Cgamma)%5Cmathbb%7B1%7D%5C%7By%20%5Cle%20%5Chat%7Bt%7D_%7B%5Cgamma%7D%5C%7D%0A"></p>
 <ul>
 <li><img src="https://latex.codecogs.com/png.latex?%5Cgamma">: 타겟 분위수 (예: 0.05 또는 0.95)</li>
 <li>이 손실 함수를 사용하여 뉴럴 네트워크 등 어떤 모델이든 특정 분위수를 예측하도록 학습시킬 수 있습니다.</li>
@@ -135,22 +192,46 @@
 </section>
 <section id="the-problem-why-conformalize" class="level1">
 <h1>The Problem: Why Conformalize?</h1>
-<p>Quantile Regression으로 구한 구간 <img src="https://latex.codecogs.com/png.latex?%5B%5Chat%7Bt%7D_%7B0.05%7D(x),%20%5Chat%7Bt%7D_%7B0.95%7D(x)%5D">는 꽤 훌륭한 불확실성 추정치입니다. 하지만 문제는 <strong>“Finite Sample”에서 90% 커버리지를 보장하지 못한다</strong>는 점입니다. 모델이 과적합(Overfitting)되거나 학습이 덜 되면, 실제 정답이 이 구간을 벗어나는 비율이 10%보다 훨씬 클 수도, 작을 수도 있습니다.</p>
-<p>따라서 우리는 Conformal Prediction을 사용하여 이 구간을 <strong>보정(Calibrate)</strong>해야 합니다.</p>
+<ul>
+<li><p>Quantile Regression으로 구한 구간 <img src="https://latex.codecogs.com/png.latex?%5B%5Chat%7Bt%7D_%7B0.05%7D(x),%20%5Chat%7Bt%7D_%7B0.95%7D(x)%5D">는 꽤 훌륭한 불확실성 추정치입니다.</p></li>
+<li><p>하지만 문제는 <strong>“Finite Sample”에서 90% 커버리지를 보장하지 못한다</strong>는 점입니다.</p></li>
+<li><p>모델이 과적합(Overfitting)되거나 학습이 덜 되면, 실제 정답이 이 구간을 벗어나는 비율이 10%보다 훨씬 클 수도, 작을 수도 있습니다.</p></li>
+<li><p>따라서 우리는 Conformal Prediction을 사용하여 이 구간을 <strong>보정(Calibrate)</strong>해야 합니다.</p></li>
+</ul>
 </section>
 <section id="conformalized-quantile-regression-algorithm" class="level1">
 <h1>Conformalized Quantile Regression Algorithm</h1>
-<p>CQR의 핵심 아이디어는 학습된 분위수 구간을 <strong><img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">만큼 늘리거나 줄여서</strong> 엄밀한 커버리지를 맞추는 것입니다.</p>
+<ul>
+<li>CQR의 핵심 아이디어는 학습된 분위수 구간을 <strong><img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">만큼 늘리거나 줄여서</strong> 엄밀한 커버리지를 맞추는 것입니다.</li>
+</ul>
 <section id="step-1-define-score-function" class="level2">
 <h2 class="anchored" data-anchor-id="step-1-define-score-function">Step 1: Define Score Function</h2>
-<p>Calibration 데이터 <img src="https://latex.codecogs.com/png.latex?(X_i,%20Y_i)">에 대해, 정답 <img src="https://latex.codecogs.com/png.latex?Y_i">가 학습된 구간 <img src="https://latex.codecogs.com/png.latex?%5B%5Chat%7Bt%7D_%7B%5Calpha/2%7D(X_i),%20%5Chat%7Bt%7D_%7B1-%5Calpha/2%7D(X_i)%5D"> 밖으로 얼마나 나갔는지를 측정하는 Score를 정의합니다.</p>
+<ul>
+<li>Calibration 데이터 <img src="https://latex.codecogs.com/png.latex?(X_i,%20Y_i)">에 대해, 정답 <img src="https://latex.codecogs.com/png.latex?Y_i">가 학습된 구간 <img src="https://latex.codecogs.com/png.latex?%5B%5Chat%7Bt%7D_%7B%5Calpha/2%7D(X_i),%20%5Chat%7Bt%7D_%7B1-%5Calpha/2%7D(X_i)%5D"> 밖으로 얼마나 나갔는지를 측정하는 Score를 정의합니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0As(x,%20y)%20=%20%5Cmax%20%5C%7B%20%5Chat%7Bt%7D_%7B%5Calpha/2%7D(x)%20-%20y,%20%5Cquad%20y%20-%20%5Chat%7Bt%7D_%7B1-%5Calpha/2%7D(x)%20%5C%7D%0A"></p>
-<p>이 식의 의미를 직관적으로 살펴봅시다: * <strong>Case 1: <img src="https://latex.codecogs.com/png.latex?y">가 구간 안에 있을 때</strong>: * <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bt%7D_%7B%5Ctext%7Blower%7D%7D%20%3C%20y%20%3C%20%5Chat%7Bt%7D_%7B%5Ctext%7Bupper%7D%7D"> 이므로, 두 항 모두 음수가 됩니다. * <img src="https://latex.codecogs.com/png.latex?s(x,%20y)%20%3C%200"> (즉, 안전함) * <strong>Case 2: <img src="https://latex.codecogs.com/png.latex?y">가 구간 밖(위쪽)에 있을 때</strong>: * <img src="https://latex.codecogs.com/png.latex?y%20%3E%20%5Chat%7Bt%7D_%7B%5Ctext%7Bupper%7D%7D"> 이므로 <img src="https://latex.codecogs.com/png.latex?y%20-%20%5Chat%7Bt%7D_%7B%5Ctext%7Bupper%7D%7D"> 가 양수가 됩니다. * <img src="https://latex.codecogs.com/png.latex?s(x,%20y)%20%3E%200"> (즉, 위험함/에러)</p>
-<p>즉, 점수 <img src="https://latex.codecogs.com/png.latex?s">가 클수록 정답이 예측 구간을 크게 벗어났음을 의미합니다.</p>
+<ul>
+<li>이 식의 의미를 직관적으로 살펴봅시다:
+<ul>
+<li><strong>Case 1: <img src="https://latex.codecogs.com/png.latex?y">가 구간 안에 있을 때</strong>:
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Chat%7Bt%7D_%7B%5Ctext%7Blower%7D%7D%20%3C%20y%20%3C%20%5Chat%7Bt%7D_%7B%5Ctext%7Bupper%7D%7D"> 이므로, 두 항 모두 음수가 됩니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?s(x,%20y)%20%3C%200"> (즉, 안전함)</li>
+</ul></li>
+<li><strong>Case 2: <img src="https://latex.codecogs.com/png.latex?y">가 구간 밖(위쪽)에 있을 때</strong>:
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?y%20%3E%20%5Chat%7Bt%7D_%7B%5Ctext%7Bupper%7D%7D"> 이므로 <img src="https://latex.codecogs.com/png.latex?y%20-%20%5Chat%7Bt%7D_%7B%5Ctext%7Bupper%7D%7D"> 가 양수가 됩니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?s(x,%20y)%20%3E%200"> (즉, 위험함/에러)</li>
+</ul></li>
+</ul></li>
+<li>즉, 점수 <img src="https://latex.codecogs.com/png.latex?s">가 클수록 정답이 예측 구간을 크게 벗어났음을 의미합니다.</li>
+</ul>
 </section>
 <section id="step-2-calibration-get-hatq" class="level2">
 <h2 class="anchored" data-anchor-id="step-2-calibration-get-hatq">Step 2: Calibration (Get <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">)</h2>
-<p>계산된 점수들 <img src="https://latex.codecogs.com/png.latex?s_1,%20%5Cdots,%20s_n">의 분포에서 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> 분위수 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 찾습니다.</p>
+<ul>
+<li>계산된 점수들 <img src="https://latex.codecogs.com/png.latex?s_1,%20%5Cdots,%20s_n">의 분포에서 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> 분위수 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 찾습니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7Bq%7D%20=%20%5Ctext%7BQuantile%7D%5Cleft(%20%5Cfrac%7B%5Clceil%20(n+1)(1-%5Calpha)%20%5Crceil%7D%7Bn%7D%20;%20%5C%7Bs_1,%20%5Cdots,%20s_n%5C%7D%20%5Cright)%0A"></p>
 <ul>
 <li>만약 모델이 불확실성을 과소평가했다면(구간이 너무 좁으면), 많은 <img src="https://latex.codecogs.com/png.latex?y">가 구간 밖에 있을 것이고 <img src="https://latex.codecogs.com/png.latex?s">값들이 커져서 <strong>양수의 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D"></strong>가 나옵니다.</li>
@@ -159,7 +240,9 @@
 </section>
 <section id="step-3-construct-prediction-interval" class="level2">
 <h2 class="anchored" data-anchor-id="step-3-construct-prediction-interval">Step 3: Construct Prediction Interval</h2>
-<p>최종적으로 새로운 입력 <img src="https://latex.codecogs.com/png.latex?X_%7Btest%7D">에 대한 예측 구간을 생성할 때, 원래 구간을 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">만큼 조정합니다.</p>
+<ul>
+<li>최종적으로 새로운 입력 <img src="https://latex.codecogs.com/png.latex?X_%7Btest%7D">에 대한 예측 구간을 생성할 때, 원래 구간을 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">만큼 조정합니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BC%7D(X_%7Btest%7D)%20=%20%5B%5Chat%7Bt%7D_%7B%5Calpha/2%7D(X_%7Btest%7D)%20-%20%5Chat%7Bq%7D,%20%5Cquad%20%5Chat%7Bt%7D_%7B1-%5Calpha/2%7D(X_%7Btest%7D)%20+%20%5Chat%7Bq%7D%5D%0A"></p>
 <ul>
 <li><img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D%20%3E%200">: 원래 구간이 너무 좁았으므로, 양쪽으로 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">만큼 <strong>넓힙니다</strong>.</li>
@@ -178,20 +261,30 @@
 <p>Python으로 CQR을 구현하는 것은 매우 간단합니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-02-Examples-of-Conformal-Procedures/Part-02-02-Conformalized-Quantile-Regression/images/figure5_cqr_python_code.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 5: Conformalized Quantile Regression 구현을 위한 Python 코드. Score를 계산하고 Quantile을 구하여 최종 구간을 조정하는 과정이 몇 줄의 코드로 구현된다.</figcaption>
+<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-02-Examples-of-Conformal-Procedures/Part-02-02-Conformalized-Quantile-Regression/images/figure7_cqr_python_code.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 7: Conformalized Quantile Regression 구현을 위한 Python 코드. Score를 계산하고 Quantile을 구하여 최종 구간을 조정하는 과정이 몇 줄의 코드로 구현된다.</figcaption>
 </figure>
 </div>
-<ol type="1">
+<ul>
+<li><ol type="1">
 <li><strong>Get Scores</strong>: Calibration 데이터에 대해 <code>max(lower - y, y - upper)</code>를 계산합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
 <li><strong>Get Quantile</strong>: 위 점수들의 <img src="https://latex.codecogs.com/png.latex?(1-%5Calpha)"> 분위수 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 계산합니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
 <li><strong>Deploy</strong>: 새로운 데이터의 Lower/Upper 예측값에 각각 <img src="https://latex.codecogs.com/png.latex?-%5Chat%7Bq%7D,%20+%5Chat%7Bq%7D">를 더해줍니다.</li>
-</ol>
+</ol></li>
+</ul>
 </section>
 <section id="conclusion" class="level1">
 <h1>Conclusion</h1>
-<p><strong>Conformalized Quantile Regression (CQR)</strong>은 회귀 문제에서 가장 널리 사용되는 최신 기법 중 하나입니다. * <strong>Adaptivity</strong>: 입력값 <img src="https://latex.codecogs.com/png.latex?x">에 따라 구간의 길이(불확실성 크기)가 달라지는 Quantile Regression의 장점을 그대로 가집니다. (어려운 입력은 구간이 넓고, 쉬운 입력은 구간이 좁음) * <strong>Validity</strong>: Conformal Prediction을 통해 통계적 커버리지를 엄밀하게 보장합니다.</p>
-<p>이 방법은 단순한 MSE 기반 회귀보다 훨씬 풍부한 정보를 제공하며, 의료나 금융과 같이 리스크 관리가 중요한 분야에서 필수적인 도구입니다.</p>
+<ul>
+<li><p><strong>Conformalized Quantile Regression (CQR)</strong>은 회귀 문제에서 가장 널리 사용되는 최신 기법 중 하나입니다.</p></li>
+<li><p><strong>Adaptivity</strong>: 입력값 <img src="https://latex.codecogs.com/png.latex?x">에 따라 구간의 길이(불확실성 크기)가 달라지는 Quantile Regression의 장점을 그대로 가집니다. (어려운 입력은 구간이 넓고, 쉬운 입력은 구간이 좁음)</p></li>
+<li><p><strong>Validity</strong>: Conformal Prediction을 통해 통계적 커버리지를 엄밀하게 보장합니다.</p></li>
+<li><p>이 방법은 단순한 MSE 기반 회귀보다 훨씬 풍부한 정보를 제공하며, 의료나 금융과 같이 리스크 관리가 중요한 분야에서 필수적인 도구입니다.</p></li>
+</ul>
 <hr>
 <p><strong>Next Step</strong>: 다음 포스트에서는 회귀 문제에서 Quantile Regression을 사용하기 어려운 경우(예: 단순히 평균과 분산만 예측하는 경우)에 사용할 수 있는 <strong>Conformalizing Scalar Uncertainty Estimates</strong>에 대해 알아보겠습니다.</p>
 
@@ -215,29 +308,55 @@
 
 <section id="introduction" class="level1">
 <h1>Introduction</h1>
-<p>이전 포스트에서 다룬 <strong>Conformalized Quantile Regression (CQR)</strong>은 매우 강력하지만, 두 개의 Quantile을 학습시켜야 한다는 조건이 있습니다. 하지만 실무에서는 종종 <strong>평균(<img src="https://latex.codecogs.com/png.latex?%5Cmu">)과 분산(<img src="https://latex.codecogs.com/png.latex?%5Csigma%5E2">)</strong>만을 예측하는 더 단순한 모델을 사용하거나, 혹은 모델 앙상블의 분산 등을 불확실성 지표로 삼기도 합니다.</p>
-<p>이번 포스트에서는 이러한 <strong>단일 스칼라 불확실성 지표(Scalar Uncertainty Estimate)</strong>를 활용하여 통계적으로 유효한 예측 구간을 생성하는 방법을 알아봅니다.</p>
+<ul>
+<li><p>이전 포스트에서 다룬 <strong>Conformalized Quantile Regression (CQR)</strong>은 매우 강력하지만, 두 개의 Quantile을 학습시켜야 한다는 조건이 있습니다.</p></li>
+<li><p>하지만 실무에서는 종종 <strong>평균(<img src="https://latex.codecogs.com/png.latex?%5Cmu">)과 분산(<img src="https://latex.codecogs.com/png.latex?%5Csigma%5E2">)</strong>만을 예측하는 더 단순한 모델을 사용하거나, 혹은 모델 앙상블의 분산 등을 불확실성 지표로 삼기도 합니다.</p></li>
+<li><p>이번 포스트에서는 이러한 <strong>단일 스칼라 불확실성 지표(Scalar Uncertainty Estimate)</strong>를 활용하여 통계적으로 유효한 예측 구간을 생성하는 방법을 알아봅니다.</p></li>
+</ul>
 </section>
 <section id="heuristic-uncertainty-the-estimated-standard-deviation" class="level1">
 <h1>Heuristic Uncertainty: The Estimated Standard Deviation</h1>
 <p>가장 흔한 시나리오는 데이터가 정규분포(Gaussian)를 따른다고 가정하고 모델을 학습시키는 것입니다.</p>
 <p><img src="https://latex.codecogs.com/png.latex?%20Y%20%7C%20X%20=%20x%20%5Csim%20%5Cmathcal%7BN%7D(%5Cmu(x),%20%5Csigma(x))%20"></p>
-<p>딥러닝 프레임워크(PyTorch 등)에서는 <code>GaussianNLLLoss</code>와 같은 손실 함수를 제공하여, 모델이 평균 예측값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)">와 불확실성 예측값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Csigma%7D(x)">를 동시에 학습하도록 돕습니다.</p>
-<p>하지만 실제 데이터는 <strong>정규분포를 따르지 않는 경우가 대부분</strong>입니다. 따라서 모델이 예측한 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Csigma%7D(x)">를 그대로 사용하여 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)%20%5Cpm%201.96%5Chat%7B%5Csigma%7D(x)">와 같은 구간을 만들면, 실제로는 95% 커버리지를 보장할 수 없습니다.</p>
-<p>우리는 Conformal Prediction을 사용하여 이 부정확한(Heuristic) <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Csigma%7D(x)">를 <strong>보정(Calibrate)</strong>할 것입니다.</p>
+<ul>
+<li><p>딥러닝 프레임워크(PyTorch 등)에서는 <code>GaussianNLLLoss</code>와 같은 손실 함수를 제공하여, 모델이 평균 예측값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)">와 불확실성 예측값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Csigma%7D(x)">를 동시에 학습하도록 돕습니다.</p></li>
+<li><p>하지만 실제 데이터는 <strong>정규분포를 따르지 않는 경우가 대부분</strong>입니다.</p></li>
+<li><p>따라서 모델이 예측한 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Csigma%7D(x)">를 그대로 사용하여 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)%20%5Cpm%201.96%5Chat%7B%5Csigma%7D(x)">와 같은 구간을 만들면, 실제로는 95% 커버리지를 보장할 수 없습니다.</p></li>
+<li><p>우리는 Conformal Prediction을 사용하여 이 부정확한(Heuristic) <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Csigma%7D(x)">를 <strong>보정(Calibrate)</strong>할 것입니다.</p></li>
+</ul>
 </section>
 <section id="generalizing-uncertainty-scalars" class="level1">
 <h1>Generalizing Uncertainty Scalars</h1>
-<p>이 방법은 비단 표준편차뿐만 아니라, <strong>“값이 클수록 불확실하다”</strong>는 의미를 가진 어떤 함수 <img src="https://latex.codecogs.com/png.latex?u(x)">에도 적용 가능합니다.</p>
-<p>논문에서는 <img src="https://latex.codecogs.com/png.latex?u(x)">로 사용할 수 있는 다양한 예시를 제시합니다: 1. <strong>Residual Prediction</strong>: <img src="https://latex.codecogs.com/png.latex?%7Cy%20-%20%5Chat%7Bf%7D(x)%7C">를 예측하는 별도의 모델 학습. 2. <strong>Ensemble Variance</strong>: 여러 모델 예측값들의 분산 측정. 3. <strong>Dropout Variance</strong>: 추론 시 Dropout을 켜고 여러 번 예측했을 때의 분산. 4. <strong>Input Perturbation</strong>: 입력에 작은 노이즈를 주었을 때 출력의 변화량.</p>
-<p>우리는 이 <img src="https://latex.codecogs.com/png.latex?u(x)">를 “불확실성의 크기(Magnitude)”로 간주하고, 이를 스케일링하는 방식(Multiplicative Correction)을 사용합니다.</p>
+<ul>
+<li><p>이 방법은 비단 표준편차뿐만 아니라, <strong>“값이 클수록 불확실하다”</strong>는 의미를 가진 어떤 함수 <img src="https://latex.codecogs.com/png.latex?u(x)">에도 적용 가능합니다.</p></li>
+<li><p>논문에서는 <img src="https://latex.codecogs.com/png.latex?u(x)">로 사용할 수 있는 다양한 예시를 제시합니다:</p>
+<ul>
+<li><ol type="1">
+<li><strong>Residual Prediction</strong>: <img src="https://latex.codecogs.com/png.latex?%7Cy%20-%20%5Chat%7Bf%7D(x)%7C">를 예측하는 별도의 모델 학습.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Ensemble Variance</strong>: 여러 모델 예측값들의 분산 측정.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><strong>Dropout Variance</strong>: 추론 시 Dropout을 켜고 여러 번 예측했을 때의 분산.</li>
+</ol></li>
+<li><ol start="4" type="1">
+<li><strong>Input Perturbation</strong>: 입력에 작은 노이즈를 주었을 때 출력의 변화량.</li>
+</ol></li>
+</ul></li>
+<li><p>우리는 이 <img src="https://latex.codecogs.com/png.latex?u(x)">를 “불확실성의 크기(Magnitude)”로 간주하고, 이를 스케일링하는 방식(Multiplicative Correction)을 사용합니다.</p></li>
+</ul>
 </section>
 <section id="the-algorithm" class="level1">
 <h1>The Algorithm</h1>
-<p>알고리즘의 핵심은 <strong>“실제 에러가 불확실성 지표 <img src="https://latex.codecogs.com/png.latex?u(x)"> 대비 몇 배나 큰가?”</strong>를 측정하는 것입니다.</p>
+<ul>
+<li>알고리즘의 핵심은 <strong>“실제 에러가 불확실성 지표 <img src="https://latex.codecogs.com/png.latex?u(x)"> 대비 몇 배나 큰가?”</strong>를 측정하는 것입니다.</li>
+</ul>
 <section id="step-1-define-score-function" class="level2">
 <h2 class="anchored" data-anchor-id="step-1-define-score-function">Step 1: Define Score Function</h2>
-<p>Calibration 데이터 <img src="https://latex.codecogs.com/png.latex?(X_i,%20Y_i)">에 대해 다음과 같은 Score를 정의합니다.</p>
+<ul>
+<li>Calibration 데이터 <img src="https://latex.codecogs.com/png.latex?(X_i,%20Y_i)">에 대해 다음과 같은 Score를 정의합니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0As(x,%20y)%20=%20%5Cfrac%7B%7Cy%20-%20%5Chat%7Bf%7D(x)%7C%7D%7Bu(x)%7D%0A"></p>
 <ul>
 <li><strong>분자 <img src="https://latex.codecogs.com/png.latex?%7Cy%20-%20%5Chat%7Bf%7D(x)%7C"></strong>: 실제 모델의 예측 오차(절대값)입니다.</li>
@@ -251,17 +370,25 @@
 </section>
 <section id="step-2-calibration-get-hatq" class="level2">
 <h2 class="anchored" data-anchor-id="step-2-calibration-get-hatq">Step 2: Calibration (Get <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">)</h2>
-<p>계산된 점수들 <img src="https://latex.codecogs.com/png.latex?s_1,%20%5Cdots,%20s_n">에 대해 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> 분위수(Quantile) <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 구합니다.</p>
+<ul>
+<li>계산된 점수들 <img src="https://latex.codecogs.com/png.latex?s_1,%20%5Cdots,%20s_n">에 대해 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> 분위수(Quantile) <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 구합니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7Bq%7D%20=%20%5Ctext%7BQuantile%7D%5Cleft(%20%5Cfrac%7B%5Clceil%20(n+1)(1-%5Calpha)%20%5Crceil%7D%7Bn%7D%20;%20%5C%7Bs_1,%20%5Cdots,%20s_n%5C%7D%20%5Cright)%0A"></p>
-<p>여기서 구해진 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">는 <strong>“불확실성 지표 <img src="https://latex.codecogs.com/png.latex?u(x)">에 곱해야 할 보정 계수(Multiplier)”</strong> 역할을 합니다.</p>
+<ul>
+<li>여기서 구해진 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">는 <strong>“불확실성 지표 <img src="https://latex.codecogs.com/png.latex?u(x)">에 곱해야 할 보정 계수(Multiplier)”</strong> 역할을 합니다.</li>
+</ul>
 </section>
 <section id="step-3-construct-prediction-interval" class="level2">
 <h2 class="anchored" data-anchor-id="step-3-construct-prediction-interval">Step 3: Construct Prediction Interval</h2>
-<p>새로운 입력 <img src="https://latex.codecogs.com/png.latex?X_%7Btest%7D">에 대한 예측 구간은 중심 예측값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)">에서 불확실성 지표 <img src="https://latex.codecogs.com/png.latex?u(x)">의 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">배만큼 벌려준 구간이 됩니다.</p>
+<ul>
+<li>새로운 입력 <img src="https://latex.codecogs.com/png.latex?X_%7Btest%7D">에 대한 예측 구간은 중심 예측값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)">에서 불확실성 지표 <img src="https://latex.codecogs.com/png.latex?u(x)">의 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">배만큼 벌려준 구간이 됩니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BC%7D(x)%20=%20%5B%5Chat%7Bf%7D(x)%20-%20%5Chat%7Bq%7Du(x),%20%5Cquad%20%5Chat%7Bf%7D(x)%20+%20%5Chat%7Bq%7Du(x)%5D%0A"></p>
 <section id="유도-과정-derivation-of-validity" class="level3">
 <h3 class="anchored" data-anchor-id="유도-과정-derivation-of-validity">유도 과정 (Derivation of Validity)</h3>
-<p>이 구간이 왜 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> 커버리지를 보장하는지 살펴보겠습니다.</p>
+<ul>
+<li>이 구간이 왜 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> 커버리지를 보장하는지 살펴보겠습니다.</li>
+</ul>
 <ol type="1">
 <li>Calibration 단계에서 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 구했으므로, 새로운 데이터에 대해 다음 확률이 성립합니다. <img src="https://latex.codecogs.com/png.latex?%20%5Cmathbb%7BP%7D%5Bs(X_%7Btest%7D,%20Y_%7Btest%7D)%20%5Cle%20%5Chat%7Bq%7D%5D%20%5Cge%201%20-%20%5Calpha%20"></li>
 <li>Score <img src="https://latex.codecogs.com/png.latex?s">의 정의를 대입합니다. <img src="https://latex.codecogs.com/png.latex?%20%5Cmathbb%7BP%7D%5Cleft%5B%20%5Cfrac%7B%7CY_%7Btest%7D%20-%20%5Chat%7Bf%7D(X_%7Btest%7D)%7C%7D%7Bu(X_%7Btest%7D)%7D%20%5Cle%20%5Chat%7Bq%7D%20%5Cright%5D%20%5Cge%201%20-%20%5Calpha%20"></li>
@@ -280,11 +407,13 @@
 </section>
 <section id="implementation" class="level1">
 <h1>Implementation</h1>
-<p>이 방법은 구현이 매우 간단하며, PyTorch 등의 라이브러리와 쉽게 결합됩니다.</p>
+<ul>
+<li>이 방법은 구현이 매우 간단하며, PyTorch 등의 라이브러리와 쉽게 결합됩니다.</li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-02-Examples-of-Conformal-Procedures/Part-02-03-Conformalizing-Scalar-Uncertainty-Estimates/images/figure7_scalar_python_code.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 7: Conformalized Uncertainty Scalars 구현을 위한 Python 코드. Score를 계산할 때 예측된 표준편차(model output의 두 번째 컬럼)로 나누어주는 것이 핵심이다.</figcaption>
+<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-02-Examples-of-Conformal-Procedures/Part-02-03-Conformalizing-Scalar-Uncertainty-Estimates/images/figure9_scalar_python_code.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 9: Conformalized Uncertainty Scalars 구현을 위한 Python 코드. Score를 계산할 때 예측된 표준편차(model output의 두 번째 컬럼)로 나누어주는 것이 핵심이다.</figcaption>
 </figure>
 </div>
 <ol type="1">
@@ -295,8 +424,14 @@
 </section>
 <section id="discussion" class="level1">
 <h1>Discussion</h1>
-<p>이 방법은 <strong>Symmetric(대칭적)</strong>인 구간을 생성한다는 특징이 있습니다. * <strong>장점</strong>: 구현이 쉽고 직관적입니다. 이미 학습된 모델(Gaussian Output 등)을 그대로 재활용하기 좋습니다. * <strong>단점</strong>: CQR과 달리 구간이 항상 예측값을 중심으로 대칭입니다. 실제 데이터 분포가 비대칭(Skewed)이라면 효율적이지 않을 수 있습니다. 또한, <img src="https://latex.codecogs.com/png.latex?u(x)">가 실제 분위수와 비례하지 않는다면 CQR보다 성능(구간의 평균 길이 등)이 떨어질 수 있습니다.</p>
-<p>따라서 가능하다면 <strong>Quantile Regression (CQR)</strong>을 사용하는 것이 더 좋지만, 상황이 여의치 않거나 빠른 배포가 필요할 때 이 방법은 훌륭한 대안이 됩니다.</p>
+<ul>
+<li>이 방법은 <strong>Symmetric(대칭적)</strong>인 구간을 생성한다는 특징이 있습니다.
+<ul>
+<li><strong>장점</strong>: 구현이 쉽고 직관적입니다. 이미 학습된 모델(Gaussian Output 등)을 그대로 재활용하기 좋습니다.</li>
+<li><strong>단점</strong>: CQR과 달리 구간이 항상 예측값을 중심으로 대칭입니다. 실제 데이터 분포가 비대칭(Skewed)이라면 효율적이지 않을 수 있습니다. 또한, <img src="https://latex.codecogs.com/png.latex?u(x)">가 실제 분위수와 비례하지 않는다면 CQR보다 성능(구간의 평균 길이 등)이 떨어질 수 있습니다.</li>
+</ul></li>
+<li>따라서 가능하다면 <strong>Quantile Regression (CQR)</strong>을 사용하는 것이 더 좋지만, 상황이 여의치 않거나 빠른 배포가 필요할 때 이 방법은 훌륭한 대안이 됩니다.</li>
+</ul>
 <hr>
 <p><strong>Next Step</strong>: 지금까지는 Black-box 모델의 불확실성을 다루었습니다. 다음 포스트에서는 이 기법들이 실제 복잡한 문제(Computer Vision 등)에서 어떻게 확장되는지 살펴보겠습니다.</p>
 
@@ -1080,52 +1215,84 @@
 
 <section id="introduction-when-the-i.i.d.-assumption-fails" class="level1">
 <h1>Introduction: When the i.i.d. Assumption Fails</h1>
-<p>지금까지 우리가 배운 모든 Conformal Prediction(CP) 방법론은 하나의 강력한 가정에 의존하고 있습니다. 바로 <strong>“테스트 데이터가 Calibration 데이터와 동일한 분포(i.i.d.)에서 왔다”</strong>는 가정입니다.</p>
-<p>하지만 현실은 그렇지 않습니다. 과거의 데이터가 미래를 완벽하게 대변하지 못하는 경우가 많습니다. * <strong>의료 진단</strong>: 학습 데이터는 성인과 유아의 비율이 50:50이었는데, 실제 병원에는 성인이 95% 방문할 수 있습니다. * <strong>자율 주행</strong>: 아침(밝음)에 데이터를 수집하여 학습했는데, 실제 주행은 오후(어두움)에 이루어질 수 있습니다.</p>
-<p>이러한 분포의 변화 중 <strong>Covariate Shift</strong>는 입력 변수 <img src="https://latex.codecogs.com/png.latex?X">의 분포 <img src="https://latex.codecogs.com/png.latex?P(X)">는 바뀌지만, 입력과 출력 사이의 관계 <img src="https://latex.codecogs.com/png.latex?P(Y%7CX)">는 유지되는 상황을 말합니다. 이번 포스트에서는 <strong>Weighted Conformal Prediction</strong>을 사용하여 이러한 변화 속에서도 커버리지를 보장하는 방법을 알아봅니다.</p>
+<ul>
+<li><p>지금까지 우리가 배운 모든 Conformal Prediction(CP) 방법론은 하나의 강력한 가정에 의존하고 있습니다.</p></li>
+<li><p>바로 <strong>“테스트 데이터가 Calibration 데이터와 동일한 분포(i.i.d.)에서 왔다”</strong>는 가정입니다.</p></li>
+<li><p>하지만 현실은 그렇지 않습니다. 과거의 데이터가 미래를 완벽하게 대변하지 못하는 경우가 많습니다.</p>
+<ul>
+<li><strong>의료 진단</strong>: 학습 데이터는 성인과 유아의 비율이 50:50이었는데, 실제 병원에는 성인이 95% 방문할 수 있습니다.</li>
+<li><strong>자율 주행</strong>: 아침(밝음)에 데이터를 수집하여 학습했는데, 실제 주행은 오후(어두움)에 이루어질 수 있습니다.</li>
+</ul></li>
+<li><p>이러한 분포의 변화 중 <strong>Covariate Shift</strong>는 입력 변수 <img src="https://latex.codecogs.com/png.latex?X">의 분포 <img src="https://latex.codecogs.com/png.latex?P(X)">는 바뀌지만, 입력과 출력 사이의 관계 <img src="https://latex.codecogs.com/png.latex?P(Y%7CX)">는 유지되는 상황을 말합니다.</p></li>
+<li><p>이번 포스트에서는 <strong>Weighted Conformal Prediction</strong>을 사용하여 이러한 변화 속에서도 커버리지를 보장하는 방법을 알아봅니다.</p></li>
+</ul>
 </section>
 <section id="problem-formulation-covariate-shift" class="level1">
 <h1>Problem Formulation: Covariate Shift</h1>
-<p>우리의 상황을 수식으로 정의해봅시다. * <strong>Calibration Data</strong>: <img src="https://latex.codecogs.com/png.latex?P"> 분포에서 추출됨. * <strong>Test Data</strong>: <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D_%7Btest%7D"> 분포에서 추출됨.</p>
+<ul>
+<li>우리의 상황을 수식으로 정의해봅시다.
+<ul>
+<li><strong>Calibration Data</strong>: <img src="https://latex.codecogs.com/png.latex?P"> 분포에서 추출됨.</li>
+<li><strong>Test Data</strong>: <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D_%7Btest%7D"> 분포에서 추출됨.</li>
+</ul></li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0AX%20%5Csim%20P%20%5Cquad%20%5Crightarrow%20%5Cquad%20X_%7Btest%7D%20%5Csim%20%5Cmathcal%7BP%7D_%7Btest%7D%0A"></p>
-<p>단, <img src="https://latex.codecogs.com/png.latex?Y%7CX"> (입력이 주어졌을 때 정답의 분포)는 변하지 않는다고 가정합니다. 이를 <strong>Covariate Shift</strong>라고 합니다.</p>
-<p>이 상황에서 기존의 일반적인 CP를 사용하면 커버리지가 깨질 수 있습니다. 예를 들어, 모델이 어려워하는 데이터(유아)가 테스트 셋에 더 많이 등장한다면, 에러율은 우리가 설정한 <img src="https://latex.codecogs.com/png.latex?%5Calpha">보다 훨씬 높아질 것입니다.</p>
+<ul>
+<li>단, <img src="https://latex.codecogs.com/png.latex?Y%7CX"> (입력이 주어졌을 때 정답의 분포)는 변하지 않는다고 가정합니다.
+<ul>
+<li>이를 <strong>Covariate Shift</strong>라고 합니다.</li>
+</ul></li>
+<li>이 상황에서 기존의 일반적인 CP를 사용하면 커버리지가 깨질 수 있습니다.
+<ul>
+<li>예를 들어, 모델이 어려워하는 데이터(유아)가 테스트 셋에 더 많이 등장한다면, 에러율은 우리가 설정한 <img src="https://latex.codecogs.com/png.latex?%5Calpha">보다 훨씬 높아질 것입니다.</li>
+</ul></li>
+</ul>
 </section>
 <section id="the-solution-weighted-conformal-prediction" class="level1">
 <h1>The Solution: Weighted Conformal Prediction</h1>
-<p>해결책의 핵심은 <strong>“테스트 분포 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D_%7Btest%7D">에서 더 자주 등장할 것 같은 데이터에 더 큰 가중치(Weight)를 주는 것”</strong>입니다.</p>
+<ul>
+<li>해결책의 핵심은 <strong>“테스트 분포 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D_%7Btest%7D">에서 더 자주 등장할 것 같은 데이터에 더 큰 가중치(Weight)를 주는 것”</strong>입니다.</li>
+</ul>
 <section id="step-1-likelihood-ratio-calculation" class="level2">
 <h2 class="anchored" data-anchor-id="step-1-likelihood-ratio-calculation">Step 1: Likelihood Ratio Calculation</h2>
-<p>먼저, 두 분포 사이의 비율(Likelihood Ratio)을 계산하는 함수 <img src="https://latex.codecogs.com/png.latex?w(x)">를 정의합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Aw(x)%20=%20%5Cfrac%7Bd%5Cmathcal%7BP%7D_%7Btest%7D(x)%7D%7BdP(x)%7D%0A"></p>
+<ul>
+<li>먼저, 두 분포 사이의 비율(Likelihood Ratio)을 계산하는 함수 <img src="https://latex.codecogs.com/png.latex?w(x)">를 정의합니다. <img src="https://latex.codecogs.com/png.latex?%0Aw(x)%20=%20%5Cfrac%7Bd%5Cmathcal%7BP%7D_%7Btest%7D(x)%7D%7BdP(x)%7D%0A">
 <ul>
 <li><img src="https://latex.codecogs.com/png.latex?w(x)%20%3E%201">: 해당 샘플 <img src="https://latex.codecogs.com/png.latex?x">는 학습 때보다 테스트 때 더 자주 등장합니다 (중요함).</li>
 <li><img src="https://latex.codecogs.com/png.latex?w(x)%20%3C%201">: 해당 샘플 <img src="https://latex.codecogs.com/png.latex?x">는 테스트 때 덜 등장합니다 (덜 중요함).</li>
+</ul></li>
 </ul>
 </section>
 <section id="step-2-compute-normalized-weights" class="level2">
 <h2 class="anchored" data-anchor-id="step-2-compute-normalized-weights">Step 2: Compute Normalized Weights</h2>
-<p>새로운 테스트 포인트 <img src="https://latex.codecogs.com/png.latex?x">가 들어왔을 때, 이 <img src="https://latex.codecogs.com/png.latex?x">와 기존 Calibration 데이터 <img src="https://latex.codecogs.com/png.latex?X_i">들에게 부여할 확률 질량(Probability Mass)을 재계산합니다.</p>
+<ul>
+<li>새로운 테스트 포인트 <img src="https://latex.codecogs.com/png.latex?x">가 들어왔을 때, 이 <img src="https://latex.codecogs.com/png.latex?x">와 기존 Calibration 데이터 <img src="https://latex.codecogs.com/png.latex?X_i">들에게 부여할 확률 질량(Probability Mass)을 재계산합니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0Ap_i%5Ew(x)%20=%20%5Cfrac%7Bw(X_i)%7D%7B%5Csum_%7Bj=1%7D%5E%7Bn%7D%20w(X_j)%20+%20w(x)%7D%0A"></p>
 <p><img src="https://latex.codecogs.com/png.latex?%0Ap_%7Btest%7D%5Ew(x)%20=%20%5Cfrac%7Bw(x)%7D%7B%5Csum_%7Bj=1%7D%5E%7Bn%7D%20w(X_j)%20+%20w(x)%7D%0A"></p>
 <ul>
 <li>기존 CP에서는 모든 데이터가 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7Bn+1%7D">의 동등한 확률을 가졌습니다.</li>
-<li>Weighted CP에서는 <img src="https://latex.codecogs.com/png.latex?w(%5Ccdot)">에 비례하여 확률을 다르게 배정합니다. 테스트 분포와 유사한 데이터일수록 <img src="https://latex.codecogs.com/png.latex?p_i">가 커집니다.</li>
+<li>Weighted CP에서는 <img src="https://latex.codecogs.com/png.latex?w(%5Ccdot)">에 비례하여 확률을 다르게 배정합니다.</li>
+<li>즉, 테스트 분포와 유사한 데이터일수록 <img src="https://latex.codecogs.com/png.latex?p_i">가 커집니다.</li>
 </ul>
 </section>
 <section id="step-3-weighted-quantile-calculation" class="level2">
 <h2 class="anchored" data-anchor-id="step-3-weighted-quantile-calculation">Step 3: Weighted Quantile Calculation</h2>
-<p>이제 가장 중요한 단계인 Quantile 계산입니다. 기존에는 단순히 점수를 정렬하고 <img src="https://latex.codecogs.com/png.latex?(1-%5Calpha)"> 지점을 찾았지만, 이제는 <strong>가중치가 반영된 누적 분포(Weighted CDF)</strong>를 사용해야 합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7Bq%7D(x)%20=%20%5Cinf%20%5Cleft%5C%7B%20s_j%20:%20%5Csum_%7Bi=1%7D%5E%7Bj%7D%20p_i%5Ew(x)%20%5Cmathbb%7BI%7D%5C%7Bs_i%20%5Cle%20s_j%5C%7D%20%5Cge%201-%5Calpha%20%5Cright%5C%7D%0A"></p>
-<p>(여기서 <img src="https://latex.codecogs.com/png.latex?s_j">는 오름차순으로 정렬된 Calibration Score라고 가정합니다.)</p>
 <ul>
+<li>이제 가장 중요한 단계인 Quantile 계산입니다.</li>
+<li>기존에는 단순히 점수를 정렬하고 <img src="https://latex.codecogs.com/png.latex?(1-%5Calpha)"> 지점을 찾았지만, 이제는 <strong>가중치가 반영된 누적 분포(Weighted CDF)</strong>를 사용해야 합니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7Bq%7D(x)%20=%20%5Cinf%20%5Cleft%5C%7B%20s_j%20:%20%5Csum_%7Bi=1%7D%5E%7Bj%7D%20p_i%5Ew(x)%20%5Cmathbb%7BI%7D%5C%7Bs_i%20%5Cle%20s_j%5C%7D%20%5Cge%201-%5Calpha%20%5Cright%5C%7D%0A">
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?s_j">는 오름차순으로 정렬된 Calibration Score라고 가정합니다.</li>
+</ul></li>
 <li>즉, 가중치 <img src="https://latex.codecogs.com/png.latex?p_i%5Ew(x)">들을 순서대로 더해가다가, 그 합이 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha">를 넘기는 순간의 점수를 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D(x)">로 선택합니다.</li>
 </ul>
 </section>
 </section>
 <section id="intuition-how-quantile-changes" class="level1">
 <h1>Intuition: How Quantile Changes</h1>
-<p>이 과정이 직관적으로 어떤 의미를 가질까요?</p>
+<ul>
+<li>이 과정이 직관적으로 어떤 의미를 가질까요?</li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-04-Extensions-of-Conformal-Prediction/Part-04-05-Conformal-Prediction-Under-Covariate-Shift/images/covariate_shift_cdf.png" class="img-fluid figure-img"></p>
@@ -1139,7 +1306,9 @@
 </section>
 <section id="theorem-guarantee" class="level1">
 <h1>Theorem &amp; Guarantee</h1>
-<p>Tibshirani et al.&nbsp;(2019)에 의해 제안된 이 방법은 다음 정리에 의해 커버리지를 보장합니다.</p>
+<ul>
+<li>Tibshirani et al.&nbsp;(2019)에 의해 제안된 이 방법은 다음 정리에 의해 커버리지를 보장합니다.</li>
+</ul>
 <blockquote class="blockquote">
 <p><strong>Theorem 3 (Conformal prediction under covariate shift)</strong></p>
 <p>데이터가 위에서 정의한 Covariate Shift 가정하에 생성되었다면, Weighted Quantile <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D(X_%7Btest%7D)">를 사용한 예측 집합 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BC%7D">는 다음을 만족한다.</p>
@@ -1148,8 +1317,11 @@
 </section>
 <section id="conclusion" class="level1">
 <h1>Conclusion</h1>
-<p><strong>Weighted Conformal Prediction</strong>은 데이터 분포가 변하는 현실 세계의 문제에 CP를 적용하기 위한 필수적인 도구입니다. 단순히 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7Bn+1%7D">이라는 고정 관념을 깨고, <strong>“테스트 시점에 더 중요한 데이터에 가중치를 준다”</strong>는 아이디어를 통해 분포 변화에 유연하게 대처할 수 있습니다.</p>
-<p>이 방법은 <img src="https://latex.codecogs.com/png.latex?w(x)">를 정확히 안다면 완벽하게 작동하며, <img src="https://latex.codecogs.com/png.latex?w(x)">를 추정해야 하는 경우에도 꽤 견고한(Robust) 성능을 보여줍니다.</p>
+<ul>
+<li><p><strong>Weighted Conformal Prediction</strong>은 데이터 분포가 변하는 현실 세계의 문제에 CP를 적용하기 위한 필수적인 도구입니다.</p></li>
+<li><p>단순히 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7Bn+1%7D">이라는 고정 관념을 깨고, <strong>“테스트 시점에 더 중요한 데이터에 가중치를 준다”</strong>는 아이디어를 통해 분포 변화에 유연하게 대처할 수 있습니다.</p></li>
+<li><p>이 방법은 <img src="https://latex.codecogs.com/png.latex?w(x)">를 정확히 안다면 완벽하게 작동하며, <img src="https://latex.codecogs.com/png.latex?w(x)">를 추정해야 하는 경우에도 꽤 견고한(Robust) 성능을 보여줍니다.</p></li>
+</ul>
 <hr>
 <p><strong>Next Step</strong>: 분포가 갑작스럽게 변하는 것(Shift)도 문제지만, 시간이 지남에 따라 서서히 변하는 <strong>Drift</strong> 현상도 중요합니다. 다음 포스트에서는 시계열 데이터 등에서 발생하는 <strong>Section 4.6 Conformal Prediction Under Distribution Drift</strong>에 대해 알아보겠습니다.</p>
 
@@ -1443,24 +1615,42 @@
 
 <section id="introduction-the-efficiency-trade-off" class="level1">
 <h1>Introduction: The Efficiency Trade-off</h1>
-<p>지금까지 우리가 다룬 방식은 <strong>Split Conformal Prediction (Inductive CP)</strong>이었습니다. 이 방식은 데이터를 학습용(Train)과 보정용(Calibration)으로 나누어 사용합니다. * <strong>장점</strong>: 계산이 매우 빠릅니다. 모델을 딱 한 번만 학습시키면 됩니다. * <strong>단점</strong>: 데이터를 쪼개야 하므로 <strong>통계적 효율성(Statistical Efficiency)</strong>이 떨어집니다. 보정용 데이터는 학습에 기여하지 못하고, 학습용 데이터는 보정에 기여하지 못하기 때문입니다.</p>
-<p>데이터가 매우 귀하거나(예: 희귀병 임상 데이터), 예측의 정확도가 비용보다 훨씬 중요한 상황이라면 어떨까요? 이때 우리는 계산 비용을 감수하더라도 모든 데이터를 학습과 보정에 동시에 사용하는 <strong>Full Conformal Prediction (Transductive CP)</strong>을 고려해야 합니다.</p>
+<ul>
+<li>지금까지 우리가 다룬 방식은 <strong>Split Conformal Prediction (Inductive CP)</strong>이었습니다.</li>
+<li>이 방식은 데이터를 학습용(Train)과 보정용(Calibration)으로 나누어 사용합니다.
+<ul>
+<li><strong>장점</strong>: 계산이 매우 빠릅니다. 모델을 딱 한 번만 학습시키면 됩니다.</li>
+<li><strong>단점</strong>: 데이터를 쪼개야 하므로 <strong>통계적 효율성(Statistical Efficiency)</strong>이 떨어집니다. 보정용 데이터는 학습에 기여하지 못하고, 학습용 데이터는 보정에 기여하지 못하기 때문입니다.</li>
+</ul></li>
+<li>데이터가 매우 귀하거나(예: 희귀병 임상 데이터), 예측의 정확도가 비용보다 훨씬 중요한 상황이라면 어떨까요?</li>
+<li>이때 우리는 계산 비용을 감수하더라도 모든 데이터를 학습과 보정에 동시에 사용하는 <strong>Full Conformal Prediction (Transductive CP)</strong>을 고려해야 합니다.</li>
+</ul>
 </section>
 <section id="the-core-idea-what-if" class="level1">
 <h1>The Core Idea: “What if?”</h1>
-<p>Full CP의 핵심 아이디어는 새로운 데이터 <img src="https://latex.codecogs.com/png.latex?X_%7Bn+1%7D">에 대해 <strong>“만약 정답이 <img src="https://latex.codecogs.com/png.latex?y">라면, 이 데이터가 기존 데이터들과 잘 어울리는가(Exchangeable)?”</strong>를 테스트하는 것입니다.</p>
-<p>우리는 아직 정답 <img src="https://latex.codecogs.com/png.latex?Y_%7Bn+1%7D">을 모르지만, 가능한 모든 후보 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Cmathcal%7BY%7D">를 하나씩 대입해볼 수는 있습니다. 만약 <img src="https://latex.codecogs.com/png.latex?y">가 진짜 정답이라면, <img src="https://latex.codecogs.com/png.latex?(X_%7Bn+1%7D,%20y)">를 포함한 전체 데이터셋은 통계적으로 동질적(Exchangeable)이어야 합니다.</p>
+<ul>
+<li><p>Full CP의 핵심 아이디어는 새로운 데이터 <img src="https://latex.codecogs.com/png.latex?X_%7Bn+1%7D">에 대해 <strong>“만약 정답이 <img src="https://latex.codecogs.com/png.latex?y">라면, 이 데이터가 기존 데이터들과 잘 어울리는가(Exchangeable)?”</strong>를 테스트하는 것입니다.</p></li>
+<li><p>우리는 아직 정답 <img src="https://latex.codecogs.com/png.latex?Y_%7Bn+1%7D">을 모르지만, 가능한 모든 후보 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Cmathcal%7BY%7D">를 하나씩 대입해볼 수는 있습니다.</p></li>
+<li><p>만약 <img src="https://latex.codecogs.com/png.latex?y">가 진짜 정답이라면, <img src="https://latex.codecogs.com/png.latex?(X_%7Bn+1%7D,%20y)">를 포함한 전체 데이터셋은 통계적으로 동질적(Exchangeable)이어야 합니다.</p></li>
+</ul>
 </section>
 <section id="the-algorithm" class="level1">
 <h1>The Algorithm</h1>
-<p>알고리즘은 모든 가능한 라벨 <img src="https://latex.codecogs.com/png.latex?y">에 대해 재학습(Retraining)을 수행해야 하므로 꽤 무겁습니다.</p>
+<ul>
+<li>알고리즘은 모든 가능한 라벨 <img src="https://latex.codecogs.com/png.latex?y">에 대해 재학습(Retraining)을 수행해야 하므로 꽤 무겁습니다.</li>
+</ul>
 <section id="step-1-loop-over-all-possible-labels" class="level2">
 <h2 class="anchored" data-anchor-id="step-1-loop-over-all-possible-labels">Step 1: Loop over all possible labels</h2>
-<p>테스트 포인트 <img src="https://latex.codecogs.com/png.latex?X_%7Bn+1%7D">에 대해, 가능한 모든 정답 후보 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Cmathcal%7BY%7D"> (예: 분류 문제의 모든 클래스)에 대해 다음 과정을 반복합니다.</p>
+<ul>
+<li>테스트 포인트 <img src="https://latex.codecogs.com/png.latex?X_%7Bn+1%7D">에 대해, 가능한 모든 정답 후보 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Cmathcal%7BY%7D"> (예: 분류 문제의 모든 클래스)에 대해 다음 과정을 반복합니다.</li>
+</ul>
 </section>
 <section id="step-2-augment-and-retrain" class="level2">
 <h2 class="anchored" data-anchor-id="step-2-augment-and-retrain">Step 2: Augment and Retrain</h2>
-<p>기존 데이터셋에 가상의 데이터 포인트 <img src="https://latex.codecogs.com/png.latex?(X_%7Bn+1%7D,%20y)">를 추가하여 확장된 데이터셋을 만듭니다. 그리고 이 데이터셋으로 모델 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D%5Ey">를 <strong>처음부터 다시 학습</strong>시킵니다.</p>
+<ul>
+<li>기존 데이터셋에 가상의 데이터 포인트 <img src="https://latex.codecogs.com/png.latex?(X_%7Bn+1%7D,%20y)">를 추가하여 확장된 데이터셋을 만듭니다.</li>
+<li>그리고 이 데이터셋으로 모델 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D%5Ey">를 <strong>처음부터 다시 학습</strong>시킵니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%20%5Ctext%7BTrain%20%7D%20%5Chat%7Bf%7D%5Ey%20%5Ctext%7B%20on%20%7D%20%5C%7B(X_1,%20Y_1),%20%5Cdots,%20(X_n,%20Y_n),%20(X_%7Bn+1%7D,%20y)%5C%7D%20"></p>
 <blockquote class="blockquote">
 <p><strong>주의</strong>: 이때 사용하는 학습 알고리즘은 데이터의 순서에 영향을 받지 않는 <strong>대칭적(Symmetric)</strong> 알고리즘이어야 합니다.</p>
@@ -1468,45 +1658,110 @@
 </section>
 <section id="step-3-compute-scores" class="level2">
 <h2 class="anchored" data-anchor-id="step-3-compute-scores">Step 3: Compute Scores</h2>
-<p>학습된 모델 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D%5Ey">를 사용하여, 확장된 데이터셋 내의 모든 포인트(<img src="https://latex.codecogs.com/png.latex?i=1%20%5Cdots%20n+1">)에 대해 Conformal Score를 계산합니다.</p>
+<ul>
+<li>학습된 모델 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D%5Ey">를 사용하여, 확장된 데이터셋 내의 모든 포인트(<img src="https://latex.codecogs.com/png.latex?i=1%20%5Cdots%20n+1">)에 대해 Conformal Score를 계산합니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%20s_i%5Ey%20=%20s(X_i,%20Y_i,%20%5Chat%7Bf%7D%5Ey)%20%5Cquad%20%5Ctext%7Bfor%20%7D%20i=1,%20%5Cdots,%20n%20"> <img src="https://latex.codecogs.com/png.latex?%20s_%7Bn+1%7D%5Ey%20=%20s(X_%7Bn+1%7D,%20y,%20%5Chat%7Bf%7D%5Ey)%20"></p>
 </section>
 <section id="step-4-compute-quantile" class="level2">
 <h2 class="anchored" data-anchor-id="step-4-compute-quantile">Step 4: Compute Quantile</h2>
-<p>이 <img src="https://latex.codecogs.com/png.latex?n+1">개의 점수들 사이에서 <img src="https://latex.codecogs.com/png.latex?s_%7Bn+1%7D%5Ey">의 위치를 확인합니다. 정확히는 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> 분위수 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D%5Ey">를 계산하여, <img src="https://latex.codecogs.com/png.latex?s_%7Bn+1%7D%5Ey">가 이 안에 들어오는지 확인합니다.</p>
+<ul>
+<li>이 <img src="https://latex.codecogs.com/png.latex?n+1">개의 점수들 사이에서 <img src="https://latex.codecogs.com/png.latex?s_%7Bn+1%7D%5Ey">의 위치를 확인합니다.</li>
+<li>정확히는 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> 분위수 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D%5Ey">를 계산하여, <img src="https://latex.codecogs.com/png.latex?s_%7Bn+1%7D%5Ey">가 이 안에 들어오는지 확인합니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%20%5Chat%7Bq%7D%5Ey%20=%20%5Ctext%7BQuantile%7D%5Cleft(%20%5C%7Bs_1%5Ey,%20%5Cdots,%20s_%7Bn+1%7D%5Ey%5C%7D%20;%20%5Cfrac%7B%5Clceil%20(n+1)(1-%5Calpha)%20%5Crceil%7D%7Bn+1%7D%20%5Cright)%20"></p>
 </section>
 <section id="step-5-construct-prediction-set" class="level2">
 <h2 class="anchored" data-anchor-id="step-5-construct-prediction-set">Step 5: Construct Prediction Set</h2>
-<p>위 조건을 만족하는(즉, 기존 데이터들과 잘 섞이는) 모든 <img src="https://latex.codecogs.com/png.latex?y">를 예측 집합에 포함시킵니다.</p>
+<ul>
+<li>위 조건을 만족하는(즉, 기존 데이터들과 잘 섞이는) 모든 <img src="https://latex.codecogs.com/png.latex?y">를 예측 집합에 포함시킵니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%20%5Cmathcal%7BC%7D(X_%7Bn+1%7D)%20=%20%5C%7B%20y%20%5Cin%20%5Cmathcal%7BY%7D%20:%20s_%7Bn+1%7D%5Ey%20%5Cle%20%5Chat%7Bq%7D%5Ey%20%5C%7D%20"></p>
 </section>
 </section>
 <section id="statistical-interpretation-permutation-test" class="level1">
 <h1>Statistical Interpretation: Permutation Test</h1>
-<p>이 과정은 통계학의 <strong>순열 검정(Permutation Test)</strong>과 완벽하게 동일합니다.</p>
 <ul>
-<li><strong>귀무가설 (<img src="https://latex.codecogs.com/png.latex?H_0">)</strong>: 데이터 포인트 <img src="https://latex.codecogs.com/png.latex?(X_%7Bn+1%7D,%20y)">는 기존 데이터들과 동일한 분포에서 왔다(Exchangeable).</li>
-<li><strong>검정 통계량</strong>: Conformal Score <img src="https://latex.codecogs.com/png.latex?s">.</li>
-<li><strong>기각</strong>: 만약 <img src="https://latex.codecogs.com/png.latex?s_%7Bn+1%7D%5Ey">가 다른 점수들에 비해 터무니없이 크다면(상위 <img src="https://latex.codecogs.com/png.latex?%5Calpha"> 영역), 우리는 “이 데이터는 이 집단에 속하지 않는다”고 판단하고 귀무가설을 기각합니다. 즉, <img src="https://latex.codecogs.com/png.latex?y">는 정답이 아닐 가능성이 높으므로 예측 집합에서 제외합니다.</li>
+<li>Full Conformal Prediction이 왜 작동하는지, 그리고 왜 “데이터를 섞어서(Permutation)” 판단하는지 이해하기 위해 통계학의 <strong>순열 검정(Permutation Test)</strong> 개념을 연결해보겠습니다.</li>
 </ul>
-<p>Full CP의 예측 집합은 <strong>“가설 검정을 통과한(기각되지 않은) 모든 <img src="https://latex.codecogs.com/png.latex?y">의 집합”</strong>입니다.</p>
+<section id="the-null-hypothesis-of-exchangeability" class="level2">
+<h2 class="anchored" data-anchor-id="the-null-hypothesis-of-exchangeability">The Null Hypothesis of Exchangeability</h2>
+<ul>
+<li>우리가 테스트 데이터 <img src="https://latex.codecogs.com/png.latex?X_%7Bn+1%7D">에 대해 어떤 가상의 정답 <img src="https://latex.codecogs.com/png.latex?y">를 부여했을 때, 핵심 질문은 이것입니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>“이 데이터 포인트 <img src="https://latex.codecogs.com/png.latex?(X_%7Bn+1%7D,%20y)">가 기존 데이터들과 구별되지 않고 잘 섞이는가?”</strong></p>
+</blockquote>
+<ul>
+<li><p>이를 통계적 가설 검정의 언어로 표현하면 다음과 같습니다.</p></li>
+<li><p><strong>귀무가설 (<img src="https://latex.codecogs.com/png.latex?H_0">):</strong> 데이터들 <img src="https://latex.codecogs.com/png.latex?Z_1,%20%5Cdots,%20Z_%7Bn+1%7D">은 <strong>교환 가능(Exchangeable)</strong>하다.</p></li>
+<li><p>즉, 데이터의 순서를 뒤섞어도 그 결합 확률 분포는 변하지 않는다.</p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?Z_i%20=%20(X_i,%20Y_i)">입니다.</li>
+</ul></li>
+</ul>
+</section>
+<section id="the-test-statistic-p-value" class="level2">
+<h2 class="anchored" data-anchor-id="the-test-statistic-p-value">The Test Statistic &amp; P-value</h2>
+<ul>
+<li>이 귀무가설을 기각하기 위해, 우리는 데이터가 얼마나 “튀는지”를 측정하는 검정 통계량 <img src="https://latex.codecogs.com/png.latex?T">를 정의합니다.</li>
+<li>Full CP에서는 <strong>Nonconformity Score (<img src="https://latex.codecogs.com/png.latex?s">)</strong>가 바로 이 역할을 합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20T(Z)%20=%20s(X,%20Y)%20"></p>
+<ul>
+<li>점수 <img src="https://latex.codecogs.com/png.latex?s">가 클수록 해당 데이터는 다른 데이터들과 이질적이라는(Exchangeability를 위반한다는) 증거가 됩니다.</li>
+<li>우리는 관측된 데이터의 점수가, 데이터를 무작위로 섞었을 때 나올 수 있는 점수들과 비교해서 얼마나 큰지 <strong>p-value</strong>를 계산합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20p%20=%20%5Cfrac%7B%5Csum_%7B%5Csigma%20%5Cin%20S_%7Bn+1%7D%7D%20%5Cmathbb%7B1%7D%5C%7B%20T(Z_%7B%5Csigma(1)%7D,%20%5Cdots,%20Z_%7B%5Csigma(n+1)%7D)%20%5Cge%20T(Z_%7Bobserved%7D)%20%5C%7D%7D%7B(n+1)!%7D%20"></p>
+<ul>
+<li>하지만 Full CP에서는 모든 순열을 다 계산할 필요 없이, 각 데이터 포인트의 점수 <img src="https://latex.codecogs.com/png.latex?s_i">들의 순위(Rank)만 보면 됩니다.</li>
+<li>따라서 p-value는 다음과 같이 단순화됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20p(y)%20=%20%5Cfrac%7B1%7D%7Bn+1%7D%20%5Csum_%7Bi=1%7D%5E%7Bn+1%7D%20%5Cmathbb%7B1%7D%5C%7B%20s_i%5Ey%20%5Cge%20s_%7Bn+1%7D%5Ey%20%5C%7D%20"></p>
+</section>
+<section id="decision-rule-validity-theorem" class="level2">
+<h2 class="anchored" data-anchor-id="decision-rule-validity-theorem">Decision Rule (Validity Theorem)</h2>
+<ul>
+<li>순열 검정의 핵심 정리에 따르면, 귀무가설(<img src="https://latex.codecogs.com/png.latex?H_0">)이 참일 때 p-value는 균등 분포(Uniform Distribution)를 따릅니다. 따라서 다음이 성립합니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>Theorem (Validity of Permutation Test)</strong></p>
+<p>모든 <img src="https://latex.codecogs.com/png.latex?%5Ctau%20%5Cin%20%5B0,%201%5D">과 모든 교환 가능한 분포 <img src="https://latex.codecogs.com/png.latex?P">에 대해: <img src="https://latex.codecogs.com/png.latex?%20%5Cmathbb%7BP%7D_P(p%20%5Cle%20%5Ctau)%20%5Cle%20%5Ctau%20"></p>
+</blockquote>
+<ul>
+<li><p>우리는 허용 가능한 에러율 <img src="https://latex.codecogs.com/png.latex?%5Calpha">를 설정했으므로, <strong>p-value가 <img src="https://latex.codecogs.com/png.latex?%5Calpha">보다 작으면(너무 희박한 확률이면)</strong> 귀무가설을 기각합니다.</p></li>
+<li><p><strong><img src="https://latex.codecogs.com/png.latex?p(y)%20%5Cle%20%5Calpha"> (기각):</strong> “<img src="https://latex.codecogs.com/png.latex?y">를 정답이라고 가정했더니, 이 데이터는 상위 <img src="https://latex.codecogs.com/png.latex?%5Calpha">% 안에 들 만큼 너무 이상해. <img src="https://latex.codecogs.com/png.latex?y">는 정답이 아닌 것 같아.” <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>예측 집합에서 제외.</strong></p></li>
+<li><p><strong><img src="https://latex.codecogs.com/png.latex?p(y)%20%3E%20%5Calpha"> (채택):</strong> “<img src="https://latex.codecogs.com/png.latex?y">를 정답이라고 가정해도, 데이터가 전체 무리 속에 자연스럽게 섞여 들어가네. <img src="https://latex.codecogs.com/png.latex?y">는 정답일 수도 있어.” <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>예측 집합에 포함.</strong></p></li>
+<li><p>결국 Full CP의 예측 집합 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BC%7D(X_%7Bn+1%7D)">은 <strong>“순열 검정에서 기각되지 않고 살아남은 모든 <img src="https://latex.codecogs.com/png.latex?y">들의 모임”</strong>입니다.</p></li>
+<li><p>이것이 바로 Full CP가 수학적으로 엄밀한 커버리지를 보장하는 이유입니다.</p></li>
+</ul>
+<hr>
+</section>
 </section>
 <section id="computational-cost-vs.-statistical-efficiency" class="level1">
 <h1>Computational Cost vs.&nbsp;Statistical Efficiency</h1>
 <section id="the-cost" class="level2">
 <h2 class="anchored" data-anchor-id="the-cost">The Cost</h2>
-<p>이 방법의 가장 큰 문제는 <strong>계산 비용</strong>입니다. 테스트 데이터가 하나 들어올 때마다, 그리고 후보 클래스 <img src="https://latex.codecogs.com/png.latex?K">개마다 매번 모델을 재학습해야 합니다. * 총 학습 횟수: <img src="https://latex.codecogs.com/png.latex?(n+1)%20%5Ctimes%20K"></p>
-<p>따라서 딥러닝과 같이 학습이 오래 걸리는 모델이나, 회귀 문제(Regression)처럼 후보 <img src="https://latex.codecogs.com/png.latex?y">가 무한히 많은 경우에는 그대로 적용하기 어렵습니다.</p>
+<ul>
+<li><p>이 방법의 가장 큰 문제는 <strong>계산 비용</strong>입니다.</p></li>
+<li><p>테스트 데이터가 하나 들어올 때마다, 그리고 후보 클래스 <img src="https://latex.codecogs.com/png.latex?K">개마다 매번 모델을 재학습해야 합니다.</p></li>
+<li><p>총 학습 횟수: <img src="https://latex.codecogs.com/png.latex?(n+1)%20%5Ctimes%20K"></p></li>
+<li><p>따라서 딥러닝과 같이 학습이 오래 걸리는 모델이나, 회귀 문제(Regression)처럼 후보 <img src="https://latex.codecogs.com/png.latex?y">가 무한히 많은 경우에는 그대로 적용하기 어렵습니다.</p></li>
+</ul>
 </section>
 <section id="the-benefit" class="level2">
 <h2 class="anchored" data-anchor-id="the-benefit">The Benefit</h2>
-<p>하지만 데이터를 나누지 않고 <img src="https://latex.codecogs.com/png.latex?n">개를 모두 사용하므로, <strong>예측 집합이 더 작고 효율적(Sharp)</strong>입니다. Split CP보다 정보 손실이 적어, 데이터가 적은 상황에서는 훨씬 강력한 성능을 발휘합니다.</p>
+<ul>
+<li>하지만 데이터를 나누지 않고 <img src="https://latex.codecogs.com/png.latex?n">개를 모두 사용하므로, <strong>예측 집합이 더 작고 효율적(Sharp)</strong>입니다.</li>
+<li>Split CP보다 정보 손실이 적어, 데이터가 적은 상황에서는 훨씬 강력한 성능을 발휘합니다.</li>
+</ul>
 </section>
 </section>
 <section id="theoretical-guarantee" class="level1">
 <h1>Theoretical Guarantee</h1>
-<p>Full CP 역시 수학적으로 엄밀한 커버리지를 보장합니다.</p>
+<ul>
+<li>Full CP 역시 수학적으로 엄밀한 커버리지를 보장합니다.</li>
+</ul>
 <blockquote class="blockquote">
 <p><strong>Theorem 5 (Full conformal coverage guarantee)</strong></p>
 <p>데이터가 교환 가능(Exchangeable)하고 학습 알고리즘이 대칭적(Symmetric)이라면, 다음이 성립한다.</p>
@@ -1551,7 +1806,9 @@
 </tr>
 </tbody>
 </table>
-<p>Full CP는 계산 비용 때문에 현대 머신러닝에서는 잘 쓰이지 않지만, <strong>Jackknife+</strong>나 <strong>CV+</strong> (Section 6.2) 같은 기법들의 이론적 토대가 되는 매우 중요한 개념입니다.</p>
+<ul>
+<li>Full CP는 계산 비용 때문에 현대 머신러닝에서는 잘 쓰이지 않지만, <strong>Jackknife+</strong>나 <strong>CV+</strong> (Section 6.2) 같은 기법들의 이론적 토대가 되는 매우 중요한 개념입니다.</li>
+</ul>
 <hr>
 <p><strong>Final Note</strong>: 이것으로 “A Gentle Introduction to Conformal Prediction” 논문의 핵심적인 이론과 알고리즘들을 모두 정리했습니다. 이 시리즈가 여러분의 모델에 ’신뢰’를 더하는 데 도움이 되기를 바랍니다.</p>
 

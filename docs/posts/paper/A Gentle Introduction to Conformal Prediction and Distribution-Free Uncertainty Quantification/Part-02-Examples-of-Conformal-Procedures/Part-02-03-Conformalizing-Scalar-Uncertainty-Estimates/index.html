@@ -210,29 +210,55 @@ window.Quarto = {
 
 <section id="introduction" class="level1">
 <h1>Introduction</h1>
-<p>이전 포스트에서 다룬 <strong>Conformalized Quantile Regression (CQR)</strong>은 매우 강력하지만, 두 개의 Quantile을 학습시켜야 한다는 조건이 있습니다. 하지만 실무에서는 종종 <strong>평균(<span class="math inline">\(\mu\)</span>)과 분산(<span class="math inline">\(\sigma^2\)</span>)</strong>만을 예측하는 더 단순한 모델을 사용하거나, 혹은 모델 앙상블의 분산 등을 불확실성 지표로 삼기도 합니다.</p>
-<p>이번 포스트에서는 이러한 <strong>단일 스칼라 불확실성 지표(Scalar Uncertainty Estimate)</strong>를 활용하여 통계적으로 유효한 예측 구간을 생성하는 방법을 알아봅니다.</p>
+<ul>
+<li><p>이전 포스트에서 다룬 <strong>Conformalized Quantile Regression (CQR)</strong>은 매우 강력하지만, 두 개의 Quantile을 학습시켜야 한다는 조건이 있습니다.</p></li>
+<li><p>하지만 실무에서는 종종 <strong>평균(<span class="math inline">\(\mu\)</span>)과 분산(<span class="math inline">\(\sigma^2\)</span>)</strong>만을 예측하는 더 단순한 모델을 사용하거나, 혹은 모델 앙상블의 분산 등을 불확실성 지표로 삼기도 합니다.</p></li>
+<li><p>이번 포스트에서는 이러한 <strong>단일 스칼라 불확실성 지표(Scalar Uncertainty Estimate)</strong>를 활용하여 통계적으로 유효한 예측 구간을 생성하는 방법을 알아봅니다.</p></li>
+</ul>
 </section>
 <section id="heuristic-uncertainty-the-estimated-standard-deviation" class="level1">
 <h1>Heuristic Uncertainty: The Estimated Standard Deviation</h1>
 <p>가장 흔한 시나리오는 데이터가 정규분포(Gaussian)를 따른다고 가정하고 모델을 학습시키는 것입니다.</p>
 <p><span class="math display">\[ Y | X = x \sim \mathcal{N}(\mu(x), \sigma(x)) \]</span></p>
-<p>딥러닝 프레임워크(PyTorch 등)에서는 <code>GaussianNLLLoss</code>와 같은 손실 함수를 제공하여, 모델이 평균 예측값 <span class="math inline">\(\hat{f}(x)\)</span>와 불확실성 예측값 <span class="math inline">\(\hat{\sigma}(x)\)</span>를 동시에 학습하도록 돕습니다.</p>
-<p>하지만 실제 데이터는 <strong>정규분포를 따르지 않는 경우가 대부분</strong>입니다. 따라서 모델이 예측한 <span class="math inline">\(\hat{\sigma}(x)\)</span>를 그대로 사용하여 <span class="math inline">\(\hat{f}(x) \pm 1.96\hat{\sigma}(x)\)</span>와 같은 구간을 만들면, 실제로는 95% 커버리지를 보장할 수 없습니다.</p>
-<p>우리는 Conformal Prediction을 사용하여 이 부정확한(Heuristic) <span class="math inline">\(\hat{\sigma}(x)\)</span>를 <strong>보정(Calibrate)</strong>할 것입니다.</p>
+<ul>
+<li><p>딥러닝 프레임워크(PyTorch 등)에서는 <code>GaussianNLLLoss</code>와 같은 손실 함수를 제공하여, 모델이 평균 예측값 <span class="math inline">\(\hat{f}(x)\)</span>와 불확실성 예측값 <span class="math inline">\(\hat{\sigma}(x)\)</span>를 동시에 학습하도록 돕습니다.</p></li>
+<li><p>하지만 실제 데이터는 <strong>정규분포를 따르지 않는 경우가 대부분</strong>입니다.</p></li>
+<li><p>따라서 모델이 예측한 <span class="math inline">\(\hat{\sigma}(x)\)</span>를 그대로 사용하여 <span class="math inline">\(\hat{f}(x) \pm 1.96\hat{\sigma}(x)\)</span>와 같은 구간을 만들면, 실제로는 95% 커버리지를 보장할 수 없습니다.</p></li>
+<li><p>우리는 Conformal Prediction을 사용하여 이 부정확한(Heuristic) <span class="math inline">\(\hat{\sigma}(x)\)</span>를 <strong>보정(Calibrate)</strong>할 것입니다.</p></li>
+</ul>
 </section>
 <section id="generalizing-uncertainty-scalars" class="level1">
 <h1>Generalizing Uncertainty Scalars</h1>
-<p>이 방법은 비단 표준편차뿐만 아니라, <strong>“값이 클수록 불확실하다”</strong>는 의미를 가진 어떤 함수 <span class="math inline">\(u(x)\)</span>에도 적용 가능합니다.</p>
-<p>논문에서는 <span class="math inline">\(u(x)\)</span>로 사용할 수 있는 다양한 예시를 제시합니다: 1. <strong>Residual Prediction</strong>: <span class="math inline">\(|y - \hat{f}(x)|\)</span>를 예측하는 별도의 모델 학습. 2. <strong>Ensemble Variance</strong>: 여러 모델 예측값들의 분산 측정. 3. <strong>Dropout Variance</strong>: 추론 시 Dropout을 켜고 여러 번 예측했을 때의 분산. 4. <strong>Input Perturbation</strong>: 입력에 작은 노이즈를 주었을 때 출력의 변화량.</p>
-<p>우리는 이 <span class="math inline">\(u(x)\)</span>를 “불확실성의 크기(Magnitude)”로 간주하고, 이를 스케일링하는 방식(Multiplicative Correction)을 사용합니다.</p>
+<ul>
+<li><p>이 방법은 비단 표준편차뿐만 아니라, <strong>“값이 클수록 불확실하다”</strong>는 의미를 가진 어떤 함수 <span class="math inline">\(u(x)\)</span>에도 적용 가능합니다.</p></li>
+<li><p>논문에서는 <span class="math inline">\(u(x)\)</span>로 사용할 수 있는 다양한 예시를 제시합니다:</p>
+<ul>
+<li><ol type="1">
+<li><strong>Residual Prediction</strong>: <span class="math inline">\(|y - \hat{f}(x)|\)</span>를 예측하는 별도의 모델 학습.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Ensemble Variance</strong>: 여러 모델 예측값들의 분산 측정.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><strong>Dropout Variance</strong>: 추론 시 Dropout을 켜고 여러 번 예측했을 때의 분산.</li>
+</ol></li>
+<li><ol start="4" type="1">
+<li><strong>Input Perturbation</strong>: 입력에 작은 노이즈를 주었을 때 출력의 변화량.</li>
+</ol></li>
+</ul></li>
+<li><p>우리는 이 <span class="math inline">\(u(x)\)</span>를 “불확실성의 크기(Magnitude)”로 간주하고, 이를 스케일링하는 방식(Multiplicative Correction)을 사용합니다.</p></li>
+</ul>
 </section>
 <section id="the-algorithm" class="level1">
 <h1>The Algorithm</h1>
-<p>알고리즘의 핵심은 <strong>“실제 에러가 불확실성 지표 <span class="math inline">\(u(x)\)</span> 대비 몇 배나 큰가?”</strong>를 측정하는 것입니다.</p>
+<ul>
+<li>알고리즘의 핵심은 <strong>“실제 에러가 불확실성 지표 <span class="math inline">\(u(x)\)</span> 대비 몇 배나 큰가?”</strong>를 측정하는 것입니다.</li>
+</ul>
 <section id="step-1-define-score-function" class="level2">
 <h2 class="anchored" data-anchor-id="step-1-define-score-function">Step 1: Define Score Function</h2>
-<p>Calibration 데이터 <span class="math inline">\((X_i, Y_i)\)</span>에 대해 다음과 같은 Score를 정의합니다.</p>
+<ul>
+<li>Calibration 데이터 <span class="math inline">\((X_i, Y_i)\)</span>에 대해 다음과 같은 Score를 정의합니다.</li>
+</ul>
 <p><span class="math display">\[
 s(x, y) = \frac{|y - \hat{f}(x)|}{u(x)}
 \]</span></p>
@@ -248,21 +274,29 @@ s(x, y) = \frac{|y - \hat{f}(x)|}{u(x)}
 </section>
 <section id="step-2-calibration-get-hatq" class="level2">
 <h2 class="anchored" data-anchor-id="step-2-calibration-get-hatq">Step 2: Calibration (Get <span class="math inline">\(\hat{q}\)</span>)</h2>
-<p>계산된 점수들 <span class="math inline">\(s_1, \dots, s_n\)</span>에 대해 <span class="math inline">\(1-\alpha\)</span> 분위수(Quantile) <span class="math inline">\(\hat{q}\)</span>를 구합니다.</p>
+<ul>
+<li>계산된 점수들 <span class="math inline">\(s_1, \dots, s_n\)</span>에 대해 <span class="math inline">\(1-\alpha\)</span> 분위수(Quantile) <span class="math inline">\(\hat{q}\)</span>를 구합니다.</li>
+</ul>
 <p><span class="math display">\[
 \hat{q} = \text{Quantile}\left( \frac{\lceil (n+1)(1-\alpha) \rceil}{n} ; \{s_1, \dots, s_n\} \right)
 \]</span></p>
-<p>여기서 구해진 <span class="math inline">\(\hat{q}\)</span>는 <strong>“불확실성 지표 <span class="math inline">\(u(x)\)</span>에 곱해야 할 보정 계수(Multiplier)”</strong> 역할을 합니다.</p>
+<ul>
+<li>여기서 구해진 <span class="math inline">\(\hat{q}\)</span>는 <strong>“불확실성 지표 <span class="math inline">\(u(x)\)</span>에 곱해야 할 보정 계수(Multiplier)”</strong> 역할을 합니다.</li>
+</ul>
 </section>
 <section id="step-3-construct-prediction-interval" class="level2">
 <h2 class="anchored" data-anchor-id="step-3-construct-prediction-interval">Step 3: Construct Prediction Interval</h2>
-<p>새로운 입력 <span class="math inline">\(X_{test}\)</span>에 대한 예측 구간은 중심 예측값 <span class="math inline">\(\hat{f}(x)\)</span>에서 불확실성 지표 <span class="math inline">\(u(x)\)</span>의 <span class="math inline">\(\hat{q}\)</span>배만큼 벌려준 구간이 됩니다.</p>
+<ul>
+<li>새로운 입력 <span class="math inline">\(X_{test}\)</span>에 대한 예측 구간은 중심 예측값 <span class="math inline">\(\hat{f}(x)\)</span>에서 불확실성 지표 <span class="math inline">\(u(x)\)</span>의 <span class="math inline">\(\hat{q}\)</span>배만큼 벌려준 구간이 됩니다.</li>
+</ul>
 <p><span class="math display">\[
 \mathcal{C}(x) = [\hat{f}(x) - \hat{q}u(x), \quad \hat{f}(x) + \hat{q}u(x)]
 \]</span></p>
 <section id="유도-과정-derivation-of-validity" class="level3">
 <h3 class="anchored" data-anchor-id="유도-과정-derivation-of-validity">유도 과정 (Derivation of Validity)</h3>
-<p>이 구간이 왜 <span class="math inline">\(1-\alpha\)</span> 커버리지를 보장하는지 살펴보겠습니다.</p>
+<ul>
+<li>이 구간이 왜 <span class="math inline">\(1-\alpha\)</span> 커버리지를 보장하는지 살펴보겠습니다.</li>
+</ul>
 <ol type="1">
 <li>Calibration 단계에서 <span class="math inline">\(\hat{q}\)</span>를 구했으므로, 새로운 데이터에 대해 다음 확률이 성립합니다. <span class="math display">\[ \mathbb{P}[s(X_{test}, Y_{test}) \le \hat{q}] \ge 1 - \alpha \]</span></li>
 <li>Score <span class="math inline">\(s\)</span>의 정의를 대입합니다. <span class="math display">\[ \mathbb{P}\left[ \frac{|Y_{test} - \hat{f}(X_{test})|}{u(X_{test})} \le \hat{q} \right] \ge 1 - \alpha \]</span></li>
@@ -272,7 +306,7 @@ s(x, y) = \frac{|y - \hat{f}(x)|}{u(x)}
 </ol>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="images/figure8_scalar_visualization.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure8_scalar_visualization.png" class="img-fluid figure-img"></p>
 <figcaption>Figure 8: Uncertainty Scalar를 이용한 예측 구간 시각화. 중심 예측값 <span class="math inline">\(\hat{f}(x)\)</span>를 기준으로, 위아래로 <span class="math inline">\(\hat{q}u(x)\)</span>만큼 벌어진 대칭적인 구간을 형성한다.</figcaption>
 </figure>
 </div>
@@ -281,11 +315,13 @@ s(x, y) = \frac{|y - \hat{f}(x)|}{u(x)}
 </section>
 <section id="implementation" class="level1">
 <h1>Implementation</h1>
-<p>이 방법은 구현이 매우 간단하며, PyTorch 등의 라이브러리와 쉽게 결합됩니다.</p>
+<ul>
+<li>이 방법은 구현이 매우 간단하며, PyTorch 등의 라이브러리와 쉽게 결합됩니다.</li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="images/figure7_scalar_python_code.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 7: Conformalized Uncertainty Scalars 구현을 위한 Python 코드. Score를 계산할 때 예측된 표준편차(model output의 두 번째 컬럼)로 나누어주는 것이 핵심이다.</figcaption>
+<p><img src="./images/figure9_scalar_python_code.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 9: Conformalized Uncertainty Scalars 구현을 위한 Python 코드. Score를 계산할 때 예측된 표준편차(model output의 두 번째 컬럼)로 나누어주는 것이 핵심이다.</figcaption>
 </figure>
 </div>
 <ol type="1">
@@ -296,8 +332,14 @@ s(x, y) = \frac{|y - \hat{f}(x)|}{u(x)}
 </section>
 <section id="discussion" class="level1">
 <h1>Discussion</h1>
-<p>이 방법은 <strong>Symmetric(대칭적)</strong>인 구간을 생성한다는 특징이 있습니다. * <strong>장점</strong>: 구현이 쉽고 직관적입니다. 이미 학습된 모델(Gaussian Output 등)을 그대로 재활용하기 좋습니다. * <strong>단점</strong>: CQR과 달리 구간이 항상 예측값을 중심으로 대칭입니다. 실제 데이터 분포가 비대칭(Skewed)이라면 효율적이지 않을 수 있습니다. 또한, <span class="math inline">\(u(x)\)</span>가 실제 분위수와 비례하지 않는다면 CQR보다 성능(구간의 평균 길이 등)이 떨어질 수 있습니다.</p>
-<p>따라서 가능하다면 <strong>Quantile Regression (CQR)</strong>을 사용하는 것이 더 좋지만, 상황이 여의치 않거나 빠른 배포가 필요할 때 이 방법은 훌륭한 대안이 됩니다.</p>
+<ul>
+<li>이 방법은 <strong>Symmetric(대칭적)</strong>인 구간을 생성한다는 특징이 있습니다.
+<ul>
+<li><strong>장점</strong>: 구현이 쉽고 직관적입니다. 이미 학습된 모델(Gaussian Output 등)을 그대로 재활용하기 좋습니다.</li>
+<li><strong>단점</strong>: CQR과 달리 구간이 항상 예측값을 중심으로 대칭입니다. 실제 데이터 분포가 비대칭(Skewed)이라면 효율적이지 않을 수 있습니다. 또한, <span class="math inline">\(u(x)\)</span>가 실제 분위수와 비례하지 않는다면 CQR보다 성능(구간의 평균 길이 등)이 떨어질 수 있습니다.</li>
+</ul></li>
+<li>따라서 가능하다면 <strong>Quantile Regression (CQR)</strong>을 사용하는 것이 더 좋지만, 상황이 여의치 않거나 빠른 배포가 필요할 때 이 방법은 훌륭한 대안이 됩니다.</li>
+</ul>
 <hr>
 <p><strong>Next Step</strong>: 지금까지는 Black-box 모델의 불확실성을 다루었습니다. 다음 포스트에서는 이 기법들이 실제 복잡한 문제(Computer Vision 등)에서 어떻게 확장되는지 살펴보겠습니다.</p>
 

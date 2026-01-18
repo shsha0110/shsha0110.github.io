@@ -206,68 +206,107 @@ window.Quarto = {
 
 <section id="introduction-why-adaptive" class="level1">
 <h1>Introduction: Why Adaptive?</h1>
-<p>이전 포스트(Section 1)에서 다룬 기본적인 Conformal Prediction 방법은 단순하고 강력하지만 한 가지 단점이 있습니다. 기존 방식(Naive method)은 단순히 <span class="math inline">\(1 - \hat{f}(x)_y\)</span>를 점수로 사용하기 때문에, 모든 클래스에 대해 고정된 임계값(Threshold)을 적용하는 경향이 있습니다.</p>
-<p>이로 인해 다음과 같은 문제가 발생합니다: 1. <strong>Hard Inputs (어려운 이미지)</strong>: 모델이 헷갈려하는 경우에도 예측 집합이 충분히 커지지 않아 정답을 놓칠 수 있습니다 (Under-coverage). 2. <strong>Easy Inputs (쉬운 이미지)</strong>: 모델이 확신하는 경우에도 예측 집합이 불필요하게 클 수 있습니다 (Over-coverage).</p>
-<p>우리는 입력 이미지의 난이도에 따라 <strong>어려우면 집합을 크게, 쉬우면 집합을 작게</strong> 만드는 <strong>Adaptive Prediction Sets (APS)</strong> 기법을 도입하여 이 문제를 해결할 것입니다.</p>
+<ul>
+<li><p>이전 포스트(Section 1)에서 다룬 기본적인 Conformal Prediction 방법은 단순하고 강력하지만 한 가지 단점이 있습니다.</p></li>
+<li><p>기존 방식(Naive method)은 단순히 <span class="math inline">\(1 - \hat{f}(x)_y\)</span>를 점수로 사용하기 때문에, 모든 클래스에 대해 고정된 임계값(Threshold)을 적용하는 경향이 있습니다.</p></li>
+<li><p>이로 인해 다음과 같은 문제가 발생합니다:</p>
+<ul>
+<li><ol type="1">
+<li><strong>Hard Inputs (어려운 이미지)</strong>: 모델이 헷갈려하는 경우에도 예측 집합이 충분히 커지지 않아 정답을 놓칠 수 있습니다 (Under-coverage).</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Easy Inputs (쉬운 이미지)</strong>: 모델이 확신하는 경우에도 예측 집합이 불필요하게 클 수 있습니다 (Over-coverage).</li>
+</ol></li>
+</ul></li>
+<li><p>우리는 입력 이미지의 난이도에 따라 <strong>어려우면 집합을 크게, 쉬우면 집합을 작게</strong> 만드는 <strong>Adaptive Prediction Sets (APS)</strong> 기법을 도입하여 이 문제를 해결할 것입니다.</p></li>
+</ul>
 </section>
 <section id="the-intuition-water-filling-approach" class="level1">
 <h1>The Intuition: “Water-filling” Approach</h1>
-<p>APS의 핵심 아이디어는 직관적입니다. 만약 모델의 예측 확률 <span class="math inline">\(\hat{f}(x)\)</span>가 완벽하다면, 우리는 확률이 높은 클래스부터 순서대로 골라 담으면서 그 <strong>확률의 합(Cumulative Sum)이 <span class="math inline">\(1-\alpha\)</span> (예: 90%)를 넘기는 순간</strong> 멈추면 됩니다.</p>
+<ul>
+<li>APS의 핵심 아이디어는 직관적입니다.</li>
+<li>만약 모델의 예측 확률 <span class="math inline">\(\hat{f}(x)\)</span>가 완벽하다면, 우리는 확률이 높은 클래스부터 순서대로 골라 담으면서 그 <strong>확률의 합(Cumulative Sum)이 <span class="math inline">\(1-\alpha\)</span> (예: 90%)를 넘기는 순간</strong> 멈추면 됩니다.</li>
+</ul>
 <p><span class="math display">\[
 \sum_{j=1}^{k} \hat{f}(x)_{\pi_j(x)} \ge 1 - \alpha
 \]</span></p>
-<p>여기서 <span class="math inline">\(\pi(x)\)</span>는 확률이 높은 순서대로 정렬된 클래스의 순열(Permutation)입니다. 이 방식은 “컵에 물(확률)을 <span class="math inline">\(90\%\)</span>가 찰 때까지 붓는 것”과 유사합니다. * <strong>쉬운 문제</strong>: 확률 분포가 뾰족(Peaked)하므로, 1~2개만 담아도 금방 <span class="math inline">\(90\%\)</span>가 찹니다. <span class="math inline">\(\rightarrow\)</span> <strong>Small Set</strong> * <strong>어려운 문제</strong>: 확률 분포가 평평(Flat)하므로, 여러 개를 담아야 <span class="math inline">\(90\%\)</span>가 찹니다. <span class="math inline">\(\rightarrow\)</span> <strong>Large Set</strong></p>
-<p>하지만 실제 모델의 확률 <span class="math inline">\(\hat{f}(x)\)</span>는 완벽하지 않으므로(Overconfident/Underconfident), 단순히 <span class="math inline">\(1-\alpha\)</span>에서 끊으면 커버리지를 보장할 수 없습니다. 따라서 <strong>Conformal Prediction을 사용하여 이 “멈추는 지점(Threshold)”을 보정</strong>해야 합니다.</p>
+<ul>
+<li><p>여기서 <span class="math inline">\(\pi(x)\)</span>는 확률이 높은 순서대로 정렬된 클래스의 순열(Permutation)입니다.</p></li>
+<li><p>이 방식은 “컵에 물(확률)을 <span class="math inline">\(90\%\)</span>가 찰 때까지 붓는 것”과 유사합니다.</p></li>
+<li><p><strong>쉬운 문제</strong>: 확률 분포가 뾰족(Peaked)하므로, 1~2개만 담아도 금방 <span class="math inline">\(90\%\)</span>가 찹니다. <span class="math inline">\(\rightarrow\)</span> <strong>Small Set</strong></p></li>
+<li><p><strong>어려운 문제</strong>: 확률 분포가 평평(Flat)하므로, 여러 개를 담아야 <span class="math inline">\(90\%\)</span>가 찹니다. <span class="math inline">\(\rightarrow\)</span> <strong>Large Set</strong></p></li>
+<li><p>하지만 실제 모델의 확률 <span class="math inline">\(\hat{f}(x)\)</span>는 완벽하지 않으므로(Overconfident/Underconfident), 단순히 <span class="math inline">\(1-\alpha\)</span>에서 끊으면 커버리지를 보장할 수 없습니다.</p></li>
+<li><p>따라서 <strong>Conformal Prediction을 사용하여 이 “멈추는 지점(Threshold)”을 보정</strong>해야 합니다.</p></li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="images/figure4_aps_visualization.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure4_aps_visualization.png" class="img-fluid figure-img"></p>
 <figcaption>Figure 4: Adaptive Prediction Sets (APS) 알고리즘의 시각화. 확률이 높은 클래스(Fox squirrel, Gray fox…)부터 순서대로 누적 합을 구하고, 그 합이 보정된 분위수(Quantile)를 넘을 때까지 클래스를 포함시킨다.</figcaption>
 </figure>
 </div>
 </section>
 <section id="mathematical-formulation" class="level1">
 <h1>Mathematical Formulation</h1>
-<p>이제 이를 수학적으로 엄밀하게 정의해보겠습니다.</p>
+<ul>
+<li>이제 이를 수학적으로 엄밀하게 정의해보겠습니다.</li>
+</ul>
 <section id="defining-the-score-function" class="level2">
 <h2 class="anchored" data-anchor-id="defining-the-score-function">1. Defining the Score Function</h2>
-<p>APS를 위한 Score Function <span class="math inline">\(s(x, y)\)</span>는 <strong>“정답 클래스 <span class="math inline">\(y\)</span>를 포함시키기 위해, 확률 상위 몇 번째 클래스까지 내려가야 하는가?”</strong>를 누적 확률로 나타냅니다.</p>
-<p>먼저, 입력 <span class="math inline">\(x\)</span>에 대해 모델이 예측한 확률을 내림차순으로 정렬하는 순열 함수 <span class="math inline">\(\pi(x)\)</span>를 정의합니다. <span class="math display">\[ \hat{f}(x)_{\pi_1(x)} \ge \hat{f}(x)_{\pi_2(x)} \ge \dots \ge \hat{f}(x)_{\pi_K(x)} \]</span></p>
-<p>이때, 정답 클래스 <span class="math inline">\(y\)</span>가 정렬된 순서상 <span class="math inline">\(k\)</span>번째에 위치한다고 가정합시다 (<span class="math inline">\(y = \pi_k(x)\)</span>). Score <span class="math inline">\(s(x, y)\)</span>는 <span class="math inline">\(y\)</span>까지의 누적 확률 질량(Cumulative Probability Mass)으로 정의됩니다:</p>
+<ul>
+<li><p>APS를 위한 Score Function <span class="math inline">\(s(x, y)\)</span>는 <strong>“정답 클래스 <span class="math inline">\(y\)</span>를 포함시키기 위해, 확률 상위 몇 번째 클래스까지 내려가야 하는가?”</strong>를 누적 확률로 나타냅니다.</p></li>
+<li><p>먼저, 입력 <span class="math inline">\(x\)</span>에 대해 모델이 예측한 확률을 내림차순으로 정렬하는 순열 함수 <span class="math inline">\(\pi(x)\)</span>를 정의합니다. <span class="math display">\[ \hat{f}(x)_{\pi_1(x)} \ge \hat{f}(x)_{\pi_2(x)} \ge \dots \ge \hat{f}(x)_{\pi_K(x)} \]</span></p></li>
+<li><p>이때, 정답 클래스 <span class="math inline">\(y\)</span>가 정렬된 순서상 <span class="math inline">\(k\)</span>번째에 위치한다고 가정합시다 (<span class="math inline">\(y = \pi_k(x)\)</span>).</p></li>
+<li><p>Score <span class="math inline">\(s(x, y)\)</span>는 <span class="math inline">\(y\)</span>까지의 누적 확률 질량(Cumulative Probability Mass)으로 정의됩니다:</p></li>
+</ul>
 <p><span class="math display">\[
 s(x,y) = \sum_{j=1}^{k} \hat{f}(x)_{\pi_j(x)}
 \]</span></p>
 <ul>
-<li><strong>의미</strong>: “모델이 가장 가능성 높다고 생각하는 것부터 정답 <span class="math inline">\(y\)</span>가 나올 때까지 확률을 다 더한 값”입니다.</li>
+<li><strong>의미</strong>: “모델이 가장 가능성 높다고 생각하는 것부터 정답 <span class="math inline">\(y\)</span>가 나올 때까지 확률을 다 더한 값”입니다.
+<ul>
 <li>만약 모델이 정답을 1순위로 예측했다면, <span class="math inline">\(s(x,y)\)</span>는 작을 것입니다.</li>
 <li>만약 모델이 정답을 하위권으로 예측했다면, <span class="math inline">\(s(x,y)\)</span>는 1에 가까워질 것입니다.</li>
+</ul></li>
 </ul>
 </section>
 <section id="calibration-finding-hatq" class="level2">
 <h2 class="anchored" data-anchor-id="calibration-finding-hatq">2. Calibration (Finding <span class="math inline">\(\hat{q}\)</span>)</h2>
-<p>이제 Calibration 데이터셋 <span class="math inline">\((X_1, Y_1), \dots, (X_n, Y_n)\)</span>에 대해 위 점수들을 계산합니다. 그리고 다음 식을 만족하는 분위수(Quantile) <span class="math inline">\(\hat{q}\)</span>를 찾습니다.</p>
+<ul>
+<li>이제 Calibration 데이터셋 <span class="math inline">\((X_1, Y_1), \dots, (X_n, Y_n)\)</span>에 대해 위 점수들을 계산합니다.</li>
+<li>그리고 다음 식을 만족하는 분위수(Quantile) <span class="math inline">\(\hat{q}\)</span>를 찾습니다.</li>
+</ul>
 <p><span class="math display">\[
 \hat{q} = \text{Quantile}\left( \frac{\lceil (n+1)(1-\alpha) \rceil}{n} ; \{s_1, \dots, s_n\} \right)
 \]</span></p>
-<p>이 <span class="math inline">\(\hat{q}\)</span>는 “정답을 포함하기 위해 누적 확률을 어디까지 허용해야 하는가?”에 대한 통계적 임계값입니다.</p>
+<ul>
+<li>이 <span class="math inline">\(\hat{q}\)</span>는 “정답을 포함하기 위해 누적 확률을 어디까지 허용해야 하는가?”에 대한 통계적 임계값입니다.</li>
+</ul>
 </section>
 <section id="constructing-the-prediction-set" class="level2">
 <h2 class="anchored" data-anchor-id="constructing-the-prediction-set">3. Constructing the Prediction Set</h2>
-<p>새로운 테스트 데이터 <span class="math inline">\(X_{test}\)</span>에 대해 예측 집합 <span class="math inline">\(\mathcal{C}(X_{test})\)</span>는 누적 확률이 <span class="math inline">\(\hat{q}\)</span>를 넘어서는 지점까지의 모든 클래스를 포함하여 구성됩니다.</p>
+<ul>
+<li>새로운 테스트 데이터 <span class="math inline">\(X_{test}\)</span>에 대해 예측 집합 <span class="math inline">\(\mathcal{C}(X_{test})\)</span>는 누적 확률이 <span class="math inline">\(\hat{q}\)</span>를 넘어서는 지점까지의 모든 클래스를 포함하여 구성됩니다.</li>
+</ul>
 <p><span class="math display">\[
 \mathcal{C}(x) = \{ \pi_1(x), \dots, \pi_k(x) \}
 \]</span></p>
-<p>여기서 <span class="math inline">\(k\)</span>는 다음을 만족하는 가장 작은 정수입니다: <span class="math display">\[
+<ul>
+<li>여기서 <span class="math inline">\(k\)</span>는 다음을 만족하는 가장 작은 정수입니다: <span class="math display">\[
 \text{sup} \left\{ k' : \sum_{j=1}^{k'} \hat{f}(x)_{\pi_j(x)} &lt; \hat{q} \right\} + 1
-\]</span> 즉, 누적 합이 <span class="math inline">\(\hat{q}\)</span>를 초과하는 순간까지 포함합니다. (수식 (3))</p>
+\]</span></li>
+<li>즉, 누적 합이 <span class="math inline">\(\hat{q}\)</span>를 초과하는 순간까지 포함합니다.</li>
+</ul>
 </section>
 </section>
 <section id="implementation-steps" class="level1">
 <h1>Implementation Steps</h1>
-<p>Python 코드로 구현할 때의 핵심 로직은 다음과 같습니다.</p>
+<ul>
+<li>Python 코드로 구현할 때의 핵심 로직은 다음과 같습니다.</li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="images/figure3_aps_python_code.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: Adaptive Prediction Sets 구현을 위한 Python 코드 예시. <code>argsort</code>를 통해 정렬하고 <code>cumsum</code>을 통해 누적 확률을 계산하는 과정이 포함되어 있다.</figcaption>
+<p><img src="./images/figure5_aps_python_code.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 5: Adaptive Prediction Sets 구현을 위한 Python 코드 예시. <code>argsort</code>를 통해 정렬하고 <code>cumsum</code>을 통해 누적 확률을 계산하는 과정이 포함되어 있다.</figcaption>
 </figure>
 </div>
 <ol type="1">
@@ -279,7 +318,12 @@ s(x,y) = \sum_{j=1}^{k} \hat{f}(x)_{\pi_j(x)}
 </section>
 <section id="summary" class="level1">
 <h1>Summary</h1>
-<p><strong>Adaptive Prediction Sets (APS)</strong>는 불확실성을 더 지능적으로 다루는 방법입니다. * 단순히 모델의 Softmax 값 하나만 보는 것이 아니라, <strong>전체 확률 분포의 형상(Shape)</strong>을 고려합니다. * 그 결과, <strong>쉬운 샘플에는 작은 집합</strong>을, <strong>어려운 샘플에는 큰 집합</strong>을 할당하여 사용자가 모델의 신뢰도를 직관적으로 파악할 수 있게 해줍니다. * 이 모든 과정에서도 <span class="math inline">\(1-\alpha\)</span>라는 통계적 커버리지는 엄격하게 보장됩니다.</p>
+<ul>
+<li><strong>Adaptive Prediction Sets (APS)</strong>는 불확실성을 더 지능적으로 다루는 방법입니다.</li>
+<li>단순히 모델의 Softmax 값 하나만 보는 것이 아니라, <strong>전체 확률 분포의 형상(Shape)</strong>을 고려합니다.</li>
+<li>그 결과, <strong>쉬운 샘플에는 작은 집합</strong>을, <strong>어려운 샘플에는 큰 집합</strong>을 할당하여 사용자가 모델의 신뢰도를 직관적으로 파악할 수 있게 해줍니다.</li>
+<li>이 모든 과정에서도 <span class="math inline">\(1-\alpha\)</span>라는 통계적 커버리지는 엄격하게 보장됩니다.</li>
+</ul>
 <hr>
 <p><strong>Next Step</strong>: 다음 포스트에서는 연속적인 값을 예측하는 회귀(Regression) 문제에서 불확실성 구간을 구하는 <strong>Conformalized Quantile Regression</strong>에 대해 알아보겠습니다.</p>
 

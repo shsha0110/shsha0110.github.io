@@ -13,45 +13,47 @@ format:
 jupyter: python3
 ---
 
-## 1. Introduction
+# Introduction
 
-사회과학 데이터, 특히 범죄학이나 경제학 데이터를 다루다 보면 선형(Linear) 모델로는 설명하기 힘든 복잡한 인과관계를 마주하게 됩니다.
+* 데이터를 다루다 보면 선형(Linear) 모델로는 설명하기 힘든 복잡한 인과관계를 마주하게 됩니다.
 
-전통적인 **2단계 최소제곱법(2SLS)**은 강력한 도구이지만, 다음과 같은 한계가 있습니다.
-1.  처치(Treatment)와 결과(Outcome)의 관계를 **선형**으로 가정합니다.
-2.  공변량(Covariate)과 처치 변수 간의 복잡한 **상호작용**을 포착하기 어렵습니다.
+* 전통적인 **2단계 최소제곱법(2SLS)**은 강력한 도구이지만, 다음과 같은 한계가 있습니다.
+    * 1.  처치(Treatment)와 결과(Outcome)의 관계를 **선형**으로 가정합니다.
+    * 2.  공변량(Covariate)과 처치 변수 간의 복잡한 **상호작용**을 포착하기 어렵습니다.
 
-이번 포스트에서는 Hartford et al.(2017)이 제안한 **Deep IV** 방법론을 소개하고, 가격($P$)과 판매량($Y$)의 비선형적 관계를 시뮬레이션 데이터를 통해 추정해보겠습니다.
+* 이번 포스트에서는 Hartford et al.(2017)이 제안한 **Deep IV** 방법론을 소개하고, 가격($P$)과 판매량($Y$)의 비선형적 관계를 시뮬레이션 데이터를 통해 추정해보겠습니다.
 
-### The Problem Formulation
+## The Problem Formulation
 
-우리가 관심 있는 인과 모델은 다음과 같습니다.
+* 우리가 해결하고자 하는 인과추론 문제는 다음과 같은 구조적 방정식(Structural Equation)으로 정의됩니다.
 
 $$Y = g(P, X) + \epsilon$$
 
-여기서:
-* $Y$: 결과 변수 (예: 판매량, 범죄율)
-* $P$: 처치 변수 (예: 가격, 경찰 순찰 빈도) - **내생성(Endogeneity) 존재** ($E[\epsilon|P] \neq 0$)
-* $X$: 관측 가능한 공변량 (예: 성수기 여부, 지역 특성)
-* $Z$: 도구 변수 (예: 원자재 가격, 예산) - 외생성 만족
+* 이 수식이 실제 현실에서 어떤 의미를 갖는지, 논문에서 제시한 **항공권 가격 결정 시나리오**를 통해 살펴보겠습니다.
 
-Deep IV는 이 문제를 풀기 위해 **두 단계의 신경망**을 사용합니다.
+## Motivating Example: Airline Ticket Pricing
 
-1.  **Stage 1 (Treatment Network):** 도구 변수를 이용해 처치 변수의 조건부 분포 $F(P|Z, X)$를 학습합니다.
-2.  **Stage 2 (Outcome Network):** 1단계에서 추정된 분포를 적분(Integrate out)하여 인과 함수 $g(P, X)$를 학습합니다.
+* 항공사가 티켓 가격($P$)을 책정하고 그에 따른 판매량($Y$)을 분석한다고 가정해 봅시다. 
+* 우리의 목표는 "가격을 올렸을 때 판매량이 실제로 얼마나 줄어드는가?"(인과 효과)를 알아내는 것입니다.
+* 하지만 단순히 데이터를 관찰하면 **내생성(Endogeneity)** 문제로 인해 잘못된 결론에 도달하게 됩니다.
+
+* **교란 변수 ($E$, Confounder):** 
+    * 예를 들어 '비즈니스 컨퍼런스'나 '휴가철' 같은 수요 급증 요인이 있다고 합시다. 
+    * 이 요인은 **가격($P$)**을 높이게 만들고(항공사가 가격을 올림), 동시에 **판매량($Y$)**도 높입니다(사람들이 비싸도 삼). 
+    * 그 결과, 데이터상으로는 **"가격이 비싼데도 판매량이 높네?"**라는 양의 상관관계가 나타나, 가격의 부정적 효과를 과소평가하게 됩니다.
+
+* 이 고리를 끊기 위해 우리는 **도구 변수 ($Z$, Instrument)**를 도입합니다.
+
+![Figure: Causal Graph (DAG) 인과 관계를 도식화하면 다음과 같습니다.](./images/dag.png)
 
 ---
 
-## 2. Data Generation
+# 1. Import Libarary
 
-먼저 내생성과 비선형성이 존재하는 가상의 데이터를 생성합니다.
-상황은 다음과 같습니다.
-* **가격($P$)**이 오르면 **판매량($Y$)**은 줄어듭니다.
-* 하지만 **성수기($X$)**에는 가격도 비싸고 판매량도 많아, 단순 회귀 시 양의 상관관계(편향)가 관찰됩니다.
-* 실제 인과 효과는 특정 가격 이상에서 급격히 판매량이 떨어지는 **S자 곡선(Sigmoid)** 형태입니다.
+* 실습에 필요한 라이브러리를 불러옵니다.
 
 ```{python}
-#| label: data-generation
+#| label: libarary-import
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -63,8 +65,18 @@ import torch.nn.functional as F
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 ```
+---
+
+# 2. Data Generation
+
+* 먼저 내생성과 비선형성이 존재하는 가상의 데이터를 생성합니다.
+* 상황은 다음과 같습니다.
+    * **가격($P$)**이 오르면 **판매량($Y$)**은 줄어듭니다.
+    * 하지만 **성수기($X$)**에는 가격도 비싸고 판매량도 많아, 단순 회귀 시 양의 상관관계(편향)가 관찰됩니다.
+    * 실제 인과 효과는 특정 가격 이상에서 급격히 판매량이 떨어지는 **S자 곡선(Sigmoid)** 형태입니다.
 
 ```{python}
+#| label: data-generation-function
 def generate_data(n, seed=42):
     np.random.seed(seed)
     
@@ -93,6 +105,8 @@ def generate_data(n, seed=42):
 ```
 
 ```{python}
+#| label: data-generation
+
 # 1. 데이터 생성
 Z_data, X_data, P_data, Y_data, true_func = generate_data(n=100)
 
@@ -116,6 +130,8 @@ Y = torch.tensor(Y_scaled, dtype=torch.float32)
 ```
 
 ```{python}
+#| label: data-visualization
+
 # 스타일 설정
 sns.set_style("whitegrid")
 plt.rcParams['figure.figsize'] = (18, 12)
@@ -195,20 +211,15 @@ plt.show()
 
 ---
 
-## 3. Benchmark: Linear 2SLS
+# 3. Benchmark: Linear 2SLS
 
-비교를 위해 전통적인 Linear 2SLS를 먼저 수행합니다. `scikit-learn`을 사용하여 2단계 회귀분석을 진행합니다.
-
-1. Stage 1: Predict  using 
-2. Stage 2: Regress  on 
+* 비교를 위해 전통적인 Linear 2SLS를 먼저 수행합니다.
+*  `scikit-learn`을 사용하여 2단계 회귀분석을 진행합니다.
+    * 1. Stage 1: Predict $P$ using $Z, X$
+    * 2. Stage 2: Regress Y on $\hat{P}, X$ 
 
 ```{python}
 #| label: linear-2sls
-
-# ==========================================
-# 2. Linear 2SLS Implementation
-# ==========================================
-
 # [Stage 1] P ~ Z + X
 # 도구변수(Z)와 공변량(X)를 사용하여 내생변수(P)를 예측.
 ZX_data = np.concatenate((Z_data, X_data), axis=1)
@@ -231,16 +242,82 @@ print(f"Estimated Causal Effect (Coefficient of P): {stage2_model.coef_[0][0]:.4
 
 ---
 
-## 4. Deep IV Implementation
+# 4. Deep IV Implementation
 
-### Stage 1: Mixture Density Network (MDN)
+* 구현에 들어가기에 앞서, **"왜 굳이 두 개의 신경망이 필요한가?"**를 수학적으로 짚고 넘어갑시다.
 
-Deep IV의 첫 단계는 의 값을 하나로 예측하는 것이 아니라, 의 **조건부 확률 분포**를 추정하는 것입니다. 이를 위해 가우시안 혼합 모델(Gaussian Mixture Model)을 출력하는 신경망을 사용합니다.
+## Mathematical Intuition: Why Two Stages?
 
-$$ \hat{F}(P|Z,X) = \sum_{k=1}^{K} \pi_k(Z,X) \mathcal{N}(\mu_k(Z,X), \sigma_k^2(Z,X)) $$
+* 우리의 목표는 인과 함수 $g(P, X)$를 찾는 것입니다. 
+* 하지만 앞서 보았듯 $Y = g(P, X) + \epsilon$ 식에서 바로 회귀분석을 할 수 없습니다. 
+* 오차항 $\epsilon$이 $P$와 상관관계가 있기 때문입니다.
+
+* 이 문제를 해결하기 위해, 우리는 식의 양변에 **도구 변수 $Z$와 공변량 $X$에 대한 조건부 기댓값(Conditional Expectation)**을 취합니다.
+
+$$E[Y | X, Z] = E[g(P, X) + \epsilon | X, Z]$$
+
+* 기댓값의 선형성(Linearity)에 의해 우변을 분리할 수 있습니다.
+
+$$E[Y | X, Z] = E[g(P, X) | X, Z] + \underbrace{E[\epsilon | X, Z]}_{= 0}$$
+
+* **도구 변수의 정의(외생성)**에 의해, 도구 변수는 오차항과 공변량이 주어진 경우 독립입니다. 
+* 따라서 $z \perp \epsilon | x \Longrightarrow E[\epsilon | X, Z] = 0$이 되어 오차항이 사라집니다.
+
+* 이제 남은 식을 적분 형태로 풀어서 쓰면 다음과 같습니다.
+
+$$E[Y | X, Z] = \int g(p, x) dF(p | x, z)$$
+
+* 이 식은 Deep IV 모델의 청사진이 됩니다.
+    * 1.  **$F(p | x, z)$:** 우변의 적분을 계산하려면, $Z$와 $X$가 주어졌을 때 $P$가 어떻게 분포하는지 알아야 합니다. $\rightarrow$ **Stage 1 (Treatment Network)**
+    * 2.  **$g(p, x)$:** 위 등식을 만족시키는 미지의 함수 $g$를 찾아야 합니다. $\rightarrow$ **Stage 2 (Outcome Network)**
+
+* 결국 Deep IV는 **"1단계에서 추정한 분포($F$)를 이용해 2단계 함수($g$)를 적분했을 때, 그 결과가 실제 관측된 $Y$의 평균과 일치하도록"** 학습하는 과정입니다.
+
+---
+
+## Stage 1: Mixture Density Network (MDN)
+
+* Deep IV의 첫 번째 단계는 'Treatment Network'를 구축하는 것입니다. 
+* 이 단계의 핵심은 전통적인 방식과의 차이점을 이해하는 데 있습니다.
+
+### 1.1. Why Density Estimation? (Point vs. Distribution)
+
+* 전통적인 **Linear 2SLS** 1단계에서는 도구변수($Z$)와 공변량($X$)을 사용하여 처치 변수의 **평균(Mean)**을 예측합니다.
+$$\hat{P}_{2SLS} = E[P | Z, X] \approx \alpha Z + \beta X$$
+* 이는 $P$와 $Z$의 관계가 선형적이고, 오차가 등분산(Homoscedastic)을 가진다는 강력한 가정을 전제로 합니다.
+
+* 하지만 논문(Hartford et al., 2017)에서는 현실 데이터가 이보다 훨씬 복잡하다고 지적합니다.
+* 가격($P$) 결정 과정은 다봉형(Multimodal)일 수도 있고, 시기($X$)에 따라 변동성(Variance)이 달라질 수도 있습니다. 
+* 따라서 단순한 평균값 하나로는 정보 손실이 발생합니다.
+
+* **Deep IV의 1단계 목표**는 $P$의 값을 하나로 예측하는 것이 아니라, $Z$와 $X$가 주어졌을 때 $P$가 가질 수 있는 **조건부 확률 분포(Conditional Probability Distribution)** 전체를 추정하는 것입니다.
+
+### 1.2. The Mixture Density Network (MDN)
+
+* 복잡한 분포를 유연하게 추정하기 위해, Deep IV는 **MDN(Mixture Density Network)** 구조를 사용합니다. 
+* 이는 신경망의 출력을 이용해 **가우시안 혼합 모델(Gaussian Mixture Model, GMM)**의 파라미터를 구성하는 방식입니다.
+
+$$\hat{F}(p|z,x) = \sum_{k=1}^{K} \pi_k(z,x) \mathcal{N}(p ; \mu_k(z,x), \sigma_k^2(z,x))$$
+
+* 이 수식의 의미는 다음과 같습니다.
+
+* **$\mathcal{N}$ (Normal Distribution):** $K$개의 정규분포를 섞어서 복잡한 분포를 표현합니다.
+* **신경망의 역할:** 입력($Z, X$)을 받아 각 정규분포의 파라미터 3가지를 출력합니다.
+    1.  **$\pi_k$ (Mixing Coefficient):** $k$번째 정규분포가 선택될 확률 (가중치, $\sum \pi_k = 1$)
+    2.  **$\mu_k$ (Mean):** $k$번째 정규분포의 중심 (평균)
+    3.  **$\sigma_k$ (Standard Deviation):** $k$번째 정규분포의 퍼짐 정도 (분산)
+
+### 1.3. Deep IV Architecture: Treatment Network
+* 논문에서 제시하는 네트워크 구조를 도식화하면 다음과 같습니다.
+    * 1.  **Input:** 도구변수($Z$)와 공변량($X$)이 신경망에 들어갑니다.
+    * 2.  **Hidden Layers:** 데이터의 비선형적인 패턴을 학습합니다.
+    * 3.  **Output Heads:** 마지막 층은 세 갈래로 나뉩니다.
+        * `Softmax` $\rightarrow$ $\pi$ (가중치)
+        * `Linear` $\rightarrow$ $\mu$ (평균)
+        * `Softplus` $\rightarrow$ $\sigma$ (표준편차, 양수 제약)
 
 ```{python}
-#| label: deep-iv-stage1
+#| label: deep-iv-stage1-model
 class FirstStageMDN(nn.Module):
     def __init__(self, input_dim, num_gaussians=5):
         super().__init__()
@@ -250,56 +327,106 @@ class FirstStageMDN(nn.Module):
             nn.Linear(64, 64),
             nn.ReLU()
         )
-        self.pi_head = nn.Linear(64, num_gaussians) 
-        self.mu_head = nn.Linear(64, num_gaussians) 
-        self.sigma_head = nn.Linear(64, num_gaussians) 
+        self.pi_head = nn.Linear(64, num_gaussians)     # 혼합 계수
+        self.mu_head = nn.Linear(64, num_gaussians)     # 평균
+        self.sigma_head = nn.Linear(64, num_gaussians)  # 표준편차
 
     def forward(self, x, z):
-        # 입력: 공변량(X)와 도구변수(Z)를 결합
+        # 1. 입력 결합
+        # Shape: (Batch, x_dim) + (Batch, z_dim) -> (Batch, input_dim)
         inputs = torch.cat([x, z], dim=1)
+        
+        # 2. 특징 추출
+        # Shape: (Batch, input_dim) -> (Batch, 64)
         features = self.shared_layer(inputs)
-        # 1. Pi (혼합 비율): Softmax로 합이 1이 되도록 함
+        
+        # 3. 파라미터 추정 (K=num_gaussians)
+        # Pi: (Batch, K)
         pi = F.softmax(self.pi_head(features), dim=1)
-        # 2. Mu (평균)
+        # Mu: (Batch, K)
         mu = self.mu_head(features)
-        # 3. Sigma (표준편차)
+        # Sigma: (Batch, K)
         sigma = F.softplus(self.sigma_head(features)) + 1e-5
+        
         return pi, mu, sigma
 
-    def sample(self, x, z, n_samples=1):
-        pi, mu, sigma = self.forward(x, z)    
-        # GMM(Gaussian Mixture Model) 객체 생성
+    def sample(self, pi, mu, sigma, n_samples=1):
         mix = D.Categorical(probs=pi)
         comp = D.Normal(loc=mu, scale=sigma)
         gmm = D.MixtureSameFamily(mix, comp)
-        # 샘플링 수행 (Batch, n_samples)
+        
+        # 샘플링 수행
         if n_samples == 1:
+            # Shape: (Batch) -> (Batch, 1)
             return gmm.sample().unsqueeze(-1)
         else:
+            # Shape: (n_samples, Batch) -> (Batch, n_samples)
             return gmm.sample((n_samples,)).permute(1, 0)
-
-# 손실 함수 (Negative Log Likelihood)
-def first_stage_loss_fn(pi, mu, sigma, p):
-    # 1. 각 가우시안 분포에서의 확률 밀도 계산
-    m = D.Normal(loc=mu, scale=sigma)
-    log_probs_component = m.log_prob(p)
-    # 2. 혼합 비율(pi) 반영 (Log-Sum-Exp Trick)
-    weighted_log_probs = torch.log(pi + 1e-8) + log_probs_component
-    log_likelihood = torch.logsumexp(weighted_log_probs, dim=1)
-    # 3. NLL 최소화
-    return -torch.mean(log_likelihood)
 
 ```
 
-### Stage 2: Outcome Network
+### 1.4. Optimization Objective (Negative Log-Likelihood)
 
-두 번째 단계는 인과 함수 $g(P, X)$를 근사하는 신경망입니다. 손실 함수는 1단계 분포에서 샘플링한 $\hat{P}$를 사용하여 계산된 기댓값과 실제 의 차이를 최소화합니다.
+* 이 신경망을 학습시키기 위해 사용하는 손실 함수는 **음의 로그 우도(Negative Log-Likelihood, NLL)**입니다.
 
-$$ L = E \left[ \left( Y - \int g(\hat{p}, X) d\hat{F}(\hat{p}|Z,X) \right)^2 \right] $$
+$$\mathcal{L}_1(\phi) = - \sum_{i=1}^{N} \log \left( \sum_{k=1}^{K} \pi_k(z_i, x_i) \cdot \frac{1}{\sqrt{2\pi}\sigma_k(z_i, x_i)} \exp \left( -\frac{(p_i - \mu_k(z_i, x_i))^2}{2\sigma_k^2(z_i, x_i)} \right) \right)$$
+
+* 쉽게 말해, **"실제 관측된 가격 데이터($p_i$)가 우리 모델의 확률 분포에서 등장할 확률을 최대화하라"**는 뜻입니다. 
+* 이를 통해 신경망은 데이터가 뭉쳐 있는 곳(Mode)과 퍼져 있는 정도(Variance)를 정확하게 학습하게 됩니다.
 
 ```{python}
-#| label: deep-iv-stage2
-# 2단계: Causal Function h (Outcome Network)
+#| label: deep-iv-stage1-loss-function
+def first_stage_loss_fn(pi, mu, sigma, p):
+    # 1. 로그 확률 밀도 계산 (Log Probability)
+    # Shape: (Batch, K)
+    m = D.Normal(loc=mu, scale=sigma)
+    log_probs_component = m.log_prob(p)
+    
+    # 2. 가중치 반영 및 Log-Sum-Exp
+    # Shape: (Batch, K) -> (Batch,)
+    weighted_log_probs = torch.log(pi + 1e-8) + log_probs_component
+    log_likelihood = torch.logsumexp(weighted_log_probs, dim=1)
+    
+    # 3. NLL 평균 (Scalar)
+    return -torch.mean(log_likelihood)
+```
+---
+
+## Stage 2: Outcome Network
+
+* 1단계에서 우리는 가격($P$)이 형성되는 확률 분포 $\hat{F}(P|Z,X)$를 얻었습니다. 
+* 이제 두 번째 단계에서는 이를 바탕으로 **진짜 인과 함수(Causal Function)** $g(P, X)$를 찾아낼 차례입니다.
+
+### 2.1. The Structural Equation
+
+* 우리의 목표는 다음 식을 만족하는 함수 $g$를 찾는 것입니다.
+
+$$E[Y | Z, X] = \int g(p, x) dF(p | z, x)$$
+
+* 이 식은 **"도구변수($Z$)와 공변량($X$)이 주어졌을 때, 예상되는 판매량($Y$)의 평균은, 가능한 모든 가격($p$)에 대해 해당 가격일 확률과 그 때의 판매량을 곱해서 더한(적분한) 것과 같다"**는 의미입니다.
+
+* 여기서 중요한 점은 우리가 1단계 모델(MDN)을 통해 분포 $F$를 이미 알고 있다는 것입니다. 
+* 따라서 남은 미지수인 함수 $g$를 신경망으로 근사할 수 있습니다.
+
+### 2.2. The Loss Function (Inverse Problem)
+
+* 2단계 신경망(Outcome Network)을 학습시키기 위한 손실 함수는 다음과 같이 정의됩니다.
+$$L(\theta) = \frac{1}{N} \sum_{i=1}^{N} \left( y_i - \int g_{\theta}(p, x_i) d\hat{F}_{\phi}(p | z_i, x_i) \right)^2$$
+    * **$y_i$:** 실제 관측된 결과 (Target)
+    * **$\int g_{\theta} d\hat{F}_{\phi}$:** 1단계 모델의 분포를 반영한 예측값 (Prediction)
+
+* 이 손실 함수의 핵심 아이디어는 **"내생성이 있는 개별 $P$값 하나를 믿는 대신, 1단계 모델이 예측한 $P$의 '분포 전체'를 믿겠다"**는 것입니다. 
+* 분포를 적분하여 얻은 기댓값이 실제 $Y$와 일치하도록 강제함으로써, 오차항($\epsilon$)의 영향을 상쇄시킵니다.
+
+### 2.3. Deep IV Architecture: Outcome Network
+* 2단계 네트워크의 작동 방식은 다음과 같습니다.
+    * 1.  **Input:** 1단계 분포에서 샘플링된 $\hat{P}$와 공변량 $X$를 입력받습니다.
+    * 2.  **Hidden Layers:** 인과 함수 $g(P,X)$의 형태(예: 비선형 S자 곡선)를 학습합니다.
+    * 3.  **Output:** 예측된 $Y$값을 출력합니다.
+
+
+```{python}
+#| label: deep-iv-stage2-model
 class SecondStageH(nn.Module):
     def __init__(self, x_dim, p_dim=1, output_dim=1):
         super().__init__()
@@ -315,70 +442,73 @@ class SecondStageH(nn.Module):
         )
         
     def forward(self, p, x):
+        # 입력 결합
+        # Shape: (Batch, S, p_dim) + (Batch, S, x_dim) -> (Batch, S, input_dim)
         inputs = torch.cat([p, x], dim=-1) 
         return self.net(inputs)
 
-def second_stage_loss_fn(model_h, pi, mu, sigma, x, y, num_samples=32):
-    # mu shape: (Batch, K)
-    batch_size, n_components = mu.shape
-    x_dim = x.shape[1]
+```
+
+### 2.4. Monte Carlo Approximation
+
+* 현실적으로 딥러닝 학습 중에 복잡한 적분($\int$)을 매번 계산하는 것은 불가능에 가깝습니다. 
+* 따라서 Deep IV는 **몬테카를로 샘플링(Monte Carlo Sampling)**을 사용하여 적분을 근사합니다.
+$$\int g_{\theta}(p, x_i) d\hat{F}_{\phi}(p | z_i, x_i) \approx \frac{1}{S} \sum_{s=1}^{S} g_{\theta}(\hat{p}^{(s)}, x_i)$$
+    * 여기서 $\hat{p}^{(s)}$는 1단계 MDN 모델에서 샘플링한 값들입니다 ($\hat{p}^{(s)} \sim \hat{F}_{\phi}$).
+    * $S$는 샘플 개수입니다 (보통 10~30개 사용).
+
+* 즉, **"1단계 모델이 시뮬레이션한 가상의 가격들($\hat{p}$)을 2단계 모델에 넣어보고, 그 평균값이 실제 판매량($y$)과 비슷해지도록"** 학습하는 것입니다. 
+
+```{python}
+#| label: deep-iv-stage2-loss-function
+def second_stage_loss_fn(treatment_net, outcome_net, pi, mu, sigma, x, y, num_samples=32):
+    # 1. 몬테카를로 샘플링
+    # Shape: (Batch, S) -> (Batch, S, 1)
+    p_samples = treatment_net.sample(pi, mu, sigma, n_samples=num_samples).unsqueeze(-1).detach()
     
-    # [Step 1] Stratified Sampling (벡터화 구현)
-    # 모든 컴포넌트(K)와 샘플(S)을 한꺼번에 처리하기 위해 차원 확장
-    # eps: (Batch, S, K)
-    eps = torch.randn(batch_size, num_samples, n_components, device=mu.device)
+    # 2. 공변량 차원 확장
+    # Shape: (Batch, x_dim) -> (Batch, S, x_dim)
+    batch_size, x_dim = x.shape
+    x_expanded = x.unsqueeze(1).expand(-1, num_samples, -1)
     
-    # mu, sigma 확장: (Batch, 1, K) -> 브로드캐스팅 -> (Batch, S, K)
-    mu_exp = mu.unsqueeze(1)
-    sigma_exp = sigma.unsqueeze(1)
+    # 3. 결과 예측 (Outcome Network Forward)
+    # Shape: (Batch, S, 1) + (Batch, S, x_dim) -> (Batch, S, 1)
+    y_pred_samples = outcome_net(p_samples, x_expanded)
     
-    # Reparameterization Trick
-    # p_samples: (Batch, S, K) -> 모든 가우시안 성분별로 S개씩 샘플링
-    # 주의: 1단계 모델의 그래디언트는 필요 없으므로 detach() 권장 (일반적인 2SLS)
-    p_samples = (mu_exp + sigma_exp * eps).detach()
+    # 4. 기댓값 근사 (Sample Mean)
+    # Shape: (Batch, S, 1) -> (Batch, 1)
+    y_pred_expectation = y_pred_samples.mean(dim=1)
     
-    # [Step 2] X 확장
-    # x: (Batch, x_dim) -> (Batch, S, K, x_dim)
-    # p_samples와 짝을 맞추기 위해 차원을 늘립니다.
-    x_expanded = x.view(batch_size, 1, 1, x_dim).expand(-1, num_samples, n_components, -1)
-    
-    # p_samples 차원 맞추기: (Batch, S, K) -> (Batch, S, K, 1)
-    p_samples_reshaped = p_samples.unsqueeze(-1)
-    
-    # [Step 3] Forward Pass
-    # 입력 shape: (Batch, S, K, dim) -> model_h는 마지막 dim만 신경 씀
-    h_out = model_h(p_samples_reshaped, x_expanded) # 결과: (Batch, S, K, 1)
-    
-    # [Step 4] 가중 평균 (Expectation 계산)
-    # 4-1. 각 성분(K)에 대한 가중치(pi) 적용
-    # pi: (Batch, K) -> (Batch, 1, K, 1)
-    pi_expanded = pi.view(batch_size, 1, n_components, 1)
-    
-    # 성분별 기댓값 합산 (Sum over K)
-    # h_weighted_sum: (Batch, S, 1)
-    h_weighted_sum = torch.sum(h_out * pi_expanded, dim=2)
-    
-    # 4-2. 샘플링(S)에 대한 평균 (Mean over S)
-    # y_pred_expectation: (Batch, 1)
-    y_pred_expectation = torch.mean(h_weighted_sum, dim=1)
-    
-    # [Step 5] MSE Loss
-    # y: (Batch, 1)
-    loss = torch.mean((y.view(-1, 1) - y_pred_expectation) ** 2)
+    # 5. 손실 계산 (MSE)
+    # Shape: (Batch, 1) vs (Batch, 1) -> Scalar
+    loss = F.mse_loss(y_pred_expectation, y.view(-1, 1))
     
     return loss
 ```
 
-### Training Loop
+## Training Procedure
+
+* Deep IV의 학습은 일반적인 지도 학습(Supervised Learning)과는 다르게, **순차적인 두 단계(Sequential Two-Stage Process)**로 진행됩니다.
+
+#### Phase 1: Distribution Learning (Treatment Network)
+* 첫 번째 단계에서는 **Treatment Network**만을 학습시킵니다.
+    * **목표:** 도구변수($Z$)와 공변량($X$)을 보고, 처치변수($P$)가 어떻게 분포하는지 완벽하게 모사하는 것입니다.
+    * **학습 방법:** `NLL Loss`를 최소화하여 실제 데이터 $P$가 모델의 확률 분포 안에 위치할 확률을 높입니다.
+    * **주의점:** 이때 결과변수 $Y$는 전혀 사용하지 않습니다.
+
+#### Transition: The Freeze
+* 1단계 학습이 끝나면 Treatment Network의 파라미터($\phi$)를 **동결(Freeze)**합니다.
+* 이제 1단계 모델은 더 이상 학습 대상이 아니라, 내생성이 제거된 가상의 처치값 $\hat{P}$를 생성해내는 **시뮬레이터(Generator)** 역할을 수행합니다.
+
+#### Phase 2: Causal Learning (Outcome Network)
+* 두 번째 단계에서는 **Outcome Network**를 학습시킵니다.
+    * **입력:** 실제 관측된 $P$를 사용하는 것이 아니라, **동결된 1단계 모델에서 샘플링한 $\hat{P}$**를 사용합니다.
+    * **목표:** $\hat{P}$를 입력받았을 때의 예측값 평균이 실제 $Y$와 가까워지도록 합니다.
+    * **학습 방법:** `MSE Loss`를 최소화하여 인과 함수 $g(P, X)$를 근사합니다.
 
 ```{python}
 #| label: training
-#| output: false
-
-# ==========================================
-# 4. Training
-# ==========================================
-
+#| output: true
 # -----------------------------------------------------
 # [Stage 1] Treatment Network Training (Z + X -> P distribution)
 # -----------------------------------------------------
@@ -437,7 +567,8 @@ for epoch in range(epochs_stage2):
     
     # 2단계 Loss 계산
     loss2 = second_stage_loss_fn(
-        model_h=outcome_net, 
+        treatment_net=treatment_net,
+        outcome_net=outcome_net, 
         pi=pi, 
         mu=mu, 
         sigma=sigma, 
@@ -459,18 +590,14 @@ print("Deep IV Training Complete.")
 
 ---
 
-## 5. Result Visualization
+## Result Visualization
 
-학습된 모델이 실제 인과 효과 곡선(Ground Truth)을 얼마나 잘 복원했는지 확인합니다.
-테스트는 **성수기와 비성수기의 중간()** 조건을 가정합니다.
+* 학습된 모델이 실제 인과 효과 곡선(Ground Truth)을 얼마나 잘 복원했는지 확인합니다.
+* 테스트는 **성수기와 비성수기의 중간($X=0.5$)** 조건을 가정합니다.
 
 ```{python}
 #| label: visualization
 #| fig-cap: "Comparison of Causal Effect Estimation"
-
-# ==========================================
-# 4. Visualization & Evaluation
-# ==========================================
 # ===========================================================
 # 1. 테스트 데이터 생성
 # ===========================================================
@@ -536,13 +663,8 @@ plt.show()
 
 ## Conclusion
 
-결과 그래프에서 볼 수 있듯이:
+* 결과 그래프에서 볼 수 있듯이:
+    * 1. **Linear 2SLS**는 데이터의 비선형성을 무시하고 단순한 직선으로 효과를 추정하여, 가격 임계값 근처에서의 급격한 수요 변화를 포착하지 못합니다.
+    * 2. **Deep IV**는 실제 인과 곡선(Ground Truth)인 S자 형태를 매우 정확하게 복원해냈습니다.
 
-1. **Linear 2SLS**는 데이터의 비선형성을 무시하고 단순한 직선으로 효과를 추정하여, 가격 임계값 근처에서의 급격한 수요 변화를 포착하지 못합니다.
-2. **Deep IV**는 실제 인과 곡선(Ground Truth)인 S자 형태를 매우 정확하게 복원해냈습니다.
-
-이는 사회과학 연구에서 비선형성이 강하게 의심될 때, 딥러닝 기반의 인과추론 방법론이 강력한 대안이 될 수 있음을 시사합니다.
-
-```
-
-```
+* 이는 비선형성이 강하게 의심될 때, 딥러닝 기반의 인과추론 방법론이 강력한 대안이 될 수 있음을 시사합니다.

@@ -1,0 +1,548 @@
+---
+title: "[Causal Inference] 13. IV (Part 3)"
+description: "Linear 2SLS vs. Deep IV"
+author: "유성현"
+date: "2026-01-18"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+jupyter: python3
+---
+
+## 1. Introduction
+
+사회과학 데이터, 특히 범죄학이나 경제학 데이터를 다루다 보면 선형(Linear) 모델로는 설명하기 힘든 복잡한 인과관계를 마주하게 됩니다.
+
+전통적인 **2단계 최소제곱법(2SLS)**은 강력한 도구이지만, 다음과 같은 한계가 있습니다.
+1.  처치(Treatment)와 결과(Outcome)의 관계를 **선형**으로 가정합니다.
+2.  공변량(Covariate)과 처치 변수 간의 복잡한 **상호작용**을 포착하기 어렵습니다.
+
+이번 포스트에서는 Hartford et al.(2017)이 제안한 **Deep IV** 방법론을 소개하고, 가격($P$)과 판매량($Y$)의 비선형적 관계를 시뮬레이션 데이터를 통해 추정해보겠습니다.
+
+### The Problem Formulation
+
+우리가 관심 있는 인과 모델은 다음과 같습니다.
+
+$$Y = g(P, X) + \epsilon$$
+
+여기서:
+* $Y$: 결과 변수 (예: 판매량, 범죄율)
+* $P$: 처치 변수 (예: 가격, 경찰 순찰 빈도) - **내생성(Endogeneity) 존재** ($E[\epsilon|P] \neq 0$)
+* $X$: 관측 가능한 공변량 (예: 성수기 여부, 지역 특성)
+* $Z$: 도구 변수 (예: 원자재 가격, 예산) - 외생성 만족
+
+Deep IV는 이 문제를 풀기 위해 **두 단계의 신경망**을 사용합니다.
+
+1.  **Stage 1 (Treatment Network):** 도구 변수를 이용해 처치 변수의 조건부 분포 $F(P|Z, X)$를 학습합니다.
+2.  **Stage 2 (Outcome Network):** 1단계에서 추정된 분포를 적분(Integrate out)하여 인과 함수 $g(P, X)$를 학습합니다.
+
+---
+
+## 2. Data Generation
+
+먼저 내생성과 비선형성이 존재하는 가상의 데이터를 생성합니다.
+상황은 다음과 같습니다.
+* **가격($P$)**이 오르면 **판매량($Y$)**은 줄어듭니다.
+* 하지만 **성수기($X$)**에는 가격도 비싸고 판매량도 많아, 단순 회귀 시 양의 상관관계(편향)가 관찰됩니다.
+* 실제 인과 효과는 특정 가격 이상에서 급격히 판매량이 떨어지는 **S자 곡선(Sigmoid)** 형태입니다.
+
+```{python}
+#| label: data-generation
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.distributions as D
+import torch.nn.functional as F
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+```
+
+```{python}
+def generate_data(n, seed=42):
+    np.random.seed(seed)
+    
+    # 1. 외생 변수 생성
+    # X: 공변량 (성수기 여부)
+    x = np.random.uniform(0, 1, n) 
+    # Z: 도구변수 (연료비)
+    z = np.random.uniform(0, 1, n) 
+    # E: 교란 변수
+    e = np.random.normal(0, 1, n)   
+
+    # 2. 처치 변수 (P) 생성
+    p = 10 + (60 * z) + (20 * x) + (5 * e) + np.random.normal(0, 1, n)
+
+    # 3. 결과 변수 (Y) 생성
+    # True Structural Function: g(p, x)
+    def true_structural_function(p_val, x_val):
+        threshold = 35 + (40 * x_val) # X에 따라 임계값이 변함 (Heterogeneity)
+        base_effect = 150 / (1 + np.exp(0.8 * (p_val - threshold)))
+        return base_effect + (50 * x_val)
+        
+    y_structural = true_structural_function(p, x)
+    y = y_structural + (10 * e) + np.random.normal(0, 2, n)
+
+    return (z.reshape(-1, 1), x.reshape(-1, 1), p.reshape(-1, 1), y.reshape(-1, 1), true_structural_function)
+```
+
+```{python}
+# 1. 데이터 생성
+Z_data, X_data, P_data, Y_data, true_func = generate_data(n=100)
+
+# 2. Scaler 선언
+scaler_z = StandardScaler()
+scaler_x = StandardScaler()
+scaler_p = StandardScaler()
+scaler_y = StandardScaler()
+
+# 3. Fitting & Transform
+Z_scaled = scaler_z.fit_transform(Z_data)
+X_scaled = scaler_x.fit_transform(X_data)
+P_scaled = scaler_p.fit_transform(P_data)
+Y_scaled = scaler_y.fit_transform(Y_data)
+
+# 4. 텐서 변환
+Z = torch.tensor(Z_scaled, dtype=torch.float32)
+X = torch.tensor(X_scaled, dtype=torch.float32)
+P = torch.tensor(P_scaled, dtype=torch.float32)
+Y = torch.tensor(Y_scaled, dtype=torch.float32)
+```
+
+```{python}
+# 스타일 설정
+sns.set_style("whitegrid")
+plt.rcParams['figure.figsize'] = (18, 12)
+plt.rcParams['font.size'] = 12
+
+# 데이터 1차원 변환
+z_flat = Z_data.flatten()
+x_flat = X_data.flatten()
+p_flat = P_data.flatten()
+y_flat = Y_data.flatten()
+
+fig, axes = plt.subplots(2, 2)
+fig.suptitle('DeepIV Simulation: Non-linear Causal Inference', fontsize=22, weight='bold')
+
+# ---------------------------------------------------------
+# (A) First Stage Strength: 도구 변수(Z) -> 처치(P)
+# ---------------------------------------------------------
+sns.regplot(x=z_flat, y=p_flat, ax=axes[0, 0], 
+            scatter_kws={'alpha': 0.05, 'color': 'navy'}, line_kws={'color': 'red'})
+axes[0, 0].set_title('(A) First Stage Relevance: Instrument(Z) -> Treatment(P)', fontsize=14, weight='bold')
+axes[0, 0].set_xlabel('Instrument Z (Fuel Cost)')
+axes[0, 0].set_ylabel('Treatment P (Price)')
+axes[0, 0].text(0.05, 0.9, f"Corr(Z, P): {np.corrcoef(z_flat, p_flat)[0,1]:.2f}\nStrong Relevance", 
+                transform=axes[0, 0].transAxes, bbox=dict(facecolor='white', alpha=0.9))
+
+# ---------------------------------------------------------
+# (B) Confounding Bias: 가격(P) vs 판매량(Y) (관측 데이터)
+# ---------------------------------------------------------
+# X(성수기 여부)가 P와 Y 모두를 증가시키는 교란(Confounding) 현상 시각화
+scatter = axes[0, 1].scatter(p_flat, y_flat, c=x_flat, cmap='coolwarm', alpha=0.3, s=15)
+axes[0, 1].set_title('(B) Confounding Bias: Observed P vs Y', fontsize=14, weight='bold')
+axes[0, 1].set_xlabel('Price P')
+axes[0, 1].set_ylabel('Sales Y')
+cbar = plt.colorbar(scatter, ax=axes[0, 1])
+cbar.set_label('Confounder X (Seasonality)', rotation=270, labelpad=15)
+axes[0, 1].text(0.05, 0.05, "Endogeneity Present:\nHigh X causes High P & High Y", 
+                transform=axes[0, 1].transAxes, bbox=dict(facecolor='white', alpha=0.9))
+
+# ---------------------------------------------------------
+# (C) Covariate Distribution: 공변량(X) -> 가격(P)
+# ---------------------------------------------------------
+sns.kdeplot(x=p_flat, hue=(x_flat > 0.5), fill=True, ax=axes[1, 0], palette='coolwarm')
+axes[1, 0].set_title('(C) P Distribution by Seasonality (X)', fontsize=14, weight='bold')
+axes[1, 0].set_xlabel('Treatment P (Price)')
+axes[1, 0].legend(['High Season (X>0.5)', 'Low Season (X<=0.5)'])
+
+# ---------------------------------------------------------
+# (D) The "True" Causal Curve (Ground Truth)
+# ---------------------------------------------------------
+def get_true_effect_consistent(p_input, x_val):
+    threshold = 35 + (40 * x_val)
+    base_effect = 150 / (1 + np.exp(0.8 * (p_input - threshold)))
+    return base_effect + (50 * x_val)
+
+p_range = np.linspace(p_flat.min(), p_flat.max(), 300)
+
+axes[1, 1].scatter(p_flat, y_flat, color='gray', alpha=0.05, label='Observed Samples')
+
+# 시나리오별 True Curve 그리기
+# X=0.1 (비수기), X=0.5 (평균), X=0.9 (성수기)
+lines_x = [0.1, 0.5, 0.9]
+colors = ['blue', 'green', 'red']
+labels = ['Low Season (X=0.1)', 'Avg Season (X=0.5)', 'High Season (X=0.9)']
+
+for lx, c, lbl in zip(lines_x, colors, labels):
+    y_true = get_true_effect_consistent(p_range, lx)
+    axes[1, 1].plot(p_range, y_true, color=c, linewidth=2.5, linestyle='--', label=f'True: {lbl}')
+
+axes[1, 1].set_title('(D) Ground Truth: Heterogeneous S-Curves', fontsize=14, weight='bold')
+axes[1, 1].set_xlabel('Treatment P (Price)')
+axes[1, 1].set_ylabel('Outcome Y (Sales)')
+axes[1, 1].legend(loc='upper right', frameon=True, framealpha=0.9)
+
+plt.tight_layout()
+plt.show()
+```
+
+---
+
+## 3. Benchmark: Linear 2SLS
+
+비교를 위해 전통적인 Linear 2SLS를 먼저 수행합니다. `scikit-learn`을 사용하여 2단계 회귀분석을 진행합니다.
+
+1. Stage 1: Predict  using 
+2. Stage 2: Regress  on 
+
+```{python}
+#| label: linear-2sls
+
+# ==========================================
+# 2. Linear 2SLS Implementation
+# ==========================================
+
+# [Stage 1] P ~ Z + X
+# 도구변수(Z)와 공변량(X)를 사용하여 내생변수(P)를 예측.
+ZX_data = np.concatenate((Z_data, X_data), axis=1)
+stage1_model = LinearRegression()
+stage1_model.fit(ZX_data, P_data)
+
+# P_hat (Hat P): 내생성이 제거된 P의 부분
+P_hat = stage1_model.predict(ZX_data)
+
+# [Stage 2] Y ~ P_hat + X
+# 예측된 처치(P_hat)와 공변량(X)를 사용하여 결과(Y)를 예측.
+PX_hat_data = np.concatenate((P_hat, X_data), axis=1)
+stage2_model = LinearRegression()
+stage2_model.fit(PX_hat_data, Y_data)
+
+print("Linear 2SLS Training Complete.")
+print(f"Estimated Causal Effect (Coefficient of P): {stage2_model.coef_[0][0]:.4f}")
+
+```
+
+---
+
+## 4. Deep IV Implementation
+
+### Stage 1: Mixture Density Network (MDN)
+
+Deep IV의 첫 단계는 의 값을 하나로 예측하는 것이 아니라, 의 **조건부 확률 분포**를 추정하는 것입니다. 이를 위해 가우시안 혼합 모델(Gaussian Mixture Model)을 출력하는 신경망을 사용합니다.
+
+$$ \hat{F}(P|Z,X) = \sum_{k=1}^{K} \pi_k(Z,X) \mathcal{N}(\mu_k(Z,X), \sigma_k^2(Z,X)) $$
+
+```{python}
+#| label: deep-iv-stage1
+class FirstStageMDN(nn.Module):
+    def __init__(self, input_dim, num_gaussians=5):
+        super().__init__()
+        self.shared_layer = nn.Sequential(
+            nn.Linear(input_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 64),
+            nn.ReLU()
+        )
+        self.pi_head = nn.Linear(64, num_gaussians) 
+        self.mu_head = nn.Linear(64, num_gaussians) 
+        self.sigma_head = nn.Linear(64, num_gaussians) 
+
+    def forward(self, x, z):
+        # 입력: 공변량(X)와 도구변수(Z)를 결합
+        inputs = torch.cat([x, z], dim=1)
+        features = self.shared_layer(inputs)
+        # 1. Pi (혼합 비율): Softmax로 합이 1이 되도록 함
+        pi = F.softmax(self.pi_head(features), dim=1)
+        # 2. Mu (평균)
+        mu = self.mu_head(features)
+        # 3. Sigma (표준편차)
+        sigma = F.softplus(self.sigma_head(features)) + 1e-5
+        return pi, mu, sigma
+
+    def sample(self, x, z, n_samples=1):
+        pi, mu, sigma = self.forward(x, z)    
+        # GMM(Gaussian Mixture Model) 객체 생성
+        mix = D.Categorical(probs=pi)
+        comp = D.Normal(loc=mu, scale=sigma)
+        gmm = D.MixtureSameFamily(mix, comp)
+        # 샘플링 수행 (Batch, n_samples)
+        if n_samples == 1:
+            return gmm.sample().unsqueeze(-1)
+        else:
+            return gmm.sample((n_samples,)).permute(1, 0)
+
+# 손실 함수 (Negative Log Likelihood)
+def first_stage_loss_fn(pi, mu, sigma, p):
+    # 1. 각 가우시안 분포에서의 확률 밀도 계산
+    m = D.Normal(loc=mu, scale=sigma)
+    log_probs_component = m.log_prob(p)
+    # 2. 혼합 비율(pi) 반영 (Log-Sum-Exp Trick)
+    weighted_log_probs = torch.log(pi + 1e-8) + log_probs_component
+    log_likelihood = torch.logsumexp(weighted_log_probs, dim=1)
+    # 3. NLL 최소화
+    return -torch.mean(log_likelihood)
+
+```
+
+### Stage 2: Outcome Network
+
+두 번째 단계는 인과 함수 $g(P, X)$를 근사하는 신경망입니다. 손실 함수는 1단계 분포에서 샘플링한 $\hat{P}$를 사용하여 계산된 기댓값과 실제 의 차이를 최소화합니다.
+
+$$ L = E \left[ \left( Y - \int g(\hat{p}, X) d\hat{F}(\hat{p}|Z,X) \right)^2 \right] $$
+
+```{python}
+#| label: deep-iv-stage2
+# 2단계: Causal Function h (Outcome Network)
+class SecondStageH(nn.Module):
+    def __init__(self, x_dim, p_dim=1, output_dim=1):
+        super().__init__()
+        input_dim = x_dim + p_dim
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, output_dim)
+        )
+        
+    def forward(self, p, x):
+        inputs = torch.cat([p, x], dim=-1) 
+        return self.net(inputs)
+
+def second_stage_loss_fn(model_h, pi, mu, sigma, x, y, num_samples=32):
+    # mu shape: (Batch, K)
+    batch_size, n_components = mu.shape
+    x_dim = x.shape[1]
+    
+    # [Step 1] Stratified Sampling (벡터화 구현)
+    # 모든 컴포넌트(K)와 샘플(S)을 한꺼번에 처리하기 위해 차원 확장
+    # eps: (Batch, S, K)
+    eps = torch.randn(batch_size, num_samples, n_components, device=mu.device)
+    
+    # mu, sigma 확장: (Batch, 1, K) -> 브로드캐스팅 -> (Batch, S, K)
+    mu_exp = mu.unsqueeze(1)
+    sigma_exp = sigma.unsqueeze(1)
+    
+    # Reparameterization Trick
+    # p_samples: (Batch, S, K) -> 모든 가우시안 성분별로 S개씩 샘플링
+    # 주의: 1단계 모델의 그래디언트는 필요 없으므로 detach() 권장 (일반적인 2SLS)
+    p_samples = (mu_exp + sigma_exp * eps).detach()
+    
+    # [Step 2] X 확장
+    # x: (Batch, x_dim) -> (Batch, S, K, x_dim)
+    # p_samples와 짝을 맞추기 위해 차원을 늘립니다.
+    x_expanded = x.view(batch_size, 1, 1, x_dim).expand(-1, num_samples, n_components, -1)
+    
+    # p_samples 차원 맞추기: (Batch, S, K) -> (Batch, S, K, 1)
+    p_samples_reshaped = p_samples.unsqueeze(-1)
+    
+    # [Step 3] Forward Pass
+    # 입력 shape: (Batch, S, K, dim) -> model_h는 마지막 dim만 신경 씀
+    h_out = model_h(p_samples_reshaped, x_expanded) # 결과: (Batch, S, K, 1)
+    
+    # [Step 4] 가중 평균 (Expectation 계산)
+    # 4-1. 각 성분(K)에 대한 가중치(pi) 적용
+    # pi: (Batch, K) -> (Batch, 1, K, 1)
+    pi_expanded = pi.view(batch_size, 1, n_components, 1)
+    
+    # 성분별 기댓값 합산 (Sum over K)
+    # h_weighted_sum: (Batch, S, 1)
+    h_weighted_sum = torch.sum(h_out * pi_expanded, dim=2)
+    
+    # 4-2. 샘플링(S)에 대한 평균 (Mean over S)
+    # y_pred_expectation: (Batch, 1)
+    y_pred_expectation = torch.mean(h_weighted_sum, dim=1)
+    
+    # [Step 5] MSE Loss
+    # y: (Batch, 1)
+    loss = torch.mean((y.view(-1, 1) - y_pred_expectation) ** 2)
+    
+    return loss
+```
+
+### Training Loop
+
+```{python}
+#| label: training
+#| output: false
+
+# ==========================================
+# 4. Training
+# ==========================================
+
+# -----------------------------------------------------
+# [Stage 1] Treatment Network Training (Z + X -> P distribution)
+# -----------------------------------------------------
+treatment_net = FirstStageMDN(
+    input_dim=X.shape[-1] + Z.shape[-1], 
+    num_gaussians=5
+)
+
+opt1 = optim.Adam(treatment_net.parameters(), lr=1e-4)
+epochs_stage1 = 1000
+
+print(f"Starting Stage 1 Training (Epochs: {epochs_stage1})...")
+
+treatment_net.train()
+for epoch in range(epochs_stage1):
+    # 1. Forward Pass
+    pi, mu, sigma = treatment_net(X, Z)
+    # 2. Loss Calculation (Negative Log Likelihood)
+    loss1 = first_stage_loss_fn(pi, mu, sigma, P)
+    # 3. Optimization
+    opt1.zero_grad()
+    loss1.backward()
+    opt1.step()
+    
+    if (epoch + 1) % 100 == 0:
+        print(f"[Stage 1] Epoch [{epoch+1}/{epochs_stage1}] | Loss: {loss1:.4f} | Avg Sigma: {sigma.mean().item():.4f}")
+
+# -----------------------------------------------------
+# [Transition] Freeze Stage 1
+# -----------------------------------------------------
+treatment_net.eval()
+for param in treatment_net.parameters():
+    param.requires_grad = False
+print("Stage 1 Freezed.")
+
+# -----------------------------------------------------
+# [Stage 2] Outcome Network Training (Resampled P + X -> Y)
+# -----------------------------------------------------
+outcome_net = SecondStageH(
+    x_dim=X.shape[-1], 
+    p_dim=1, 
+    output_dim=1
+)
+
+opt2 = optim.Adam(outcome_net.parameters(), lr=1e-4)
+epochs_stage2 = 1000
+
+print(f"\nStarting Stage 2 Training (Epochs: {epochs_stage2})...")
+
+outcome_net.train()
+for epoch in range(epochs_stage2):
+    total_loss = 0
+
+    with torch.no_grad():
+        pi, mu, sigma = treatment_net(X, Z)
+    
+    # 2단계 Loss 계산
+    loss2 = second_stage_loss_fn(
+        model_h=outcome_net, 
+        pi=pi, 
+        mu=mu, 
+        sigma=sigma, 
+        x=X, 
+        y=Y, 
+        num_samples=20 
+    )
+    # Optimization
+    opt2.zero_grad()
+    loss2.backward()
+    opt2.step()
+
+    
+    if (epoch + 1) % 100 == 0:
+        print(f"[Stage 2] Epoch [{epoch+1}/{epochs_stage2}] | Loss: {loss2:.4f}")
+   
+print("Deep IV Training Complete.")
+```
+
+---
+
+## 5. Result Visualization
+
+학습된 모델이 실제 인과 효과 곡선(Ground Truth)을 얼마나 잘 복원했는지 확인합니다.
+테스트는 **성수기와 비성수기의 중간()** 조건을 가정합니다.
+
+```{python}
+#| label: visualization
+#| fig-cap: "Comparison of Causal Effect Estimation"
+
+# ==========================================
+# 4. Visualization & Evaluation
+# ==========================================
+# ===========================================================
+# 1. 테스트 데이터 생성
+# ===========================================================
+p_min, p_max = P_data.min(), P_data.max()
+p_test = np.linspace(p_min, p_max, 200).reshape(-1, 1)
+
+fixed_x_val = 0.5
+x_test = np.full_like(p_test, fixed_x_val)
+
+def true_structural_function(p_val, x_val):
+    threshold = 35 + (40 * x_val)
+    base_effect = 150 / (1 + np.exp(0.8 * (p_val - threshold)))
+    return base_effect + (50 * x_val)
+        
+true_y = true_structural_function(p_test, x_test)
+
+# ===========================================================
+# 2. Linear 2SLS 예측
+# ===========================================================
+px_test_linear = np.concatenate((p_test, x_test), axis=1)
+linear_pred = stage2_model.predict(px_test_linear)
+
+# ===========================================================
+# 3. DeepIV 예측
+# ===========================================================
+outcome_net.eval()
+
+p_test_scaled = scaler_p.transform(p_test)
+x_test_scaled = scaler_x.transform(x_test)
+p_tensor = torch.tensor(p_test_scaled, dtype=torch.float32)
+x_tensor = torch.tensor(x_test_scaled, dtype=torch.float32)
+
+with torch.no_grad():
+    y_pred_scaled = outcome_net(p_tensor, x_tensor)    
+    deep_pred = scaler_y.inverse_transform(y_pred_scaled.numpy())
+
+# ===========================================================
+# 4. 최종 시각화
+# ===========================================================
+plt.figure(figsize=(12, 8))
+
+# 배경: 관측 데이터
+plt.scatter(P_data, Y_data, color='gray', alpha=0.1, s=10, label='Observed Data')
+
+# 1. Ground Truth (검은 실선)
+plt.plot(p_test, true_y, 'k-', linewidth=3, label='Ground Truth')
+
+# 2. Linear 2SLS (빨간 점선)
+plt.plot(p_test, linear_pred, 'r--', linewidth=2.5, label='Linear 2SLS')
+
+# 3. Deep IV (파란 실선)
+plt.plot(p_test, deep_pred, 'b-', linewidth=2.5, label='Deep IV')
+
+plt.title(f"Causal Effect Estimation: Non-linear Pricing (at Seasonality X={fixed_x_val})", fontsize=16, weight='bold')
+plt.xlabel("Treatment: Ticket Price (P)", fontsize=13)
+plt.ylabel("Outcome: Sales (Y)", fontsize=13)
+plt.legend(fontsize=12, loc='upper right', framealpha=0.9)
+plt.grid(True, alpha=0.3, linestyle='--')
+plt.tight_layout()
+plt.show()
+
+```
+
+## Conclusion
+
+결과 그래프에서 볼 수 있듯이:
+
+1. **Linear 2SLS**는 데이터의 비선형성을 무시하고 단순한 직선으로 효과를 추정하여, 가격 임계값 근처에서의 급격한 수요 변화를 포착하지 못합니다.
+2. **Deep IV**는 실제 인과 곡선(Ground Truth)인 S자 형태를 매우 정확하게 복원해냈습니다.
+
+이는 사회과학 연구에서 비선형성이 강하게 의심될 때, 딥러닝 기반의 인과추론 방법론이 강력한 대안이 될 수 있음을 시사합니다.
+
+```
+
+```

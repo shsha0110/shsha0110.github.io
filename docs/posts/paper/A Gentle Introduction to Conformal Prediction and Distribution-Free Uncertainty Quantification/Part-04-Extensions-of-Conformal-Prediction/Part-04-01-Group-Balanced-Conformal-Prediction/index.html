@@ -206,45 +206,69 @@ window.Quarto = {
 
 <section id="introduction-the-fairness-problem" class="level1">
 <h1>Introduction: The Fairness Problem</h1>
-<p>지금까지 우리는 전체 데이터셋에 대해 평균적으로 <span class="math inline">\(1-\alpha\)</span>의 커버리지를 보장하는 방법(Marginal Coverage)을 배웠습니다. 하지만 현실 세계, 특히 의료나 금융 같은 민감한 분야에서는 “평균적인 성공”만으로는 충분하지 않습니다.</p>
-<p>예를 들어, 어떤 질병 진단 AI가 백인 환자에게는 99%의 정확도를 보이지만, 유색 인종 환자에게는 80%의 정확도밖에 보이지 않는다고 가정해봅시다. 이 경우 백인 환자가 다수라면 전체 평균 정확도는 90%를 넘길 수 있겠지만, 이는 <strong>공정하지 못한(Unfair)</strong> 시스템입니다.</p>
-<p><strong>Group-Balanced Conformal Prediction</strong>은 이러한 문제를 해결하기 위해, 데이터 내의 특정 그룹(인종, 성별, 연령대 등) 각각에 대해 독립적으로 커버리지를 보장하는 기법입니다.</p>
+<ul>
+<li><p>지금까지 우리는 전체 데이터셋에 대해 평균적으로 <span class="math inline">\(1-\alpha\)</span>의 커버리지를 보장하는 방법(Marginal Coverage)을 배웠습니다.</p></li>
+<li><p>하지만 현실 세계, 특히 의료나 금융 같은 민감한 분야에서는 “평균적인 성공”만으로는 충분하지 않습니다.</p></li>
+<li><p>예를 들어, 어떤 질병 진단 AI가 백인 환자에게는 99%의 정확도를 보이지만, 유색 인종 환자에게는 80%의 정확도밖에 보이지 않는다고 가정해봅시다.</p></li>
+<li><p>이 경우 백인 환자가 다수라면 전체 평균 정확도는 90%를 넘길 수 있겠지만, 이는 <strong>공정하지 못한(Unfair)</strong> 시스템입니다.</p></li>
+<li><p><strong>Group-Balanced Conformal Prediction</strong>은 이러한 문제를 해결하기 위해, 데이터 내의 특정 그룹(인종, 성별, 연령대 등) 각각에 대해 독립적으로 커버리지를 보장하는 기법입니다.</p></li>
+</ul>
 </section>
 <section id="problem-formulation" class="level1">
 <h1>Problem Formulation</h1>
-<p>우리의 입력 데이터 <span class="math inline">\(X\)</span>의 첫 번째 특성(Feature) <span class="math inline">\(X_{i,1}\)</span>이 그룹을 나타내는 범주형 변수라고 가정해봅시다. 이 그룹은 <span class="math inline">\(\{1, \dots, G\}\)</span> 중 하나의 값을 가집니다.</p>
-<p>기존의 CP는 다음을 보장했습니다: <span class="math display">\[ \mathbb{P}(Y_{test} \in \mathcal{C}(X_{test})) \ge 1-\alpha \]</span></p>
-<p>하지만 우리가 원하는 것은 <strong>모든 그룹 <span class="math inline">\(g\)</span>에 대해</strong> 다음이 성립하는 것입니다:</p>
+<ul>
+<li><p>우리의 입력 데이터 <span class="math inline">\(X\)</span>의 첫 번째 특성(Feature) <span class="math inline">\(X_{i,1}\)</span>이 그룹을 나타내는 범주형 변수라고 가정해봅시다.</p></li>
+<li><p>이 그룹은 <span class="math inline">\(\{1, \dots, G\}\)</span> 중 하나의 값을 가집니다.</p></li>
+<li><p>기존의 CP는 다음을 보장했습니다: <span class="math display">\[ \mathbb{P}(Y_{test} \in \mathcal{C}(X_{test})) \ge 1-\alpha \]</span></p></li>
+<li><p>하지만 우리가 원하는 것은 <strong>모든 그룹 <span class="math inline">\(g\)</span>에 대해</strong> 다음이 성립하는 것입니다:</p></li>
+</ul>
 <p><span class="math display">\[
 \mathbb{P}(Y_{test} \in \mathcal{C}(X_{test}) \mid X_{test,1} = g) \ge 1-\alpha, \quad \forall g \in \{1, \dots, G\}
 \]</span></p>
-<p>즉, 어떤 그룹에 속한 데이터가 들어오더라도 똑같이 <span class="math inline">\(1-\alpha\)</span> 이상의 확률로 정답을 포함해야 합니다.</p>
+<ul>
+<li>즉, 어떤 그룹에 속한 데이터가 들어오더라도 똑같이 <span class="math inline">\(1-\alpha\)</span> 이상의 확률로 정답을 포함해야 합니다.</li>
+</ul>
 </section>
 <section id="the-algorithm" class="level1">
 <h1>The Algorithm</h1>
-<p>이 문제를 해결하는 방법은 직관적입니다. <strong>“그룹별로 따로따로 Conformal Prediction을 수행”</strong>하는 것입니다.</p>
+<ul>
+<li>이 문제를 해결하는 방법은 직관적입니다. <strong>“그룹별로 따로따로 Conformal Prediction을 수행”</strong>하는 것입니다.</li>
+</ul>
 <section id="step-1-stratify-calibration-data" class="level2">
 <h2 class="anchored" data-anchor-id="step-1-stratify-calibration-data">Step 1: Stratify Calibration Data</h2>
-<p>Calibration 데이터셋을 그룹별로 나눕니다. 그룹 <span class="math inline">\(g\)</span>에 속하는 데이터들만 모아서 부분집합을 만듭니다.</p>
+<ul>
+<li>Calibration 데이터셋을 그룹별로 나눕니다.</li>
+<li>그룹 <span class="math inline">\(g\)</span>에 속하는 데이터들만 모아서 부분집합을 만듭니다.</li>
+</ul>
 <p><span class="math display">\[
 S^{(g)} = \{ (X_j, Y_j) : X_{j,1} = g \}
 \]</span></p>
 </section>
 <section id="step-2-calibrate-per-group" class="level2">
 <h2 class="anchored" data-anchor-id="step-2-calibrate-per-group">Step 2: Calibrate per Group</h2>
-<p>각 그룹 <span class="math inline">\(g\)</span>에 대해 독립적으로 Quantile <span class="math inline">\(\hat{q}^{(g)}\)</span>를 계산합니다.</p>
-<ol type="1">
-<li>그룹 <span class="math inline">\(g\)</span> 데이터에 대한 Conformal Score들을 계산합니다: <span class="math inline">\(s^{(g)}_1, \dots, s^{(g)}_{n^{(g)}}\)</span></li>
-<li>해당 그룹의 데이터 개수 <span class="math inline">\(n^{(g)}\)</span>를 기준으로 보정된 분위수를 구합니다:</li>
-</ol>
-<p><span class="math display">\[
+<ul>
+<li>각 그룹 <span class="math inline">\(g\)</span>에 대해 독립적으로 Quantile <span class="math inline">\(\hat{q}^{(g)}\)</span>를 계산합니다.</li>
+<li><ol type="1">
+<li>그룹 <span class="math inline">\(g\)</span> 데이터에 대한 Conformal Score들을 계산합니다: <span class="math display">\[s^{(g)}_1, \dots, s^{(g)}_{n^{(g)}}\]</span></li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>해당 그룹의 데이터 개수 <span class="math inline">\(n^{(g)}\)</span>를 기준으로 보정된 분위수를 구합니다: <span class="math display">\[
 \hat{q}^{(g)} = \text{Quantile}\left( \frac{\lceil (n^{(g)}+1)(1-\alpha) \rceil}{n^{(g)}} ; \{s^{(g)}_1, \dots, s^{(g)}_{n^{(g)}}\} \right)
-\]</span></p>
-<p>결과적으로 우리는 그룹의 개수만큼 서로 다른 임계값(Threshold) <span class="math inline">\(\hat{q}^{(1)}, \dots, \hat{q}^{(G)}\)</span>를 얻게 됩니다. * 모델이 잘 맞추는 쉬운 그룹은 <span class="math inline">\(\hat{q}\)</span>가 작을 것이고 (작은 예측 집합), * 모델이 어려워하는 그룹은 <span class="math inline">\(\hat{q}\)</span>가 클 것입니다 (큰 예측 집합).</p>
+\]</span></li>
+</ol></li>
+<li>결과적으로 우리는 그룹의 개수만큼 서로 다른 임계값(Threshold) <span class="math inline">\(\hat{q}^{(1)}, \dots, \hat{q}^{(G)}\)</span>를 얻게 됩니다.
+<ul>
+<li>모델이 잘 맞추는 쉬운 그룹은 <span class="math inline">\(\hat{q}\)</span>가 작을 것이고 (작은 예측 집합),</li>
+<li>모델이 어려워하는 그룹은 <span class="math inline">\(\hat{q}\)</span>가 클 것입니다 (큰 예측 집합).</li>
+</ul></li>
+</ul>
 </section>
 <section id="step-3-inference" class="level2">
 <h2 class="anchored" data-anchor-id="step-3-inference">Step 3: Inference</h2>
-<p>새로운 테스트 데이터 <span class="math inline">\(X_{test}\)</span>가 들어오면, 먼저 이 데이터가 어느 그룹에 속하는지(<span class="math inline">\(X_{test,1}\)</span>) 확인합니다. 그리고 해당 그룹에 맞는 임계값 <span class="math inline">\(\hat{q}^{(X_{test,1})}\)</span>을 사용하여 예측 집합을 구성합니다.</p>
+<ul>
+<li>새로운 테스트 데이터 <span class="math inline">\(X_{test}\)</span>가 들어오면, 먼저 이 데이터가 어느 그룹에 속하는지(<span class="math inline">\(X_{test,1}\)</span>) 확인합니다.</li>
+<li>그리고 해당 그룹에 맞는 임계값 <span class="math inline">\(\hat{q}^{(X_{test,1})}\)</span>을 사용하여 예측 집합을 구성합니다.</li>
+</ul>
 <p><span class="math display">\[
 \mathcal{C}(x) = \{ y : s(x, y) \le \hat{q}^{(x_1)} \}
 \]</span></p>
@@ -258,13 +282,17 @@ S^{(g)} = \{ (X_j, Y_j) : X_{j,1} = g \}
 </section>
 <section id="theoretical-guarantee" class="level1">
 <h1>Theoretical Guarantee</h1>
-<p>이 방법은 Vovk에 의해 처음 제안되었으며, 다음의 명제에 의해 수학적으로 정당화됩니다.</p>
+<ul>
+<li>이 방법은 Vovk에 의해 처음 제안되었으며, 다음의 명제에 의해 수학적으로 정당화됩니다.</li>
+</ul>
 <blockquote class="blockquote">
 <p><strong>Proposition 1 (Error control guarantee for group-balanced conformal prediction)</strong></p>
 <p>데이터가 i.i.d. 가정하에 추출되었다면, 위 알고리즘을 통해 생성된 예측 집합 <span class="math inline">\(\mathcal{C}\)</span>는 모든 그룹 <span class="math inline">\(g\)</span>에 대해 다음을 만족한다.</p>
 <p><span class="math display">\[ \mathbb{P}(Y_{test} \in \mathcal{C}(X_{test}) \mid X_{test,1} = g) \ge 1-\alpha \]</span></p>
 </blockquote>
-<p>이로써 우리는 인종, 성별 등 민감한 속성에 관계없이 모든 사용자에게 <strong>동등한 수준의 안전장치(Equal Coverage)</strong>를 제공할 수 있게 됩니다.</p>
+<ul>
+<li>이로써 우리는 인종, 성별 등 민감한 속성에 관계없이 모든 사용자에게 <strong>동등한 수준의 안전장치(Equal Coverage)</strong>를 제공할 수 있게 됩니다.</li>
+</ul>
 </section>
 <section id="practical-note" class="level1">
 <h1>Practical Note</h1>

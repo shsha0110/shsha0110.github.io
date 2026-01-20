@@ -13,75 +13,73 @@ format:
 
 # Introduction: The Problem with Imbalanced Classes
 
-머신러닝 분류 문제, 특히 의료 진단과 같은 분야에서는 **클래스 불균형(Class Imbalance)**이 흔하게 발생합니다.
-예를 들어, 암 진단 모델을 개발한다고 가정해봅시다.
-* **정상(Normal)**: 데이터의 95%
-* **암(Cancer)**: 데이터의 5%
+* 머신러닝 분류 문제, 특히 의료 진단과 같은 분야에서는 **클래스 불균형(Class Imbalance)**이 흔하게 발생합니다.
+* 예를 들어, 암 진단 모델을 개발한다고 가정해봅시다.
+  * **정상(Normal)**: 데이터의 95%
+  * **암(Cancer)**: 데이터의 5%
 
-우리가 일반적인 Conformal Prediction을 사용하여 95% 커버리지를 달성했다고 칩시다.
-가장 쉬운 달성 방법은 무엇일까요?
-**"그냥 모든 환자를 '정상'이라고 예측하고, 암 환자는 다 틀리는 것"**입니다.
-이렇게 해도 (정상 95% + 암 0%) / 100% $\approx$ 95% 커버리지는 달성됩니다.
+* 우리가 일반적인 Conformal Prediction을 사용하여 95% 커버리지를 달성했다고 칩시다.
+* 가장 쉬운 달성 방법은 무엇일까요?
+* **"그냥 모든 환자를 '정상'이라고 예측하고, 암 환자는 다 틀리는 것"**입니다.
+* 이렇게 해도 (정상 95% + 암 0%) / 100% $\approx$ 95% 커버리지는 달성됩니다.
 
-하지만 이는 재앙입니다. 우리는 암 환자에 대해서도 똑같이 95%의 정확도로 정답을 포함시키기를 원합니다.
-**Class-Conditional Conformal Prediction**은 바로 이 문제, 즉 **모든 정답 클래스(Ground Truth Class)**에 대해 균등한 커버리지를 보장하기 위한 방법입니다.
+* 하지만 이는 재앙입니다. 
+* 우리는 암 환자에 대해서도 똑같이 95%의 정확도로 정답을 포함시키기를 원합니다.
+* **Class-Conditional Conformal Prediction**은 바로 이 문제, 즉 **모든 정답 클래스(Ground Truth Class)**에 대해 균등한 커버리지를 보장하기 위한 방법입니다.
 
 # Problem Formulation
 
-우리의 목표는 단순한 전체 평균($1-\alpha$)이 아니라, **각 클래스 $y \in \{1, \dots, K\}$ 별로** 조건부 커버리지를 만족하는 것입니다.
+* 우리의 목표는 단순한 전체 평균($1-\alpha$)이 아니라, **각 클래스 $y \in \{1, \dots, K\}$ 별로** 조건부 커버리지를 만족하는 것입니다.
 
 $$
 \mathbb{P}(Y_{test} \in \mathcal{C}(X_{test}) \mid Y_{test} = y) \ge 1-\alpha, \quad \forall y \in \{1, \dots, K\}
 $$
 
-이것이 보장된다면, "암 환자" 그룹 내에서도 정답이 예측 집합에 포함될 확률이 95% 이상이 되고, "정상인" 그룹 내에서도 마찬가지가 됩니다.
+* 이것이 보장된다면, "암 환자" 그룹 내에서도 정답이 예측 집합에 포함될 확률이 95% 이상이 되고, "정상인" 그룹 내에서도 마찬가지가 됩니다.
 
 # The Algorithm
 
-알고리즘은 Group-Balanced CP와 유사하게 **"따로따로(Separately)"** 전략을 취하지만, 추론(Inference) 단계에서 중요한 차이가 있습니다.
+* 알고리즘은 Group-Balanced CP와 유사하게 **"따로따로(Separately)"** 전략을 취하지만, 추론(Inference) 단계에서 중요한 차이가 있습니다.
 
 ## Step 1: Stratify Calibration Data by Class
-Calibration 데이터셋을 실제 정답 클래스(Ground Truth Class)별로 나눕니다.
+* Calibration 데이터셋을 실제 정답 클래스(Ground Truth Class)별로 나눕니다.
 
 $$
 S^{(k)} = \{ (X_j, Y_j) : Y_j = k \}
 $$
 
 ## Step 2: Calibrate per Class
-각 클래스 $k$에 대해 독립적으로 Quantile $\hat{q}^{(k)}$를 계산합니다.
-
-1.  클래스 $k$에 속하는 데이터들의 Score $s^{(k)}_1, \dots, s^{(k)}_{n^{(k)}}$를 모읍니다.
-2.  해당 클래스의 데이터 수 $n^{(k)}$를 기준으로 보정된 분위수를 구합니다:
-
+* 각 클래스 $k$에 대해 독립적으로 Quantile $\hat{q}^{(k)}$를 계산합니다.
+  * 1.  클래스 $k$에 속하는 데이터들의 Score $s^{(k)}_1, \dots, s^{(k)}_{n^{(k)}}$를 모읍니다.
+  * 2.  해당 클래스의 데이터 수 $n^{(k)}$를 기준으로 보정된 분위수를 구합니다:
 $$
 \hat{q}^{(k)} = \text{Quantile}\left( \frac{\lceil (n^{(k)}+1)(1-\alpha) \rceil}{n^{(k)}} ; \{s^{(k)}_1, \dots, s^{(k)}_{n^{(k)}}\} \right)
 $$
 
-결과적으로 우리는 클래스 개수만큼의 임계값 $\hat{q}^{(1)}, \dots, \hat{q}^{(K)}$를 얻습니다.
-* 샘플이 적거나 모델이 어려워하는 클래스(예: 암)는 임계값이 높게(보수적으로) 설정될 것입니다.
+* 결과적으로 우리는 클래스 개수만큼의 임계값 $\hat{q}^{(1)}, \dots, \hat{q}^{(K)}$를 얻습니다.
+  * 샘플이 적거나 모델이 어려워하는 클래스(예: 암)는 임계값이 높게(보수적으로) 설정될 것입니다.
 
 ## Step 3: Inference (Iterative Check)
-이 부분이 4.1절(Group-Balanced)과 가장 다릅니다.
-테스트 시점에는 입력 $X_{test}$의 **진짜 클래스(True Class)가 무엇인지 모릅니다.** 따라서 "해당 그룹의 $\hat{q}$를 가져다 쓰는" 방식은 불가능합니다.
+* 이 부분이 4.1절(Group-Balanced)과 가장 다릅니다.
+* 테스트 시점에는 입력 $X_{test}$의 **진짜 클래스(True Class)가 무엇인지 모릅니다.**
+* 따라서 "해당 그룹의 $\hat{q}$를 가져다 쓰는" 방식은 불가능합니다.
 
-대신, 우리는 **"만약 정답이 클래스 $y$라면?"**이라는 가정을 모든 후보 클래스에 대해 수행합니다.
+* 대신, 우리는 **"만약 정답이 클래스 $y$라면?"**이라는 가정을 모든 후보 클래스에 대해 수행합니다.
 
-예측 집합 $\mathcal{C}(x)$는 다음 조건을 만족하는 모든 클래스 $y$를 포함합니다:
-
+* 예측 집합 $\mathcal{C}(x)$는 다음 조건을 만족하는 모든 클래스 $y$를 포함합니다:
 $$
 \mathcal{C}(x) = \{ y : s(x, y) \le \hat{q}^{(y)} \}
 $$
+  * 후보 클래스 $y$가 '암'이라면? $\rightarrow$ $s(x, \text{암})$을 계산하고, 이를 '암' 클래스의 임계값 $\hat{q}^{(\text{암})}$과 비교합니다.
+  * 후보 클래스 $y$가 '정상'이라면? $\rightarrow$ $s(x, \text{정상})$을 계산하고, 이를 '정상' 클래스의 임계값 $\hat{q}^{(\text{정상})}$과 비교합니다.
 
-* 후보 클래스 $y$가 '암'이라면? $\rightarrow$ $s(x, \text{암})$을 계산하고, 이를 '암' 클래스의 임계값 $\hat{q}^{(\text{암})}$과 비교합니다.
-* 후보 클래스 $y$가 '정상'이라면? $\rightarrow$ $s(x, \text{정상})$을 계산하고, 이를 '정상' 클래스의 임계값 $\hat{q}^{(\text{정상})}$과 비교합니다.
+* 각 클래스마다 **자신만의 기준(Threshold)**을 통과해야 집합에 들어갈 수 있는 것입니다.
 
-각 클래스마다 **자신만의 기준(Threshold)**을 통과해야 집합에 들어갈 수 있는 것입니다.
-
-![Figure: Class-Conditional Conformal Prediction의 개념도. Calibration 데이터를 색깔(클래스)별로 나누어 각각의 분포 $\hat{q}^{(1)}, \hat{q}^{(2)}$를 구한다. 추론 시에는 각 후보 클래스 $y$가 자신의 기준 $\hat{q}^{(y)}$를 만족하는지 확인한다.](images/class_conditional_cp_visualization.png)
+![Figure: Class-Conditional Conformal Prediction의 개념도. Calibration 데이터를 색깔(클래스)별로 나누어 각각의 분포 $\hat{q}^{(1)}, \hat{q}^{(2)}$를 구한다. 추론 시에는 각 후보 클래스 $y$가 자신의 기준 $\hat{q}^{(y)}$를 만족하는지 확인한다.](./images/class_conditional_cp_visualization.png)
 
 # Comparison: Group-Balanced vs. Class-Conditional
 
-이 두 가지 확장의 차이를 명확히 구분하는 것이 중요합니다.
+* 이 두 가지 확장의 차이를 명확히 구분하는 것이 중요합니다.
 
 | 특징 | Group-Balanced (4.1) | Class-Conditional (4.2) |
 | :--- | :--- | :--- |
@@ -92,7 +90,7 @@ $$
 
 # Theoretical Guarantee
 
-Vovk의 증명에 따르면, 이 방법 또한 수학적으로 엄밀한 커버리지를 보장합니다.
+* Vovk의 증명에 따르면, 이 방법 또한 수학적으로 엄밀한 커버리지를 보장합니다.
 
 > **Proposition 2 (Error control guarantee for class-balanced conformal prediction)**
 >
@@ -102,8 +100,9 @@ Vovk의 증명에 따르면, 이 방법 또한 수학적으로 엄밀한 커버�
 
 # Conclusion
 
-Class-Conditional CP는 불균형한 데이터셋에서 **소수 클래스(Minority Class)의 성능을 희생하지 않기 위한 필수적인 기법**입니다.
-비록 소수 클래스의 데이터가 적어서 $\hat{q}$가 커지고(불확실성이 커지고), 결과적으로 예측 집합의 크기가 커질 수는 있습니다. 하지만 이는 "틀리는 것"보다는 훨씬 낫습니다. 우리는 적어도 그 안에 정답이 있다는 확신(Safety)을 가질 수 있기 때문입니다.
+* Class-Conditional CP는 불균형한 데이터셋에서 **소수 클래스(Minority Class)의 성능을 희생하지 않기 위한 필수적인 기법**입니다.
+* 비록 소수 클래스의 데이터가 적어서 $\hat{q}$가 커지고(불확실성이 커지고), 결과적으로 예측 집합의 크기가 커질 수는 있습니다. 
+* 하지만 이는 "틀리는 것"보다는 훨씬 낫습니다. 우리는 적어도 그 안에 정답이 있다는 확신(Safety)을 가질 수 있기 때문입니다.
 
 ---
 **Next Step**: 지금까지는 "정답을 포함할 확률(Coverage)"을 제어하는 것에 집중했습니다. 하지만 어떤 문제에서는 "포함 확률"보다 **"틀렸을 때의 손실(Risk/Loss)"**을 제어하는 것이 더 중요할 수 있습니다. 다음 포스트에서는 이를 일반화한 **Section 4.3 Conformal Risk Control**에 대해 다루겠습니다.

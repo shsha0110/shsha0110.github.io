@@ -651,25 +651,172 @@
     "text": "5. 최종 결과: 2SLS 추정량\n\n위의 \\(A\\)와 \\(B\\) 결과를 합치면 다음과 같습니다.\n\n\\[\n\\begin{aligned}\n\\hat{\\Gamma}_{2SLS} &= A^{-1} B \\\\\n&= [(P_Z\\mathbf{R})' (P_Z\\mathbf{R})]^{-1} (P_Z\\mathbf{R})' \\mathbf{y}\n\\end{aligned}\n\\]\n\n이 식은 “원래의 변수 행렬(\\(\\mathbf{R}\\))을 도구변수 공간에 투영(\\(P_Z\\))시킨 뒤, 그 투영된 변수들을 사용하여 OLS를 수행하는 것”과 수학적으로 동일함을 보여줍니다."
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-05/index.html",
-    "href": "posts/lecture/L04/causal-inference-04-part-05/index.html",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 5)",
+    "objectID": "posts/lecture/L15/causal-inference-15-part-03/index.html",
+    "href": "posts/lecture/L15/causal-inference-15-part-03/index.html",
+    "title": "비교 불가능을 비교하다: 합성 대조조법 (Synthetic Control Method)",
     "section": "",
-    "text": "이전 포스트들에서 배운 교란(Confounding)과 Back-door Criterion을 실제 코드로 구현해 보는 시간입니다.\n특히 심슨의 역설(Simpson’s Paradox) 상황을 시뮬레이션하고, DoWhy 라이브러리의 성향 점수 층화(Propensity Score Stratification) 방법을 통해 올바른 인과 효과를 추정해 봅니다."
+    "text": "지난 포스트들에서 우리는 이중차분법(DiD)을 통해 정책의 효과를 추정하는 방법을 배웠습니다. 하지만 DiD를 적용하기 어려운 상황이 종종 발생합니다. 바로 “적절한 통제 집단(Control Group)을 찾기 어려울 때”입니다.\n예를 들어, 캘리포니아 주가 담배 규제 정책(Proposition 99)을 시행했을 때, 나머지 49개 주 전체를 평균 내어 비교하는 것이 공정할까요? 캘리포니아와 인구 구조, 경제 규모, 흡연 문화가 비슷한 단일한 주는 존재하지 않을지도 모릅니다.\n이번 포스트에서는 이러한 문제를 해결하기 위해, 여러 통제 집단을 적절히 섞어 “가상의 도플갱어(Synthetic Control)”를 만들어내는 합성 대조조법(Synthetic Control Method, SCM)에 대해 알아봅니다.\n\n참고 자료: 본 포스트는 이상학 교수님의 “Differences in Differences & Synthetic Control Method” 강의 자료(1503 DiD SCM.pdf)를 바탕으로 재구성되었습니다."
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
-    "href": "posts/lecture/L04/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 5)",
-    "section": "5.1 모델 정의 및 식별 (Modeling & Identification)",
-    "text": "5.1 모델 정의 및 식별 (Modeling & Identification)\n\n인과 그래프(Graph)를 정의하고 Back-door 기준을 통해 식별 가능성을 확인합니다.\n\n\n\nCode\n# 단계 1: 모델 정의 (Causal Graph 생성)\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age'] # 교란 변수 지정\n)\n\n# 단계 2: 식별 (Identification)\nidentified_estimand = model.identify_effect()\nprint(identified_estimand)\n\n\nEstimand type: EstimandType.NONPARAMETRIC_ATE\n\n### Estimand : 1\nEstimand name: backdoor\nEstimand expression:\n     d                         \n───────────(E[Cholesterol|Age])\nd[Exercise]                    \nEstimand assumption 1, Unconfoundedness: If U→{Exercise} and U→Cholesterol then P(Cholesterol|Exercise,Age,U) = P(Cholesterol|Exercise,Age)\n\n### Estimand : 2\nEstimand name: iv\nNo such variable(s) found!\n\n### Estimand : 3\nEstimand name: frontdoor\nNo such variable(s) found!"
+    "objectID": "posts/lecture/L15/causal-inference-15-part-03/index.html#들어가며-적절한-비교-대상이-없다면",
+    "href": "posts/lecture/L15/causal-inference-15-part-03/index.html#들어가며-적절한-비교-대상이-없다면",
+    "title": "비교 불가능을 비교하다: 합성 대조조법 (Synthetic Control Method)",
+    "section": "",
+    "text": "지난 포스트들에서 우리는 이중차분법(DiD)을 통해 정책의 효과를 추정하는 방법을 배웠습니다. 하지만 DiD를 적용하기 어려운 상황이 종종 발생합니다. 바로 “적절한 통제 집단(Control Group)을 찾기 어려울 때”입니다.\n예를 들어, 캘리포니아 주가 담배 규제 정책(Proposition 99)을 시행했을 때, 나머지 49개 주 전체를 평균 내어 비교하는 것이 공정할까요? 캘리포니아와 인구 구조, 경제 규모, 흡연 문화가 비슷한 단일한 주는 존재하지 않을지도 모릅니다.\n이번 포스트에서는 이러한 문제를 해결하기 위해, 여러 통제 집단을 적절히 섞어 “가상의 도플갱어(Synthetic Control)”를 만들어내는 합성 대조조법(Synthetic Control Method, SCM)에 대해 알아봅니다.\n\n참고 자료: 본 포스트는 이상학 교수님의 “Differences in Differences & Synthetic Control Method” 강의 자료(1503 DiD SCM.pdf)를 바탕으로 재구성되었습니다."
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
-    "href": "posts/lecture/L04/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 5)",
-    "section": "5.2 인과 효과 추정 (Estimation: Stratification)",
-    "text": "5.2 인과 효과 추정 (Estimation: Stratification)\n\n여기서는 성향 점수 층화(Propensity Score Stratification) 방법을 사용합니다. 나이가 비슷하여 운동할 확률(성향 점수)이 유사한 사람들끼리 묶어서 비교하는 방식입니다.\n\n\n\nCode\n# 단계 3: 추정 (Estimation)\n# num_strata=5: 데이터를 성향 점수에 따라 5개 구간으로 나눔\nestimate = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\",\n    method_params={'num_strata': 5, 'clipping_threshold': 5}\n)\n\nprint(\"=\"*50)\nprint(f\"2. 인과 효과 추정 (Causal Estimate): {estimate.value:.4f}\")\nprint(f\"   -&gt; 실제 효과 (-10.0)에 매우 근접함\")\nprint(\"=\"*50)\n\n\n==================================================\n2. 인과 효과 추정 (Causal Estimate): -9.1264\n   -&gt; 실제 효과 (-10.0)에 매우 근접함\n=================================================="
+    "objectID": "posts/lecture/L15/causal-inference-15-part-03/index.html#사례-연구-캘리포니아-담배-규제-proposition-99",
+    "href": "posts/lecture/L15/causal-inference-15-part-03/index.html#사례-연구-캘리포니아-담배-규제-proposition-99",
+    "title": "비교 불가능을 비교하다: 합성 대조조법 (Synthetic Control Method)",
+    "section": "2 1. 사례 연구: 캘리포니아 담배 규제 (Proposition 99)",
+    "text": "2 1. 사례 연구: 캘리포니아 담배 규제 (Proposition 99)\n1988년 캘리포니아 주는 담배 소비를 줄이기 위해 담배세를 인상하는 ’Proposition 99’를 통과시켰습니다. 이 정책의 효과를 어떻게 측정할 수 있을까요?\n\n2.1 1.1 단순 비교의 함정\n가장 단순한 방법은 “캘리포니아”와 “나머지 미국 전체(Rest of the U.S.)”의 담배 판매량을 비교하는 것입니다.\n!(path/to/scm_bad_control.png) 주석: 점선(Rest of the U.S.)은 캘리포니아(실선)와 정책 시행 이전(1988년 이전)부터 추세가 다릅니다. 이는 평행 추세 가정을 위배하며, 좋은 비교 대상이 아님을 보여줍니다.\n\n\n2.2 1.2 합성 캘리포니아 (Synthetic California)의 등장\nSCM은 다른 주들의 데이터를 가중 평균(Weighted Average)하여, 1988년 이전의 캘리포니아와 거의 완벽하게 겹치는 가상의 캘리포니아를 만들어냅니다.\n!(path/to/scm_good_control.png) 주석: 합성 캘리포니아(점선)는 정책 시행 이전까지 실제 캘리포니아(실선)와 거의 일치합니다. 따라서 1988년 이후 벌어지는 격차(Gap)를 순수한 정책 효과로 해석할 수 있습니다."
+  },
+  {
+    "objectID": "posts/lecture/L15/causal-inference-15-part-03/index.html#수학적-모형-mathematical-framework",
+    "href": "posts/lecture/L15/causal-inference-15-part-03/index.html#수학적-모형-mathematical-framework",
+    "title": "비교 불가능을 비교하다: 합성 대조조법 (Synthetic Control Method)",
+    "section": "3 2. 수학적 모형 (Mathematical Framework)",
+    "text": "3 2. 수학적 모형 (Mathematical Framework)\nSCM을 수식으로 엄밀하게 정의해 봅시다.\n\n3.1 2.1 기본 세팅\n\n단일 처치 집단: \\(i=1\\) (캘리포니아)\n통제 집단 풀(Donor Pool): \\(i=2, \\dots, J+1\\) (나머지 주들)\n시간: \\(T_0\\) (개입 이전 기간), \\(T\\) (전체 기간)\n목표: 개입 이후(\\(t &gt; T_0\\))의 처치 효과 \\(\\tau_{1t}\\) 추정 \\[\\tau_{1t} = Y_{1t}(1) - Y_{1t}(0)\\]\n\n여기서 \\(Y_{1t}(1)\\)은 관찰되지만, 정책이 없었을 때의 결과인 \\(Y_{1t}(0)\\)은 결측된 반사실(Missing Counterfactual)입니다.\n\n\n3.2 2.2 합성 통제 집단 구성 (Weights Construction)\nSCM의 핵심은 통제 집단 유닛들에 부여할 가중치 벡터 \\(W = (w_2, \\dots, w_{J+1})'\\)를 찾는 것입니다. 이 가중치는 다음 두 가지 제약 조건을 만족해야 합니다.\n\n비음수 조건 (Non-negative): \\(w_j \\ge 0\\)\n합의 조건 (Sum to one): \\(\\sum_{j=2}^{J+1} w_j = 1\\)\n\n이 제약 조건들은 합성 통제 집단이 데이터들의 볼록 껍질(Convex Hull) 내부에 존재하게 하여, 내삽(Interpolation)을 수행하도록 강제합니다. 즉, 데이터의 범위를 벗어나는 과도한 외삽(Extrapolation)을 방지합니다.\n\n\n3.3 2.3 최적화 문제 (Optimization)\n우리는 개입 이전 기간(\\(t \\le T_0\\)) 동안 처치 집단(\\(Y_1\\))과 합성 통제 집단(\\(\\sum w_j Y_j\\))의 차이를 최소화하는 \\(W^*\\)를 찾습니다.\n\\[\nW^* = \\underset{W}{\\mathrm{argmin}} \\left( \\sum_{t=1}^{T_0} (Y_{1t} - \\sum_{j=2}^{J+1} w_j Y_{jt})^2 + \\sum_{k=1}^{K} (Z_{1k} - \\sum_{j=2}^{J+1} w_j Z_{jk})^2 \\right)\n\\] (실제로는 각 변수의 중요도를 반영하는 \\(V\\) 행렬을 포함한 2중 최적화가 수행되지만, 직관적 이해를 위해 단순화했습니다.)"
+  },
+  {
+    "objectID": "posts/lecture/L15/causal-inference-15-part-03/index.html#이론적-정당성-theoretical-justification",
+    "href": "posts/lecture/L15/causal-inference-15-part-03/index.html#이론적-정당성-theoretical-justification",
+    "title": "비교 불가능을 비교하다: 합성 대조조법 (Synthetic Control Method)",
+    "section": "4 3. 이론적 정당성 (Theoretical Justification)",
+    "text": "4 3. 이론적 정당성 (Theoretical Justification)\n왜 SCM이 DiD보다 강력할 수 있을까요? 이는 요인 모형(Factor Model)을 통해 설명됩니다.\n\n4.1 3.1 상호작용 요인 모형 (Interacted Factor Model)\n결과 변수 \\(Y_{it}(0)\\)가 다음과 같이 생성된다고 가정해 봅시다.\n\\[\nY_{it}(0) = \\delta_t + \\boldsymbol{Z}_i' \\boldsymbol{\\beta}_t + \\boldsymbol{\\lambda}_t \\boldsymbol{\\mu}_i + \\epsilon_{it}\n\\]\n\n\\(\\delta_t\\): 시간 고정 효과 (Time Fixed Effect)\n\\(\\boldsymbol{Z}_i\\): 관찰 가능한 공변량\n\\(\\boldsymbol{\\lambda}_t \\boldsymbol{\\mu}_i\\): 관찰되지 않은 시간 가변적 교란 요인(Time-varying Confounding)\n\n기존의 DiD는 시간 불변의 고정 효과(\\(\\alpha_i\\))만 제거할 수 있지만, SCM은 적절한 가중치 구성을 통해 \\(\\boldsymbol{\\lambda}_t \\boldsymbol{\\mu}_i\\) 항까지 상쇄시킬 수 있습니다. Abadie et al. (2010)은 개입 이전 기간(\\(T_0\\))이 충분히 길다면, SCM 추정량의 편향(Bias)이 0으로 수렴함을 증명했습니다.\n\n\n4.2 3.2 볼록성(Convexity)의 기하학적 의미\nSCM은 데이터를 ‘섞어서’ 만드는 것이므로 기하학적으로는 다면체 내부의 한 점을 찾는 것과 같습니다.\n!(path/to/convex_hull_triangle.png) 주석: \\(X_1\\)(검은 점)을 \\(X_0\\)(빨간 점들)의 조합으로 표현할 때, \\(X_1\\)이 빨간 점들이 이루는 다면체(Triangle) 내부에 있어야 안전한 추론(Interpolation)이 가능합니다. 외부에 있다면 SCM 적용에 주의가 필요합니다."
+  },
+  {
+    "objectID": "posts/lecture/L15/causal-inference-15-part-03/index.html#한계와-확장-augmented-scm",
+    "href": "posts/lecture/L15/causal-inference-15-part-03/index.html#한계와-확장-augmented-scm",
+    "title": "비교 불가능을 비교하다: 합성 대조조법 (Synthetic Control Method)",
+    "section": "5 4. 한계와 확장: Augmented SCM",
+    "text": "5 4. 한계와 확장: Augmented SCM\n\n5.1 4.1 편향 보정 (Bias Correction)\n현실에서는 개입 이전 기간(\\(T_0\\))에도 처치 집단과 합성 대조군이 완벽하게 일치하지 않을 수 있습니다(Imperfect Pre-treatment Fit). 이 경우 추정치에 편향이 발생합니다.\n이를 해결하기 위해 Augmented SCM (ASCM)이 제안되었습니다.\n\n\n5.2 4.2 ASCM 공식\nASCM은 기존 SCM 추정치에 회귀분석을 이용한 보정항을 추가합니다.\n\\[\n\\hat{Y}_{1t}^{aug}(0) = \\underbrace{\\sum_{j=2}^{J+1} w_j Y_{jt}}_{\\text{Original SCM}} + \\underbrace{\\left( \\hat{m}_{1t} - \\sum_{j=2}^{J+1} w_j \\hat{m}_{jt} \\right)}_{\\text{Bias Correction}}\n\\]\n\n\\(\\hat{m}_{it}\\): 공변량 등을 이용해 예측한 결과값 (Ridge Regression 등을 사용)\n이 보정항은 합성 대조군이 설명하지 못하는 잔여 차이를 회귀 모델로 메꿔주는 역할을 합니다."
+  },
+  {
+    "objectID": "posts/lecture/L15/causal-inference-15-part-03/index.html#마치며-투명하고-강력한-인과추론",
+    "href": "posts/lecture/L15/causal-inference-15-part-03/index.html#마치며-투명하고-강력한-인과추론",
+    "title": "비교 불가능을 비교하다: 합성 대조조법 (Synthetic Control Method)",
+    "section": "6 마치며: 투명하고 강력한 인과추론",
+    "text": "6 마치며: 투명하고 강력한 인과추론\n합성 대조조법은 다음과 같은 이유로 현대 사회과학 연구에서 가장 사랑받는 방법론 중 하나가 되었습니다.\n\n투명성 (Transparency): 어떤 통제 유닛이 몇 퍼센트의 비중으로 사용되었는지 명확히 알 수 있습니다.\n데이터 기반 (Data-driven): 연구자의 자의적인 대조군 선정을 방지합니다.\n유연성: 시간에 따라 변하는 교란 요인을 통제할 수 있습니다.\n\n데이터가 충분히 쌓인 시계열 환경에서 정책 효과를 분석해야 한다면, SCM은 가장 먼저 고려해야 할 도구입니다."
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html",
+    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
+    "section": "",
+    "text": "이번 포스트에서는 인과추론에서 가장 핵심적인 개념 중 하나인 교란(Confounding)과 이를 해결하기 위한 백도어 기준(Back-door Criterion)으로 나아가기 전, 식별 가능성(Identification Problem)에 대해 다시 한번 짚어보고자 합니다.\n강의 자료는 서울대학교 데이터사이언스대학원 이상학 교수님의 “Confounding and Backdoor” 수업 자료를 바탕으로 합니다\n\n\n\nRecap(Identification Problem) and Example of Identifiable and Non-identifiable Effects\nConfounding Bias\nBack-door Criterion\nEvaluation"
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html#목차",
+    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html#목차",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
+    "section": "",
+    "text": "Recap(Identification Problem) and Example of Identifiable and Non-identifiable Effects\nConfounding Bias\nBack-door Criterion\nEvaluation"
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html#설정-setup",
+    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html#설정-setup",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
+    "section": "4.1 설정 (Setup)",
+    "text": "4.1 설정 (Setup)\n아래와 같은 “Bow-tie” 형태의 그래프를 고려합니다. 여기서 \\(U_{XY}\\)는 \\(X\\)와 \\(Y\\)에 동시에 영향을 주는 관측되지 않은 교란 변수(Unobserved Confounder)입니다.\n\n\n\nFigure 3. Causal Graph with Unobserved Confounder\n\n\n두 모델 \\(\\mathcal{H}^{(1)}\\)과 \\(\\mathcal{H}^{(2)}\\)는 다음과 같은 구조적 방정식(Structural Equations)을 갖습니다. 여기서 \\(U_Y, U_{XY}\\)는 모두 베르누이 분포(동전 던지기, \\(p=0.5\\))를 따릅니다.\n\n4.1.1 Model 1 (\\(\\mathcal{H}^{(1)}\\))\n\\[\n\\begin{cases}\nX \\leftarrow U_{XY} \\\\\nY \\leftarrow (X \\oplus U_{XY}) \\lor U_Y\n\\end{cases}\n\\] * 여기서 \\(\\oplus\\)는 XOR 연산, \\(\\lor\\)는 OR 연산을 의미합니다.\n\n\n4.1.2 Model 2 (\\(\\mathcal{H}^{(2)}\\))\n\\[\n\\begin{cases}\nX \\leftarrow U_{XY} \\\\\nY \\leftarrow U_Y\n\\end{cases}\n\\] * 모델 2에서는 \\(X\\)가 \\(Y\\)에 아무런 영향을 주지 않습니다 (끊어진 인과 관계)."
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html#관측-분포의-일치-observational-equivalence",
+    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html#관측-분포의-일치-observational-equivalence",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
+    "section": "4.2 관측 분포의 일치 (Observational Equivalence)",
+    "text": "4.2 관측 분포의 일치 (Observational Equivalence)\n놀랍게도 두 모델은 관측 데이터 상으로는 완벽하게 동일합니다.\n\nModel 1의 경우: 구조 방정식을 보면 \\(X\\)는 \\(U_{XY}\\)와 같습니다. 따라서 \\(X \\oplus U_{XY}\\)는 항상 \\(0\\)이 됩니다 (\\(X\\)와 \\(U_{XY}\\)가 같으므로). \\[Y = 0 \\lor U_Y = U_Y\\] 결국 관측 환경에서는 \\(Y\\)가 오직 \\(U_Y\\)에 의해서만 결정됩니다\nModel 2의 경우: 정의상 \\(Y \\leftarrow U_Y\\)이므로, 역시 \\(Y\\)는 \\(U_Y\\)에 의해 결정됩니다.\n\n결과적으로 두 모델 모두 \\(P(Y=1) = P(U_Y=1) = 0.5\\)이며, \\(X\\)와 \\(Y\\)의 결합 분포 표(Truth Table)도 완전히 일치합니다\n\n\n\n\n\n\n\n\n\n\n\\(U_Y\\)\n\\(U_{XY}\\) (\\(=X\\))\n\\(Y^{(1)}\\) (Model 1)\n\\(Y^{(2)}\\) (Model 2)\n\\(P(u)\\)\n\n\n\n\n0\n0\n0\n0\n1/4\n\n\n0\n1\n0\n0\n1/4\n\n\n1\n0\n1\n1\n1/4\n\n\n1\n1\n1\n1\n1/4"
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html#인과-효과의-불일치-interventional-differences",
+    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html#인과-효과의-불일치-interventional-differences",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
+    "section": "4.3 인과 효과의 불일치 (Interventional Differences)",
+    "text": "4.3 인과 효과의 불일치 (Interventional Differences)\n이제 \\(do(x)\\) 연산을 통해 실제로 인과 효과를 계산해 보면 두 모델의 차이가 드러납니다. \\(do(x)\\)는 \\(X\\)를 강제로 특정 값으로 고정하는 것이므로, 더 이상 \\(X\\)는 \\(U_{XY}\\)의 영향을 받지 않습니다.\n\n\n\nFigure 4. Causal Graph with Unobserved Confounder\n\n\n우리는 \\(P(y=1 | do(x=0))\\)을 계산해 보겠습니다\n\n4.3.1 Case 1: Model \\(\\mathcal{H}^{(1)}\\)\n구조 방정식: \\(Y \\leftarrow (x \\oplus U_{XY}) \\lor U_Y\\). 여기서 \\(x=0\\)으로 고정했습니다.\n\n\\(U_{XY}=0, U_Y=0 \\Rightarrow Y = (0 \\oplus 0) \\lor 0 = 0\\)\n\\(U_{XY}=0, U_Y=1 \\Rightarrow Y = (0 \\oplus 0) \\lor 1 = 1\\) (\\(U_Y=1\\) 이면 어차피 \\(Y=1\\))\n\\(U_{XY}=1, U_Y=0 \\Rightarrow Y = (0 \\oplus 1) \\lor 0 = 1\\) (\\(U_{XY}=1 \\nRightarrow X=1\\) 이므로, 여기서 차이 발생!)\n\\(U_{XY}=1, U_Y=1 \\Rightarrow Y = (0 \\oplus 1) \\lor 1 = 1\\) (\\(U_Y=1\\) 이면 어차피 \\(Y=1\\))\n\n4가지 경우 중 3가지 경우에 \\(Y=1\\)이 됩니다. \\[\\therefore P^{(1)}(y=1|do(x=0)) = \\frac{3}{4}\\]\n\n\n4.3.2 Case 2: Model \\(\\mathcal{H}^{(2)}\\)\n구조 방정식: \\(Y \\leftarrow U_Y\\). \\(X\\)의 값과 상관없이 \\(Y\\)는 \\(U_Y\\)를 따릅니다.\n\n\\(U_Y=0 \\Rightarrow Y=0\\)\n\\(U_Y=1 \\Rightarrow Y=1\\)\n\n\\[\\therefore P^{(2)}(y=1|do(x=0)) = \\frac{1}{2}\\]"
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html#결론",
+    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html#결론",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
+    "section": "4.4 결론",
+    "text": "4.4 결론\n\n\n\n\\(Y\\)\n\\(P^{(1)}(Y|do(x))\\)\n\\(P^{(2)}(Y|do(x))\\)\n\n\n\n\n0\n\\(\\frac{1}{4}\\)\n\\(\\frac{1}{2}\\)\n\n\n1\n\\(\\frac{3}{4}\\)\n\\(\\frac{1}{2}\\)\n\n\n\n두 모델은 동일한 인과 그래프와 동일한 관측 분포 \\(P(v)\\)를 가지지만, 계산된 인과 효과 \\(P(y|do(x))\\)는 \\(\\frac{3}{4}\\)와 \\(\\frac{1}{2}\\)로 서로 다릅니다\n\nEven though both models induce \\(I\\) (Graph) and have the same \\(P(v)\\), the effect \\(P^{(1)}(y|do(x)) \\neq P^{(2)}(y|do(x))\\).\n\n이는 주어진 그래프 구조(Unobserved Confounder가 존재하는 경우)만으로는 데이터에서 인과 효과를 유일하게 식별해낼 수 없음을(Non-identifiable) 의미합니다. 이러한 경우, 추가적인 가정이나 데이터를 통한 식별 전략이 필요합니다."
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html",
+    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
+    "section": "",
+    "text": "지난 포스트에서는 인과 효과의 식별 가능성(Identifiability)에 대해 다루었습니다. 이번에는 현실 데이터 분석에서 가장 빈번하게 마주치는 문제이자, 인과추론이 필요한 가장 큰 이유 중 하나인 교란 편향(Confounding Bias)에 대해 구체적인 예시를 통해 알아보겠습니다."
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html#단순-관측-직관과-반대되는-결과",
+    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html#단순-관측-직관과-반대되는-결과",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
+    "section": "2.1 1. 단순 관측: 직관과 반대되는 결과",
+    "text": "2.1 1. 단순 관측: 직관과 반대되는 결과\n\n수집한 데이터를 단순히 산점도(Scatter Plot)로 그려보았더니 놀라운 결과가 나타났습니다.\n\n\n\n\nFigure 1. Observed Correlation between Exercise and Cholesterol\n\n\n\n관측 결과: 운동을 많이 하는 사람일수록 콜레스테롤 수치가 더 높게 나타납니다.\n의문: \\(P(\\text{cholesterol} | \\text{exercise})\\)를 보면, 운동이 콜레스테롤을 높이는 것처럼 보입니다. 과연 “더 많은 운동 \\(\\Rightarrow\\) 콜레스테롤 증가”라고 결론 내릴 수 있을까요?"
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html#교란-변수의-발견-나이age",
+    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html#교란-변수의-발견-나이age",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
+    "section": "2.2 2. 교란 변수의 발견: 나이(Age)",
+    "text": "2.2 2. 교란 변수의 발견: 나이(Age)\n\n이 이상한 현상을 이해하기 위해, 우리는 데이터에 숨겨진 제3의 변수인 ‘나이(Age)’를 색상으로 구분하여 다시 시각화해보았습니다.\n\n\n\n\nFigure 2. Scatter Plot Stratified by Age\n\n\n\n그래프를 자세히 보면 다음과 같은 패턴이 드러납니다:\n\n나이와 운동: 나이가 많은 사람(노란색 계열)들이 건강 관리를 위해 운동을 더 많이 하는 경향이 있습니다.\n나이와 콜레스테롤: 동시에, 나이가 많을수록 자연적으로 콜레스테롤 수치가 높습니다.\n\n즉, ‘나이’가 운동량(\\(X\\))과 콜레스테롤(\\(Y\\)) 모두에 영향을 미치는 교란 변수(Confounder)로 작용하고 있었던 것입니다."
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html#계층별-분석-인과-효과의-확인",
+    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html#계층별-분석-인과-효과의-확인",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
+    "section": "2.3 3. 계층별 분석: 인과 효과의 확인",
+    "text": "2.3 3. 계층별 분석: 인과 효과의 확인\n\n이제 나이(Age)를 고정한 상태에서 운동과 콜레스테롤의 관계를 다시 살펴봅시다.\n\n\n\n\nFigure 3. True Causal Effect within Age Groups\n\n\n\n각 연령대 그룹(같은 색깔) 내부를 들여다보면, 운동을 많이 할수록 콜레스테롤 수치가 낮아지는 것을 명확히 볼 수 있습니다.\n결론: 운동의 진짜 인과 효과는 콜레스테롤을 낮추는 것입니다. (\\(More\\ exercise \\Rightarrow Lower\\ Cholesterol\\))"
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html#복잡한-인과-그래프에서의-문제",
+    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html#복잡한-인과-그래프에서의-문제",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
+    "section": "4.1 복잡한 인과 그래프에서의 문제",
+    "text": "4.1 복잡한 인과 그래프에서의 문제\n\n다음과 같이 복잡한 인과 그래프를 고려해 봅시다.\n\n\n\n\nFigure 4. A Complex Causal Graph\n\n\n\nGoal: 변수 \\(Z_1, ..., Z_k\\)가 측정되었을 때, \\(X\\)가 \\(Y\\)에 미치는 인과 효과 \\(Q = P(y|do(x))\\)를 찾아내는 것.\n여기서 중요한 질문이 생깁니다.\n\n“부모 변수(Parents) 중 일부만 관측되었을 때, 타겟 인과 효과 \\(Q\\)를 식별할 수 있는가?”"
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
+    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
+    "section": "4.2 주의해야 할 구조: Collider",
+    "text": "4.2 주의해야 할 구조: Collider\n\n그래프 분석 시 주의해야 할 점은 단순히 모든 변수를 통제(Conditioning)한다고 좋은 것이 아니라는 점입니다.\n예를 들어 위 그래프에서 \\(Z_4\\)와 같은 변수를 살펴봅시다.\n\n\nNote: \\(Z_4\\)는 \\(Z_1\\)과 \\(Z_2\\)의 화살표를 동시에 받는 Collider (\\(Z_1 \\rightarrow Z_4 \\leftarrow Z_2\\))입니다. \\(Z_4\\)를 조건부(given)로 잡을 경우, 오히려 \\(Z_1\\)과 \\(Z_2\\) 사이에 길이 뚫리는 현상이 발생하여 새로운 편향을 만들 수 있습니다.\n\n\n따라서 우리는 어떤 변수를 조정 집합(Adjustment Set)에 넣어야 편향을 제거하고 올바른 인과 효과를 구할 수 있는지 판단하는 체계적인 기준이 필요합니다. 이것이 바로 다음 포스트에서 다룰 Back-door Criterion입니다."
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-04/index.html",
+    "href": "posts/lecture/L04/causal-inference-04-part-04/index.html",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 4)",
+    "section": "",
+    "text": "지난 포스트에서는 Back-door Criterion을 통해 어떤 공변량 집합 \\(Z\\)를 보정(Adjustment)해야 인과 효과 \\(P(y|do(x))\\)를 식별할 수 있는지 알아보았습니다.\n\n\\[P(y|do(x)) = \\sum_{z} P(y|x,z)P(z)\\]\n\n이번 포스트에서는 이 식을 실제 데이터(Practice)에서 어떻게 평가하고 계산하는지, 특히 계산 복잡도 문제를 해결하기 위한 Inverse Probability Weighting (IPW) 기법에 대해 다룹니다."
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-04/index.html#derivation",
+    "href": "posts/lecture/L04/causal-inference-04-part-04/index.html#derivation",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 4)",
+    "section": "3.1 Derivation",
+    "text": "3.1 Derivation\n\n기존의 Back-door Adjustment 식을 베이즈 정리와 결합 확률 법칙을 이용해 재구성해 봅시다.\n\n\\[\n\\begin{align}\nP(y|do(x)) &= \\sum_{z} P(y|x,z)P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x,z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)P(z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)} \\quad\n\\end{align}\n\\]\n\n이제 우리는 \\(P(z)\\)를 따로 추정하거나 모든 \\(z\\)에 대해 합을 구할 필요 없이, 결합 확률 \\(P(y,x,z)\\)를 \\(P(x|z)\\)로 나눈 형태로 식을 단순화했습니다."
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-04/index.html#propensity-score-gz",
+    "href": "posts/lecture/L04/causal-inference-04-part-04/index.html#propensity-score-gz",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 4)",
+    "section": "3.2 Propensity Score \\(g(z)\\)",
+    "text": "3.2 Propensity Score \\(g(z)\\)\n\n위 식의 분모에 있는 \\(P(x|z)\\)는 공변량 \\(Z\\)가 주어졌을 때 원인 변수 \\(X\\)가 할당될 확률을 의미하며, 이를 Propensity Score라고 부릅니다.\n보통 \\(g(z)\\)로 표기하며 로지스틱 회귀(Logistic Regression) 등의 모델을 사용하여 추정합니다.\n\n\\[g(z) = P(X=x|Z=z)\\]"
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-04/index.html#핵심-포인트",
+    "href": "posts/lecture/L04/causal-inference-04-part-04/index.html#핵심-포인트",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 4)",
+    "section": "4.1 핵심 포인트",
+    "text": "4.1 핵심 포인트\n\n\\(\\mathbb{1}(\\cdot)\\) (Indicator Function): 조건이 참이면 1, 거짓이면 0을 반환하는 함수입니다.\n시간 복잡도 \\(O(N)\\): 가장 마지막 식을 보면, 더 이상 \\(Z\\)의 모든 조합에 대해 합을 구할 필요가 없습니다. 단순히 관측된 \\(N\\)개의 데이터 샘플을 한 번씩만 순회하며 가중치(\\(1/g(z_i)\\))를 더하면 계산이 끝납니다. 이것이 IPW가 강력한 이유입니다."
+  },
+  {
+    "objectID": "posts/lecture/L04/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
+    "href": "posts/lecture/L04/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 4)",
+    "section": "4.2 시간 복잡도의 개선",
+    "text": "4.2 시간 복잡도의 개선\n\n이 방식의 가장 큰 장점은 계산 효율성입니다.\n고차원 \\(Z\\)에 대해 적분하거나 합을 구하는 대신, 샘플 수 \\(N\\)에 비례하는 선형 시간(\\(O(N)\\)) 만에 계산이 가능합니다."
   },
   {
     "objectID": "posts/lecture/L04/causal-inference-04-part-03/index.html",
@@ -742,123 +889,123 @@
     "text": "6.3 증명 (Derivation)\n\n부모 변수를 통한 조정(Adjustment by Direct Parents) 공식에서 시작합니다.\n\n\\[\n\\begin{aligned}\nP(y|do(x)) &= \\sum_{pa_X} P(y|x, pa_X)P(pa_X) \\\\\n&= \\sum_{z^-, pa_X} P(y|x, pa_X, z^-)P(z^-|x, pa_X)P(pa_X) && \\because \\text{Expand by } Z^- \\text{ (Total Probability)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-|pa_X)P(pa_X) && \\because \\text{Apply Assumptions Condition (i) \\& (ii)} \\\\\n&= \\sum_{z^-, pa_X} P(y|x, z)P(z^-, pa_X) && \\because \\text{Chain Rule } P(A|B)P(B) = P(A,B) \\\\\n&= \\sum_{z} P(y|x, z) \\sum_{pa_X \\setminus z} P(z^-, pa_X) && \\because \\text{Rearrange Summation } (Z \\cup (Pa_X \\setminus Z) = \\{Z, Pa_X\\}) \\\\\n&= \\sum_{z} P(y|x, z)P(z) && \\because \\text{Marginalize out } Pa_X \\setminus Z\n\\end{aligned}\n\\]\n\n결론: \n\n\nAdjustment by \\(Z\\) is equivalent to adjustment by direct parents whenever \\(Z\\) is back-door admissible.\n\n\n즉, \\(Z\\)가 Back-door criterion만 만족한다면, 직접적인 부모를 모두 측정하지 못하더라도 \\(Z\\)를 통해 인과 효과를 정확히 계산할 수 있음이 수학적으로 증명됩니다."
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-04/index.html",
-    "href": "posts/lecture/L04/causal-inference-04-part-04/index.html",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 4)",
+    "objectID": "posts/lecture/L04/causal-inference-04-part-05/index.html",
+    "href": "posts/lecture/L04/causal-inference-04-part-05/index.html",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 5)",
     "section": "",
-    "text": "지난 포스트에서는 Back-door Criterion을 통해 어떤 공변량 집합 \\(Z\\)를 보정(Adjustment)해야 인과 효과 \\(P(y|do(x))\\)를 식별할 수 있는지 알아보았습니다.\n\n\\[P(y|do(x)) = \\sum_{z} P(y|x,z)P(z)\\]\n\n이번 포스트에서는 이 식을 실제 데이터(Practice)에서 어떻게 평가하고 계산하는지, 특히 계산 복잡도 문제를 해결하기 위한 Inverse Probability Weighting (IPW) 기법에 대해 다룹니다."
+    "text": "이전 포스트들에서 배운 교란(Confounding)과 Back-door Criterion을 실제 코드로 구현해 보는 시간입니다.\n특히 심슨의 역설(Simpson’s Paradox) 상황을 시뮬레이션하고, DoWhy 라이브러리의 성향 점수 층화(Propensity Score Stratification) 방법을 통해 올바른 인과 효과를 추정해 봅니다."
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-04/index.html#derivation",
-    "href": "posts/lecture/L04/causal-inference-04-part-04/index.html#derivation",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 4)",
-    "section": "3.1 Derivation",
-    "text": "3.1 Derivation\n\n기존의 Back-door Adjustment 식을 베이즈 정리와 결합 확률 법칙을 이용해 재구성해 봅시다.\n\n\\[\n\\begin{align}\nP(y|do(x)) &= \\sum_{z} P(y|x,z)P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x,z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)P(z)} P(z) \\\\\n&= \\sum_{z} \\frac{P(y,x,z)}{P(x|z)} \\quad\n\\end{align}\n\\]\n\n이제 우리는 \\(P(z)\\)를 따로 추정하거나 모든 \\(z\\)에 대해 합을 구할 필요 없이, 결합 확률 \\(P(y,x,z)\\)를 \\(P(x|z)\\)로 나눈 형태로 식을 단순화했습니다."
+    "objectID": "posts/lecture/L04/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
+    "href": "posts/lecture/L04/causal-inference-04-part-05/index.html#모델-정의-및-식별-modeling-identification",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 5)",
+    "section": "5.1 모델 정의 및 식별 (Modeling & Identification)",
+    "text": "5.1 모델 정의 및 식별 (Modeling & Identification)\n\n인과 그래프(Graph)를 정의하고 Back-door 기준을 통해 식별 가능성을 확인합니다.\n\n\n\nCode\n# 단계 1: 모델 정의 (Causal Graph 생성)\nmodel = CausalModel(\n    data=df,\n    treatment='Exercise',\n    outcome='Cholesterol',\n    common_causes=['Age'] # 교란 변수 지정\n)\n\n# 단계 2: 식별 (Identification)\nidentified_estimand = model.identify_effect()\nprint(identified_estimand)\n\n\nEstimand type: EstimandType.NONPARAMETRIC_ATE\n\n### Estimand : 1\nEstimand name: backdoor\nEstimand expression:\n     d                         \n───────────(E[Cholesterol|Age])\nd[Exercise]                    \nEstimand assumption 1, Unconfoundedness: If U→{Exercise} and U→Cholesterol then P(Cholesterol|Exercise,Age,U) = P(Cholesterol|Exercise,Age)\n\n### Estimand : 2\nEstimand name: iv\nNo such variable(s) found!\n\n### Estimand : 3\nEstimand name: frontdoor\nNo such variable(s) found!"
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-04/index.html#propensity-score-gz",
-    "href": "posts/lecture/L04/causal-inference-04-part-04/index.html#propensity-score-gz",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 4)",
-    "section": "3.2 Propensity Score \\(g(z)\\)",
-    "text": "3.2 Propensity Score \\(g(z)\\)\n\n위 식의 분모에 있는 \\(P(x|z)\\)는 공변량 \\(Z\\)가 주어졌을 때 원인 변수 \\(X\\)가 할당될 확률을 의미하며, 이를 Propensity Score라고 부릅니다.\n보통 \\(g(z)\\)로 표기하며 로지스틱 회귀(Logistic Regression) 등의 모델을 사용하여 추정합니다.\n\n\\[g(z) = P(X=x|Z=z)\\]"
+    "objectID": "posts/lecture/L04/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
+    "href": "posts/lecture/L04/causal-inference-04-part-05/index.html#인과-효과-추정-estimation-stratification",
+    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 5)",
+    "section": "5.2 인과 효과 추정 (Estimation: Stratification)",
+    "text": "5.2 인과 효과 추정 (Estimation: Stratification)\n\n여기서는 성향 점수 층화(Propensity Score Stratification) 방법을 사용합니다. 나이가 비슷하여 운동할 확률(성향 점수)이 유사한 사람들끼리 묶어서 비교하는 방식입니다.\n\n\n\nCode\n# 단계 3: 추정 (Estimation)\n# num_strata=5: 데이터를 성향 점수에 따라 5개 구간으로 나눔\nestimate = model.estimate_effect(\n    identified_estimand,\n    method_name=\"backdoor.propensity_score_stratification\",\n    method_params={'num_strata': 5, 'clipping_threshold': 5}\n)\n\nprint(\"=\"*50)\nprint(f\"2. 인과 효과 추정 (Causal Estimate): {estimate.value:.4f}\")\nprint(f\"   -&gt; 실제 효과 (-10.0)에 매우 근접함\")\nprint(\"=\"*50)\n\n\n==================================================\n2. 인과 효과 추정 (Causal Estimate): -9.1264\n   -&gt; 실제 효과 (-10.0)에 매우 근접함\n=================================================="
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-04/index.html#핵심-포인트",
-    "href": "posts/lecture/L04/causal-inference-04-part-04/index.html#핵심-포인트",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 4)",
-    "section": "4.1 핵심 포인트",
-    "text": "4.1 핵심 포인트\n\n\\(\\mathbb{1}(\\cdot)\\) (Indicator Function): 조건이 참이면 1, 거짓이면 0을 반환하는 함수입니다.\n시간 복잡도 \\(O(N)\\): 가장 마지막 식을 보면, 더 이상 \\(Z\\)의 모든 조합에 대해 합을 구할 필요가 없습니다. 단순히 관측된 \\(N\\)개의 데이터 샘플을 한 번씩만 순회하며 가중치(\\(1/g(z_i)\\))를 더하면 계산이 끝납니다. 이것이 IPW가 강력한 이유입니다."
-  },
-  {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
-    "href": "posts/lecture/L04/causal-inference-04-part-04/index.html#시간-복잡도의-개선",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 4)",
-    "section": "4.2 시간 복잡도의 개선",
-    "text": "4.2 시간 복잡도의 개선\n\n이 방식의 가장 큰 장점은 계산 효율성입니다.\n고차원 \\(Z\\)에 대해 적분하거나 합을 구하는 대신, 샘플 수 \\(N\\)에 비례하는 선형 시간(\\(O(N)\\)) 만에 계산이 가능합니다."
-  },
-  {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html",
-    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
+    "objectID": "posts/lecture/L15/causal-inference-15-part-02/index.html",
+    "href": "posts/lecture/L15/causal-inference-15-part-02/index.html",
+    "title": "선형성을 넘어서: 비선형 이중차분법 (Nonlinear DiD / Changes-in-Changes)",
     "section": "",
-    "text": "지난 포스트에서는 인과 효과의 식별 가능성(Identifiability)에 대해 다루었습니다. 이번에는 현실 데이터 분석에서 가장 빈번하게 마주치는 문제이자, 인과추론이 필요한 가장 큰 이유 중 하나인 교란 편향(Confounding Bias)에 대해 구체적인 예시를 통해 알아보겠습니다."
+    "text": "지난 포스트에서 다룬 표준 이중차분법(Standard DiD)은 강력하지만, 중요한 가정을 전제로 합니다. 바로 “평행 추세(Parallel Trends)” 가정입니다. 하지만 이 가정은 결과 변수(\\(Y\\))의 선형성(Linearity)에 의존적이라는 한계가 있습니다.\n예를 들어, 소득(\\(Y\\))에 대해서는 평행 추세가 성립하더라도, 로그 소득(\\(\\log Y\\))에 대해서는 성립하지 않을 수 있습니다(Not invariant to nonlinear transformations). 만약 정책 효과가 소득 구간별로 다르게 나타난다면(예: 저소득층에게 더 큰 효과), 평균값의 변화만 보는 선형 DiD는 이러한 분포의 변화를 놓치게 됩니다.\n이번 포스트에서는 이러한 선형성 가정을 완화하고, 분포 전체의 변화를 추정할 수 있는 비선형 이중차분법(Nonlinear DiD), 일명 Changes-in-Changes (CiC) 모델에 대해 알아봅니다.\n\n참고 자료: 본 포스트는 이상학 교수님의 “Differences in Differences & Synthetic Control Method” 강의 자료(1502 DiD SCM.pdf)를 바탕으로 재구성되었습니다."
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html#단순-관측-직관과-반대되는-결과",
-    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html#단순-관측-직관과-반대되는-결과",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
-    "section": "2.1 1. 단순 관측: 직관과 반대되는 결과",
-    "text": "2.1 1. 단순 관측: 직관과 반대되는 결과\n\n수집한 데이터를 단순히 산점도(Scatter Plot)로 그려보았더니 놀라운 결과가 나타났습니다.\n\n\n\n\nFigure 1. Observed Correlation between Exercise and Cholesterol\n\n\n\n관측 결과: 운동을 많이 하는 사람일수록 콜레스테롤 수치가 더 높게 나타납니다.\n의문: \\(P(\\text{cholesterol} | \\text{exercise})\\)를 보면, 운동이 콜레스테롤을 높이는 것처럼 보입니다. 과연 “더 많은 운동 \\(\\Rightarrow\\) 콜레스테롤 증가”라고 결론 내릴 수 있을까요?"
-  },
-  {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html#교란-변수의-발견-나이age",
-    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html#교란-변수의-발견-나이age",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
-    "section": "2.2 2. 교란 변수의 발견: 나이(Age)",
-    "text": "2.2 2. 교란 변수의 발견: 나이(Age)\n\n이 이상한 현상을 이해하기 위해, 우리는 데이터에 숨겨진 제3의 변수인 ‘나이(Age)’를 색상으로 구분하여 다시 시각화해보았습니다.\n\n\n\n\nFigure 2. Scatter Plot Stratified by Age\n\n\n\n그래프를 자세히 보면 다음과 같은 패턴이 드러납니다:\n\n나이와 운동: 나이가 많은 사람(노란색 계열)들이 건강 관리를 위해 운동을 더 많이 하는 경향이 있습니다.\n나이와 콜레스테롤: 동시에, 나이가 많을수록 자연적으로 콜레스테롤 수치가 높습니다.\n\n즉, ‘나이’가 운동량(\\(X\\))과 콜레스테롤(\\(Y\\)) 모두에 영향을 미치는 교란 변수(Confounder)로 작용하고 있었던 것입니다."
-  },
-  {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html#계층별-분석-인과-효과의-확인",
-    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html#계층별-분석-인과-효과의-확인",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
-    "section": "2.3 3. 계층별 분석: 인과 효과의 확인",
-    "text": "2.3 3. 계층별 분석: 인과 효과의 확인\n\n이제 나이(Age)를 고정한 상태에서 운동과 콜레스테롤의 관계를 다시 살펴봅시다.\n\n\n\n\nFigure 3. True Causal Effect within Age Groups\n\n\n\n각 연령대 그룹(같은 색깔) 내부를 들여다보면, 운동을 많이 할수록 콜레스테롤 수치가 낮아지는 것을 명확히 볼 수 있습니다.\n결론: 운동의 진짜 인과 효과는 콜레스테롤을 낮추는 것입니다. (\\(More\\ exercise \\Rightarrow Lower\\ Cholesterol\\))"
-  },
-  {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html#복잡한-인과-그래프에서의-문제",
-    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html#복잡한-인과-그래프에서의-문제",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
-    "section": "4.1 복잡한 인과 그래프에서의 문제",
-    "text": "4.1 복잡한 인과 그래프에서의 문제\n\n다음과 같이 복잡한 인과 그래프를 고려해 봅시다.\n\n\n\n\nFigure 4. A Complex Causal Graph\n\n\n\nGoal: 변수 \\(Z_1, ..., Z_k\\)가 측정되었을 때, \\(X\\)가 \\(Y\\)에 미치는 인과 효과 \\(Q = P(y|do(x))\\)를 찾아내는 것.\n여기서 중요한 질문이 생깁니다.\n\n“부모 변수(Parents) 중 일부만 관측되었을 때, 타겟 인과 효과 \\(Q\\)를 식별할 수 있는가?”"
-  },
-  {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
-    "href": "posts/lecture/L04/causal-inference-04-part-02/index.html#주의해야-할-구조-collider",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 2)",
-    "section": "4.2 주의해야 할 구조: Collider",
-    "text": "4.2 주의해야 할 구조: Collider\n\n그래프 분석 시 주의해야 할 점은 단순히 모든 변수를 통제(Conditioning)한다고 좋은 것이 아니라는 점입니다.\n예를 들어 위 그래프에서 \\(Z_4\\)와 같은 변수를 살펴봅시다.\n\n\nNote: \\(Z_4\\)는 \\(Z_1\\)과 \\(Z_2\\)의 화살표를 동시에 받는 Collider (\\(Z_1 \\rightarrow Z_4 \\leftarrow Z_2\\))입니다. \\(Z_4\\)를 조건부(given)로 잡을 경우, 오히려 \\(Z_1\\)과 \\(Z_2\\) 사이에 길이 뚫리는 현상이 발생하여 새로운 편향을 만들 수 있습니다.\n\n\n따라서 우리는 어떤 변수를 조정 집합(Adjustment Set)에 넣어야 편향을 제거하고 올바른 인과 효과를 구할 수 있는지 판단하는 체계적인 기준이 필요합니다. 이것이 바로 다음 포스트에서 다룰 Back-door Criterion입니다."
-  },
-  {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html",
-    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
+    "objectID": "posts/lecture/L15/causal-inference-15-part-02/index.html#들어가며-선형-did의-한계",
+    "href": "posts/lecture/L15/causal-inference-15-part-02/index.html#들어가며-선형-did의-한계",
+    "title": "선형성을 넘어서: 비선형 이중차분법 (Nonlinear DiD / Changes-in-Changes)",
     "section": "",
-    "text": "이번 포스트에서는 인과추론에서 가장 핵심적인 개념 중 하나인 교란(Confounding)과 이를 해결하기 위한 백도어 기준(Back-door Criterion)으로 나아가기 전, 식별 가능성(Identification Problem)에 대해 다시 한번 짚어보고자 합니다.\n강의 자료는 서울대학교 데이터사이언스대학원 이상학 교수님의 “Confounding and Backdoor” 수업 자료를 바탕으로 합니다\n\n\n\nRecap(Identification Problem) and Example of Identifiable and Non-identifiable Effects\nConfounding Bias\nBack-door Criterion\nEvaluation"
+    "text": "지난 포스트에서 다룬 표준 이중차분법(Standard DiD)은 강력하지만, 중요한 가정을 전제로 합니다. 바로 “평행 추세(Parallel Trends)” 가정입니다. 하지만 이 가정은 결과 변수(\\(Y\\))의 선형성(Linearity)에 의존적이라는 한계가 있습니다.\n예를 들어, 소득(\\(Y\\))에 대해서는 평행 추세가 성립하더라도, 로그 소득(\\(\\log Y\\))에 대해서는 성립하지 않을 수 있습니다(Not invariant to nonlinear transformations). 만약 정책 효과가 소득 구간별로 다르게 나타난다면(예: 저소득층에게 더 큰 효과), 평균값의 변화만 보는 선형 DiD는 이러한 분포의 변화를 놓치게 됩니다.\n이번 포스트에서는 이러한 선형성 가정을 완화하고, 분포 전체의 변화를 추정할 수 있는 비선형 이중차분법(Nonlinear DiD), 일명 Changes-in-Changes (CiC) 모델에 대해 알아봅니다.\n\n참고 자료: 본 포스트는 이상학 교수님의 “Differences in Differences & Synthetic Control Method” 강의 자료(1502 DiD SCM.pdf)를 바탕으로 재구성되었습니다."
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html#목차",
-    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html#목차",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
+    "objectID": "posts/lecture/L15/causal-inference-15-part-02/index.html#직관적-이해-분위수-매핑-quantile-mapping",
+    "href": "posts/lecture/L15/causal-inference-15-part-02/index.html#직관적-이해-분위수-매핑-quantile-mapping",
+    "title": "선형성을 넘어서: 비선형 이중차분법 (Nonlinear DiD / Changes-in-Changes)",
+    "section": "2 1. 직관적 이해: 분위수 매핑 (Quantile Mapping)",
+    "text": "2 1. 직관적 이해: 분위수 매핑 (Quantile Mapping)\n비선형 DiD의 핵심 아이디어는 “평균의 변화”가 아니라 “분위수(Quantile)의 변화”를 비교하는 것입니다.\n\n2.1 시각적 설명\n아래 그림은 통제 집단(Control)과 처치 집단(Treated)의 누적 분포 함수(CDF)가 시간이 지남에 따라 어떻게 변하는지를 보여줍니다.\n!(path/to/nonlinear_did_graph.png) 주석: \\(x\\)축은 결과값, \\(y\\)축은 확률(0~1)을 나타냅니다. \\(r_0(q)\\)와 \\(r_1(q)\\)는 각각 통제 집단과 처치 집단에서 특정 분위수 \\(q\\)에 해당하는 값의 시간적 변화(매핑)를 의미합니다.\n\n통제 집단의 변화 (\\(r_0(q)\\)): \\(t=0\\) 시점의 \\(q\\) 분위수 값이 \\(t=1\\) 시점에 어떻게 변했는지 보여줍니다.\n가정: 처치 집단이 처치를 받지 않았더라면, “시간에 따른 분위수의 변화 양상”이 통제 집단과 동일했을 것이라고 가정합니다.\n즉, 통제 집단에서의 매핑(화살표)을 처치 집단에 그대로 적용하여 반사실(Counterfactual)을 구성합니다."
+  },
+  {
+    "objectID": "posts/lecture/L15/causal-inference-15-part-02/index.html#수식적-정의-formalization",
+    "href": "posts/lecture/L15/causal-inference-15-part-02/index.html#수식적-정의-formalization",
+    "title": "선형성을 넘어서: 비선형 이중차분법 (Nonlinear DiD / Changes-in-Changes)",
+    "section": "3 2. 수식적 정의 (Formalization)",
+    "text": "3 2. 수식적 정의 (Formalization)\n이제 이를 수학적으로 엄밀하게 정의해 봅시다.\n\n3.1 2.1 분포 함수 (Distribution Functions)\n우선, 각 집단(\\(G_i=g\\))과 시점(\\(t\\))에서의 잠재적 결과(Potential Outcome) \\(Y(0)\\)(처치받지 않음)의 누적 분포 함수를 정의합니다.\n\\[\nF_{gt}(y) = P(Y_{it}(0) \\le y | G_i = g)\n\\]\n여기서 \\(g \\in \\{0, 1\\}\\) (0: 통제, 1: 처치), \\(t \\in \\{0, 1\\}\\) (0: 전, 1: 후) 입니다. 우리가 관찰할 수 있는 분포들은 \\(F_{00}, F_{01}, F_{10}\\)이며, 처치 집단의 사후 결과인 \\(F_{11}\\)은 처치(\\(Y(1)\\))를 받은 상태이므로, 처치를 받지 않았을 상태(\\(Y(0)\\))인 \\(F_{11}\\)은 반사실(Counterfactual)로서 식별해야 할 대상입니다.\n\n\n3.2 2.2 분위수 처치 효과 (Quantile Treatment Effect, QTE)\n우리의 목표는 특정 분위수 \\(q\\)에서의 처치 효과 \\(\\tau(q)\\)를 구하는 것입니다.\n\\[\n\\tau(q) = \\underbrace{\\tilde{F}_{11}^{-1}(q)}_{\\text{관측값}} - \\underbrace{F_{11}^{-1}(q)}_{\\text{반사실(추정값)}}\n\\]\n\n\\(\\tilde{F}_{11}(y) = P(Y_{i1}(1) \\le y | G_i = 1)\\): 실제로 관측된 처치 집단의 사후 결과 분포 (\\(Y(1)\\)).\n\\(F_{11}(y)\\): 우리가 추정해야 할 처치 집단의 반사실적 사후 결과 분포 (\\(Y(0)\\))."
+  },
+  {
+    "objectID": "posts/lecture/L15/causal-inference-15-part-02/index.html#식별-가정-및-유도-identification",
+    "href": "posts/lecture/L15/causal-inference-15-part-02/index.html#식별-가정-및-유도-identification",
+    "title": "선형성을 넘어서: 비선형 이중차분법 (Nonlinear DiD / Changes-in-Changes)",
+    "section": "4 3. 식별 가정 및 유도 (Identification)",
+    "text": "4 3. 식별 가정 및 유도 (Identification)\n비선형 DiD의 핵심 가정은 “분위수 변화의 불변성”입니다. Athey & Imbens (2006)의 Changes-in-Changes 모델로도 알려져 있습니다.\n\n4.1 3.1 식별 가정 (Identification Assumption)\n모든 분위수 \\(q \\in [0, 1]\\)에 대하여 다음이 성립한다고 가정합니다.\n\\[\nF_{01}(F_{00}^{-1}(q)) = F_{11}(F_{10}^{-1}(q))\n\\]\n이 수식의 의미를 단계별로 풀어보겠습니다. 1. 좌변 (\\(F_{01}(F_{00}^{-1}(q))\\)): 통제 집단에서 시점 0에 \\(q\\) 분위수에 해당하는 값(\\(F_{00}^{-1}(q)\\))을 찾고, 그 값이 시점 1의 분포(\\(F_{01}\\))에서 차지하는 위치(확률)를 봅니다. 즉, 통제 집단에서 시간이 흐름에 따라 순위(Rank)가 어떻게 변했는지를 나타냅니다. 2. 우변 (\\(F_{11}(F_{10}^{-1}(q))\\)): 처치 집단에서도 동일하게, 시점 0에 \\(q\\) 분위수에 해당하는 값이 시점 1(반사실)에 갖게 될 위치를 나타냅니다. 3. 결론: “시간에 따른 상대적 위치(Rank)의 변화 함수”는 두 집단 간에 동일하다는 것입니다.\n\n\n4.2 3.2 반사실 분포 \\(F_{11}(y)\\)의 유도 과정\n우리는 \\(F_{11}(y)\\)를 구하고 싶습니다. 위 식별 가정을 이용하여 이를 \\(y\\)에 대한 함수로 정리해 봅시다.\n단계 1: 목표 변수 설정 우변의 \\(F_{11}(\\cdot)\\) 안에 있는 \\(F_{10}^{-1}(q)\\)를 \\(y\\)라고 둡니다. 즉, 어떤 결과값 \\(y\\)가 처치 집단의 사전 시점(\\(t=0\\))에서 갖는 누적 확률(분위수)을 \\(q'\\)라고 합시다.\n\\[\ny = F_{10}^{-1}(q') \\iff q' = F_{10}(y)\n\\]\n단계 2: 가정식에 대입 식별 가정 식의 \\(q\\) 자리에 \\(q' = F_{10}(y)\\)를 대입합니다.\n\\[\nF_{01}(F_{00}^{-1}(q')) = F_{11}(F_{10}^{-1}(q'))\n\\]\n여기에 \\(q'\\)와 \\(y\\)의 관계를 적용하면:\n\\[\nF_{01}(F_{00}^{-1}(F_{10}(y))) = F_{11}(y)\n\\]\n단계 3: 결과 도출 따라서, 처치 집단이 처치를 받지 않았을 때(\\(t=1\\))의 잠재적 분포 \\(F_{11}(y)\\)는 관찰 가능한 데이터(\\(F_{01}, F_{00}, F_{10}\\))만으로 다음과 같이 식별됩니다.\n\\[\nF_{11}(y) = F_{01}\\left[ F_{00}^{-1} \\{ F_{10}(y) \\} \\right]\n\\]\n\n\n4.3 3.3 해석\n이 최종 수식은 다음과 같은 알고리즘으로 이해할 수 있습니다.\n\n\\(F_{10}(y)\\): 처치 집단의 \\(t=0\\) 시점에서 결과값 \\(y\\)의 분위수(Rank)를 찾습니다.\n\\(F_{00}^{-1}(\\cdot)\\): 통제 집단의 \\(t=0\\) 시점에서 동일한 분위수를 가진 결과값을 찾습니다. (집단 간 비교 기준점 확보)\n\\(F_{01}(\\cdot)\\): 그 결과값이 통제 집단의 \\(t=1\\) 시점에서 갖는 새로운 분위수를 확인합니다. (시간 효과 반영)\n\\(F_{11}(y)\\): 이 “변환된 분위수”가 바로 처치 집단(\\(t=1\\))에서 \\(y\\)가 가질 누적 확률입니다."
+  },
+  {
+    "objectID": "posts/lecture/L15/causal-inference-15-part-02/index.html#요약-및-시사점",
+    "href": "posts/lecture/L15/causal-inference-15-part-02/index.html#요약-및-시사점",
+    "title": "선형성을 넘어서: 비선형 이중차분법 (Nonlinear DiD / Changes-in-Changes)",
+    "section": "5 4. 요약 및 시사점",
+    "text": "5 4. 요약 및 시사점\n비선형 DiD(CiC)는 평균값 비교에 그치는 기존 DiD의 한계를 넘어, 정책이 전체 소득 분포나 특정 분위수(예: 하위 10%)에 미치는 영향을 정밀하게 분석할 수 있게 해줍니다.\n\n장점:\n\n로그 변환 등 결과 변수의 비선형 변환에 영향을 받지 않습니다(Invariant).\n평균뿐만 아니라 분포 전체의 처치 효과(QTE)를 추정할 수 있습니다.\n\n조건:\n\n연속적인 결과 변수에 적합하며, 역함수(\\(F^{-1}\\))가 존재해야 하므로 분포 함수가 강단조증가(strictly increasing)해야 한다는 조건이 필요할 수 있습니다.\n\n\n다음 포스트에서는 이러한 방법론들이 실제 데이터 분석 라이브러리에서 어떻게 구현되는지 살펴보겠습니다."
+  },
+  {
+    "objectID": "posts/lecture/L15/causal-inference-15-part-01/index.html",
+    "href": "posts/lecture/L15/causal-inference-15-part-01/index.html",
+    "title": "인과추론의 핵심: 이중차분법(Differences in Differences) 완벽 정리",
     "section": "",
-    "text": "Recap(Identification Problem) and Example of Identifiable and Non-identifiable Effects\nConfounding Bias\nBack-door Criterion\nEvaluation"
+    "text": "사회과학 데이터 분석, 특히 관찰 데이터(observational data)를 다루는 연구에서 가장 큰 난제는 ’인과관계’를 식별하는 것입니다. 무작위 통제 실험(RCT)이 불가능한 상황에서, 우리는 어떻게 정책이나 개입(Treatment)의 효과를 발라낼 수 있을까요?\n이번 포스트에서는 인과추론의 가장 강력하고 널리 쓰이는 도구 중 하나인 이중차분법(Differences in Differences, DiD)에 대해 다룹니다. 특히 잠재적 결과(Potential Outcomes) 프레임워크를 기반으로 DiD 추정량이 도출되는 과정을 수학적으로 엄밀하게 살펴보겠습니다.\n\n[cite_start]참고 자료: 본 포스트는 이상학 교수님의 “Differences in Differences & Synthetic Control Method” 강의 자료를 바탕으로 재구성되었습니다[cite: 1, 2]."
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html#설정-setup",
-    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html#설정-setup",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
-    "section": "4.1 설정 (Setup)",
-    "text": "4.1 설정 (Setup)\n아래와 같은 “Bow-tie” 형태의 그래프를 고려합니다. 여기서 \\(U_{XY}\\)는 \\(X\\)와 \\(Y\\)에 동시에 영향을 주는 관측되지 않은 교란 변수(Unobserved Confounder)입니다.\n\n\n\nFigure 3. Causal Graph with Unobserved Confounder\n\n\n두 모델 \\(\\mathcal{H}^{(1)}\\)과 \\(\\mathcal{H}^{(2)}\\)는 다음과 같은 구조적 방정식(Structural Equations)을 갖습니다. 여기서 \\(U_Y, U_{XY}\\)는 모두 베르누이 분포(동전 던지기, \\(p=0.5\\))를 따릅니다.\n\n4.1.1 Model 1 (\\(\\mathcal{H}^{(1)}\\))\n\\[\n\\begin{cases}\nX \\leftarrow U_{XY} \\\\\nY \\leftarrow (X \\oplus U_{XY}) \\lor U_Y\n\\end{cases}\n\\] * 여기서 \\(\\oplus\\)는 XOR 연산, \\(\\lor\\)는 OR 연산을 의미합니다.\n\n\n4.1.2 Model 2 (\\(\\mathcal{H}^{(2)}\\))\n\\[\n\\begin{cases}\nX \\leftarrow U_{XY} \\\\\nY \\leftarrow U_Y\n\\end{cases}\n\\] * 모델 2에서는 \\(X\\)가 \\(Y\\)에 아무런 영향을 주지 않습니다 (끊어진 인과 관계)."
+    "objectID": "posts/lecture/L15/causal-inference-15-part-01/index.html#들어가며",
+    "href": "posts/lecture/L15/causal-inference-15-part-01/index.html#들어가며",
+    "title": "인과추론의 핵심: 이중차분법(Differences in Differences) 완벽 정리",
+    "section": "",
+    "text": "사회과학 데이터 분석, 특히 관찰 데이터(observational data)를 다루는 연구에서 가장 큰 난제는 ’인과관계’를 식별하는 것입니다. 무작위 통제 실험(RCT)이 불가능한 상황에서, 우리는 어떻게 정책이나 개입(Treatment)의 효과를 발라낼 수 있을까요?\n이번 포스트에서는 인과추론의 가장 강력하고 널리 쓰이는 도구 중 하나인 이중차분법(Differences in Differences, DiD)에 대해 다룹니다. 특히 잠재적 결과(Potential Outcomes) 프레임워크를 기반으로 DiD 추정량이 도출되는 과정을 수학적으로 엄밀하게 살펴보겠습니다.\n\n[cite_start]참고 자료: 본 포스트는 이상학 교수님의 “Differences in Differences & Synthetic Control Method” 강의 자료를 바탕으로 재구성되었습니다[cite: 1, 2]."
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html#관측-분포의-일치-observational-equivalence",
-    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html#관측-분포의-일치-observational-equivalence",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
-    "section": "4.2 관측 분포의 일치 (Observational Equivalence)",
-    "text": "4.2 관측 분포의 일치 (Observational Equivalence)\n놀랍게도 두 모델은 관측 데이터 상으로는 완벽하게 동일합니다.\n\nModel 1의 경우: 구조 방정식을 보면 \\(X\\)는 \\(U_{XY}\\)와 같습니다. 따라서 \\(X \\oplus U_{XY}\\)는 항상 \\(0\\)이 됩니다 (\\(X\\)와 \\(U_{XY}\\)가 같으므로). \\[Y = 0 \\lor U_Y = U_Y\\] 결국 관측 환경에서는 \\(Y\\)가 오직 \\(U_Y\\)에 의해서만 결정됩니다\nModel 2의 경우: 정의상 \\(Y \\leftarrow U_Y\\)이므로, 역시 \\(Y\\)는 \\(U_Y\\)에 의해 결정됩니다.\n\n결과적으로 두 모델 모두 \\(P(Y=1) = P(U_Y=1) = 0.5\\)이며, \\(X\\)와 \\(Y\\)의 결합 분포 표(Truth Table)도 완전히 일치합니다\n\n\n\n\n\n\n\n\n\n\n\\(U_Y\\)\n\\(U_{XY}\\) (\\(=X\\))\n\\(Y^{(1)}\\) (Model 1)\n\\(Y^{(2)}\\) (Model 2)\n\\(P(u)\\)\n\n\n\n\n0\n0\n0\n0\n1/4\n\n\n0\n1\n0\n0\n1/4\n\n\n1\n0\n1\n1\n1/4\n\n\n1\n1\n1\n1\n1/4"
+    "objectID": "posts/lecture/L15/causal-inference-15-part-01/index.html#문제의-정의-식별-문제-identification-problem",
+    "href": "posts/lecture/L15/causal-inference-15-part-01/index.html#문제의-정의-식별-문제-identification-problem",
+    "title": "인과추론의 핵심: 이중차분법(Differences in Differences) 완벽 정리",
+    "section": "2 1. 문제의 정의: 식별 문제 (Identification Problem)",
+    "text": "2 1. 문제의 정의: 식별 문제 (Identification Problem)\n인과추론의 근본적인 문제는 반사실(Counterfactual)을 관찰할 수 없다는 데 있습니다.\n\n2.1 1.1 기본 세팅\n[cite_start]두 개의 그룹과 두 개의 시점이 있다고 가정해 봅시다[cite: 84].\n\n집단 (Groups):\n\n\\(G_i = 1\\): 처치 집단 (Treated Group, 예: 최저임금이 인상된 뉴저지주)\n[cite_start]\\(G_i = 0\\): 통제 집단 (Control Group, 예: 최저임금이 동결된 펜실베이니아주) [cite: 89, 90]\n\n시점 (Time Periods):\n\n\\(t = 0\\): 개입 이전 (Pre-period)\n[cite_start]\\(t = 1\\): 개입 이후 (Post-period) [cite: 86, 87]\n\n\n\n\n2.2 1.2 잠재적 결과 (Potential Outcomes)\n[cite_start]\\(Y_{it}(x)\\)를 시점 \\(t\\)에서 처치 상태가 \\(x\\)일 때 개인 \\(i\\)의 잠재적 결과라고 정의합니다[cite: 104]. [cite_start]우리가 실제로 관찰하는 결과 \\(Y_{it}\\)는 일치성(Consistency) 가정에 의해 다음과 같이 표현됩니다[cite: 106].\n\\[\nY_{it} = G_{it}Y_{it}(1) + (1-G_{it})Y_{it}(0)\n\\]\n\n\n2.3 1.3 우리가 알고 싶은 것 (ATT)\n[cite_start]우리의 목표는 처치 집단에 대한 평균 처치 효과(ATT: Average Treatment Effect on the Treated)를 구하는 것입니다[cite: 117].\n\\[\n\\tau_{ATT} = \\mathbb{E}[Y_{i1}(1) - Y_{i1}(0) | G_i=1]\n\\]\n[cite_start]이 식을 풀면 다음과 같습니다[cite: 119].\n\\[\n\\tau_{ATT} = \\underbrace{\\mathbb{E}[Y_{i1}(1) | G_i=1]}_{\\text{(a) 관찰 가능}} - \\underbrace{\\mathbb{E}[Y_{i1}(0) | G_i=1]}_{\\text{(b) 반사실 (관찰 불가)}}\n\\]\n\n(a): 처치를 받은 집단의 처치 후 결과이므로 데이터에서 관찰할 수 있습니다.\n(b): 문제의 핵심입니다. 처치를 받은 집단이 만약 처치를 받지 않았더라면 겪었을 결과입니다. [cite_start]이는 현실에 존재하지 않으므로, 적절한 대조군을 통해 추정해야 합니다[cite: 125]."
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html#인과-효과의-불일치-interventional-differences",
-    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html#인과-효과의-불일치-interventional-differences",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
-    "section": "4.3 인과 효과의 불일치 (Interventional Differences)",
-    "text": "4.3 인과 효과의 불일치 (Interventional Differences)\n이제 \\(do(x)\\) 연산을 통해 실제로 인과 효과를 계산해 보면 두 모델의 차이가 드러납니다. \\(do(x)\\)는 \\(X\\)를 강제로 특정 값으로 고정하는 것이므로, 더 이상 \\(X\\)는 \\(U_{XY}\\)의 영향을 받지 않습니다.\n\n\n\nFigure 4. Causal Graph with Unobserved Confounder\n\n\n우리는 \\(P(y=1 | do(x=0))\\)을 계산해 보겠습니다\n\n4.3.1 Case 1: Model \\(\\mathcal{H}^{(1)}\\)\n구조 방정식: \\(Y \\leftarrow (x \\oplus U_{XY}) \\lor U_Y\\). 여기서 \\(x=0\\)으로 고정했습니다.\n\n\\(U_{XY}=0, U_Y=0 \\Rightarrow Y = (0 \\oplus 0) \\lor 0 = 0\\)\n\\(U_{XY}=0, U_Y=1 \\Rightarrow Y = (0 \\oplus 0) \\lor 1 = 1\\) (\\(U_Y=1\\) 이면 어차피 \\(Y=1\\))\n\\(U_{XY}=1, U_Y=0 \\Rightarrow Y = (0 \\oplus 1) \\lor 0 = 1\\) (\\(U_{XY}=1 \\nRightarrow X=1\\) 이므로, 여기서 차이 발생!)\n\\(U_{XY}=1, U_Y=1 \\Rightarrow Y = (0 \\oplus 1) \\lor 1 = 1\\) (\\(U_Y=1\\) 이면 어차피 \\(Y=1\\))\n\n4가지 경우 중 3가지 경우에 \\(Y=1\\)이 됩니다. \\[\\therefore P^{(1)}(y=1|do(x=0)) = \\frac{3}{4}\\]\n\n\n4.3.2 Case 2: Model \\(\\mathcal{H}^{(2)}\\)\n구조 방정식: \\(Y \\leftarrow U_Y\\). \\(X\\)의 값과 상관없이 \\(Y\\)는 \\(U_Y\\)를 따릅니다.\n\n\\(U_Y=0 \\Rightarrow Y=0\\)\n\\(U_Y=1 \\Rightarrow Y=1\\)\n\n\\[\\therefore P^{(2)}(y=1|do(x=0)) = \\frac{1}{2}\\]"
+    "objectID": "posts/lecture/L15/causal-inference-15-part-01/index.html#반사실을-찾아서-세-가지-비교-전략",
+    "href": "posts/lecture/L15/causal-inference-15-part-01/index.html#반사실을-찾아서-세-가지-비교-전략",
+    "title": "인과추론의 핵심: 이중차분법(Differences in Differences) 완벽 정리",
+    "section": "3 2. 반사실을 찾아서: 세 가지 비교 전략",
+    "text": "3 2. 반사실을 찾아서: 세 가지 비교 전략\n반사실 \\(\\mathbb{E}[Y_{i1}(0) | G_i=1]\\)을 대체하기 위해 우리는 어떤 전략을 취할 수 있을까요?\n!(path/to/image1.png) [cite_start]주석: \\(x\\)축은 시간(Time), \\(y\\)축은 평균 결과(Average Outcome)를 나타내며, 처치 집단과 통제 집단의 변화 추이를 시각화한 그래프입니다. [cite: 12]\n\n3.1 전략 1: 횡단면 비교 (Cross-sectional Design)\n[cite_start]가장 단순한 접근은 처치 후 시점(\\(t=1\\))에서 통제 집단의 결과를 반사실로 사용하는 것입니다[cite: 133].\n\\[\n\\mathbb{E}[Y_{i1}(0) | G_i=1] \\approx \\mathbb{E}[Y_{i1}(0) | G_i=0]\n\\]\n\n가정: 처치 여부가 결과와 독립적이어야 합니다 (Selection Bias가 없어야 함).\n한계: 두 집단은 처치 여부 외에도 원래부터 다른 특성을 가질 수 있습니다. [cite_start]예를 들어, 뉴저지와 펜실베이니아는 경제 상황이 다를 수 있습니다[cite: 134].\n\n\n\n3.2 전략 2: 전후 비교 (Before-and-After Design)\n[cite_start]처치 집단의 개입 이전 시점(\\(t=0\\)) 결과를 반사실로 사용하는 방법입니다[cite: 147].\n\\[\n\\mathbb{E}[Y_{i1}(0) | G_i=1] \\approx \\mathbb{E}[Y_{i0}(0) | G_i=1]\n\\]\n\n[cite_start]가정: 시간이 지나도 결과에 자연적인 변화(Trend)가 없어야 합니다[cite: 148].\n한계: 경기 변동이나 계절적 요인 등 시간의 흐름에 따른 변화를 무시합니다."
   },
   {
-    "objectID": "posts/lecture/L04/causal-inference-04-part-01/index.html#결론",
-    "href": "posts/lecture/L04/causal-inference-04-part-01/index.html#결론",
-    "title": "[Causal Inference] 04. Confounding and Backdoor (Part 1)",
-    "section": "4.4 결론",
-    "text": "4.4 결론\n\n\n\n\\(Y\\)\n\\(P^{(1)}(Y|do(x))\\)\n\\(P^{(2)}(Y|do(x))\\)\n\n\n\n\n0\n\\(\\frac{1}{4}\\)\n\\(\\frac{1}{2}\\)\n\n\n1\n\\(\\frac{3}{4}\\)\n\\(\\frac{1}{2}\\)\n\n\n\n두 모델은 동일한 인과 그래프와 동일한 관측 분포 \\(P(v)\\)를 가지지만, 계산된 인과 효과 \\(P(y|do(x))\\)는 \\(\\frac{3}{4}\\)와 \\(\\frac{1}{2}\\)로 서로 다릅니다\n\nEven though both models induce \\(I\\) (Graph) and have the same \\(P(v)\\), the effect \\(P^{(1)}(y|do(x)) \\neq P^{(2)}(y|do(x))\\).\n\n이는 주어진 그래프 구조(Unobserved Confounder가 존재하는 경우)만으로는 데이터에서 인과 효과를 유일하게 식별해낼 수 없음을(Non-identifiable) 의미합니다. 이러한 경우, 추가적인 가정이나 데이터를 통한 식별 전략이 필요합니다."
+    "objectID": "posts/lecture/L15/causal-inference-15-part-01/index.html#이중차분법-difference-in-differences",
+    "href": "posts/lecture/L15/causal-inference-15-part-01/index.html#이중차분법-difference-in-differences",
+    "title": "인과추론의 핵심: 이중차분법(Differences in Differences) 완벽 정리",
+    "section": "4 3. 이중차분법 (Difference-in-Differences)",
+    "text": "4 3. 이중차분법 (Difference-in-Differences)\nDiD는 위 두 전략의 한계를 극복하기 위해 “집단 간 차이”와 “시점 간 차이”를 결합합니다.\n\n4.1 3.1 평행 추세 가정 (Parallel Trends Assumption)\nDiD의 핵심 가정입니다. [cite_start]“처치가 없었더라면, 처치 집단의 평균 결과 변화량은 통제 집단의 변화량과 같았을 것”이라는 가정입니다[cite: 161, 162].\n수식으로는 다음과 같습니다: \\[\n\\mathbb{E}[Y_{i1}(0) - Y_{i0}(0) | G_i=1] = \\mathbb{E}[Y_{i1}(0) - Y_{i0}(0) | G_i=0]\n\\]\n이 가정을 이용해 우리가 모르는 반사실을 유도해 봅시다. 위 식을 이항하면 반사실 \\(\\mathbb{E}[Y_{i1}(0) | [cite_start]G_i=1]\\)은 다음과 같이 표현됩니다[cite: 177].\n\\[\n\\underbrace{\\mathbb{E}[Y_{i1}(0) | G_i=1]}_{\\text{반사실}} = \\underbrace{\\mathbb{E}[Y_{i0}(0) | G_i=1]}_{\\text{처치집단 초기값}} + \\underbrace{(\\mathbb{E}[Y_{i1}(0) | G_i=0] - \\mathbb{E}[Y_{i0}(0) | G_i=0])}_{\\text{통제집단의 시간 추세}}\n\\]\n즉, 처치 집단의 초기값에 통제 집단에서 관찰된 ’시간에 따른 변화분(Trend)’을 더해주면, 처치 집단이 처치를 받지 않았을 때의 결과를 추정할 수 있습니다.\n!(path/to/image2.png) 주석: 점선으로 표시된 부분은 평행 추세 가정에 기반하여 생성된 Counterfactual 지점입니다. [cite_start]처치 집단(빨간색)의 실제 결과와 점선(Counterfactual)의 차이가 바로 인과 효과입니다. [cite: 36]\n\n\n4.2 3.2 DiD 추정량 유도\n[cite_start]이제 ATT 식에 위에서 구한 반사실을 대입해 보겠습니다[cite: 163, 179].\n\\[\n\\begin{aligned}\n\\tau_{ATT} &= \\mathbb{E}[Y_{i1} | G_i=1] - \\mathbb{E}[Y_{i1}(0) | G_i=1] \\\\\n&= \\mathbb{E}[Y_{i1} | G_i=1] - \\left( \\mathbb{E}[Y_{i0} | G_i=1] + (\\mathbb{E}[Y_{i1} | G_i=0] - \\mathbb{E}[Y_{i0} | G_i=0]) \\right) \\\\\n&= \\left( \\mathbb{E}[Y_{i1} | G_i=1] - \\mathbb{E}[Y_{i0} | G_i=1] \\right) - \\left( \\mathbb{E}[Y_{i1} | G_i=0] - \\mathbb{E}[Y_{i0} | G_i=0] \\right)\n\\end{aligned}\n\\]\n이 수식이 의미하는 바는 명확합니다: 1. First Difference: 처치 집단의 전후 차이를 구합니다 (시간 효과 + 처치 효과). 2. Second Difference: 통제 집단의 전후 차이를 구합니다 (순수 시간 효과). 3. Difference-in-Differences: 1번에서 2번을 빼면 순수한 처치 효과(Treatment Effect)만 남습니다."
+  },
+  {
+    "objectID": "posts/lecture/L15/causal-inference-15-part-01/index.html#추정-및-회귀분석-모델",
+    "href": "posts/lecture/L15/causal-inference-15-part-01/index.html#추정-및-회귀분석-모델",
+    "title": "인과추론의 핵심: 이중차분법(Differences in Differences) 완벽 정리",
+    "section": "5 4. 추정 및 회귀분석 모델",
+    "text": "5 4. 추정 및 회귀분석 모델\n실제 데이터 분석에서는 회귀분석을 통해 표준오차(Standard Error)와 함께 추정량을 계산합니다.\n\n5.1 4.1 이원 고정 효과 모형 (Two-way Fixed Effects Model)\n[cite_start]패널 데이터가 있을 때, 다음과 같은 선형 회귀식을 사용합니다[cite: 212, 213].\n\\[\nY_{it} = \\alpha + \\gamma G_i + \\beta t + \\tau (G_i \\times t) + \\epsilon_{it}\n\\]\n여기서 각 계수의 의미는 다음과 같습니다: * \\(\\alpha\\): 통제 집단의 초기 평균값 (Intercept) * \\(\\gamma\\): 처치 집단과 통제 집단 간의 고유한 차이 (Group Fixed Effect) * \\(\\beta\\): 시간의 흐름에 따른 자연적 변화 (Time Fixed Effect) * [cite_start]\\(\\tau\\): 우리가 구하고자 하는 DiD 추정량 (Interaction Term Coefficient) [cite: 215]\n\n\n5.2 4.2 실제 사례: Card & Krueger (1994)\n[cite_start]최저임금 인상이 고용에 미치는 영향을 분석한 고전적인 연구입니다[cite: 74].\n\nQuestion: 최저임금을 올리면 고용이 감소하는가?\n[cite_start]Setting: 1992년 뉴저지(NJ)는 최저임금을 $4.25에서 $5.05로 인상(처치 집단), 펜실베이니아(PA)는 동결(통제 집단)[cite: 77].\nResult: 두 주(State)의 패스트푸드점 고용 변화를 DiD로 분석한 결과, 통념과 달리 고용 감소 효과가 뚜렷하지 않음을 보였습니다."
+  },
+  {
+    "objectID": "posts/lecture/L15/causal-inference-15-part-01/index.html#위협-요인과-검증",
+    "href": "posts/lecture/L15/causal-inference-15-part-01/index.html#위협-요인과-검증",
+    "title": "인과추론의 핵심: 이중차분법(Differences in Differences) 완벽 정리",
+    "section": "6 5. 위협 요인과 검증",
+    "text": "6 5. 위협 요인과 검증\n[cite_start]DiD가 강력한 도구이긴 하지만, 평행 추세 가정이 위배되면 결과는 편향됩니다[cite: 196].\n\n6.1 5.1 Ashenfelter’s Dip\n직업 훈련 프로그램 등의 효과를 분석할 때 자주 나타나는 현상입니다. [cite_start]처치를 받기 직전에 소득이 일시적으로 급락하는 현상을 말합니다[cite: 198]. 이 경우 처치 이전의 추세가 평행하지 않을 수 있으므로 주의해야 합니다.\n\n\n6.2 5.2 위조 검증 (Falsification Test)\n평행 추세 가정을 간접적으로 검증하기 위해 개입 이전 시점(Pre-treatment period)들의 데이터를 사용합니다. [cite_start]개입이 없었던 과거 기간 동안에도 두 집단의 추세가 평행했는지 확인하는 것입니다[cite: 200]. 만약 과거에도 추세가 달랐다면, 미래에도 달랐을 가능성이 높습니다."
+  },
+  {
+    "objectID": "posts/lecture/L15/causal-inference-15-part-01/index.html#마치며",
+    "href": "posts/lecture/L15/causal-inference-15-part-01/index.html#마치며",
+    "title": "인과추론의 핵심: 이중차분법(Differences in Differences) 완벽 정리",
+    "section": "7 마치며",
+    "text": "7 마치며\n[cite_start]이중차분법은 “시간에 따라 변하지 않는 관찰되지 않은 교란 요인(Time-constant unmeasured confounding)”을 통제할 수 있다는 강력한 장점이 있습니다[cite: 188]. 하지만 이 역시 ’평행 추세’라는 가정이 성립해야만 유효하다는 점을 명심해야 합니다.\n다음 포스트에서는 평행 추세 가정이 성립하지 않을 때 대안으로 사용할 수 있는 합성 대조조법(Synthetic Control Method)에 대해 다뤄보겠습니다."
   },
   {
     "objectID": "posts/lecture/L13/causal-inference-13-part-02/index.html",
@@ -1593,6 +1740,6 @@
     "href": "index.html",
     "title": "shsha0110.github.io",
     "section": "",
-    "text": "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 1)\n\n\n1. Conformal Prediction\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 15, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 2.1)\n\n\n2.1. Examples of Conformal Procedures\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 2.2)\n\n\n2.2. Conformalized Quantile Regression\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 2.3)\n\n\n2.3. Conformalizing Scalar Uncertainty Estimates\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 2.4)\n\n\n2.4. Conformalizing Bayes\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 3.1)\n\n\n3.1. Evaluating Adaptivity\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 3.2)\n\n\n3.2. The Effect of the Size of the Calibration Set\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 3.3)\n\n\n3.3. Checking for Correct Coverage\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.1)\n\n\n4.1. Group-Balanced Conformal Prediction\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.2)\n\n\n4.2. Class-Conditional Conformal Prediction\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.3)\n\n\n4.3. Conformal Risk Control\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.4)\n\n\n4.4. Outlier Detection\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.5)\n\n\n4.5. Conformal Prediction Under Covariate Shift\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.6)\n\n\n4.6. Conformal Prediction Under Distribution Shift\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 5)\n\n\n5. Worked Examples\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 6)\n\n\n6. Full Conformal Prediction\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 01. Introduction\n\n\n\n\n\n\nCausal Inference\n\n\n\nIntroduction to Causal Inference\n\n\n\n\n\nJan 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 1)\n\n\n\n\n\n\nCausal Inference\n\n\n\nIndentifiable and Non-identifiable Effects\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 2)\n\n\n\n\n\n\nCausal Inference\n\n\n\nCounfounding Bias\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 3)\n\n\n\n\n\n\nCausal Inference\n\n\n\nBack-door Criterion\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 4)\n\n\n\n\n\n\nCausal Inference\n\n\n\nInverse Probability Weighting\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 5)\n\n\n\n\n\n\nCausal Inference\n\n\n\nSimpson’s Paradox Simulation Using DoWhy: Stratification & Refutation\n\n\n\n\n\nJan 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 1)\n\n\n\n\n\n\nCausal Inference\n\n\n\nPartial Identification Problem: Natural Bounds\n\n\n\n\n\nJan 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 2)\n\n\n\n\n\n\nCausal Inference\n\n\n\nPartial Identification Problem: Non-Compliance\n\n\n\n\n\nJan 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 3)\n\n\n\n\n\n\nCausal Inference\n\n\n\nBounds on Partially-observed Covariates\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 4)\n\n\n\n\n\n\nCausal Inference\n\n\n\nNon-Compliance Simulation\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 1)\n\n\n\n\n\n\nCausal Inference\n\n\n\nIV under Linear Assumption\n\n\n\n\n\nJan 15, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 2)\n\n\n\n\n\n\nCausal Inference\n\n\n\nRandom Experiment wiht Noncompliance\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 3)\n\n\n\n\n\n\nCausal Inference\n\n\n\nLinear 2SLS vs. Deep IV\n\n\n\n\n\nJan 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n성향 점수의 역할과 이중 강건성(Double Robustness)\n\n\nPaper Review: Conformal inference of counterfactuals and individual treatment effects (Section 3.1 - 3.2)\n\n\n\nCausal Inference\n\nConformal Prediction\n\nMachine Learning\n\n\n\n\n\n\n\n\n\nJan 22, 2026\n\n\nReviewer\n\n\n\n\n\n\n\n\n\n\n\n\n세계관의 확장: 다른 인과추론 프레임워크로의 연결\n\n\nPaper Review: Conformal inference of counterfactuals and individual treatment effects (Section 5)\n\n\n\nCausal Inference\n\nPearl's Causal Diagram\n\nInvariant Prediction\n\n\n\n\n\n\n\n\n\nJan 22, 2026\n\n\nReviewer\n\n\n\n\n\n\n\n\n\n\n\n\n실전 검증: ACIC 2018 데이터와 NLSM 실제 사례 분석\n\n\nPaper Review: Conformal inference of counterfactuals and individual treatment effects (Section 4)\n\n\n\nCausal Inference\n\nNested Conformal Prediction\n\nITE\n\n\n\n\n\n\n\n\n\nJan 22, 2026\n\n\nReviewer\n\n\n\n\n\n\n\n\n\n\n\n\n점 추정을 넘어 구간 추정으로: 인과추론의 불확실성을 다루는 법\n\n\nPaper Review: Conformal inference of counterfactuals and individual treatment effects (Section 2)\n\n\n\nCausal Inference\n\nStatistics\n\nUncertainty Quantification\n\n\n\n\n\n\n\n\n\nJan 22, 2026\n\n\nReviewer\n\n\n\n\n\n\n\n\n\n\n\n\n평균을 넘어 개인으로: 인과추론의 새로운 패러다임과 Conformal Inference\n\n\nPaper Review: Conformal inference of counterfactuals and individual treatment effects (Section 1)\n\n\n\nCausal Inference\n\nStatistics\n\nMachine Learning\n\n\n\n\n\n\n\n\n\nJan 22, 2026\n\n\nReviewer\n\n\n\n\n\nNo matching items"
+    "text": "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 1)\n\n\n1. Conformal Prediction\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 15, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 2.1)\n\n\n2.1. Examples of Conformal Procedures\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 2.2)\n\n\n2.2. Conformalized Quantile Regression\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 2.3)\n\n\n2.3. Conformalizing Scalar Uncertainty Estimates\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 2.4)\n\n\n2.4. Conformalizing Bayes\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 3.1)\n\n\n3.1. Evaluating Adaptivity\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 3.2)\n\n\n3.2. The Effect of the Size of the Calibration Set\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 3.3)\n\n\n3.3. Checking for Correct Coverage\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.1)\n\n\n4.1. Group-Balanced Conformal Prediction\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.2)\n\n\n4.2. Class-Conditional Conformal Prediction\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.3)\n\n\n4.3. Conformal Risk Control\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.4)\n\n\n4.4. Outlier Detection\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.5)\n\n\n4.5. Conformal Prediction Under Covariate Shift\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.6)\n\n\n4.6. Conformal Prediction Under Distribution Shift\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 5)\n\n\n5. Worked Examples\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\nA Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 6)\n\n\n6. Full Conformal Prediction\n\n\n\nPaper Review\n\n\n\n\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 01. Introduction\n\n\n\n\n\n\nCausal Inference\n\n\n\nIntroduction to Causal Inference\n\n\n\n\n\nJan 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 1)\n\n\n\n\n\n\nCausal Inference\n\n\n\nIndentifiable and Non-identifiable Effects\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 2)\n\n\n\n\n\n\nCausal Inference\n\n\n\nCounfounding Bias\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 3)\n\n\n\n\n\n\nCausal Inference\n\n\n\nBack-door Criterion\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 4)\n\n\n\n\n\n\nCausal Inference\n\n\n\nInverse Probability Weighting\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 5)\n\n\n\n\n\n\nCausal Inference\n\n\n\nSimpson’s Paradox Simulation Using DoWhy: Stratification & Refutation\n\n\n\n\n\nJan 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 1)\n\n\n\n\n\n\nCausal Inference\n\n\n\nPartial Identification Problem: Natural Bounds\n\n\n\n\n\nJan 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 2)\n\n\n\n\n\n\nCausal Inference\n\n\n\nPartial Identification Problem: Non-Compliance\n\n\n\n\n\nJan 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 3)\n\n\n\n\n\n\nCausal Inference\n\n\n\nBounds on Partially-observed Covariates\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 4)\n\n\n\n\n\n\nCausal Inference\n\n\n\nNon-Compliance Simulation\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 1)\n\n\n\n\n\n\nCausal Inference\n\n\n\nIV under Linear Assumption\n\n\n\n\n\nJan 15, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 2)\n\n\n\n\n\n\nCausal Inference\n\n\n\nRandom Experiment wiht Noncompliance\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 3)\n\n\n\n\n\n\nCausal Inference\n\n\n\nLinear 2SLS vs. Deep IV\n\n\n\n\n\nJan 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n비교 불가능을 비교하다: 합성 대조조법 (Synthetic Control Method)\n\n\n\n\n\n\nCausal Inference\n\nEconometrics\n\nMethodology\n\nSCM\n\n\n\n\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n선형성을 넘어서: 비선형 이중차분법 (Nonlinear DiD / Changes-in-Changes)\n\n\n\n\n\n\nCausal Inference\n\nEconometrics\n\nMethodology\n\nAdvanced\n\n\n\n\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n성향 점수의 역할과 이중 강건성(Double Robustness)\n\n\nPaper Review: Conformal inference of counterfactuals and individual treatment effects (Section 3.1 - 3.2)\n\n\n\nCausal Inference\n\nConformal Prediction\n\nMachine Learning\n\n\n\n\n\n\n\n\n\nJan 22, 2026\n\n\nReviewer\n\n\n\n\n\n\n\n\n\n\n\n\n세계관의 확장: 다른 인과추론 프레임워크로의 연결\n\n\nPaper Review: Conformal inference of counterfactuals and individual treatment effects (Section 5)\n\n\n\nCausal Inference\n\nPearl's Causal Diagram\n\nInvariant Prediction\n\n\n\n\n\n\n\n\n\nJan 22, 2026\n\n\nReviewer\n\n\n\n\n\n\n\n\n\n\n\n\n실전 검증: ACIC 2018 데이터와 NLSM 실제 사례 분석\n\n\nPaper Review: Conformal inference of counterfactuals and individual treatment effects (Section 4)\n\n\n\nCausal Inference\n\nNested Conformal Prediction\n\nITE\n\n\n\n\n\n\n\n\n\nJan 22, 2026\n\n\nReviewer\n\n\n\n\n\n\n\n\n\n\n\n\n인과추론의 핵심: 이중차분법(Differences in Differences) 완벽 정리\n\n\n\n\n\n\nCausal Inference\n\nEconometrics\n\nMethodology\n\n\n\n\n\n\n\n\n\nJan 21, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n점 추정을 넘어 구간 추정으로: 인과추론의 불확실성을 다루는 법\n\n\nPaper Review: Conformal inference of counterfactuals and individual treatment effects (Section 2)\n\n\n\nCausal Inference\n\nStatistics\n\nUncertainty Quantification\n\n\n\n\n\n\n\n\n\nJan 22, 2026\n\n\nReviewer\n\n\n\n\n\n\n\n\n\n\n\n\n평균을 넘어 개인으로: 인과추론의 새로운 패러다임과 Conformal Inference\n\n\nPaper Review: Conformal inference of counterfactuals and individual treatment effects (Section 1)\n\n\n\nCausal Inference\n\nStatistics\n\nMachine Learning\n\n\n\n\n\n\n\n\n\nJan 22, 2026\n\n\nReviewer\n\n\n\n\n\nNo matching items"
   }
 ]

@@ -10,7 +10,248 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>A blog built with Quarto</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Wed, 21 Jan 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Thu, 22 Jan 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>비교 불가능을 비교하다: 합성 대조조법 (Synthetic Control Method)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/lecture/L15/causal-inference-15-part-03/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="들어가며-적절한-비교-대상이-없다면" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="들어가며-적절한-비교-대상이-없다면"><span class="header-section-number">1</span> 들어가며: 적절한 비교 대상이 없다면?</h2>
+<p>지난 포스트들에서 우리는 이중차분법(DiD)을 통해 정책의 효과를 추정하는 방법을 배웠습니다. 하지만 DiD를 적용하기 어려운 상황이 종종 발생합니다. 바로 <strong>“적절한 통제 집단(Control Group)을 찾기 어려울 때”</strong>입니다.</p>
+<p>예를 들어, 캘리포니아 주가 담배 규제 정책(Proposition 99)을 시행했을 때, 나머지 49개 주 전체를 평균 내어 비교하는 것이 공정할까요? 캘리포니아와 인구 구조, 경제 규모, 흡연 문화가 비슷한 단일한 주는 존재하지 않을지도 모릅니다.</p>
+<p>이번 포스트에서는 이러한 문제를 해결하기 위해, 여러 통제 집단을 적절히 섞어 <strong>“가상의 도플갱어(Synthetic Control)”</strong>를 만들어내는 <strong>합성 대조조법(Synthetic Control Method, SCM)</strong>에 대해 알아봅니다.</p>
+<blockquote class="blockquote">
+<p><strong>참고 자료</strong>: 본 포스트는 이상학 교수님의 “Differences in Differences &amp; Synthetic Control Method” 강의 자료(1503 DiD SCM.pdf)를 바탕으로 재구성되었습니다.</p>
+</blockquote>
+<hr>
+</section>
+<section id="사례-연구-캘리포니아-담배-규제-proposition-99" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="사례-연구-캘리포니아-담배-규제-proposition-99"><span class="header-section-number">2</span> 1. 사례 연구: 캘리포니아 담배 규제 (Proposition 99)</h2>
+<p>1988년 캘리포니아 주는 담배 소비를 줄이기 위해 담배세를 인상하는 ’Proposition 99’를 통과시켰습니다. 이 정책의 효과를 어떻게 측정할 수 있을까요?</p>
+<section id="단순-비교의-함정" class="level3" data-number="2.1">
+<h3 data-number="2.1" class="anchored" data-anchor-id="단순-비교의-함정"><span class="header-section-number">2.1</span> 1.1 단순 비교의 함정</h3>
+<p>가장 단순한 방법은 “캘리포니아”와 “나머지 미국 전체(Rest of the U.S.)”의 담배 판매량을 비교하는 것입니다.</p>
+<p>!(path/to/scm_bad_control.png) <em>주석: 점선(Rest of the U.S.)은 캘리포니아(실선)와 정책 시행 이전(1988년 이전)부터 추세가 다릅니다. 이는 평행 추세 가정을 위배하며, 좋은 비교 대상이 아님을 보여줍니다.</em></p>
+</section>
+<section id="합성-캘리포니아-synthetic-california의-등장" class="level3" data-number="2.2">
+<h3 data-number="2.2" class="anchored" data-anchor-id="합성-캘리포니아-synthetic-california의-등장"><span class="header-section-number">2.2</span> 1.2 합성 캘리포니아 (Synthetic California)의 등장</h3>
+<p>SCM은 다른 주들의 데이터를 가중 평균(Weighted Average)하여, 1988년 이전의 캘리포니아와 <strong>거의 완벽하게 겹치는</strong> 가상의 캘리포니아를 만들어냅니다.</p>
+<p>!(path/to/scm_good_control.png) <em>주석: 합성 캘리포니아(점선)는 정책 시행 이전까지 실제 캘리포니아(실선)와 거의 일치합니다. 따라서 1988년 이후 벌어지는 격차(Gap)를 순수한 정책 효과로 해석할 수 있습니다.</em></p>
+<hr>
+</section>
+</section>
+<section id="수학적-모형-mathematical-framework" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="수학적-모형-mathematical-framework"><span class="header-section-number">3</span> 2. 수학적 모형 (Mathematical Framework)</h2>
+<p>SCM을 수식으로 엄밀하게 정의해 봅시다.</p>
+<section id="기본-세팅" class="level3" data-number="3.1">
+<h3 data-number="3.1" class="anchored" data-anchor-id="기본-세팅"><span class="header-section-number">3.1</span> 2.1 기본 세팅</h3>
+<ul>
+<li><strong>단일 처치 집단:</strong> <img src="https://latex.codecogs.com/png.latex?i=1"> (캘리포니아)</li>
+<li><strong>통제 집단 풀(Donor Pool):</strong> <img src="https://latex.codecogs.com/png.latex?i=2,%20%5Cdots,%20J+1"> (나머지 주들)</li>
+<li><strong>시간:</strong> <img src="https://latex.codecogs.com/png.latex?T_0"> (개입 이전 기간), <img src="https://latex.codecogs.com/png.latex?T"> (전체 기간)</li>
+<li><strong>목표:</strong> 개입 이후(<img src="https://latex.codecogs.com/png.latex?t%20%3E%20T_0">)의 처치 효과 <img src="https://latex.codecogs.com/png.latex?%5Ctau_%7B1t%7D"> 추정 <img src="https://latex.codecogs.com/png.latex?%5Ctau_%7B1t%7D%20=%20Y_%7B1t%7D(1)%20-%20Y_%7B1t%7D(0)"></li>
+</ul>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?Y_%7B1t%7D(1)">은 관찰되지만, 정책이 없었을 때의 결과인 <img src="https://latex.codecogs.com/png.latex?Y_%7B1t%7D(0)">은 <strong>결측된 반사실(Missing Counterfactual)</strong>입니다.</p>
+</section>
+<section id="합성-통제-집단-구성-weights-construction" class="level3" data-number="3.2">
+<h3 data-number="3.2" class="anchored" data-anchor-id="합성-통제-집단-구성-weights-construction"><span class="header-section-number">3.2</span> 2.2 합성 통제 집단 구성 (Weights Construction)</h3>
+<p>SCM의 핵심은 통제 집단 유닛들에 부여할 <strong>가중치 벡터 <img src="https://latex.codecogs.com/png.latex?W%20=%20(w_2,%20%5Cdots,%20w_%7BJ+1%7D)'"></strong>를 찾는 것입니다. 이 가중치는 다음 두 가지 제약 조건을 만족해야 합니다.</p>
+<ol type="1">
+<li><strong>비음수 조건 (Non-negative):</strong> <img src="https://latex.codecogs.com/png.latex?w_j%20%5Cge%200"></li>
+<li><strong>합의 조건 (Sum to one):</strong> <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bj=2%7D%5E%7BJ+1%7D%20w_j%20=%201"></li>
+</ol>
+<p>이 제약 조건들은 합성 통제 집단이 데이터들의 <strong>볼록 껍질(Convex Hull)</strong> 내부에 존재하게 하여, <strong>내삽(Interpolation)</strong>을 수행하도록 강제합니다. 즉, 데이터의 범위를 벗어나는 과도한 <strong>외삽(Extrapolation)</strong>을 방지합니다.</p>
+</section>
+<section id="최적화-문제-optimization" class="level3" data-number="3.3">
+<h3 data-number="3.3" class="anchored" data-anchor-id="최적화-문제-optimization"><span class="header-section-number">3.3</span> 2.3 최적화 문제 (Optimization)</h3>
+<p>우리는 개입 이전 기간(<img src="https://latex.codecogs.com/png.latex?t%20%5Cle%20T_0">) 동안 처치 집단(<img src="https://latex.codecogs.com/png.latex?Y_1">)과 합성 통제 집단(<img src="https://latex.codecogs.com/png.latex?%5Csum%20w_j%20Y_j">)의 차이를 최소화하는 <img src="https://latex.codecogs.com/png.latex?W%5E*">를 찾습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AW%5E*%20=%20%5Cunderset%7BW%7D%7B%5Cmathrm%7Bargmin%7D%7D%20%5Cleft(%20%5Csum_%7Bt=1%7D%5E%7BT_0%7D%20(Y_%7B1t%7D%20-%20%5Csum_%7Bj=2%7D%5E%7BJ+1%7D%20w_j%20Y_%7Bjt%7D)%5E2%20+%20%5Csum_%7Bk=1%7D%5E%7BK%7D%20(Z_%7B1k%7D%20-%20%5Csum_%7Bj=2%7D%5E%7BJ+1%7D%20w_j%20Z_%7Bjk%7D)%5E2%20%5Cright)%0A"> <em>(실제로는 각 변수의 중요도를 반영하는 <img src="https://latex.codecogs.com/png.latex?V"> 행렬을 포함한 2중 최적화가 수행되지만, 직관적 이해를 위해 단순화했습니다.)</em></p>
+<hr>
+</section>
+</section>
+<section id="이론적-정당성-theoretical-justification" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="이론적-정당성-theoretical-justification"><span class="header-section-number">4</span> 3. 이론적 정당성 (Theoretical Justification)</h2>
+<p>왜 SCM이 DiD보다 강력할 수 있을까요? 이는 <strong>요인 모형(Factor Model)</strong>을 통해 설명됩니다.</p>
+<section id="상호작용-요인-모형-interacted-factor-model" class="level3" data-number="4.1">
+<h3 data-number="4.1" class="anchored" data-anchor-id="상호작용-요인-모형-interacted-factor-model"><span class="header-section-number">4.1</span> 3.1 상호작용 요인 모형 (Interacted Factor Model)</h3>
+<p>결과 변수 <img src="https://latex.codecogs.com/png.latex?Y_%7Bit%7D(0)">가 다음과 같이 생성된다고 가정해 봅시다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AY_%7Bit%7D(0)%20=%20%5Cdelta_t%20+%20%5Cboldsymbol%7BZ%7D_i'%20%5Cboldsymbol%7B%5Cbeta%7D_t%20+%20%5Cboldsymbol%7B%5Clambda%7D_t%20%5Cboldsymbol%7B%5Cmu%7D_i%20+%20%5Cepsilon_%7Bit%7D%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cdelta_t">: 시간 고정 효과 (Time Fixed Effect)</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cboldsymbol%7BZ%7D_i">: 관찰 가능한 공변량</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cboldsymbol%7B%5Clambda%7D_t%20%5Cboldsymbol%7B%5Cmu%7D_i"></strong>: 관찰되지 않은 <strong>시간 가변적 교란 요인(Time-varying Confounding)</strong></li>
+</ul>
+<p>기존의 DiD는 시간 불변의 고정 효과(<img src="https://latex.codecogs.com/png.latex?%5Calpha_i">)만 제거할 수 있지만, SCM은 적절한 가중치 구성을 통해 <img src="https://latex.codecogs.com/png.latex?%5Cboldsymbol%7B%5Clambda%7D_t%20%5Cboldsymbol%7B%5Cmu%7D_i"> 항까지 상쇄시킬 수 있습니다. Abadie et al.&nbsp;(2010)은 개입 이전 기간(<img src="https://latex.codecogs.com/png.latex?T_0">)이 충분히 길다면, SCM 추정량의 편향(Bias)이 0으로 수렴함을 증명했습니다.</p>
+</section>
+<section id="볼록성convexity의-기하학적-의미" class="level3" data-number="4.2">
+<h3 data-number="4.2" class="anchored" data-anchor-id="볼록성convexity의-기하학적-의미"><span class="header-section-number">4.2</span> 3.2 볼록성(Convexity)의 기하학적 의미</h3>
+<p>SCM은 데이터를 ‘섞어서’ 만드는 것이므로 기하학적으로는 다면체 내부의 한 점을 찾는 것과 같습니다.</p>
+<p>!(path/to/convex_hull_triangle.png) <em>주석: <img src="https://latex.codecogs.com/png.latex?X_1">(검은 점)을 <img src="https://latex.codecogs.com/png.latex?X_0">(빨간 점들)의 조합으로 표현할 때, <img src="https://latex.codecogs.com/png.latex?X_1">이 빨간 점들이 이루는 다면체(Triangle) 내부에 있어야 안전한 추론(Interpolation)이 가능합니다. 외부에 있다면 SCM 적용에 주의가 필요합니다.</em></p>
+<hr>
+</section>
+</section>
+<section id="한계와-확장-augmented-scm" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="한계와-확장-augmented-scm"><span class="header-section-number">5</span> 4. 한계와 확장: Augmented SCM</h2>
+<section id="편향-보정-bias-correction" class="level3" data-number="5.1">
+<h3 data-number="5.1" class="anchored" data-anchor-id="편향-보정-bias-correction"><span class="header-section-number">5.1</span> 4.1 편향 보정 (Bias Correction)</h3>
+<p>현실에서는 개입 이전 기간(<img src="https://latex.codecogs.com/png.latex?T_0">)에도 처치 집단과 합성 대조군이 완벽하게 일치하지 않을 수 있습니다(Imperfect Pre-treatment Fit). 이 경우 추정치에 편향이 발생합니다.</p>
+<p>이를 해결하기 위해 <strong>Augmented SCM (ASCM)</strong>이 제안되었습니다.</p>
+</section>
+<section id="ascm-공식" class="level3" data-number="5.2">
+<h3 data-number="5.2" class="anchored" data-anchor-id="ascm-공식"><span class="header-section-number">5.2</span> 4.2 ASCM 공식</h3>
+<p>ASCM은 기존 SCM 추정치에 <strong>회귀분석을 이용한 보정항</strong>을 추가합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7BY%7D_%7B1t%7D%5E%7Baug%7D(0)%20=%20%5Cunderbrace%7B%5Csum_%7Bj=2%7D%5E%7BJ+1%7D%20w_j%20Y_%7Bjt%7D%7D_%7B%5Ctext%7BOriginal%20SCM%7D%7D%20+%20%5Cunderbrace%7B%5Cleft(%20%5Chat%7Bm%7D_%7B1t%7D%20-%20%5Csum_%7Bj=2%7D%5E%7BJ+1%7D%20w_j%20%5Chat%7Bm%7D_%7Bjt%7D%20%5Cright)%7D_%7B%5Ctext%7BBias%20Correction%7D%7D%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Chat%7Bm%7D_%7Bit%7D">: 공변량 등을 이용해 예측한 결과값 (Ridge Regression 등을 사용)</li>
+<li>이 보정항은 합성 대조군이 설명하지 못하는 잔여 차이를 회귀 모델로 메꿔주는 역할을 합니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="마치며-투명하고-강력한-인과추론" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="마치며-투명하고-강력한-인과추론"><span class="header-section-number">6</span> 마치며: 투명하고 강력한 인과추론</h2>
+<p>합성 대조조법은 다음과 같은 이유로 현대 사회과학 연구에서 가장 사랑받는 방법론 중 하나가 되었습니다.</p>
+<ol type="1">
+<li><strong>투명성 (Transparency):</strong> 어떤 통제 유닛이 몇 퍼센트의 비중으로 사용되었는지 명확히 알 수 있습니다.</li>
+<li><strong>데이터 기반 (Data-driven):</strong> 연구자의 자의적인 대조군 선정을 방지합니다.</li>
+<li><strong>유연성:</strong> 시간에 따라 변하는 교란 요인을 통제할 수 있습니다.</li>
+</ol>
+<p>데이터가 충분히 쌓인 시계열 환경에서 정책 효과를 분석해야 한다면, SCM은 가장 먼저 고려해야 할 도구입니다.</p>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Causal Inference</category>
+  <category>Econometrics</category>
+  <category>Methodology</category>
+  <category>SCM</category>
+  <guid>https://shsha0110.github.io/posts/lecture/L15/causal-inference-15-part-03/</guid>
+  <pubDate>Thu, 22 Jan 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>선형성을 넘어서: 비선형 이중차분법 (Nonlinear DiD / Changes-in-Changes)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/lecture/L15/causal-inference-15-part-02/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="들어가며-선형-did의-한계" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="들어가며-선형-did의-한계"><span class="header-section-number">1</span> 들어가며: 선형 DiD의 한계</h2>
+<p>지난 포스트에서 다룬 표준 이중차분법(Standard DiD)은 강력하지만, 중요한 가정을 전제로 합니다. 바로 <strong>“평행 추세(Parallel Trends)”</strong> 가정입니다. 하지만 이 가정은 결과 변수(<img src="https://latex.codecogs.com/png.latex?Y">)의 <strong>선형성(Linearity)</strong>에 의존적이라는 한계가 있습니다.</p>
+<p>예를 들어, 소득(<img src="https://latex.codecogs.com/png.latex?Y">)에 대해서는 평행 추세가 성립하더라도, 로그 소득(<img src="https://latex.codecogs.com/png.latex?%5Clog%20Y">)에 대해서는 성립하지 않을 수 있습니다(Not invariant to nonlinear transformations). 만약 정책 효과가 소득 구간별로 다르게 나타난다면(예: 저소득층에게 더 큰 효과), 평균값의 변화만 보는 선형 DiD는 이러한 분포의 변화를 놓치게 됩니다.</p>
+<p>이번 포스트에서는 이러한 선형성 가정을 완화하고, 분포 전체의 변화를 추정할 수 있는 <strong>비선형 이중차분법(Nonlinear DiD)</strong>, 일명 <strong>Changes-in-Changes (CiC)</strong> 모델에 대해 알아봅니다.</p>
+<blockquote class="blockquote">
+<p><strong>참고 자료</strong>: 본 포스트는 이상학 교수님의 “Differences in Differences &amp; Synthetic Control Method” 강의 자료(1502 DiD SCM.pdf)를 바탕으로 재구성되었습니다.</p>
+</blockquote>
+<hr>
+</section>
+<section id="직관적-이해-분위수-매핑-quantile-mapping" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="직관적-이해-분위수-매핑-quantile-mapping"><span class="header-section-number">2</span> 1. 직관적 이해: 분위수 매핑 (Quantile Mapping)</h2>
+<p>비선형 DiD의 핵심 아이디어는 “평균의 변화”가 아니라 <strong>“분위수(Quantile)의 변화”</strong>를 비교하는 것입니다.</p>
+<section id="시각적-설명" class="level3" data-number="2.1">
+<h3 data-number="2.1" class="anchored" data-anchor-id="시각적-설명"><span class="header-section-number">2.1</span> 시각적 설명</h3>
+<p>아래 그림은 통제 집단(Control)과 처치 집단(Treated)의 누적 분포 함수(CDF)가 시간이 지남에 따라 어떻게 변하는지를 보여줍니다.</p>
+<p>!(path/to/nonlinear_did_graph.png) <em>주석: <img src="https://latex.codecogs.com/png.latex?x">축은 결과값, <img src="https://latex.codecogs.com/png.latex?y">축은 확률(0~1)을 나타냅니다. <img src="https://latex.codecogs.com/png.latex?r_0(q)">와 <img src="https://latex.codecogs.com/png.latex?r_1(q)">는 각각 통제 집단과 처치 집단에서 특정 분위수 <img src="https://latex.codecogs.com/png.latex?q">에 해당하는 값의 시간적 변화(매핑)를 의미합니다.</em></p>
+<ul>
+<li><strong>통제 집단의 변화 (<img src="https://latex.codecogs.com/png.latex?r_0(q)">):</strong> <img src="https://latex.codecogs.com/png.latex?t=0"> 시점의 <img src="https://latex.codecogs.com/png.latex?q"> 분위수 값이 <img src="https://latex.codecogs.com/png.latex?t=1"> 시점에 어떻게 변했는지 보여줍니다.</li>
+<li><strong>가정:</strong> 처치 집단이 처치를 받지 않았더라면, <strong>“시간에 따른 분위수의 변화 양상”</strong>이 통제 집단과 동일했을 것이라고 가정합니다.</li>
+<li>즉, 통제 집단에서의 매핑(화살표)을 처치 집단에 그대로 적용하여 반사실(Counterfactual)을 구성합니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="수식적-정의-formalization" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="수식적-정의-formalization"><span class="header-section-number">3</span> 2. 수식적 정의 (Formalization)</h2>
+<p>이제 이를 수학적으로 엄밀하게 정의해 봅시다.</p>
+<section id="분포-함수-distribution-functions" class="level3" data-number="3.1">
+<h3 data-number="3.1" class="anchored" data-anchor-id="분포-함수-distribution-functions"><span class="header-section-number">3.1</span> 2.1 분포 함수 (Distribution Functions)</h3>
+<p>우선, 각 집단(<img src="https://latex.codecogs.com/png.latex?G_i=g">)과 시점(<img src="https://latex.codecogs.com/png.latex?t">)에서의 잠재적 결과(Potential Outcome) <img src="https://latex.codecogs.com/png.latex?Y(0)">(처치받지 않음)의 누적 분포 함수를 정의합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AF_%7Bgt%7D(y)%20=%20P(Y_%7Bit%7D(0)%20%5Cle%20y%20%7C%20G_i%20=%20g)%0A"></p>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?g%20%5Cin%20%5C%7B0,%201%5C%7D"> (0: 통제, 1: 처치), <img src="https://latex.codecogs.com/png.latex?t%20%5Cin%20%5C%7B0,%201%5C%7D"> (0: 전, 1: 후) 입니다. 우리가 관찰할 수 있는 분포들은 <img src="https://latex.codecogs.com/png.latex?F_%7B00%7D,%20F_%7B01%7D,%20F_%7B10%7D">이며, 처치 집단의 사후 결과인 <img src="https://latex.codecogs.com/png.latex?F_%7B11%7D">은 처치(<img src="https://latex.codecogs.com/png.latex?Y(1)">)를 받은 상태이므로, 처치를 받지 않았을 상태(<img src="https://latex.codecogs.com/png.latex?Y(0)">)인 <img src="https://latex.codecogs.com/png.latex?F_%7B11%7D">은 <strong>반사실(Counterfactual)</strong>로서 식별해야 할 대상입니다.</p>
+</section>
+<section id="분위수-처치-효과-quantile-treatment-effect-qte" class="level3" data-number="3.2">
+<h3 data-number="3.2" class="anchored" data-anchor-id="분위수-처치-효과-quantile-treatment-effect-qte"><span class="header-section-number">3.2</span> 2.2 분위수 처치 효과 (Quantile Treatment Effect, QTE)</h3>
+<p>우리의 목표는 특정 분위수 <img src="https://latex.codecogs.com/png.latex?q">에서의 처치 효과 <img src="https://latex.codecogs.com/png.latex?%5Ctau(q)">를 구하는 것입니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctau(q)%20=%20%5Cunderbrace%7B%5Ctilde%7BF%7D_%7B11%7D%5E%7B-1%7D(q)%7D_%7B%5Ctext%7B%EA%B4%80%EC%B8%A1%EA%B0%92%7D%7D%20-%20%5Cunderbrace%7BF_%7B11%7D%5E%7B-1%7D(q)%7D_%7B%5Ctext%7B%EB%B0%98%EC%82%AC%EC%8B%A4(%EC%B6%94%EC%A0%95%EA%B0%92)%7D%7D%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Ctilde%7BF%7D_%7B11%7D(y)%20=%20P(Y_%7Bi1%7D(1)%20%5Cle%20y%20%7C%20G_i%20=%201)">: 실제로 관측된 처치 집단의 사후 결과 분포 (<img src="https://latex.codecogs.com/png.latex?Y(1)">).</li>
+<li><img src="https://latex.codecogs.com/png.latex?F_%7B11%7D(y)">: 우리가 추정해야 할 처치 집단의 반사실적 사후 결과 분포 (<img src="https://latex.codecogs.com/png.latex?Y(0)">).</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="식별-가정-및-유도-identification" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="식별-가정-및-유도-identification"><span class="header-section-number">4</span> 3. 식별 가정 및 유도 (Identification)</h2>
+<p>비선형 DiD의 핵심 가정은 <strong>“분위수 변화의 불변성”</strong>입니다. Athey &amp; Imbens (2006)의 Changes-in-Changes 모델로도 알려져 있습니다.</p>
+<section id="식별-가정-identification-assumption" class="level3" data-number="4.1">
+<h3 data-number="4.1" class="anchored" data-anchor-id="식별-가정-identification-assumption"><span class="header-section-number">4.1</span> 3.1 식별 가정 (Identification Assumption)</h3>
+<p>모든 분위수 <img src="https://latex.codecogs.com/png.latex?q%20%5Cin%20%5B0,%201%5D">에 대하여 다음이 성립한다고 가정합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AF_%7B01%7D(F_%7B00%7D%5E%7B-1%7D(q))%20=%20F_%7B11%7D(F_%7B10%7D%5E%7B-1%7D(q))%0A"></p>
+<p>이 수식의 의미를 단계별로 풀어보겠습니다. 1. <strong>좌변 (<img src="https://latex.codecogs.com/png.latex?F_%7B01%7D(F_%7B00%7D%5E%7B-1%7D(q))">):</strong> 통제 집단에서 시점 0에 <img src="https://latex.codecogs.com/png.latex?q"> 분위수에 해당하는 값(<img src="https://latex.codecogs.com/png.latex?F_%7B00%7D%5E%7B-1%7D(q)">)을 찾고, 그 값이 시점 1의 분포(<img src="https://latex.codecogs.com/png.latex?F_%7B01%7D">)에서 차지하는 위치(확률)를 봅니다. 즉, <strong>통제 집단에서 시간이 흐름에 따라 순위(Rank)가 어떻게 변했는지</strong>를 나타냅니다. 2. <strong>우변 (<img src="https://latex.codecogs.com/png.latex?F_%7B11%7D(F_%7B10%7D%5E%7B-1%7D(q))">):</strong> 처치 집단에서도 동일하게, 시점 0에 <img src="https://latex.codecogs.com/png.latex?q"> 분위수에 해당하는 값이 시점 1(반사실)에 갖게 될 위치를 나타냅니다. 3. <strong>결론:</strong> “시간에 따른 상대적 위치(Rank)의 변화 함수”는 두 집단 간에 동일하다는 것입니다.</p>
+</section>
+<section id="반사실-분포-f_11y의-유도-과정" class="level3" data-number="4.2">
+<h3 data-number="4.2" class="anchored" data-anchor-id="반사실-분포-f_11y의-유도-과정"><span class="header-section-number">4.2</span> 3.2 반사실 분포 <img src="https://latex.codecogs.com/png.latex?F_%7B11%7D(y)">의 유도 과정</h3>
+<p>우리는 <img src="https://latex.codecogs.com/png.latex?F_%7B11%7D(y)">를 구하고 싶습니다. 위 식별 가정을 이용하여 이를 <img src="https://latex.codecogs.com/png.latex?y">에 대한 함수로 정리해 봅시다.</p>
+<p><strong>단계 1: 목표 변수 설정</strong> 우변의 <img src="https://latex.codecogs.com/png.latex?F_%7B11%7D(%5Ccdot)"> 안에 있는 <img src="https://latex.codecogs.com/png.latex?F_%7B10%7D%5E%7B-1%7D(q)">를 <img src="https://latex.codecogs.com/png.latex?y">라고 둡니다. 즉, 어떤 결과값 <img src="https://latex.codecogs.com/png.latex?y">가 처치 집단의 사전 시점(<img src="https://latex.codecogs.com/png.latex?t=0">)에서 갖는 누적 확률(분위수)을 <img src="https://latex.codecogs.com/png.latex?q'">라고 합시다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ay%20=%20F_%7B10%7D%5E%7B-1%7D(q')%20%5Ciff%20q'%20=%20F_%7B10%7D(y)%0A"></p>
+<p><strong>단계 2: 가정식에 대입</strong> 식별 가정 식의 <img src="https://latex.codecogs.com/png.latex?q"> 자리에 <img src="https://latex.codecogs.com/png.latex?q'%20=%20F_%7B10%7D(y)">를 대입합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AF_%7B01%7D(F_%7B00%7D%5E%7B-1%7D(q'))%20=%20F_%7B11%7D(F_%7B10%7D%5E%7B-1%7D(q'))%0A"></p>
+<p>여기에 <img src="https://latex.codecogs.com/png.latex?q'">와 <img src="https://latex.codecogs.com/png.latex?y">의 관계를 적용하면:</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AF_%7B01%7D(F_%7B00%7D%5E%7B-1%7D(F_%7B10%7D(y)))%20=%20F_%7B11%7D(y)%0A"></p>
+<p><strong>단계 3: 결과 도출</strong> 따라서, 처치 집단이 처치를 받지 않았을 때(<img src="https://latex.codecogs.com/png.latex?t=1">)의 잠재적 분포 <img src="https://latex.codecogs.com/png.latex?F_%7B11%7D(y)">는 관찰 가능한 데이터(<img src="https://latex.codecogs.com/png.latex?F_%7B01%7D,%20F_%7B00%7D,%20F_%7B10%7D">)만으로 다음과 같이 식별됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AF_%7B11%7D(y)%20=%20F_%7B01%7D%5Cleft%5B%20F_%7B00%7D%5E%7B-1%7D%20%5C%7B%20F_%7B10%7D(y)%20%5C%7D%20%5Cright%5D%0A"></p>
+</section>
+<section id="해석" class="level3" data-number="4.3">
+<h3 data-number="4.3" class="anchored" data-anchor-id="해석"><span class="header-section-number">4.3</span> 3.3 해석</h3>
+<p>이 최종 수식은 다음과 같은 알고리즘으로 이해할 수 있습니다.</p>
+<ol type="1">
+<li><strong><img src="https://latex.codecogs.com/png.latex?F_%7B10%7D(y)">:</strong> 처치 집단의 <img src="https://latex.codecogs.com/png.latex?t=0"> 시점에서 결과값 <img src="https://latex.codecogs.com/png.latex?y">의 분위수(Rank)를 찾습니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?F_%7B00%7D%5E%7B-1%7D(%5Ccdot)">:</strong> 통제 집단의 <img src="https://latex.codecogs.com/png.latex?t=0"> 시점에서 <strong>동일한 분위수</strong>를 가진 결과값을 찾습니다. (집단 간 비교 기준점 확보)</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?F_%7B01%7D(%5Ccdot)">:</strong> 그 결과값이 통제 집단의 <img src="https://latex.codecogs.com/png.latex?t=1"> 시점에서 갖는 새로운 분위수를 확인합니다. (시간 효과 반영)</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?F_%7B11%7D(y)">:</strong> 이 “변환된 분위수”가 바로 처치 집단(<img src="https://latex.codecogs.com/png.latex?t=1">)에서 <img src="https://latex.codecogs.com/png.latex?y">가 가질 누적 확률입니다.</li>
+</ol>
+<hr>
+</section>
+</section>
+<section id="요약-및-시사점" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="요약-및-시사점"><span class="header-section-number">5</span> 4. 요약 및 시사점</h2>
+<p>비선형 DiD(CiC)는 평균값 비교에 그치는 기존 DiD의 한계를 넘어, 정책이 <strong>전체 소득 분포나 특정 분위수(예: 하위 10%)</strong>에 미치는 영향을 정밀하게 분석할 수 있게 해줍니다.</p>
+<ul>
+<li><strong>장점:</strong>
+<ul>
+<li>로그 변환 등 결과 변수의 비선형 변환에 영향을 받지 않습니다(Invariant).</li>
+<li>평균뿐만 아니라 분포 전체의 처치 효과(QTE)를 추정할 수 있습니다.</li>
+</ul></li>
+<li><strong>조건:</strong>
+<ul>
+<li>연속적인 결과 변수에 적합하며, 역함수(<img src="https://latex.codecogs.com/png.latex?F%5E%7B-1%7D">)가 존재해야 하므로 분포 함수가 강단조증가(strictly increasing)해야 한다는 조건이 필요할 수 있습니다.</li>
+</ul></li>
+</ul>
+<p>다음 포스트에서는 이러한 방법론들이 실제 데이터 분석 라이브러리에서 어떻게 구현되는지 살펴보겠습니다.</p>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Causal Inference</category>
+  <category>Econometrics</category>
+  <category>Methodology</category>
+  <category>Advanced</category>
+  <guid>https://shsha0110.github.io/posts/lecture/L15/causal-inference-15-part-02/</guid>
+  <pubDate>Wed, 21 Jan 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>이론에서 현실로: 시뮬레이션을 통한 성능 검증</title>
   <dc:creator>Reviewer </dc:creator>
@@ -1017,6 +1258,154 @@
   <category>Machine Learning</category>
   <guid>https://shsha0110.github.io/posts/paper/Conformal inference of counterfactuals and individual treatment effects/01-From average effects to individual effects/</guid>
   <pubDate>Wed, 21 Jan 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>인과추론의 핵심: 이중차분법(Differences in Differences) 완벽 정리</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/lecture/L15/causal-inference-15-part-01/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="들어가며" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="들어가며"><span class="header-section-number">1</span> 들어가며</h2>
+<p>사회과학 데이터 분석, 특히 관찰 데이터(observational data)를 다루는 연구에서 가장 큰 난제는 ’인과관계’를 식별하는 것입니다. 무작위 통제 실험(RCT)이 불가능한 상황에서, 우리는 어떻게 정책이나 개입(Treatment)의 효과를 발라낼 수 있을까요?</p>
+<p>이번 포스트에서는 인과추론의 가장 강력하고 널리 쓰이는 도구 중 하나인 <strong>이중차분법(Differences in Differences, DiD)</strong>에 대해 다룹니다. 특히 잠재적 결과(Potential Outcomes) 프레임워크를 기반으로 DiD 추정량이 도출되는 과정을 수학적으로 엄밀하게 살펴보겠습니다.</p>
+<blockquote class="blockquote">
+<p>[cite_start]<strong>참고 자료</strong>: 본 포스트는 이상학 교수님의 “Differences in Differences &amp; Synthetic Control Method” 강의 자료를 바탕으로 재구성되었습니다[cite: 1, 2].</p>
+</blockquote>
+<hr>
+</section>
+<section id="문제의-정의-식별-문제-identification-problem" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="문제의-정의-식별-문제-identification-problem"><span class="header-section-number">2</span> 1. 문제의 정의: 식별 문제 (Identification Problem)</h2>
+<p>인과추론의 근본적인 문제는 <strong>반사실(Counterfactual)</strong>을 관찰할 수 없다는 데 있습니다.</p>
+<section id="기본-세팅" class="level3" data-number="2.1">
+<h3 data-number="2.1" class="anchored" data-anchor-id="기본-세팅"><span class="header-section-number">2.1</span> 1.1 기본 세팅</h3>
+<p>[cite_start]두 개의 그룹과 두 개의 시점이 있다고 가정해 봅시다[cite: 84].</p>
+<ul>
+<li><strong>집단 (Groups):</strong>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?G_i%20=%201">: 처치 집단 (Treated Group, 예: 최저임금이 인상된 뉴저지주)</li>
+<li>[cite_start]<img src="https://latex.codecogs.com/png.latex?G_i%20=%200">: 통제 집단 (Control Group, 예: 최저임금이 동결된 펜실베이니아주) [cite: 89, 90]</li>
+</ul></li>
+<li><strong>시점 (Time Periods):</strong>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?t%20=%200">: 개입 이전 (Pre-period)</li>
+<li>[cite_start]<img src="https://latex.codecogs.com/png.latex?t%20=%201">: 개입 이후 (Post-period) [cite: 86, 87]</li>
+</ul></li>
+</ul>
+</section>
+<section id="잠재적-결과-potential-outcomes" class="level3" data-number="2.2">
+<h3 data-number="2.2" class="anchored" data-anchor-id="잠재적-결과-potential-outcomes"><span class="header-section-number">2.2</span> 1.2 잠재적 결과 (Potential Outcomes)</h3>
+<p>[cite_start]<img src="https://latex.codecogs.com/png.latex?Y_%7Bit%7D(x)">를 시점 <img src="https://latex.codecogs.com/png.latex?t">에서 처치 상태가 <img src="https://latex.codecogs.com/png.latex?x">일 때 개인 <img src="https://latex.codecogs.com/png.latex?i">의 잠재적 결과라고 정의합니다[cite: 104]. [cite_start]우리가 실제로 관찰하는 결과 <img src="https://latex.codecogs.com/png.latex?Y_%7Bit%7D">는 일치성(Consistency) 가정에 의해 다음과 같이 표현됩니다[cite: 106].</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AY_%7Bit%7D%20=%20G_%7Bit%7DY_%7Bit%7D(1)%20+%20(1-G_%7Bit%7D)Y_%7Bit%7D(0)%0A"></p>
+</section>
+<section id="우리가-알고-싶은-것-att" class="level3" data-number="2.3">
+<h3 data-number="2.3" class="anchored" data-anchor-id="우리가-알고-싶은-것-att"><span class="header-section-number">2.3</span> 1.3 우리가 알고 싶은 것 (ATT)</h3>
+<p>[cite_start]우리의 목표는 <strong>처치 집단에 대한 평균 처치 효과(ATT: Average Treatment Effect on the Treated)</strong>를 구하는 것입니다[cite: 117].</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctau_%7BATT%7D%20=%20%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(1)%20-%20Y_%7Bi1%7D(0)%20%7C%20G_i=1%5D%0A"></p>
+<p>[cite_start]이 식을 풀면 다음과 같습니다[cite: 119].</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctau_%7BATT%7D%20=%20%5Cunderbrace%7B%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(1)%20%7C%20G_i=1%5D%7D_%7B%5Ctext%7B(a)%20%EA%B4%80%EC%B0%B0%20%EA%B0%80%EB%8A%A5%7D%7D%20-%20%5Cunderbrace%7B%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(0)%20%7C%20G_i=1%5D%7D_%7B%5Ctext%7B(b)%20%EB%B0%98%EC%82%AC%EC%8B%A4%20(%EA%B4%80%EC%B0%B0%20%EB%B6%88%EA%B0%80)%7D%7D%0A"></p>
+<ul>
+<li><strong>(a)</strong>: 처치를 받은 집단의 처치 후 결과이므로 데이터에서 관찰할 수 있습니다.</li>
+<li><strong>(b)</strong>: <strong>문제의 핵심</strong>입니다. 처치를 받은 집단이 만약 처치를 받지 <em>않았더라면</em> 겪었을 결과입니다. [cite_start]이는 현실에 존재하지 않으므로, 적절한 대조군을 통해 추정해야 합니다[cite: 125].</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="반사실을-찾아서-세-가지-비교-전략" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="반사실을-찾아서-세-가지-비교-전략"><span class="header-section-number">3</span> 2. 반사실을 찾아서: 세 가지 비교 전략</h2>
+<p>반사실 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(0)%20%7C%20G_i=1%5D">을 대체하기 위해 우리는 어떤 전략을 취할 수 있을까요?</p>
+<p>!(path/to/image1.png) [cite_start]<em>주석: <img src="https://latex.codecogs.com/png.latex?x">축은 시간(Time), <img src="https://latex.codecogs.com/png.latex?y">축은 평균 결과(Average Outcome)를 나타내며, 처치 집단과 통제 집단의 변화 추이를 시각화한 그래프입니다. [cite: 12]</em></p>
+<section id="전략-1-횡단면-비교-cross-sectional-design" class="level3" data-number="3.1">
+<h3 data-number="3.1" class="anchored" data-anchor-id="전략-1-횡단면-비교-cross-sectional-design"><span class="header-section-number">3.1</span> 전략 1: 횡단면 비교 (Cross-sectional Design)</h3>
+<p>[cite_start]가장 단순한 접근은 처치 후 시점(<img src="https://latex.codecogs.com/png.latex?t=1">)에서 통제 집단의 결과를 반사실로 사용하는 것입니다[cite: 133].</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(0)%20%7C%20G_i=1%5D%20%5Capprox%20%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(0)%20%7C%20G_i=0%5D%0A"></p>
+<ul>
+<li><strong>가정:</strong> 처치 여부가 결과와 독립적이어야 합니다 (Selection Bias가 없어야 함).</li>
+<li><strong>한계:</strong> 두 집단은 처치 여부 외에도 원래부터 다른 특성을 가질 수 있습니다. [cite_start]예를 들어, 뉴저지와 펜실베이니아는 경제 상황이 다를 수 있습니다[cite: 134].</li>
+</ul>
+</section>
+<section id="전략-2-전후-비교-before-and-after-design" class="level3" data-number="3.2">
+<h3 data-number="3.2" class="anchored" data-anchor-id="전략-2-전후-비교-before-and-after-design"><span class="header-section-number">3.2</span> 전략 2: 전후 비교 (Before-and-After Design)</h3>
+<p>[cite_start]처치 집단의 개입 이전 시점(<img src="https://latex.codecogs.com/png.latex?t=0">) 결과를 반사실로 사용하는 방법입니다[cite: 147].</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(0)%20%7C%20G_i=1%5D%20%5Capprox%20%5Cmathbb%7BE%7D%5BY_%7Bi0%7D(0)%20%7C%20G_i=1%5D%0A"></p>
+<ul>
+<li>[cite_start]<strong>가정:</strong> 시간이 지나도 결과에 자연적인 변화(Trend)가 없어야 합니다[cite: 148].</li>
+<li><strong>한계:</strong> 경기 변동이나 계절적 요인 등 시간의 흐름에 따른 변화를 무시합니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="이중차분법-difference-in-differences" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="이중차분법-difference-in-differences"><span class="header-section-number">4</span> 3. 이중차분법 (Difference-in-Differences)</h2>
+<p>DiD는 위 두 전략의 한계를 극복하기 위해 <strong>“집단 간 차이”</strong>와 <strong>“시점 간 차이”</strong>를 결합합니다.</p>
+<section id="평행-추세-가정-parallel-trends-assumption" class="level3" data-number="4.1">
+<h3 data-number="4.1" class="anchored" data-anchor-id="평행-추세-가정-parallel-trends-assumption"><span class="header-section-number">4.1</span> 3.1 평행 추세 가정 (Parallel Trends Assumption)</h3>
+<p>DiD의 핵심 가정입니다. [cite_start]<strong>“처치가 없었더라면, 처치 집단의 평균 결과 변화량은 통제 집단의 변화량과 같았을 것”</strong>이라는 가정입니다[cite: 161, 162].</p>
+<p>수식으로는 다음과 같습니다: <img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(0)%20-%20Y_%7Bi0%7D(0)%20%7C%20G_i=1%5D%20=%20%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(0)%20-%20Y_%7Bi0%7D(0)%20%7C%20G_i=0%5D%0A"></p>
+<p>이 가정을 이용해 우리가 모르는 반사실을 유도해 봅시다. 위 식을 이항하면 반사실 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(0)%20%7C%20%5Bcite_start%5DG_i=1%5D">은 다음과 같이 표현됩니다[cite: 177].</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cunderbrace%7B%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(0)%20%7C%20G_i=1%5D%7D_%7B%5Ctext%7B%EB%B0%98%EC%82%AC%EC%8B%A4%7D%7D%20=%20%5Cunderbrace%7B%5Cmathbb%7BE%7D%5BY_%7Bi0%7D(0)%20%7C%20G_i=1%5D%7D_%7B%5Ctext%7B%EC%B2%98%EC%B9%98%EC%A7%91%EB%8B%A8%20%EC%B4%88%EA%B8%B0%EA%B0%92%7D%7D%20+%20%5Cunderbrace%7B(%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(0)%20%7C%20G_i=0%5D%20-%20%5Cmathbb%7BE%7D%5BY_%7Bi0%7D(0)%20%7C%20G_i=0%5D)%7D_%7B%5Ctext%7B%ED%86%B5%EC%A0%9C%EC%A7%91%EB%8B%A8%EC%9D%98%20%EC%8B%9C%EA%B0%84%20%EC%B6%94%EC%84%B8%7D%7D%0A"></p>
+<p>즉, 처치 집단의 초기값에 통제 집단에서 관찰된 ’시간에 따른 변화분(Trend)’을 더해주면, 처치 집단이 처치를 받지 않았을 때의 결과를 추정할 수 있습니다.</p>
+<p>!(path/to/image2.png) <em>주석: 점선으로 표시된 부분은 평행 추세 가정에 기반하여 생성된 Counterfactual 지점입니다. [cite_start]처치 집단(빨간색)의 실제 결과와 점선(Counterfactual)의 차이가 바로 인과 효과입니다. [cite: 36]</em></p>
+</section>
+<section id="did-추정량-유도" class="level3" data-number="4.2">
+<h3 data-number="4.2" class="anchored" data-anchor-id="did-추정량-유도"><span class="header-section-number">4.2</span> 3.2 DiD 추정량 유도</h3>
+<p>[cite_start]이제 ATT 식에 위에서 구한 반사실을 대입해 보겠습니다[cite: 163, 179].</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctau_%7BATT%7D%20&amp;=%20%5Cmathbb%7BE%7D%5BY_%7Bi1%7D%20%7C%20G_i=1%5D%20-%20%5Cmathbb%7BE%7D%5BY_%7Bi1%7D(0)%20%7C%20G_i=1%5D%20%5C%5C%0A&amp;=%20%5Cmathbb%7BE%7D%5BY_%7Bi1%7D%20%7C%20G_i=1%5D%20-%20%5Cleft(%20%5Cmathbb%7BE%7D%5BY_%7Bi0%7D%20%7C%20G_i=1%5D%20+%20(%5Cmathbb%7BE%7D%5BY_%7Bi1%7D%20%7C%20G_i=0%5D%20-%20%5Cmathbb%7BE%7D%5BY_%7Bi0%7D%20%7C%20G_i=0%5D)%20%5Cright)%20%5C%5C%0A&amp;=%20%5Cleft(%20%5Cmathbb%7BE%7D%5BY_%7Bi1%7D%20%7C%20G_i=1%5D%20-%20%5Cmathbb%7BE%7D%5BY_%7Bi0%7D%20%7C%20G_i=1%5D%20%5Cright)%20-%20%5Cleft(%20%5Cmathbb%7BE%7D%5BY_%7Bi1%7D%20%7C%20G_i=0%5D%20-%20%5Cmathbb%7BE%7D%5BY_%7Bi0%7D%20%7C%20G_i=0%5D%20%5Cright)%0A%5Cend%7Baligned%7D%0A"></p>
+<p>이 수식이 의미하는 바는 명확합니다: 1. <strong>First Difference:</strong> 처치 집단의 전후 차이를 구합니다 (시간 효과 + 처치 효과). 2. <strong>Second Difference:</strong> 통제 집단의 전후 차이를 구합니다 (순수 시간 효과). 3. <strong>Difference-in-Differences:</strong> 1번에서 2번을 빼면 순수한 <strong>처치 효과(Treatment Effect)</strong>만 남습니다.</p>
+<hr>
+</section>
+</section>
+<section id="추정-및-회귀분석-모델" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="추정-및-회귀분석-모델"><span class="header-section-number">5</span> 4. 추정 및 회귀분석 모델</h2>
+<p>실제 데이터 분석에서는 회귀분석을 통해 표준오차(Standard Error)와 함께 추정량을 계산합니다.</p>
+<section id="이원-고정-효과-모형-two-way-fixed-effects-model" class="level3" data-number="5.1">
+<h3 data-number="5.1" class="anchored" data-anchor-id="이원-고정-효과-모형-two-way-fixed-effects-model"><span class="header-section-number">5.1</span> 4.1 이원 고정 효과 모형 (Two-way Fixed Effects Model)</h3>
+<p>[cite_start]패널 데이터가 있을 때, 다음과 같은 선형 회귀식을 사용합니다[cite: 212, 213].</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AY_%7Bit%7D%20=%20%5Calpha%20+%20%5Cgamma%20G_i%20+%20%5Cbeta%20t%20+%20%5Ctau%20(G_i%20%5Ctimes%20t)%20+%20%5Cepsilon_%7Bit%7D%0A"></p>
+<p>여기서 각 계수의 의미는 다음과 같습니다: * <img src="https://latex.codecogs.com/png.latex?%5Calpha">: 통제 집단의 초기 평균값 (Intercept) * <img src="https://latex.codecogs.com/png.latex?%5Cgamma">: 처치 집단과 통제 집단 간의 고유한 차이 (Group Fixed Effect) * <img src="https://latex.codecogs.com/png.latex?%5Cbeta">: 시간의 흐름에 따른 자연적 변화 (Time Fixed Effect) * [cite_start]<strong><img src="https://latex.codecogs.com/png.latex?%5Ctau"></strong>: 우리가 구하고자 하는 DiD 추정량 (Interaction Term Coefficient) [cite: 215]</p>
+</section>
+<section id="실제-사례-card-krueger-1994" class="level3" data-number="5.2">
+<h3 data-number="5.2" class="anchored" data-anchor-id="실제-사례-card-krueger-1994"><span class="header-section-number">5.2</span> 4.2 실제 사례: Card &amp; Krueger (1994)</h3>
+<p>[cite_start]최저임금 인상이 고용에 미치는 영향을 분석한 고전적인 연구입니다[cite: 74].</p>
+<ul>
+<li><strong>Question:</strong> 최저임금을 올리면 고용이 감소하는가?</li>
+<li>[cite_start]<strong>Setting:</strong> 1992년 뉴저지(NJ)는 최저임금을 $4.25에서 $5.05로 인상(처치 집단), 펜실베이니아(PA)는 동결(통제 집단)[cite: 77].</li>
+<li><strong>Result:</strong> 두 주(State)의 패스트푸드점 고용 변화를 DiD로 분석한 결과, 통념과 달리 고용 감소 효과가 뚜렷하지 않음을 보였습니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="위협-요인과-검증" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="위협-요인과-검증"><span class="header-section-number">6</span> 5. 위협 요인과 검증</h2>
+<p>[cite_start]DiD가 강력한 도구이긴 하지만, <strong>평행 추세 가정</strong>이 위배되면 결과는 편향됩니다[cite: 196].</p>
+<section id="ashenfelters-dip" class="level3" data-number="6.1">
+<h3 data-number="6.1" class="anchored" data-anchor-id="ashenfelters-dip"><span class="header-section-number">6.1</span> 5.1 Ashenfelter’s Dip</h3>
+<p>직업 훈련 프로그램 등의 효과를 분석할 때 자주 나타나는 현상입니다. [cite_start]처치를 받기 직전에 소득이 일시적으로 급락하는 현상을 말합니다[cite: 198]. 이 경우 처치 이전의 추세가 평행하지 않을 수 있으므로 주의해야 합니다.</p>
+</section>
+<section id="위조-검증-falsification-test" class="level3" data-number="6.2">
+<h3 data-number="6.2" class="anchored" data-anchor-id="위조-검증-falsification-test"><span class="header-section-number">6.2</span> 5.2 위조 검증 (Falsification Test)</h3>
+<p>평행 추세 가정을 간접적으로 검증하기 위해 <strong>개입 이전 시점(Pre-treatment period)</strong>들의 데이터를 사용합니다. [cite_start]개입이 없었던 과거 기간 동안에도 두 집단의 추세가 평행했는지 확인하는 것입니다[cite: 200]. 만약 과거에도 추세가 달랐다면, 미래에도 달랐을 가능성이 높습니다.</p>
+<hr>
+</section>
+</section>
+<section id="마치며" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="마치며"><span class="header-section-number">7</span> 마치며</h2>
+<p>[cite_start]이중차분법은 “시간에 따라 변하지 않는 관찰되지 않은 교란 요인(Time-constant unmeasured confounding)”을 통제할 수 있다는 강력한 장점이 있습니다[cite: 188]. 하지만 이 역시 ’평행 추세’라는 가정이 성립해야만 유효하다는 점을 명심해야 합니다.</p>
+<p>다음 포스트에서는 평행 추세 가정이 성립하지 않을 때 대안으로 사용할 수 있는 <strong>합성 대조조법(Synthetic Control Method)</strong>에 대해 다뤄보겠습니다.</p>
+
+
+</section>
+
+ ]]></description>
+  <category>Causal Inference</category>
+  <category>Econometrics</category>
+  <category>Methodology</category>
+  <guid>https://shsha0110.github.io/posts/lecture/L15/causal-inference-15-part-01/</guid>
+  <pubDate>Tue, 20 Jan 2026 15:00:00 GMT</pubDate>
 </item>
 <item>
   <title>[Causal Inference] 13. IV (Part 3)</title>
@@ -4902,524 +5291,6 @@ font-style: inherit;">'--'</span>)</span>
  ]]></description>
   <category>Paper Review</category>
   <guid>https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-04-Extensions-of-Conformal-Prediction/Part-04-04-Outlier-Detection/</guid>
-  <pubDate>Thu, 15 Jan 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.5)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-04-Extensions-of-Conformal-Prediction/Part-04-05-Conformal-Prediction-Under-Covariate-Shift/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-when-the-i.i.d.-assumption-fails" class="level1">
-<h1>Introduction: When the i.i.d. Assumption Fails</h1>
-<ul>
-<li><p>지금까지 우리가 배운 모든 Conformal Prediction(CP) 방법론은 하나의 강력한 가정에 의존하고 있습니다.</p></li>
-<li><p>바로 <strong>“테스트 데이터가 Calibration 데이터와 동일한 분포(i.i.d.)에서 왔다”</strong>는 가정입니다.</p></li>
-<li><p>하지만 현실은 그렇지 않습니다. 과거의 데이터가 미래를 완벽하게 대변하지 못하는 경우가 많습니다.</p>
-<ul>
-<li><strong>의료 진단</strong>: 학습 데이터는 성인과 유아의 비율이 50:50이었는데, 실제 병원에는 성인이 95% 방문할 수 있습니다.</li>
-<li><strong>자율 주행</strong>: 아침(밝음)에 데이터를 수집하여 학습했는데, 실제 주행은 오후(어두움)에 이루어질 수 있습니다.</li>
-</ul></li>
-<li><p>이러한 분포의 변화 중 <strong>Covariate Shift</strong>는 입력 변수 <img src="https://latex.codecogs.com/png.latex?X">의 분포 <img src="https://latex.codecogs.com/png.latex?P(X)">는 바뀌지만, 입력과 출력 사이의 관계 <img src="https://latex.codecogs.com/png.latex?P(Y%7CX)">는 유지되는 상황을 말합니다.</p></li>
-<li><p>이번 포스트에서는 <strong>Weighted Conformal Prediction</strong>을 사용하여 이러한 변화 속에서도 커버리지를 보장하는 방법을 알아봅니다.</p></li>
-</ul>
-</section>
-<section id="problem-formulation-covariate-shift" class="level1">
-<h1>Problem Formulation: Covariate Shift</h1>
-<ul>
-<li>우리의 상황을 수식으로 정의해봅시다.
-<ul>
-<li><strong>Calibration Data</strong>: <img src="https://latex.codecogs.com/png.latex?P"> 분포에서 추출됨.</li>
-<li><strong>Test Data</strong>: <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D_%7Btest%7D"> 분포에서 추출됨.</li>
-</ul></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0AX%20%5Csim%20P%20%5Cquad%20%5Crightarrow%20%5Cquad%20X_%7Btest%7D%20%5Csim%20%5Cmathcal%7BP%7D_%7Btest%7D%0A"></p>
-<ul>
-<li>단, <img src="https://latex.codecogs.com/png.latex?Y%7CX"> (입력이 주어졌을 때 정답의 분포)는 변하지 않는다고 가정합니다.
-<ul>
-<li>이를 <strong>Covariate Shift</strong>라고 합니다.</li>
-</ul></li>
-<li>이 상황에서 기존의 일반적인 CP를 사용하면 커버리지가 깨질 수 있습니다.
-<ul>
-<li>예를 들어, 모델이 어려워하는 데이터(유아)가 테스트 셋에 더 많이 등장한다면, 에러율은 우리가 설정한 <img src="https://latex.codecogs.com/png.latex?%5Calpha">보다 훨씬 높아질 것입니다.</li>
-</ul></li>
-</ul>
-</section>
-<section id="the-solution-weighted-conformal-prediction" class="level1">
-<h1>The Solution: Weighted Conformal Prediction</h1>
-<ul>
-<li>해결책의 핵심은 <strong>“테스트 분포 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D_%7Btest%7D">에서 더 자주 등장할 것 같은 데이터에 더 큰 가중치(Weight)를 주는 것”</strong>입니다.</li>
-</ul>
-<section id="step-1-likelihood-ratio-calculation" class="level2">
-<h2 class="anchored" data-anchor-id="step-1-likelihood-ratio-calculation">Step 1: Likelihood Ratio Calculation</h2>
-<ul>
-<li>먼저, 두 분포 사이의 비율(Likelihood Ratio)을 계산하는 함수 <img src="https://latex.codecogs.com/png.latex?w(x)">를 정의합니다. <img src="https://latex.codecogs.com/png.latex?%0Aw(x)%20=%20%5Cfrac%7Bd%5Cmathcal%7BP%7D_%7Btest%7D(x)%7D%7BdP(x)%7D%0A">
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?w(x)%20%3E%201">: 해당 샘플 <img src="https://latex.codecogs.com/png.latex?x">는 학습 때보다 테스트 때 더 자주 등장합니다 (중요함).</li>
-<li><img src="https://latex.codecogs.com/png.latex?w(x)%20%3C%201">: 해당 샘플 <img src="https://latex.codecogs.com/png.latex?x">는 테스트 때 덜 등장합니다 (덜 중요함).</li>
-</ul></li>
-</ul>
-</section>
-<section id="step-2-compute-normalized-weights" class="level2">
-<h2 class="anchored" data-anchor-id="step-2-compute-normalized-weights">Step 2: Compute Normalized Weights</h2>
-<ul>
-<li>새로운 테스트 포인트 <img src="https://latex.codecogs.com/png.latex?x">가 들어왔을 때, 이 <img src="https://latex.codecogs.com/png.latex?x">와 기존 Calibration 데이터 <img src="https://latex.codecogs.com/png.latex?X_i">들에게 부여할 확률 질량(Probability Mass)을 재계산합니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ap_i%5Ew(x)%20=%20%5Cfrac%7Bw(X_i)%7D%7B%5Csum_%7Bj=1%7D%5E%7Bn%7D%20w(X_j)%20+%20w(x)%7D%0A"></p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ap_%7Btest%7D%5Ew(x)%20=%20%5Cfrac%7Bw(x)%7D%7B%5Csum_%7Bj=1%7D%5E%7Bn%7D%20w(X_j)%20+%20w(x)%7D%0A"></p>
-<ul>
-<li>기존 CP에서는 모든 데이터가 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7Bn+1%7D">의 동등한 확률을 가졌습니다.</li>
-<li>Weighted CP에서는 <img src="https://latex.codecogs.com/png.latex?w(%5Ccdot)">에 비례하여 확률을 다르게 배정합니다.</li>
-<li>즉, 테스트 분포와 유사한 데이터일수록 <img src="https://latex.codecogs.com/png.latex?p_i">가 커집니다.</li>
-</ul>
-</section>
-<section id="step-3-weighted-quantile-calculation" class="level2">
-<h2 class="anchored" data-anchor-id="step-3-weighted-quantile-calculation">Step 3: Weighted Quantile Calculation</h2>
-<ul>
-<li>이제 가장 중요한 단계인 Quantile 계산입니다.</li>
-<li>기존에는 단순히 점수를 정렬하고 <img src="https://latex.codecogs.com/png.latex?(1-%5Calpha)"> 지점을 찾았지만, 이제는 <strong>가중치가 반영된 누적 분포(Weighted CDF)</strong>를 사용해야 합니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7Bq%7D(x)%20=%20%5Cinf%20%5Cleft%5C%7B%20s_j%20:%20%5Csum_%7Bi=1%7D%5E%7Bj%7D%20p_i%5Ew(x)%20%5Cmathbb%7BI%7D%5C%7Bs_i%20%5Cle%20s_j%5C%7D%20%5Cge%201-%5Calpha%20%5Cright%5C%7D%0A">
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?s_j">는 오름차순으로 정렬된 Calibration Score라고 가정합니다.</li>
-</ul></li>
-<li>즉, 가중치 <img src="https://latex.codecogs.com/png.latex?p_i%5Ew(x)">들을 순서대로 더해가다가, 그 합이 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha">를 넘기는 순간의 점수를 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D(x)">로 선택합니다.</li>
-</ul>
-</section>
-</section>
-<section id="intuition-how-quantile-changes" class="level1">
-<h1>Intuition: How Quantile Changes</h1>
-<ul>
-<li>이 과정이 직관적으로 어떤 의미를 가질까요?</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-04-Extensions-of-Conformal-Prediction/Part-04-05-Conformal-Prediction-Under-Covariate-Shift/images/covariate_shift_cdf.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: Standard CP vs Weighted CP의 CDF 비교. (좌측) 일반적인 CP는 모든 점수의 가중치가 같아 직선 형태의 CDF를 가진다. (우측) Covariate Shift 상황에서는 가중치에 따라 CDF가 곡선이 되며, Quantile <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">의 위치가 달라진다.</figcaption>
-</figure>
-</div>
-<ol type="1">
-<li><p><strong>Shift towards Hard Examples</strong>: 만약 테스트 분포가 모델이 어려워하는(Score가 높은) 데이터들 쪽으로 이동했다면, 높은 점수를 가진 <img src="https://latex.codecogs.com/png.latex?X_i">들의 가중치 <img src="https://latex.codecogs.com/png.latex?w(X_i)">가 커집니다. <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> CDF 그래프에서 오른쪽 부분의 경사가 가파라집니다. <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <img src="https://latex.codecogs.com/png.latex?1-%5Calpha"> 지점에 도달하기 위해 더 많은 점수를 지나야 하거나, 더 높은 점수에서 도달하게 됩니다. <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong><img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">가 증가합니다 (더 보수적인, 넓은 예측 집합 생성).</strong></p></li>
-<li><p><strong>Shift towards Easy Examples</strong>: 반대로 테스트 분포가 쉬운 데이터들 위주라면, 낮은 점수들의 가중치가 커집니다. <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong><img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">가 감소합니다 (더 좁고 효율적인 예측 집합 생성).</strong></p></li>
-</ol>
-</section>
-<section id="theorem-guarantee" class="level1">
-<h1>Theorem &amp; Guarantee</h1>
-<ul>
-<li>Tibshirani et al.&nbsp;(2019)에 의해 제안된 이 방법은 다음 정리에 의해 커버리지를 보장합니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>Theorem 3 (Conformal prediction under covariate shift)</strong></p>
-<p>데이터가 위에서 정의한 Covariate Shift 가정하에 생성되었다면, Weighted Quantile <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D(X_%7Btest%7D)">를 사용한 예측 집합 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BC%7D">는 다음을 만족한다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%20%5Cmathbb%7BP%7D(Y_%7Btest%7D%20%5Cin%20%5Cmathcal%7BC%7D(X_%7Btest%7D))%20%5Cge%201-%5Calpha%20"></p>
-</blockquote>
-</section>
-<section id="conclusion" class="level1">
-<h1>Conclusion</h1>
-<ul>
-<li><p><strong>Weighted Conformal Prediction</strong>은 데이터 분포가 변하는 현실 세계의 문제에 CP를 적용하기 위한 필수적인 도구입니다.</p></li>
-<li><p>단순히 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7Bn+1%7D">이라는 고정 관념을 깨고, <strong>“테스트 시점에 더 중요한 데이터에 가중치를 준다”</strong>는 아이디어를 통해 분포 변화에 유연하게 대처할 수 있습니다.</p></li>
-<li><p>이 방법은 <img src="https://latex.codecogs.com/png.latex?w(x)">를 정확히 안다면 완벽하게 작동하며, <img src="https://latex.codecogs.com/png.latex?w(x)">를 추정해야 하는 경우에도 꽤 견고한(Robust) 성능을 보여줍니다.</p></li>
-</ul>
-<hr>
-<p><strong>Next Step</strong>: 분포가 갑작스럽게 변하는 것(Shift)도 문제지만, 시간이 지남에 따라 서서히 변하는 <strong>Drift</strong> 현상도 중요합니다. 다음 포스트에서는 시계열 데이터 등에서 발생하는 <strong>Section 4.6 Conformal Prediction Under Distribution Drift</strong>에 대해 알아보겠습니다.</p>
-
-
-</section>
-
- ]]></description>
-  <category>Paper Review</category>
-  <guid>https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-04-Extensions-of-Conformal-Prediction/Part-04-05-Conformal-Prediction-Under-Covariate-Shift/</guid>
-  <pubDate>Thu, 15 Jan 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 4.6)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-04-Extensions-of-Conformal-Prediction/Part-04-06-Conformal-Prediction-Under-Distribution-Shift/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-when-data-changes-over-time" class="level1">
-<h1>Introduction: When Data Changes Over Time</h1>
-<ul>
-<li><p>이전 포스트(4.5절)에서는 입력 분포가 변하는 Covariate Shift를 다루었습니다.</p></li>
-<li><p>하지만 그보다 더 다루기 까다로운 것은 <strong>Distribution Drift(분포 표류)</strong>입니다.</p></li>
-<li><p>Distribution Drift는 데이터의 분포가 <strong>시간이 지남에 따라 서서히(Slowly varying), 혹은 알 수 없는 방식으로 변하는 현상</strong>을 말합니다.</p>
-<ul>
-<li><strong>주식 시장</strong>: 10년 전의 시장 상황과 오늘의 시장 상황은 전혀 다릅니다.</li>
-<li><strong>센서 데이터</strong>: 기계가 노후화되면서 센서의 측정값 분포가 서서히 달라집니다.</li>
-</ul></li>
-<li><p>이런 시계열(Time-series) 문제에서는 “과거의 모든 데이터가 미래를 예측하는 데 동등하게 중요하다”는 i.i.d. 가정이 성립하지 않습니다.</p></li>
-<li><p>1년 전 데이터보다 어제의 데이터가 훨씬 중요하기 때문입니다.</p></li>
-<li><p>이번 포스트에서는 <strong>최신 데이터에 더 큰 가중치</strong>를 부여하는 Weighted Conformal Prediction을 통해 이 문제를 해결하는 방법을 알아봅니다.</p></li>
-</ul>
-</section>
-<section id="the-method-weighted-conformal-prediction-again" class="level1">
-<h1>The Method: Weighted Conformal Prediction (Again)</h1>
-<ul>
-<li>기본적인 아이디어는 4.5절의 Covariate Shift와 동일하게 <strong>Weighted Quantile</strong>을 사용하는 것입니다.</li>
-<li>하지만 가중치 <img src="https://latex.codecogs.com/png.latex?w_i">를 결정하는 방식이 다릅니다.</li>
-<li>Likelihood Ratio를 계산하는 대신, <strong>시간적 근접성(Recency)</strong>을 기준으로 가중치를 설정합니다.</li>
-</ul>
-<section id="step-1-define-weight-schedule" class="level2">
-<h2 class="anchored" data-anchor-id="step-1-define-weight-schedule">Step 1: Define Weight Schedule</h2>
-<ul>
-<li><p>사용자는 도메인 지식에 기반하여 “오래된 데이터를 얼마나 잊을 것인가”를 결정하는 가중치 스케줄을 정의합니다.</p></li>
-<li><p>가장 널리 쓰이는 두 가지 방법은 다음과 같습니다:</p></li>
-<li><ol type="1">
-<li><strong>Rolling Window (Sliding Window)</strong>:</li>
-</ol>
-<ul>
-<li>최근 <img src="https://latex.codecogs.com/png.latex?K">개의 데이터만 사용하고, 나머지는 버립니다. <img src="https://latex.codecogs.com/png.latex?%20w_i%5E%7B%5Ctext%7Bfixed%7D%7D%20=%20%5Cmathbb%7BI%7D%5C%7Bi%20%5Cge%20n%20-%20K%5C%7D%20"></li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>Exponential Decay (Smooth Decay)</strong>:</li>
-</ol>
-<ul>
-<li>과거 데이터의 영향력을 지수적으로 감소시킵니다. <img src="https://latex.codecogs.com/png.latex?%20w_i%5E%7B%5Ctext%7Bdecay%7D%7D%20=%20%5Cgamma%5E%7Bn-i+1%7D%20%5Cquad%20(0%20%3C%20%5Cgamma%20%3C%201)%20"></li>
-<li>예: <img src="https://latex.codecogs.com/png.latex?%5Cgamma%20=%200.99">라면 바로 직전 데이터는 1, 그 전은 0.99, 그 전은 <img src="https://latex.codecogs.com/png.latex?0.98%20%5Cdots"> 가중치를 가짐.</li>
-</ul></li>
-</ul>
-</section>
-<section id="step-2-normalize-weights" class="level2">
-<h2 class="anchored" data-anchor-id="step-2-normalize-weights">Step 2: Normalize Weights</h2>
-<ul>
-<li>정의된 가중치 <img src="https://latex.codecogs.com/png.latex?w_i">를 전체 합이 1이 되도록 정규화(Normalize)합니다.</li>
-<li>이때 테스트 포인트 <img src="https://latex.codecogs.com/png.latex?X_%7Btest%7D">의 가중치 <img src="https://latex.codecogs.com/png.latex?w_%7Btest%7D">도 포함하여 계산합니다.
-<ul>
-<li>보통 <img src="https://latex.codecogs.com/png.latex?w_%7Btest%7D=1">로 둠.</li>
-</ul></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctilde%7Bw%7D_i%20=%20%5Cfrac%7Bw_i%7D%7B%5Csum_%7Bj=1%7D%5E%7Bn%7D%20w_j%20+%201%7D%0A"></p>
-</section>
-<section id="step-3-weighted-quantile" class="level2">
-<h2 class="anchored" data-anchor-id="step-3-weighted-quantile">Step 3: Weighted Quantile</h2>
-<ul>
-<li>정규화된 가중치를 사용하여 보정된 분위수(Quantile) <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 계산합니다.</li>
-<li>Calibration Score <img src="https://latex.codecogs.com/png.latex?s_i">들을 오름차순 정렬했을 때, 누적 가중치 합이 <img src="https://latex.codecogs.com/png.latex?1-%5Calpha">를 넘는 지점을 찾습니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7Bq%7D%20=%20%5Cinf%20%5Cleft%5C%7B%20q%20:%20%5Csum_%7Bi=1%7D%5E%7Bn%7D%20%5Ctilde%7Bw%7D_i%20%5Cmathbb%7BI%7D%5C%7Bs_i%20%5Cle%20q%5C%7D%20%5Cge%201-%5Calpha%20%5Cright%5C%7D%0A"></p>
-</section>
-</section>
-<section id="theoretical-analysis" class="level1">
-<h1>Theoretical Analysis</h1>
-<ul>
-<li>이 방식이 왜 작동하는지 수학적으로 살펴보겠습니다.</li>
-<li>Barber et al.&nbsp;(2022)의 연구에 따르면, Weighted CP는 분포 간의 거리(Total Variation Distance)에 비례하는 오차 범위 내에서 커버리지를 보장합니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>Theorem 4 (Conformal prediction under distribution drift)</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?i">번째 Calibration 데이터와 테스트 데이터 사이의 TV 거리(Total Variation Distance)를 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon_i">라고 하자. <img src="https://latex.codecogs.com/png.latex?%20%5Cepsilon_i%20=%20d_%7BTV%7D((X_i,%20Y_i),%20(X_%7Btest%7D,%20Y_%7Btest%7D))%20"></p>
-<p>이때 위에서 정의한 Weighted CP 절차는 다음을 만족한다: <img src="https://latex.codecogs.com/png.latex?%20%5Cmathbb%7BP%7D(Y_%7Btest%7D%20%5Cin%20%5Cmathcal%7BC%7D(X_%7Btest%7D))%20%5Cge%201%20-%20%5Calpha%20-%202%20%5Csum_%7Bi=1%7D%5E%7Bn%7D%20%5Ctilde%7Bw%7D_i%20%5Cepsilon_i%20"></p>
-</blockquote>
-<section id="interpretation" class="level3">
-<h3 class="anchored" data-anchor-id="interpretation">Interpretation</h3>
-<ul>
-<li>이 부등식의 우변에 있는 <strong>페널티 항 (<img src="https://latex.codecogs.com/png.latex?2%20%5Csum%20%5Ctilde%7Bw%7D_i%20%5Cepsilon_i">)</strong>을 줄이는 것이 핵심입니다.
-<ul>
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cepsilon_i"> (Drift)</strong>:
-<ul>
-<li>데이터 <img src="https://latex.codecogs.com/png.latex?i">가 현재 시점(<img src="https://latex.codecogs.com/png.latex?test">)과 얼마나 다른 분포를 가지는지를 나타냅니다.</li>
-<li>오래된 데이터일수록 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon_i">가 클(1에 가까울) 것입니다.</li>
-</ul></li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Ctilde%7Bw%7D_i"> (Weight)</strong>:
-<ul>
-<li>우리가 부여한 가중치입니다.</li>
-</ul></li>
-</ul></li>
-<li>우리의 목표는 <strong><img src="https://latex.codecogs.com/png.latex?%5Cepsilon_i">가 큰(오래되어 분포가 달라진) 데이터에 작은 가중치 <img src="https://latex.codecogs.com/png.latex?%5Ctilde%7Bw%7D_i">를 부여</strong>하여, 곱 <img src="https://latex.codecogs.com/png.latex?%5Ctilde%7Bw%7D_i%20%5Cepsilon_i">를 0에 가깝게 만드는 것입니다.</li>
-<li>즉, <strong>“분포가 많이 변한 데이터는 무시하겠다”</strong>는 전략을 통해 커버리지 손실을 막을 수 있습니다.</li>
-</ul>
-</section>
-</section>
-<section id="practical-consideration-effective-sample-size" class="level1">
-<h1>Practical Consideration: Effective Sample Size</h1>
-<ul>
-<li>가중치를 사용하면 분포 변화에는 대응할 수 있지만, 대가가 따릅니다. 바로 <strong>유효 샘플 수(Effective Sample Size)</strong>가 줄어든다는 점입니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0An%5E%7B%5Ctext%7Beff%7D%7D%20=%20%5Cfrac%7B(%5Csum%20w_i)%5E2%7D%7B%5Csum%20w_i%5E2%7D%0A"></p>
-<ul>
-<li><strong>Uniform Weights (<img src="https://latex.codecogs.com/png.latex?w_i=1">)</strong>: <img src="https://latex.codecogs.com/png.latex?n%5E%7B%5Ctext%7Beff%7D%7D%20=%20n">. 모든 데이터를 다 쓰므로 샘플 수가 많아 분산이 작습니다 (안정적).</li>
-<li><strong>Concentrated Weights</strong>: 최근 데이터에만 큰 가중치를 주면 <img src="https://latex.codecogs.com/png.latex?n%5E%7B%5Ctext%7Beff%7D%7D">가 급격히 작아집니다.
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?n%5E%7B%5Ctext%7Beff%7D%7D">가 작아지면 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 커버리지의 분산(Variance)이 커집니다. (즉, 예측 집합의 크기가 들쑥날쑥해짐)</li>
-</ul></li>
-<li>따라서 <strong>Trade-off</strong>가 존재합니다:
-<ul>
-<li>가중치를 너무 급격하게 줄이면(빠른 적응) <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 분포 변화에는 강하지만, 예측이 불안정해짐.</li>
-<li>가중치를 너무 천천히 줄이면(느린 적응) <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 예측은 안정적이지만, 이미 변해버린 과거 분포의 영향을 받음.</li>
-</ul></li>
-</ul>
-</section>
-<section id="conclusion" class="level1">
-<h1>Conclusion</h1>
-<ul>
-<li><p>Conformal Prediction Under Distribution Drift는 시계열 데이터와 같이 <strong>Non-stationary</strong> 환경에서 신뢰할 수 있는 예측 구간을 만드는 방법입니다.</p></li>
-<li><p>핵심은 <strong>Weighted Quantile</strong>을 사용하는 것입니다.</p></li>
-<li><p>가중치 스케줄(Sliding Window, Decay)을 통해 과거 데이터를 적절히 “망각(Forget)”해야 합니다.</p></li>
-<li><p>이론적으로, 분포 변화가 큰 데이터에 가중치를 적게 줌으로써 커버리지 하락을 방어합니다.</p></li>
-<li><p>하지만 너무 과도한 가중치 조절은 유효 샘플 수를 줄여 불안정성을 초래할 수 있으므로 주의가 필요합니다.</p></li>
-</ul>
-<hr>
-<p><strong>Next Step</strong>: 이제 이론적인 확장은 모두 다루었습니다. 다음 포스트부터는 <strong>Section 5. Worked Examples</strong>로 넘어가서, 실제 데이터셋(Multilabel Classification, Tumor Segmentation 등)에 이 기법들을 어떻게 적용하는지 예제 코드를 통해 구체적으로 살펴보겠습니다.</p>
-
-
-</section>
-
- ]]></description>
-  <category>Paper Review</category>
-  <guid>https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-04-Extensions-of-Conformal-Prediction/Part-04-06-Conformal-Prediction-Under-Distribution-Shift/</guid>
-  <pubDate>Thu, 15 Jan 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification (Part 5)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-05-Worked-Examples/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>Introduction</h1>
-<ul>
-<li><p>지금까지 우리는 Conformal Prediction(CP)의 다양한 이론적 확장(Extension)들을 다루었습니다.</p></li>
-<li><p>이제 이 도구들이 실제 머신러닝 문제에서 어떻게 작동하는지 확인할 차례입니다.</p></li>
-<li><p>이번 포스트에서는 논문의 <strong>Section 5</strong>에서 소개된 5가지의 구체적인 적용 사례를 살펴봅니다.</p></li>
-<li><p>각 사례는 단순한 분류/회귀를 넘어, <strong>Risk Control</strong>, <strong>Distribution Shift</strong>, <strong>Outlier Detection</strong> 등 현실적인 난제들을 어떻게 해결하는지 보여줍니다.</p></li>
-</ul>
-</section>
-<section id="multilabel-classification-with-fnr-control" class="level1">
-<h1>1. Multilabel Classification with FNR Control</h1>
-<section id="problem-setup" class="level2">
-<h2 class="anchored" data-anchor-id="problem-setup">Problem Setup</h2>
-<ul>
-<li>이미지 안에 있는 모든 객체를 맞추는 다중 라벨 분류(Multilabel Classification) 문제입니다.</li>
-<li>단순히 정답을 포함하는 것을 넘어, <strong>“정답 객체 중 90% 이상을 찾아내라(Recall <img src="https://latex.codecogs.com/png.latex?%5Cge"> 90%)”</strong>와 같은 요구사항이 있을 때 사용합니다.</li>
-<li>이를 위해 <strong>False Negative Rate (FNR)</strong>를 제어합니다.
-<ul>
-<li><strong>Dataset</strong>: Microsoft COCO (Common Objects in Context)</li>
-<li><strong>Goal</strong>: 실제 객체들(<img src="https://latex.codecogs.com/png.latex?Y">) 중 모델이 예측한 집합(<img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BC%7D">)에 포함되지 않은 비율(FNR)을 <img src="https://latex.codecogs.com/png.latex?%5Calpha"> 이하로 유지.</li>
-</ul></li>
-</ul>
-</section>
-<section id="methodology-conformal-risk-control" class="level2">
-<h2 class="anchored" data-anchor-id="methodology-conformal-risk-control">Methodology: Conformal Risk Control</h2>
-<ul>
-<li><p>여기서는 <strong>Section 4.3</strong>에서 다룬 Conformal Risk Control(CRC)을 사용합니다.</p></li>
-<li><ol type="1">
-<li><strong>Prediction Set Construction</strong>:</li>
-</ol>
-<ul>
-<li>모델의 예측 확률 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)">가 임계값 <img src="https://latex.codecogs.com/png.latex?%5Clambda"> 이상인 클래스들을 선택합니다. <img src="https://latex.codecogs.com/png.latex?%20%5Cmathcal%7BC%7D_%5Clambda(x)%20=%20%5C%7B%20k%20:%20%5Chat%7Bf%7D(x)_k%20%5Cge%20%5Clambda%20%5C%7D%20">
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Clambda">가 작을수록 더 많은 클래스를 포함하므로 보수적이 됨.</li>
-</ul></li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>Loss Function (<img src="https://latex.codecogs.com/png.latex?l_%7BFNR%7D">)</strong>:</li>
-</ol>
-<ul>
-<li>예측 집합이 정답을 얼마나 놓쳤는지를 정의합니다. <img src="https://latex.codecogs.com/png.latex?l_%7BFNR%7D(%5Cmathcal%7BC%7D_%5Clambda(x),%20y)%20=%201%20-%20%5Cfrac%7B%7C%5Cmathcal%7BC%7D_%5Clambda(x)%20%5Ccap%20y%7C%7D%7B%7Cy%7C%7D"></li>
-<li>만약 정답 <img src="https://latex.codecogs.com/png.latex?y=%5C%7B%5Ctext%7B%EC%82%AC%EB%9E%8C,%20%EC%B0%A8%7D%5C%7D">인데 예측 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BC%7D=%5C%7B%5Ctext%7B%EC%82%AC%EB%9E%8C%7D%5C%7D">이라면, 교집합은 1개, 정답은 2개이므로 손실은 <img src="https://latex.codecogs.com/png.latex?1%20-%201/2%20=%200.5">입니다.</li>
-</ul></li>
-</ul>
-<ol start="3" type="1">
-<li><strong>Threshold Optimization</strong>:
-<ul>
-<li>Calibration Set에서 경험적 리스크가 <img src="https://latex.codecogs.com/png.latex?%5Calpha"> (보정항 포함) 이하가 되는 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Clambda%7D">를 찾습니다. <img src="https://latex.codecogs.com/png.latex?%20%5Chat%7B%5Clambda%7D%20=%20%5Cinf%20%5Cleft%5C%7B%20%5Clambda%20:%20%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5En%20l_%7BFNR%7D(%5Cmathcal%7BC%7D_%5Clambda(X_i),%20Y_i)%20%5Cle%20%5Calpha%20-%20%5Cfrac%7B1-%5Calpha%7D%7Bn%7D%20%5Cright%5C%7D%20"></li>
-</ul></li>
-</ol>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-05-Worked-Examples/images/multilabel.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: MS COCO 데이터셋에 대한 Multilabel Classification 결과 (<img src="https://latex.codecogs.com/png.latex?%5Calpha=0.1">). 빨간색 텍스트는 놓친 정답(False Negative), 파란색은 잘못 예측한 오답(False Positive), 검은색은 맞춘 정답(True Positive)을 나타낸다. 평균적으로 90% 이상의 정답 라벨을 찾아내고 있다.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="tumor-segmentation" class="level1">
-<h1>2. Tumor Segmentation</h1>
-<section id="problem-setup-1" class="level2">
-<h2 class="anchored" data-anchor-id="problem-setup-1">Problem Setup</h2>
-<ul>
-<li>의료 영상에서 종양(Tumor) 부위를 픽셀 단위로 분할(Segmentation)하는 문제입니다.</li>
-<li>여기서도 핵심은 <strong>“종양 픽셀을 놓치지 않는 것”</strong>입니다. 즉, 픽셀 단위의 FNR 제어가 필요합니다.
-<ul>
-<li><strong>Dataset</strong>: Gut Polyps dataset</li>
-<li><strong>Goal</strong>: 전체 종양 픽셀 중 예측 마스크가 커버하지 못한 비율을 제어.</li>
-</ul></li>
-</ul>
-</section>
-<section id="methodology" class="level2">
-<h2 class="anchored" data-anchor-id="methodology">Methodology</h2>
-<ul>
-<li><p>Multilabel Classification과 원리는 동일하지만, 대상이 <strong>클래스</strong>에서 <strong>픽셀</strong>로 바뀝니다.</p></li>
-<li><ol type="1">
-<li><strong>Output</strong>: <img src="https://latex.codecogs.com/png.latex?M%20%5Ctimes%20N"> 크기의 확률 맵 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(x)">.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>Prediction Mask</strong>: 각 픽셀 <img src="https://latex.codecogs.com/png.latex?(i,j)">에 대해 확률이 <img src="https://latex.codecogs.com/png.latex?%5Clambda"> 이상이면 종양으로 예측. <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BC%7D_%5Clambda(x)%20=%20%5C%7B%20(i,j)%20:%20%5Chat%7Bf%7D(x)_%7B(i,j)%7D%20%5Cge%20%5Clambda%20%5C%7D"></li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><strong>Loss Function</strong>: <img src="https://latex.codecogs.com/png.latex?l(%5Cmathcal%7BC%7D,%20Y)%20=%20%5Cfrac%7B%5Ctext%7B%5C#%20of%20missed%20tumor%20pixels%7D%7D%20%7B%5Ctext%7Btotal%20%5C#%20of%20tumor%20pixels%7D%7D"></li>
-</ol></li>
-<li><p>이 방법을 적용하면 의사는 “이 AI가 표시한 영역 안에 실제 종양의 90%가 포함되어 있다”는 확신을 가지고 진단에 임할 수 있습니다.</p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-05-Worked-Examples/images/segmentation.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 종양 분할(Tumor Segmentation) 결과 (<img src="https://latex.codecogs.com/png.latex?%5Calpha=0.1">). 붉은 영역은 모델이 놓친 종양 부위(False Negative)이다. CRC를 통해 놓치는 부위를 통계적으로 최소화할 수 있다.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="weather-prediction-time-series" class="level1">
-<h1>3. Weather Prediction (Time-Series)</h1>
-<section id="problem-setup-2" class="level2">
-<h2 class="anchored" data-anchor-id="problem-setup-2">Problem Setup</h2>
-<ul>
-<li>시간의 흐름에 따라 기온(Temperature)을 예측하는 시계열 회귀 문제입니다.</li>
-<li>시간이 지남에 따라 계절이 바뀌고 기후가 변하므로, 데이터는 <strong>i.i.d.가 아니며 분포가 표류(Distribution Drift)</strong>합니다.
-<ul>
-<li><strong>Dataset</strong>: Yandex Weather Prediction (Shifts Project)</li>
-<li><strong>Challenge</strong>: 과거 데이터와 현재 데이터의 상관관계가 변함.</li>
-</ul></li>
-</ul>
-</section>
-<section id="methodology-weighted-conformal-prediction" class="level2">
-<h2 class="anchored" data-anchor-id="methodology-weighted-conformal-prediction">Methodology: Weighted Conformal Prediction</h2>
-<ul>
-<li><strong>Section 4.6</strong>의 분포 표류(Distribution Drift) 대응법을 사용합니다.</li>
-<li><ol type="1">
-<li><strong>Score Function</strong>:</li>
-</ol>
-<ul>
-<li>예측값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bf%7D(X_t)">와 불확실성 추정값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bu%7D(X_t)">를 이용한 정규화된 잔차(Normalized Residual)를 사용합니다. <img src="https://latex.codecogs.com/png.latex?%20s_t%20=%20%5Cfrac%7B%7CY_t%20-%20%5Chat%7Bf%7D(X_t)%7C%7D%7B%5Chat%7Bu%7D(X_t)%7D%20"></li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>Weighted Quantile</strong>:</li>
-</ol>
-<ul>
-<li>최근 <img src="https://latex.codecogs.com/png.latex?K">개의 데이터만 사용하는 <strong>Sliding Window</strong> 방식을 적용합니다.</li>
-<li>가중치 <img src="https://latex.codecogs.com/png.latex?w_%7Bt'%7D%20=%20%5Cmathbb%7BI%7D%5C%7Bt'%20%5Cge%20t%20-%20K%5C%7D">를 사용하여, 오래된 데이터는 과감히 버리고 최근 데이터 분포에만 맞춥니다. <img src="https://latex.codecogs.com/png.latex?%20%5Chat%7Bq%7D_t%20=%20%5Ctext%7BQuantile%7D_%7B%5Ctext%7Bweighted%7D%7D(s_%7Bt-K%7D,%20%5Cdots,%20s_%7Bt-1%7D)%20"></li>
-</ul></li>
-<li>결과적으로 급격한 기온 변화나 계절 변화가 발생했을 때, 일반 CP보다 훨씬 빠르게 적응하여 적절한 커버리지를 회복합니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-05-Worked-Examples/images/weather.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 시계열 기온 예측 결과. (왼쪽) 일반 CP(주황색)는 분포 변화 시 커버리지가 무너지지만, Weighted CP(파란색)는 빠르게 회복하여 목표 커버리지(0.9)를 유지한다. (오른쪽) 예측된 구간의 시각화.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="toxic-comment-identification-outlier-detection" class="level1">
-<h1>4. Toxic Comment Identification (Outlier Detection)</h1>
-<section id="problem-setup-3" class="level2">
-<h2 class="anchored" data-anchor-id="problem-setup-3">Problem Setup</h2>
-<ul>
-<li>온라인 댓글이 유해한지(Toxic) 아닌지를 판별하는 문제입니다.</li>
-<li>정상적인 대화(Non-toxic) 데이터만 잔뜩 있는 상태에서, 새로운 댓글이 <strong>정상 범주를 벗어난(Outlier/Toxic)</strong> 것인지 탐지합니다.
-<ul>
-<li><strong>Dataset</strong>: Jigsaw Multilingual Toxic Comment Classification</li>
-<li><strong>Goal</strong>: 정상 댓글을 유해하다고 잘못 판별할 확률(False Positive Rate)을 <img src="https://latex.codecogs.com/png.latex?%5Calpha"> 이하로 제어. (Type-1 Error Control)</li>
-</ul></li>
-</ul>
-</section>
-<section id="methodology-conformal-outlier-detection" class="level2">
-<h2 class="anchored" data-anchor-id="methodology-conformal-outlier-detection">Methodology: Conformal Outlier Detection</h2>
-<ul>
-<li><strong>Section 4.4</strong>의 방법을 적용합니다.</li>
-<li><ol type="1">
-<li><strong>Heuristic Model</strong>: BERT 기반의 유해성 점수 예측 모델 <img src="https://latex.codecogs.com/png.latex?f(x)%20%5Cin%20%5B0,%201%5D">.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>Calibration</strong>: 정상 댓글(Non-toxic) <img src="https://latex.codecogs.com/png.latex?n">개에 대해 점수 <img src="https://latex.codecogs.com/png.latex?s_i%20=%20f(X_i)">를 계산하고 Quantile <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bq%7D">를 구합니다.</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><strong>Detection</strong>: <img src="https://latex.codecogs.com/png.latex?%20%5Cmathcal%7BC%7D(x)%20=%20%5Cbegin%7Bcases%7D%20%5Ctext%7BNormal%7D%20&amp;%20%5Ctext%7Bif%20%7D%20f(x)%20%5Cle%20%5Chat%7Bq%7D%20%5C%5C%20%5Ctext%7BToxic%20(Outlier)%7D%20&amp;%20%5Ctext%7Bif%20%7D%20f(x)%20%3E%20%5Chat%7Bq%7D%20%5Cend%7Bcases%7D%20"></li>
-</ol></li>
-<li>이 방식은 “이 댓글은 유해합니다”라고 경보를 울릴 때, 그 경보가 오작동일 확률을 수학적으로 보장해줍니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-05-Worked-Examples/images/toxic.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 유해 댓글 탐지 예시 (<img src="https://latex.codecogs.com/png.latex?%5Calpha=0.1">). 다국어 댓글에 대해 정상 댓글을 유해하다고 잘못 분류할 확률을 10%로 제한하면서, 실제 유해 댓글의 70%를 성공적으로 잡아냈다.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="selective-classification-abstention" class="level1">
-<h1>5. Selective Classification (Abstention)</h1>
-<section id="problem-setup-4" class="level2">
-<h2 class="anchored" data-anchor-id="problem-setup-4">Problem Setup</h2>
-<ul>
-<li>모델이 확신할 수 없을 때는 <strong>“모르겠습니다(I don’t know)”</strong>라고 대답을 거부(Abstain)하는 시스템입니다.</li>
-<li>목표는 대답을 거부하지 않고 예측을 내놓았을 때의 정확도가 <img src="https://latex.codecogs.com/png.latex?%5Cge%201-%5Calpha">가 되도록 하는 것입니다.
-<ul>
-<li><strong>Dataset</strong>: ImageNet</li>
-<li><strong>Goal</strong>: Selective Accuracy <img src="https://latex.codecogs.com/png.latex?%5Cge%2090%5C%25">.</li>
-</ul></li>
-</ul>
-</section>
-<section id="methodology-learn-then-test" class="level2">
-<h2 class="anchored" data-anchor-id="methodology-learn-then-test">Methodology: Learn then Test</h2>
-<ul>
-<li>이 문제는 정확도(Accuracy)가 임계값 <img src="https://latex.codecogs.com/png.latex?%5Clambda">에 따라 단조 증가(Monotone)하지 않을 수 있기 때문에, 표준 CRC 대신 <strong>Learn then Test</strong> (Appendix A 내용) 프레임워크를 사용합니다.</li>
-<li><ol type="1">
-<li><strong>Risk Definition</strong>: <img src="https://latex.codecogs.com/png.latex?%20R(%5Clambda)%20=%20%5Cmathbb%7BP%7D(%5Ctext%7BError%7D%20%5Cmid%20%5Ctext%7BConfidence%7D%20%5Cge%20%5Clambda)%20"></li>
-</ol>
-<ul>
-<li>조건부 확률이므로 직접 제어하기 까다롭습니다.</li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>Empirical Estimate &amp; Upper Bound</strong>:</li>
-</ol>
-<ul>
-<li>Calibration Set에서 특정 신뢰도 <img src="https://latex.codecogs.com/png.latex?%5Clambda"> 이상인 샘플들의 에러율 <img src="https://latex.codecogs.com/png.latex?%5Chat%7BR%7D(%5Clambda)">를 계산합니다.</li>
-<li>이 에러율은 이항 분포(Binomial Distribution)를 따르므로, 클로퍼-피어슨(Clopper-Pearson) 구간 등을 이용해 <strong>에러율의 보수적 상한선(Upper Bound) <img src="https://latex.codecogs.com/png.latex?%5Chat%7BR%7D%5E+(%5Clambda)"></strong>을 구합니다.</li>
-</ul></li>
-<li><ol start="3" type="1">
-<li><strong>Scan &amp; Select</strong>: <img src="https://latex.codecogs.com/png.latex?%5Chat%7BR%7D%5E+(%5Clambda)%20%5Cle%20%5Calpha">를 만족하는 가장 작은 <img src="https://latex.codecogs.com/png.latex?%5Clambda">를 선택합니다.</li>
-</ol></li>
-<li>결과적으로 모델은 자신이 없으면 대답을 회피하고, 대답을 했을 때는 매우 높은 정확도를 보장하게 됩니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-05-Worked-Examples/images/selective.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: ImageNet에 대한 Selective Classification 결과. (왼쪽) <img src="https://latex.codecogs.com/png.latex?%5Clambda">가 커질수록(가로축), 예측을 수행하는 비율(주황색)은 줄어들지만, 정확도(파란색)는 올라간다. 점선은 목표 정확도 90%를 달성하는 지점을 나타낸다. (오른쪽) 모델이 예측한 예시(가오리)와 기권을 선택한 예시(여우).</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="conclusion" class="level1">
-<h1>Conclusion</h1>
-<ul>
-<li>이상의 5가지 예제는 Conformal Prediction이 단순히 이론적인 개념에 머무르지 않고, <strong>실제 현업의 복잡한 문제들을 해결하는 강력한 도구</strong>임을 보여줍니다.
-<ul>
-<li><strong>Segmentation/Multilabel</strong>: 단순 에러율이 아닌 FNR 등 복잡한 Metric 제어.</li>
-<li><strong>Time-series</strong>: 데이터 분포 변화(Drift)에 대한 적응.</li>
-<li><strong>Outlier Detection</strong>: 비지도 학습 환경에서의 통계적 보장.</li>
-<li><strong>Selective Classification</strong>: 고위험 환경에서의 안전한 AI.</li>
-</ul></li>
-<li>이 모든 과정에서 가장 중요한 것은 <strong>“적절한 Score Function의 정의”</strong>와 <strong>“올바른 Calibration 기법의 선택”</strong>입니다.</li>
-</ul>
-<hr>
-<p><strong>Next Step</strong>: 이제 Conformal Prediction의 핵심 이론과 응용 사례를 모두 살펴보았습니다. 다음 포스트에서는 이 모든 내용을 아우르는 <strong>Full Conformal Prediction</strong>과 문서를 마무리하는 논의들을 정리하며 시리즈를 마치겠습니다.</p>
-
-
-</section>
-
- ]]></description>
-  <category>Paper Review</category>
-  <guid>https://shsha0110.github.io/posts/paper/A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification/Part-05-Worked-Examples/</guid>
   <pubDate>Thu, 15 Jan 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>

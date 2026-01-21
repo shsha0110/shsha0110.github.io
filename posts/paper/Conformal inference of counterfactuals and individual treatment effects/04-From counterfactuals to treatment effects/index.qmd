@@ -1,0 +1,295 @@
+---
+title: "미지의 영역으로: 새로운 환자를 위한 ITE 구간 추정"
+subtitle: "Paper Review: Conformal inference of counterfactuals and individual treatment effects (Section 4)"
+author: "Reviewer"
+date: "2026-01-22"
+categories: [Causal Inference, Nested Conformal Prediction, ITE]
+format:
+  html:
+    toc: true
+    number-sections: true
+    math: true
+---
+
+## 들어가며
+
+이전 포스트(Section 3)까지 우리는 데이터셋에 이미 존재하는 대상(In-sample)에 대해, 관측되지 않은 반사실(Counterfactual)을 추론하여 ITE 구간을 구하는 법을 배웠습니다.
+
+하지만 현실의 문제는 더 어렵습니다. 병원에 **새로운 환자**가 찾아왔습니다. 이 환자는 아직 처치를 받지도(Treat), 받지 않지도(Control) 않았습니다. 즉, $Y(1)$과 $Y(0)$가 **모두 미지수(Missing)**입니다.
+
+이번 포스트에서는 Section 4에서 제안하는, **두 잠재적 결과가 모두 없는 새로운 대상**에 대해 ITE 신뢰 구간을 구축하는 세 가지 접근법(Naive, Nested-Inexact, Nested-Exact)을 살펴보겠습니다.
+
+---
+
+## 나이브 접근법 (A Naive Approach)
+
+가장 직관적이고 단순한 방법은 앞서 배운 반사실 추론 도구를 각각 적용하는 것입니다.
+
+### 논리적 구조
+
+1.  새로운 환자 $X$에 대해 $Y(1)$의 예측 구간 $[\hat{Y}^L(1), \hat{Y}^R(1)]$을 구합니다.
+2.  동일한 환자 $X$에 대해 $Y(0)$의 예측 구간 $[\hat{Y}^L(0), \hat{Y}^R(0)]$을 구합니다.
+3.  두 구간의 차(Difference)를 이용하여 ITE 구간을 구성합니다.
+
+### 수학적 정의
+
+ITE 구간 $\hat{C}_{ITE}(x)$는 다음과 같이 정의됩니다.
+
+$$
+\hat{C}_{ITE}(x) = [\hat{Y}^L(1;x) - \hat{Y}^R(0;x), \quad \hat{Y}^R(1;x) - \hat{Y}^L(0;x)]
+$$
+
+* **하한(Lower Bound):** $Y(1)$의 최소값 - $Y(0)$의 최대값 (최악의 경우)
+* **상한(Upper Bound):** $Y(1)$의 최대값 - $Y(0)$의 최소값 (최상의 경우)
+
+### 한계점
+만약 각 반사실 구간이 $1-\alpha/2$ 수준의 커버리지를 가진다면, 이 나이브 구간은 $1-\alpha$ 수준의 ITE 커버리지를 보장합니다.
+
+하지만 이 방식은 **구간이 지나치게 넓어지는(Conservative)** 경향이 있습니다. $Y(1)$과 $Y(0)$ 사이의 상관관계를 고려하지 않고, 가장 극단적인 경우를 가정하여 구간을 빼버리기 때문입니다.
+
+![Image: naive_approach_diagram.png]
+*Figure 1: 나이브 접근법의 도식화. 두 개의 독립적인 구간을 단순히 빼서 ITE 구간을 만들면, 불확실성이 과도하게 합쳐져 구간이 매우 넓어진다.*
+
+---
+
+## 중첩 접근법 (A Nested Approach)
+
+저자들은 나이브 방식의 한계를 극복하기 위해 **중첩(Nested) 접근법**을 제안합니다. 이 방법은 데이터를 두 번 활용하여, ITE에 대한 **"대리 구간(Surrogate Interval)"**을 먼저 만들고 이를 학습하는 방식입니다.
+
+### 데이터 분할 전략 (Data Splitting)
+
+전체 데이터를 두 개의 폴드(Fold 1, Fold 2)로 나눕니다.
+
+1.  **Fold 1 (Training):** 반사실 구간 모델($\hat{C}_1(x), \hat{C}_0(x)$)을 학습하는 데 사용합니다 (Section 3의 방법론 적용).
+2.  **Fold 2 (Inference):** 학습된 모델을 적용하여 각 개체의 ITE 구간을 추론하고, 이를 다시 학습 데이터로 활용합니다.
+
+### 대리 구간(Surrogate Interval) 생성
+
+Fold 2에 있는 개체 $i$는 $T_i$와 $Y_i^{obs}$를 알고 있습니다. 이를 이용해 개인별 ITE 구간 $\hat{C}_i$를 다음과 같이 계산합니다.
+
+$$
+\hat{C}_{ITE}(X_i; T_i, Y_i^{obs}) = 
+\begin{cases} 
+Y_i^{obs} - \hat{C}_0(X_i) & \text{if } T_i = 1 \\ 
+\hat{C}_1(X_i) - Y_i^{obs} & \text{if } T_i = 0 
+\end{cases}
+$$
+
+* **설명:**
+    * 처치군($T=1$)은 $Y(1)$을 이미 알고 있습니다. 따라서 $Y(0)$에 대한 예측 구간만 구해서 관측값에서 빼줍니다.
+    * 대조군($T=0$)은 $Y(0)$를 이미 알고 있습니다. 따라서 $Y(1)$에 대한 예측 구간을 구해서 관측값을 빼줍니다.
+
+![Image: nested_approach_table.png]
+*Figure 2: 중첩 접근법의 데이터 흐름 (Table 3 참조). Fold 1에서 모델을 만들고, Fold 2에서 실제 관측값과 결합하여 ITE 구간을 완성한다.*
+
+### 커버리지 보장 증명
+
+이렇게 만든 대리 구간 $\hat{C}_i$가 실제 ITE를 포함할 확률은 얼마나 될까요?
+
+$$
+\begin{align}
+\mathbb{P}(Y_i(1) - Y_i(0) \in \hat{C}_i) &= \mathbb{P}(T_i=1)\mathbb{P}(Y_i(0) \in \hat{C}_0(X_i) | T_i=1) \\
+&+ \mathbb{P}(T_i=0)\mathbb{P}(Y_i(1) \in \hat{C}_1(X_i) | T_i=0)
+\end{align}
+$$
+
+만약 우리가 Fold 1에서 만든 구간들이 각각 조건부 커버리지 $1-\alpha$를 만족한다면(식 14), 위 식에 의해 **대리 구간 $\hat{C}_i$ 역시 ITE를 $1-\alpha$ 확률로 포함**하게 됩니다(식 15).
+
+---
+
+## 중첩 프레임워크 하에서의 두 가지 방법론
+
+이제 우리는 Fold 2 데이터셋을 통해 입력 $X_i$와 출력 구간 $\hat{C}_i$의 쌍 $(X_i, \hat{C}_i)$를 확보했습니다. 이제 새로운 데이터 $X$가 들어왔을 때 어떤 구간을 내놓을지 결정해야 합니다.
+
+### 1. 부정확한 방법 (The Inexact Method)
+
+가장 실용적인 방법은 머신러닝을 이용해 구간의 경계를 직접 예측하는 것입니다.
+
+* **방법:** $\hat{C}_i$의 왼쪽 끝점($L$)과 오른쪽 끝점($R$)을 타겟 변수로 삼아, $X_i$에 대해 회귀 모델을 학습합니다.
+* **예시:** 왼쪽 끝점의 40% 분위수, 오른쪽 끝점의 60% 분위수를 예측하는 모델 등.
+* **특징:**
+    * **장점:** 나이브 접근법보다 훨씬 짧고 효율적인 구간을 생성합니다.
+    * **단점:** "부정확(Inexact)"하다고 명명된 이유는, 최종 예측 결과에 대한 엄밀한 유한 샘플 커버리지 보장(Finite-sample guarantee)이 없기 때문입니다.
+
+### 2. 정확한 방법 (The Exact Method)
+
+엄격한 안전성이 요구되는 의료/금융 분야를 위해, 저자들은 **2차 컨포멀 추론(Secondary Conformal Inference)**을 제안합니다.
+
+* **목표:** 새로운 입력 $X$에 대해, 앞서 구한 대리 구간 $C$를 포함할 확률이 $1-\gamma$인 **구간의 구간(Interval expansion)** $\hat{\mathcal{C}}(X)$를 찾는 것입니다.
+
+$$
+\mathbb{P}(C \subset \hat{\mathcal{C}}(X)) \ge 1 - \gamma
+$$
+
+이를 만족하면 최종적으로 ITE를 놓칠 확률은 $\alpha + \gamma$ 이하로 통제됩니다.
+
+$$
+\mathbb{P}(\text{ITE Error}) \le \alpha (\text{Step 1 Error}) + \gamma (\text{Step 2 Error})
+$$
+
+#### Algorithm 2: 구간 결과를 위한 컨포멀 추론
+
+저자들은 단순한 보정(Bonferroni) 대신, 구간의 왼쪽($C^L$)과 오른쪽($C^R$)을 동시에 보정하는 알고리즘을 제시합니다.
+
+1.  **점수 계산 (Score $V_i$):** 예측된 구간 $[\hat{m}^L, \hat{m}^R]$이 실제 대리 구간 $[C^L, C^R]$을 얼마나 벗어났는지 계산합니다.
+    $$V_i = \max \{ \hat{m}^L(X_i) - C_i^L, \quad C_i^R - \hat{m}^R(X_i) \}$$
+2.  **보정값 ($\eta$) 산출:** $V_i$들의 분포에서 $(1-\gamma)$ 분위수를 찾아 보정합니다.
+3.  **최종 구간:** $[\hat{m}^L(x) - \eta, \hat{m}^R(x) + \eta]$
+
+이 "정확한 방법"을 사용하면, 새로운 환자에 대해서도 수학적으로 증명된 커버리지를 가진 ITE 구간을 제공할 수 있습니다.
+
+---
+
+## 요약
+
+Section 4는 인과추론의 가장 어려운 단계인 **완전한 미지수(Out-of-sample ITE)**를 다룹니다.
+
+| 접근법 | 설명 | 장점 | 단점 |
+| :--- | :--- | :--- | :--- |
+| **Naive** | $Y(1)$ 구간 - $Y(0)$ 구간 | 구현이 쉬움 | 구간이 너무 넓어 쓸모가 적음 |
+| **Nested (Inexact)** | ITE 대리 구간($\hat{C}_i$)을 ML로 학습 | 구간이 짧고 효율적임 | 수학적 보장이 완벽하지 않음 |
+| **Nested (Exact)** | 대리 구간에 대해 다시 Conformal 적용 | **이중 보장($\alpha+\gamma$)** 가능 | Inexact보다 구간이 다소 넓을 수 있음 |
+
+실제 적용 시에는 데이터의 양과 리스크 허용 범위에 따라 **Nested-Inexact** (실용성 중시) 혹은 **Nested-Exact** (안전성 중시)를 선택하여 사용할 수 있습니다.
+
+***
+**Reference:**
+Lei, L., & Candès, E. J. (2021). Conformal inference of counterfactuals and individual treatment effects. *Journal of the Royal Statistical Society: Series B (Statistical Methodology)*, 83(5), 911-938.
+
+---
+title: "실전 검증: ACIC 2018 데이터와 NLSM 실제 사례 분석"
+subtitle: "Paper Review: Conformal inference of counterfactuals and individual treatment effects (Section 4.4 - 4.5)"
+author: "Reviewer"
+date: "2026-01-22"
+categories: [Causal Inference, Empirical Study, Real World Application]
+format:
+  html:
+    toc: true
+    number-sections: true
+    math: true
+---
+
+## 들어가며
+
+이론적으로 완벽해 보이는 방법론도 실제 데이터 앞에서는 무력할 수 있습니다. 특히, 인과추론의 가장 큰 난제인 **"두 잠재적 결과가 모두 결측된 새로운 대상(Out-of-sample)"**에 대한 ITE 구간 추정은 검증이 더욱 까다롭습니다.
+
+저자들은 이를 검증하기 위해 두 가지 단계의 실험을 설계했습니다.
+1.  **정답(Ground Truth)을 아는 상황:** ACIC 2018 워크숍 데이터를 기반으로 한 합성 데이터 실험.
+2.  **정답을 모르는 상황:** 실제 NLSM(National Study of Learning Mindsets) 데이터 분석.
+
+---
+
+## ACIC 2018 데이터를 활용한 성능 평가 (Empirical Performance)
+
+### 데이터 생성 메커니즘 (Data Generating Process)
+
+저자들은 2018 Atlantic Causal Inference Conference (ACIC) 워크숍에서 사용된 데이터를 기반으로 실험을 설계했습니다. 이 데이터는 실제 대규모 교육 실험인 NLSM의 특성을 모방하여 만들어졌습니다.
+
+커버리지(Coverage)를 정확히 평가하려면 실제값($Y(1), Y(0)$)을 알아야 하므로, 저자들은 다음과 같은 과정을 통해 합성 데이터를 생성했습니다.
+
+**Step 1: 기저 함수 학습**
+전체 데이터를 $\mathcal{Z}_1$ (20%)과 $\mathcal{Z}_2$ (80%)로 나눕니다. $\mathcal{Z}_1$을 이용해 $Y(0)$의 평균 함수 $\hat{m}_0(x)$를 Random Forest로 학습합니다.
+
+**Step 2: 이분산성(Heteroscedasticity) 모델링**
+데이터의 현실성을 높이기 위해 오차의 분산이 공변량에 따라 달라지게 설정합니다. Quantile Random Forest를 이용해 조건부 사분위수 범위(Interquartile Range) $\hat{r}_0(x)$와 $\hat{r}_1(x)$를 추정합니다.
+
+**Step 3: 잠재적 결과 생성 (수학적 정의)**
+새로운 공변량 $X_i$에 대해, 잠재적 결과는 다음과 같이 생성됩니다.
+
+$$
+\begin{align}
+Y_i(0) &= \hat{m}_0(X_i) + 0.5 \hat{r}_0(X_i) \epsilon_{i0} \\
+Y_i(1) &= \hat{m}_0(X_i) + \tau(X_i) + 0.5 \hat{r}_1(X_i) \epsilon_{i1}
+\end{align}
+$$
+
+* $\tau(x)$: 사전에 정의된 참 CATE 함수.
+* $\epsilon_{i0}, \epsilon_{i1} \sim N(0, 1)$: 독립적인 표준 정규분포 노이즈.
+* 이 식은 평균 효과뿐만 아니라 분산의 구조까지 반영된 정교한 생성 방식입니다.
+
+**Step 4: 성향 점수 및 관측 데이터 생성**
+성향 점수 $\hat{e}(x)$를 추정하고, 이를 0.1과 0.9 사이로 잘라낸(Truncate) 뒤, 베르누이 시행을 통해 처치 여부 $T_i$를 결정합니다.
+
+$$
+T_i \sim \text{Bernoulli}(\hat{e}(X_i))
+$$
+
+### 비교 방법론 및 실험 설정
+
+* **Training:** $n=1000$개의 샘플로 학습.
+* **Testing:** 5000개의 새로운 샘플에 대해 ITE 구간 추정 (오직 $X$만 제공됨).
+* **비교 대상:**
+    * **CQR 계열:** Naive, Exact Nested, Inexact Nested (제안 방법).
+    * **BART 계열:** Naive, Inexact Nested.
+    * **벤치마크:** Causal Forest, X-learner (ITE용이 아님을 감안).
+
+### 실험 결과 1: 커버리지와 구간 길이
+
+![Figure 5: Coverage and average length of intervals for ITE](Figure_5_Coverage_and_average_length.png)
+*Figure 5: (왼쪽) ITE 구간의 커버리지. 빨간 선은 목표인 95%. (오른쪽) 구간의 평균 길이. 파란 선은 Oracle 길이.*
+
+**핵심 결과 분석:**
+1.  **Naive 방법들의 보수성:** CQR(Naive)와 BART(Naive)는 100%에 가까운 커버리지를 보이지만, 구간의 길이가 매우 깁니다(오른쪽 패널). 이는 두 구간을 단순히 뺐기 때문에 불확실성이 과대평가되었음을 의미합니다.
+2.  **Inexact Nested CQR의 우수성:** 제안된 **Inexact Nested CQR**은 목표치인 95% 커버리지를 정확히 달성하면서도, 구간의 길이가 Naive 방식이나 Exact 방식보다 훨씬 짧고 효율적입니다.
+3.  **경쟁자들의 실패:**
+    * **BART(Inexact):** 목표 커버리지(95%)에 도달하지 못했습니다.
+    * **Causal Forest / X-learner:** ITE가 아닌 CATE를 추정하도록 설계되었기에, ITE의 불확실성을 담기에는 구간이 턱없이 좁고 커버리지가 매우 낮습니다.
+
+### 실험 결과 2: 조건부 커버리지의 안정성
+
+데이터의 분산(Variance)이나 효과의 크기(CATE)가 달라질 때 커버리지가 유지되는지 확인합니다.
+
+![Figure 6: Estimated conditional coverage of ITE](Figure_6_Estimated_conditional_coverage_of_ITE.png)
+*Figure 6: 조건부 분산(위쪽 행)과 CATE 크기(아래쪽 행)에 따른 조건부 커버리지 변화.*
+
+* **Inexact CQR (맨 오른쪽):** 분산이 커지거나(x축 오른쪽), CATE가 변해도 커버리지가 비교적 안정적으로 유지됩니다.
+* **Inexact BART (두 번째 열):** 조건부 분산이 커질수록 커버리지가 급격히 떨어지는 약점을 보입니다. 이는 Section 3.6의 결과와 일치하며, BART가 이분산성(Heteroscedasticity) 데이터에서 불확실성 추정에 취약함을 재확인시켜 줍니다.
+
+---
+
+## 실제 데이터 재분석: NLSM (Re-analysing NLSM data)
+
+### 분석 개요
+
+NLSM(National Study of Learning Mindsets)은 학생들의 학습 태도에 대한 개입 효과를 연구한 대규모 실험입니다. 실제 데이터이므로 개별 학생의 참 ITE($Y_i(1)-Y_i(0)$)는 알 수 없습니다(Ground Truth 부재).
+
+하지만 저자들은 제안한 **Inexact CQR (w/ BART learner)** 방법을 적용하여 탐색적 분석(Exploratory Analysis)을 수행했습니다. 이는 실제 환경에서 이 방법론이 어떻게 의사결정을 도울 수 있는지 보여줍니다.
+
+### 분석 방법: 교차 예측 (Cross-Prediction)
+
+데이터를 두 폴드 $\mathcal{Z}_1, \mathcal{Z}_2$로 나눈 뒤, 서로가 서로의 테스트 셋이 되도록 교차하여 ITE 구간을 생성했습니다. 이를 100회 반복하여 변동성을 반영했습니다.
+
+### 분석 결과 및 해석
+
+![Figure 7: Re-analysis of NLSM data](Figure_7_Re_analysis_of_NLSM_data.png)
+*Figure 7: NLSM 데이터 분석 결과. (a) 유의수준 alpha에 따른 구간 길이. (b) 구간의 하한이 양수인 비율(긍정적 효과). (c) 구간의 상한이 음수인 비율(부정적 효과).*
+
+1.  **구간의 길이 (패널 a):** 허용 오차 수준($\alpha$)이 커질수록(즉, 신뢰 수준이 낮아질수록) 구간의 길이는 줄어듭니다. 이는 통계적으로 자연스러운 현상입니다.
+2.  **긍정적 효과의 발견 (패널 b):** $\alpha > 0.25$ (신뢰수준 75% 미만)일 때부터 구간의 하한이 0보다 큰(Positive Lower Bound) 케이스들이 나타나기 시작합니다.
+    * **의미:** "이 학생에게 개입을 하면 학습 태도가 개선될 것이다"라고 어느 정도 확신을 가지고 말할 수 있는 학생들의 비율입니다.
+3.  **부정적 효과의 부재 (패널 c):** $\alpha$를 0.5까지 높여도 구간의 상한이 0보다 작은(Negative Upper Bound) 케이스는 거의 없습니다.
+    * **의미:** 이 개입(Intervention)이 학생에게 악영향을 끼친다는 증거는 발견되지 않았습니다.
+
+### 실무적 시사점
+
+이 분석은 정책 결정자에게 매우 유용한 가이드를 제공합니다.
+* **안전한 개입:** 부정적 효과가 관측되지 않으므로, 부작용 걱정 없이 프로그램을 시행할 수 있는 근거가 됩니다.
+* **타겟팅:** 긍정적 효과가 확실시되는 하위 그룹을 식별하여 자원을 집중할 수 있습니다.
+* 이 모든 판단은 점 추정(Point Estimate)이 아닌, **신뢰할 수 있는 구간(Interval Estimate)**에 기반하므로 훨씬 더 안전합니다.
+
+---
+
+## 결론 (Conclusion)
+
+이 논문은 인과추론의 영역을 **'평균의 점 추정'**에서 **'개인의 구간 추정'**으로 확장했습니다.
+
+1.  **방법론의 확장:** 가중 컨포멀 추론(Weighted Conformal Inference)을 통해 관측 데이터의 공변량 변화(Covariate Shift)를 보정했습니다.
+2.  **이중 강건성:** 성향 점수 혹은 결과 모델 중 하나만 정확해도 커버리지가 보장됨을 입증했습니다.
+3.  **현실적 적용:** 데이터가 완전히 없는 새로운 대상에 대해서도 중첩(Nested) 접근법을 통해 효율적인 ITE 구간을 생성할 수 있음을 보였습니다.
+4.  **성능 입증:** 합성 데이터와 실제 데이터 분석을 통해, 기존의 Causal Forest나 BART보다 불확실성 정량화 측면에서 우월함을 증명했습니다.
+
+결국 이 연구는 **"불확실성을 고려한 안전하고 정밀한 의사결정"**이라는 인과추론의 궁극적 목표에 한 걸음 더 다가가게 해 줍니다.
+
+***
+**Reference:**
+Lei, L., & Candès, E. J. (2021). Conformal inference of counterfactuals and individual treatment effects. *Journal of the Royal Statistical Society: Series B (Statistical Methodology)*, 83(5), 911-938.

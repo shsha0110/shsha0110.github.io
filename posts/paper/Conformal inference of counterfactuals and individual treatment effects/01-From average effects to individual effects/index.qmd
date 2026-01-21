@@ -1,0 +1,138 @@
+---
+title: "평균을 넘어 개인으로: 인과추론의 새로운 패러다임과 Conformal Inference"
+subtitle: "Paper Review: Conformal inference of counterfactuals and individual treatment effects (Section 1)"
+author: "Reviewer"
+date: "2026-01-22"
+categories: [Causal Inference, Statistics, Machine Learning]
+format:
+  html:
+    toc: true
+    number-sections: true
+---
+
+## 들어가며: 평균의 함정
+
+인과추론(Causal Inference) 분야에서 지난 수십 년간 가장 지배적인 목표는 **평균 처치 효과(ATE, Average Treatment Effect)**를 추정하는 것이었습니다. 하지만 ATE는 집단 전체에 대한 거친 요약(coarse summary)일 뿐, 개별 환자나 대상에게 적용할 때는 치명적인 한계를 드러낼 수 있습니다.
+
+논문에서는 아주 직관적인 예시를 듭니다. 어떤 신약이 있다고 가정해 봅시다.
+
+> **시나리오:**
+> * 환자의 **70%**: 완치됨 (긍정적 효과)
+> * 환자의 **30%**: 증상이 훨씬 악화됨 (부정적 효과)
+
+이 경우, 단순 평균을 내면 "효과가 있다"는 긍정적인 ATE가 도출될 수 있습니다. 하지만 이 약을 승인해야 할까요? [cite_start]30%의 환자에게는 독이 될 수 있는 약을 획일적으로 처방하는 것은 위험합니다[cite: 36, 37].
+
+[cite_start]이처럼 **"One-size-fits-all(만능)"** 접근법은 불충분하며, 임상적 특성과 개인의 선호에 맞춘 **개별 처치 효과(ITE, Individual Treatment Effect)**의 추정이 필수적입니다[cite: 42].
+
+---
+
+## CATE의 등장과 그 한계
+
+### CATE란 무엇인가?
+
+ITE의 중요성이 대두되면서, 연구자들은 **조건부 평균 처치 효과(CATE, Conditional Average Treatment Effect)**에 주목하기 시작했습니다. CATE는 특정 공변량(covariate, $X$)을 가진 하위 그룹의 평균적인 효과를 의미합니다.
+
+$$
+\tau(x) = \mathbb{E}[Y(1) - Y(0) | X = x]
+$$
+
+여기서 $Y(1)$은 처치를 받았을 때의 잠재적 결과, $Y(0)$는 받지 않았을 때의 결과입니다. [cite_start]머신러닝 알고리즘을 활용해 이 CATE를 유연하게 추정하려는 시도가 많았습니다[cite: 16].
+
+!(placeholder_image_1.png)
+*Figure 1: 평균 처치 효과(ATE)와 조건부 평균 처치 효과(CATE)의 차이. ATE는 전체의 평균을 보지만, CATE는 변수 X에 따른 효과의 분포를 추정한다.*
+
+### 점 추정(Point Estimate)의 위험성
+
+하지만 본 논문의 저자들은 CATE 역시 충분하지 않다고 지적합니다. CATE는 여전히 **'조건부 평균(Expectation)'**에 불과하기 때문입니다. 의사결정, 특히 의료나 공공 정책과 같이 민감한 분야에서는 "평균적으로 어떠한가"보다 **"불확실성이 어느 정도인가"**가 훨씬 중요합니다.
+
+[cite_start]저자들은 CATE 추정만으로는 놓치게 되는 두 가지 핵심적인 변동성(Variability)을 강조합니다[cite: 48].
+
+1.  **반응 변수의 내재적 변동성 (Aleatoric Uncertainty):** 회귀 함수(regression function) 주변에 데이터가 얼마나 퍼져 있는가? 공변량 $X$가 ITE의 변동을 완벽하게 설명하지 못한다면 여전히 큰 불확실성이 남습니다.
+2.  **추정량의 변동성 (Epistemic Uncertainty):** 유한한 표본(finite samples)으로 인해 발생하는 CATE 추정값 자체의 오차입니다.
+
+이 두 가지를 모두 통제하려면, (1) 공변량이 ITE의 변동을 거의 완벽하게 설명해야 하고, (2) 모든 $X$ 값에 대해 CATE를 완벽하게 추정할 수 있어야 합니다. [cite_start]현실적으로 이는 불가능에 가깝습니다[cite: 49, 50].
+
+---
+
+## 불확실성 정량화: 신뢰구간의 필요성
+
+[cite_start]미국 FDA는 약물 승인을 위해 단순한 점 추정치가 아닌, 충분한 증거를 보장하는 **신뢰구간(Confidence Interval)** 또는 p-value를 요구합니다[cite: 57]. 하지만 기존의 머신러닝 기반 CATE 추정 방법들은 이러한 불확실성 정량화(Uncertainty Quantification)에서 꽤 저조한 성능을 보입니다.
+
+[cite_start]심지어 베이지안 방법론을 포함한 최신 기법들도 간단하고 매끄러운 모형(smooth models)에서조차 목표하는 커버리지(coverage)를 달성하지 못하는 경우가 많습니다[cite: 61].
+
+### 제안하는 해결책: Conformal Inference
+
+[cite_start]이 논문은 **Conformal Inference(컨포멀 추론)** 아이디어를 차용하여, 잠재적 결과(Potential Outcome) 프레임워크 하에서 신뢰할 수 있는 ITE 예측 구간(Prediction Interval)을 생성하는 방법을 제안합니다[cite: 19, 62].
+
+!(placeholder_image_2.png)
+*Figure 2: Conformal Inference의 기본 개념. 데이터 분포에 대한 가정 없이, 유한한 샘플에서 실제 값이 포함될 확률(예: 90%)을 보장하는 구간을 생성한다.*
+
+---
+
+## 해결해야 할 두 가지 도전 과제
+
+[cite_start]ITE에 대한 신뢰 구간을 만들기 위해 논문은 문제를 두 가지 단계로 나눕니다[cite: 63, 64, 65].
+
+### Challenge 1: 연구 대상자(In-sample)를 위한 구간 추정
+데이터셋에 존재하는 대상($i$)에 대해 ITE 구간을 만드는 것입니다.
+* **문제:** 각 대상에 대해 $Y_i(1)$ 혹은 $Y_i(0)$ 중 하나만 관측됩니다(Fundamental Problem of Causal Inference).
+* **접근법:** 관측되지 않은 잠재적 결과(Counterfactual)를 추론하는 문제로 귀결됩니다.
+
+### Challenge 2: 새로운 대상(Out-of-sample)을 위한 구간 추정
+연구에 참여하지 않은 완전히 새로운 대상에 대해 ITE 구간을 만드는 것입니다.
+* **문제:** 이들은 $Y(1)$과 $Y(0)$가 둘 다 관측되지 않습니다.
+* **접근법:** 두 잠재적 결과를 동시에 모델링할 수 없으므로 훨씬 더 어려운 문제입니다.
+
+---
+
+## 핵심 아이디어의 논리적 전개 (Step-by-Step)
+
+논문의 Section 1은 구체적인 수식보다는 방법론의 **논리적 구조**를 설명하는 데 집중합니다. [cite_start]저자들이 제안하는 방법이 어떻게 첫 번째 Challenge(반사실적 추론)를 해결하여 ITE 구간으로 연결되는지 단계별로 정리해 보겠습니다[cite: 70, 71].
+
+### Step 1: 반사실적(Counterfactual) 결과의 추론
+
+어떤 환자 $i$가 처치($T_i=1$)를 받았고 결과 $Y_i(1)$이 관측되었다고 가정해 봅시다. 우리가 알고 싶은 ITE는 다음과 같습니다.
+
+$$
+\tau_i = Y_i(1) - Y_i(0)
+$$
+
+여기서 $Y_i(1)$은 이미 알고 있는 상수(observed)입니다. 따라서 $\tau_i$를 아는 것은 오직 미지의 값인 **$Y_i(0)$(Counterfactual)**를 추론하는 것에 달려 있습니다.
+
+### Step 2: 예측 구간 생성
+
+Conformal Inference를 사용하여, 미지의 $Y_i(0)$가 포함될 확률이 $1-\alpha$인 예측 구간 $\hat{C}_0(X_i)$를 생성합니다.
+
+$$
+\mathbb{P}(Y_i(0) \in \hat{C}_0(X_i)) \ge 1 - \alpha
+$$
+
+### Step 3: 구간의 이동(Shifting)을 통한 ITE 구간 도출
+
+이제 관측된 $Y_i(1)$을 이용하여 위에서 구한 구간을 이동(shift)시킵니다. 부등식을 재배열하면 자연스럽게 ITE($\tau_i$)에 대한 구간이 도출됩니다.
+
+$$
+Y_i(0) \in \hat{C}_0(X_i) \iff Y_i(1) - \tau_i \in \hat{C}_0(X_i)
+$$
+
+이를 $\tau_i$에 대해 정리하면:
+
+$$
+\tau_i \in Y_i(1) - \hat{C}_0(X_i)
+$$
+
+즉, **"관측되지 않은 잠재적 결과에 대한 신뢰 구간을 구하면, 이를 관측된 결과와 대조하여 ITE의 신뢰 구간으로 변환할 수 있다"**는 것이 핵심 논리입니다.
+
+---
+
+## 결론 및 요약
+
+이 논문의 Section 1은 단순히 평균 효과(ATE)나 조건부 평균(CATE)을 추정하는 것을 넘어, **개별 효과(ITE)의 불확실성을 정량화**하는 것이 왜 필수적인지 역설합니다.
+
+특히 저자들은 자신들의 방법론이 **이중 강건성(Doubly Robust Property)**을 가짐을 강조합니다. [cite_start]이는 (1) 성향 점수(Propensity Score) 모델이 정확하거나, (2) 조건부 분위수(Conditional Quantiles) 모델이 정확하다면, 둘 중 하나만 만족해도 평균 커버리지(Average Coverage)가 보장된다는 강력한 성질입니다[cite: 21].
+
+다음 포스트에서는 이 개념들이 구체적인 수식과 알고리즘(Section 2 이후)으로 어떻게 구현되는지 살펴보겠습니다.
+
+***
+**Reference:**
+Lei, L., & Candès, E. J. (2021). Conformal inference of counterfactuals and individual treatment effects. *Journal of the Royal Statistical Society: Series B (Statistical Methodology)*, 83(5), 911-938.

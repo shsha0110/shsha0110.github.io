@@ -1,127 +1,195 @@
 ---
-title: "비교 불가능을 비교하다: 합성 대조조법 (Synthetic Control Method)"
+title: "[Causal Inference] 15. DiD & SCM (Part 3)"
+description: "Synthetic Control Method"
 author: "유성현"
-date: "2026-01-23"
-categories: [Causal Inference, Econometrics, Methodology, SCM]
+date: "2026-01-22"
+categories: [Causal Inference]
 format:
   html:
     toc: true
-    number-sections: true
-    code-fold: true
+    number-sections: false
+    code-fold: show
     math: true
 ---
 
-## 들어가며: 적절한 비교 대상이 없다면?
+# Overview
 
-지난 포스트들에서 우리는 이중차분법(DiD)을 통해 정책의 효과를 추정하는 방법을 배웠습니다. 하지만 DiD를 적용하기 어려운 상황이 종종 발생합니다. 바로 **"적절한 통제 집단(Control Group)을 찾기 어려울 때"**입니다.
-
-예를 들어, 캘리포니아 주가 담배 규제 정책(Proposition 99)을 시행했을 때, 나머지 49개 주 전체를 평균 내어 비교하는 것이 공정할까요? 캘리포니아와 인구 구조, 경제 규모, 흡연 문화가 비슷한 단일한 주는 존재하지 않을지도 모릅니다.
-
-이번 포스트에서는 이러한 문제를 해결하기 위해, 여러 통제 집단을 적절히 섞어 **"가상의 도플갱어(Synthetic Control)"**를 만들어내는 **합성 대조조법(Synthetic Control Method, SCM)**에 대해 알아봅니다.
-
-> **참고 자료**: 본 포스트는 이상학 교수님의 "Differences in Differences & Synthetic Control Method" 강의 자료(1503 DiD SCM.pdf)를 바탕으로 재구성되었습니다.
+* 지난 포스트들에서 우리는 이중차분법(DiD)을 통해 인과효과를 추정하는 방법을 배웠습니다. 
+* 하지만 DiD를 적용하기 어려운 상황이 종종 발생합니다. 바로 **"적절한 통제 집단(Control Group)을 찾기 어려울 때"**입니다.
+* 예를 들어, 캘리포니아 주가 담배 규제 정책(Proposition 99)을 시행했을 때, 나머지 49개 주 전체를 평균 내어 비교하는 것이 공정할까요? 
+* 캘리포니아와 인구 구조, 경제 규모, 흡연 문화가 비슷한 단일한 주는 존재하지 않을지도 모릅니다.
+* 이번 포스트에서는 이러한 문제를 해결하기 위해, 여러 통제 집단을 적절히 섞어 **"가상의 도플갱어(Synthetic Control)"**를 만들어내는 **통제집단합성법(Synthetic Control Method, SCM)**에 대해 알아봅니다.
 
 ---
 
-## 1. 사례 연구: 캘리포니아 담배 규제 (Proposition 99)
+# 1. 사례 연구: 캘리포니아 담배 규제 (Proposition 99)
 
-1988년 캘리포니아 주는 담배 소비를 줄이기 위해 담배세를 인상하는 'Proposition 99'를 통과시켰습니다. 이 정책의 효과를 어떻게 측정할 수 있을까요?
+* 1988년 캘리포니아 주는 담배 소비를 줄이기 위해 담배세를 인상하는 'Proposition 99'를 통과시켰습니다. 이 정책의 효과를 어떻게 측정할 수 있을까요?
 
-### 1.1 단순 비교의 함정
-가장 단순한 방법은 "캘리포니아"와 "나머지 미국 전체(Rest of the U.S.)"의 담배 판매량을 비교하는 것입니다.
+![Figure: 점선(Rest of the U.S.)은 캘리포니아(실선)와 정책 시행 이전(1988년 이전)부터 추세가 다릅니다. 이는 평행 추세 가정을 위배하며, 좋은 비교 대상이 아님을 보여줍니다(좌). 합성 캘리포니아(점선)는 정책 시행 이전까지 실제 캘리포니아(실선)와 거의 일치합니다. 따라서 1988년 이후 벌어지는 격차(Gap)를 순수한 정책 효과로 해석할 수 있습니다(우).](./images/scm_control.png)
 
-!(path/to/scm_bad_control.png)
-*주석: 점선(Rest of the U.S.)은 캘리포니아(실선)와 정책 시행 이전(1988년 이전)부터 추세가 다릅니다. 이는 평행 추세 가정을 위배하며, 좋은 비교 대상이 아님을 보여줍니다.*
+## 1.1 단순 비교의 함정
+* 가장 단순한 방법은 "캘리포니아"와 "나머지 미국 전체(Rest of the U.S.)"의 담배 판매량을 비교하는 것입니다.
 
-### 1.2 합성 캘리포니아 (Synthetic California)의 등장
-SCM은 다른 주들의 데이터를 가중 평균(Weighted Average)하여, 1988년 이전의 캘리포니아와 **거의 완벽하게 겹치는** 가상의 캘리포니아를 만들어냅니다.
-
-!(path/to/scm_good_control.png)
-*주석: 합성 캘리포니아(점선)는 정책 시행 이전까지 실제 캘리포니아(실선)와 거의 일치합니다. 따라서 1988년 이후 벌어지는 격차(Gap)를 순수한 정책 효과로 해석할 수 있습니다.*
+## 1.2 합성 캘리포니아 (Synthetic California)의 등장
+* SCM은 다른 주들의 데이터를 가중 평균(Weighted Average)하여, 1988년 이전의 캘리포니아와 **거의 완벽하게 겹치는** 가상의 캘리포니아를 만들어냅니다.
 
 ---
 
-## 2. 수학적 모형 (Mathematical Framework)
+## 2. Mathematical Framework
 
-SCM을 수식으로 엄밀하게 정의해 봅시다.
+* SCM을 수식으로 엄밀하게 정의해 봅시다.
 
-### 2.1 기본 세팅
+## 2.1 Setup
 * **단일 처치 집단:** $i=1$ (캘리포니아)
 * **통제 집단 풀(Donor Pool):** $i=2, \dots, J+1$ (나머지 주들)
 * **시간:** $T_0$ (개입 이전 기간), $T$ (전체 기간)
 * **목표:** 개입 이후($t > T_0$)의 처치 효과 $\tau_{1t}$ 추정
   $$\tau_{1t} = Y_{1t}(1) - Y_{1t}(0)$$
 
-여기서 $Y_{1t}(1)$은 관찰되지만, 정책이 없었을 때의 결과인 $Y_{1t}(0)$은 **결측된 반사실(Missing Counterfactual)**입니다.
+* 여기서 $Y_{1t}(1)$은 관찰되지만, 정책이 없었을 때의 결과인 $Y_{1t}(0)$은 **결측된 반사실(Missing Counterfactual)**입니다.
 
-### 2.2 합성 통제 집단 구성 (Weights Construction)
-SCM의 핵심은 통제 집단 유닛들에 부여할 **가중치 벡터 $W = (w_2, \dots, w_{J+1})'$**를 찾는 것입니다. 이 가중치는 다음 두 가지 제약 조건을 만족해야 합니다.
+## 2.2 합성 통제 집단 구성 (Weights Construction)
+* SCM의 핵심은 통제 집단 유닛들에 부여할 **가중치 벡터 $W = (w_2, \dots, w_{J+1})'$**를 찾는 것입니다. 
+* 이 가중치는 다음 두 가지 제약 조건을 만족해야 합니다.
+  * 1.  **비음수 조건 (Non-negative):** $w_j \ge 0$
+  * 2.  **합의 조건 (Sum to one):** $\sum_{j=2}^{J+1} w_j = 1$
+* 이 제약 조건들은 합성 통제 집단이 데이터들의 **볼록 껍질(Convex Hull)** 내부에 존재하게 하여, **내삽(Interpolation)**을 수행하도록 강제합니다.
+* 즉, 데이터의 범위를 벗어나는 과도한 **외삽(Extrapolation)**을 방지합니다.
 
-1.  **비음수 조건 (Non-negative):** $w_j \ge 0$
-2.  **합의 조건 (Sum to one):** $\sum_{j=2}^{J+1} w_j = 1$
+## 2.3 최적화 문제 (Optimization)
 
-이 제약 조건들은 합성 통제 집단이 데이터들의 **볼록 껍질(Convex Hull)** 내부에 존재하게 하여, **내삽(Interpolation)**을 수행하도록 강제합니다. 즉, 데이터의 범위를 벗어나는 과도한 **외삽(Extrapolation)**을 방지합니다.
+* SCM의 핵심은 "어떤 주(State)를 얼마나 섞을 것인가?"를 결정하는 **최적의 가중치 벡터 $W^*$**를 찾는 것입니다.
 
-### 2.3 최적화 문제 (Optimization)
-우리는 개입 이전 기간($t \le T_0$) 동안 처치 집단($Y_1$)과 합성 통제 집단($\sum w_j Y_j$)의 차이를 최소화하는 $W^*$를 찾습니다.
+### 2.3.1 목적 함수 (Objective Function)
+* 우리는 개입 이전 기간($t \le T_0$) 동안, 처치 집단과 합성 통제 집단 사이의 **차이(Distance)**를 최소화하고자 합니다. 
+* 이를 위한 목적 함수는 다음과 같이 구성됩니다.
 
 $$
-W^* = \underset{W}{\mathrm{argmin}} \left( \sum_{t=1}^{T_0} (Y_{1t} - \sum_{j=2}^{J+1} w_j Y_{jt})^2 + \sum_{k=1}^{K} (Z_{1k} - \sum_{j=2}^{J+1} w_j Z_{jk})^2 \right)
+W^* = \underset{W}{\mathrm{argmin}} \sqrt{ \underbrace{\sum_{m=1}^{k} v_m \left( X_{1m} - \sum_{j=2}^{J+1} w_j X_{jm} \right)^2}_{\text{예측 변수들의 가중 거리 합}} }
 $$
-*(실제로는 각 변수의 중요도를 반영하는 $V$ 행렬을 포함한 2중 최적화가 수행되지만, 직관적 이해를 위해 단순화했습니다.)*
+
+* 여기서 $X_{1m}$과 $X_{jm}$은 각각 처치 집단과 통제 집단의 예측 변수(Pre-treatment outcomes 및 Covariates)를 의미하며, 수식의 의미는 다음과 같습니다.
+
+* 1.  **결과 변수 추세 매칭 (Outcome Matching):**
+    * 개입 이전의 결과 변수(예: 연도별 담배 판매량) 추세가 처치 집단과 최대한 겹치도록 만듭니다.
+    * 과거의 궤적을 잘 모사해야 미래의 반사실(Counterfactual)도 신뢰할 수 있습니다.
+
+* 2.  **공변량 매칭 (Covariate Matching):**
+    * 단순히 결과값의 패턴만 맞추는 것이 아니라, 결과에 영향을 미치는 근본적인 특성(예: GDP, 인구 비중, 소득 수준 등)까지 유사하게 맞춥니다.
+    * 이는 모델이 우연히 시계열 패턴만 맞추는 **과적합(Overfitting)**을 방지하고, 구조적인 유사성을 보장합니다.
+
+### 2.3.2 제약 조건 (Constraints)
+* 찾아낸 가중치 $W = (w_2, \dots, w_{J+1})'$는 반드시 다음 두 가지 조건을 만족해야 합니다.
+* **비음수 조건 ($w_j \ge 0$):** 회귀분석과 달리 음의 가중치를 허용하지 않습니다.
+$$
+w_j \ge 0
+$$
+* **합의 조건 ($\sum w_j = 1$):** 모든 가중치의 합은 1이어야 합니다.
+$$
+\sum_{j=2}^{J+1} w_j = 1
+$$
+* **의미:** 
+  * 이 제약 조건들로 인해 합성 대조군은 데이터의 **볼록 껍질(Convex Hull)** 내에서 생성됩니다. 
+  * 즉, 합성 대조군은 통제 집단들의 **'엄밀한 내삽(Interpolation)'** 결과물이 되며, 데이터 범위를 벗어나는 외삽(Extrapolation)의 위험을 차단합니다.
+
+### 2.3.3 변수 중요도 행렬 ($V$ Matrix)
+* 위 수식의 $v_m$은 각 변수 $m$이 합성에 얼마나 기여해야 하는지를 결정하는 **중요도 가중치**입니다.
+
+* 모든 변수가 예측에 동일하게 중요하지 않습니다. 예를 들어, 흡연량을 예측할 때 '지난해 흡연량'이 'GDP'보다 더 중요할 수 있습니다.
+* 실제 분석에서는 **이중 최적화(Nested Optimization)** 과정을 거칩니다.
+    * **Inner Step:** $V$가 주어졌을 때, 차이를 최소화하는 $W$를 찾습니다.
+    * **Outer Step:** 개입 이전 기간의 예측 오차(MSPE)를 가장 낮추는 최적의 변수 중요도 $V$를 찾아냅니다.
 
 ---
 
-## 3. 이론적 정당성 (Theoretical Justification)
+# 3. 이론적 정당성 (Theoretical Justification)
 
-왜 SCM이 DiD보다 강력할 수 있을까요? 이는 **요인 모형(Factor Model)**을 통해 설명됩니다.
+## 3.1. Model-based Justification
+* SCM이 단순히 "비슷해 보이는" 대상을 섞는 것이 아니라, 수학적으로 타당한 인과추론 도구인 이유는 무엇일까요? 
+* Abadie et al. (2010)은 두 가지 모형을 통해 SCM의 강력함을 증명했습니다.
 
-### 3.1 상호작용 요인 모형 (Interacted Factor Model)
-결과 변수 $Y_{it}(0)$가 다음과 같이 생성된다고 가정해 봅시다.
+### 모형 1: 상호작용 요인 모형 (Interacted Factor Model)
+
+* 가장 널리 인용되는 SCM의 기반 모형입니다. 
+* 결과 변수 $Y_{it}(0)$가 관찰 가능한 요인뿐만 아니라, 관찰되지 않는 **'시간에 따라 변하는 요인'**에 의해 결정된다고 가정합니다.
 
 $$
-Y_{it}(0) = \delta_t + \boldsymbol{Z}_i' \boldsymbol{\beta}_t + \boldsymbol{\lambda}_t \boldsymbol{\mu}_i + \epsilon_{it}
+Y_{it}(0) = \underbrace{\delta_t}_{\text{Time FE}} + \underbrace{\boldsymbol{Z}_i' \boldsymbol{\beta}_t}_{\text{Covariates}} + \underbrace{\alpha_i}_{\text{Unit FE}} + \underbrace{\boldsymbol{\lambda}_t \boldsymbol{\mu}_i}_{\text{Latent Factors}} + \epsilon_{it}
 $$
 
-* $\delta_t$: 시간 고정 효과 (Time Fixed Effect)
-* $\boldsymbol{Z}_i$: 관찰 가능한 공변량
-* **$\boldsymbol{\lambda}_t \boldsymbol{\mu}_i$**: 관찰되지 않은 **시간 가변적 교란 요인(Time-varying Confounding)**
+* 이 수식의 각 항은 다음을 의미합니다.
+  * $\delta_t$: 모든 유닛에 공통적으로 영향을 미치는 시간 충격 (예: 글로벌 경제 위기).
+  * $\boldsymbol{Z}_i' \boldsymbol{\beta}_t$: 관찰 가능한 공변량($Z$)이 시간에 따라 미치는 영향($\beta_t$)이 변할 수 있음을 허용.
+  * $\alpha_i$: 유닛 고유의 고정 효과 (기존 DiD가 통제하는 부분).
+  * **$\boldsymbol{\lambda}_t \boldsymbol{\mu}_i$ (핵심):** 관찰되지 않는 공통 요인($\lambda_t$)과 각 유닛의 요인 적재값($\mu_i$)의 곱입니다.
+      * 이는 **시간 가변적 교란 요인(Time-varying Confounding)**을 구조적으로 모형화한 것입니다.
+      * 예를 들어, $\lambda_t$가 '기술 발전 속도'라면 $\mu_i$는 해당 주(State)의 '기술 수용성'이 될 수 있으며, 이 효과는 시간에 따라 달라집니다.
 
-기존의 DiD는 시간 불변의 고정 효과($\alpha_i$)만 제거할 수 있지만, SCM은 적절한 가중치 구성을 통해 $\boldsymbol{\lambda}_t \boldsymbol{\mu}_i$ 항까지 상쇄시킬 수 있습니다. Abadie et al. (2010)은 개입 이전 기간($T_0$)이 충분히 길다면, SCM 추정량의 편향(Bias)이 0으로 수렴함을 증명했습니다.
+* 기존의 이중차분법(DiD)은 $\alpha_i$(시간 불변 요인)만 제거할 수 있습니다. 
+* 하지만 SCM은 적절한 가중치($W$)를 통해 $\boldsymbol{\lambda}_t \boldsymbol{\mu}_i$ 항까지 상쇄시킬 수 있어, 평행 추세 가정이 위배되는 상황에서도 편향 없는 추정이 가능합니다.
 
-### 3.2 볼록성(Convexity)의 기하학적 의미
-SCM은 데이터를 '섞어서' 만드는 것이므로 기하학적으로는 다면체 내부의 한 점을 찾는 것과 같습니다.
+### 모형 2: 자기회귀 모형 (Autoregressive Model)
 
-!(path/to/convex_hull_triangle.png)
-*주석: $X_1$(검은 점)을 $X_0$(빨간 점들)의 조합으로 표현할 때, $X_1$이 빨간 점들이 이루는 다면체(Triangle) 내부에 있어야 안전한 추론(Interpolation)이 가능합니다. 외부에 있다면 SCM 적용에 주의가 필요합니다.*
+* 두 번째 정당화 논리는 데이터가 자기회귀(AR) 과정을 따른다는 가정에서 출발합니다. 
+* 즉, 현재의 결과가 과거의 결과에 의존하는 경우입니다.
+
+$$
+Y_{i, t+1}(0) = \alpha_t Y_{it}(0) + \beta_{t+1} \boldsymbol{Z}_{i, t+1} + u_{i, t+1}
+$$
+$$
+\boldsymbol{Z}_{i, t+1} = \gamma_t Y_{it}(0) + \Pi_t \boldsymbol{Z}_{it} + \boldsymbol{v}_{i, t+1}
+$$
+
+* 이 모형은 고정 효과(Fixed Effects) 없이도, 과거의 결과값($Y_{it}$)과 공변량($Z$)을 완벽하게 매칭하면 미래의 경로도 예측할 수 있음을 시사합니다.
+
+## 3.2 SCM의 추정 성질 (SCM Properties)
+
+* 위의 모형들 하에서, 만약 우리가 개입 이전 기간의 결과($Y$)와 공변량($Z$)을 완벽하게 균형 맞추는 가중치 $w^*$를 찾을 수 있다면 다음과 같은 성질이 성립합니다.
+
+$$
+\sum_{j=2}^{J+1} w_j^* Y_{jt} = Y_{1t} \quad \text{and} \quad \sum_{j=2}^{J+1} w_j^* \boldsymbol{Z}_j = \boldsymbol{Z}_1
+$$
+
+* 이 조건이 충족될 때, 개입 이후 시점($t > T_0$)에 대한 반사실 추정량 $\hat{Y}_{1t}(0)$은 다음과 같은 특징을 가집니다.
+
+1.  **Under Model 1 (점근적 일치성):**
+    * 개입 이전 기간($T_0$)이 길어질수록($T_0 \to \infty$), 편향(Bias)이 0으로 수렴합니다.
+    * 즉, $\hat{Y}_{1t}(0) \to Y_{1t}(0)$이 되어, 과거 데이터를 길게 확보할수록 추정이 정확해집니다.
+
+2.  **Under Model 2 (비편향성):**
+    * 자기회귀 모형 하에서는 단기간의 개입 이전 데이터만으로도 비편향 추정량($\mathbb{E}[\hat{Y}_{1t}(0)] = \mathbb{E}[Y_{1t}(0)]$)을 얻을 수 있습니다.
+
+* 결론적으로 SCM은 **"과거의 궤적(Trajectory)을 오랫동안, 그리고 정확하게 흉내 낼 수 있다면 미래의 궤적 또한 신뢰할 수 있다"**는 수학적 보장을 가지고 있습니다.
+
+## 3.3 볼록성(Convexity)의 기하학적 의미
+* SCM은 데이터를 '섞어서' 만드는 것이므로 기하학적으로는 다면체 내부의 한 점을 찾는 것과 같습니다.
+
+![Figure: $X_1$(검은 점)을 $X_0$(빨간 점들)의 조합으로 표현할 때, $X_1$이 빨간 점들이 이루는 다면체(Triangle) 내부에 있어야 안전한 추론(Interpolation)이 가능합니다. 외부에 있다면 SCM 적용에 주의가 필요합니다.](./images/convex_hull_triangle.png)
 
 ---
 
-## 4. 한계와 확장: Augmented SCM
+# 4. Practical Concerns: Augmented SCM
 
-### 4.1 편향 보정 (Bias Correction)
-현실에서는 개입 이전 기간($T_0$)에도 처치 집단과 합성 대조군이 완벽하게 일치하지 않을 수 있습니다(Imperfect Pre-treatment Fit). 이 경우 추정치에 편향이 발생합니다.
+## 4.1 편향 보정 (Bias Correction)
+* 현실에서는 개입 이전 기간($T_0$)에도 처치 집단과 합성 대조군이 완벽하게 일치하지 않을 수 있습니다(Imperfect Pre-treatment Fit). 
+* 이 경우 추정치에 편향이 발생합니다.
+* 이를 해결하기 위해 **Augmented SCM (ASCM)**이 제안되었습니다.
 
-이를 해결하기 위해 **Augmented SCM (ASCM)**이 제안되었습니다.
-
-### 4.2 ASCM 공식
-ASCM은 기존 SCM 추정치에 **회귀분석을 이용한 보정항**을 추가합니다.
-
+## 4.2 ASCM 공식
+* ASCM은 기존 SCM 추정치에 **회귀분석을 이용한 보정항**을 추가합니다.
 $$
 \hat{Y}_{1t}^{aug}(0) = \underbrace{\sum_{j=2}^{J+1} w_j Y_{jt}}_{\text{Original SCM}} + \underbrace{\left( \hat{m}_{1t} - \sum_{j=2}^{J+1} w_j \hat{m}_{jt} \right)}_{\text{Bias Correction}}
 $$
-
-* $\hat{m}_{it}$: 공변량 등을 이용해 예측한 결과값 (Ridge Regression 등을 사용)
-* 이 보정항은 합성 대조군이 설명하지 못하는 잔여 차이를 회귀 모델로 메꿔주는 역할을 합니다.
+  * $\hat{m}_{it}$: 공변량 등을 이용해 예측한 결과값 (Ridge Regression 등을 사용)
+  * 이 보정항은 합성 대조군이 설명하지 못하는 잔여 차이를 회귀 모델로 메꿔주는 역할을 합니다.
 
 ---
 
-## 마치며: 투명하고 강력한 인과추론
+# 마치며: 투명하고 강력한 인과추론
 
-합성 대조조법은 다음과 같은 이유로 현대 사회과학 연구에서 가장 사랑받는 방법론 중 하나가 되었습니다.
-
-1.  **투명성 (Transparency):** 어떤 통제 유닛이 몇 퍼센트의 비중으로 사용되었는지 명확히 알 수 있습니다.
-2.  **데이터 기반 (Data-driven):** 연구자의 자의적인 대조군 선정을 방지합니다.
-3.  **유연성:** 시간에 따라 변하는 교란 요인을 통제할 수 있습니다.
-
-데이터가 충분히 쌓인 시계열 환경에서 정책 효과를 분석해야 한다면, SCM은 가장 먼저 고려해야 할 도구입니다.
+* 통제집단합성법은 다음과 같은 이유로 현대 사회과학 연구에서 가장 사랑받는 방법론 중 하나가 되었습니다.
+  * 1.  **투명성 (Transparency):** 어떤 통제 유닛이 몇 퍼센트의 비중으로 사용되었는지 명확히 알 수 있습니다.
+  * 2.  **데이터 기반 (Data-driven):** 연구자의 자의적인 대조군 선정을 방지합니다.
+  * 3.  **유연성:** 시간에 따라 변하는 교란 요인을 통제할 수 있습니다.
+* 데이터가 충분히 쌓인 시계열 환경에서 정책 효과를 분석해야 한다면, SCM은 가장 먼저 고려해야 할 도구입니다.

@@ -1,0 +1,170 @@
+---
+title: "[Causal Inference] 16. Causal Discovery (Part 5)"
+description: "Functional Causal Models"
+author: "유성현"
+date: "2026-01-22"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: The Limits of Correlation
+
+인과 추론(Causal Inference)에서 가장 근본적인 질문 중 하나는 "상관관계는 인과관계가 아니다"라는 명제에서 출발합니다. 두 변수 $X$와 $Y$가 통계적으로 종속되어 있을 때, 우리는 이것이 $X \to Y$ 때문인지, $Y \to X$ 때문인지, 혹은 잠재적 교란 변수(confounder) 때문인지 데이터만으로는 완벽하게 구분하기 어렵습니다.
+
+[cite_start]기존의 **Constraint-based approach** (예: PC algorithm)는 조건부 독립성 검정(Conditional Independence Test)을 통해 인과 그래프의 뼈대(Skeleton)와 V-structure를 찾아내지만, **Markov Equivalence Class**에 속하는 그래프들(같은 조건부 독립성을 가지는 그래프들) 사이에서는 방향을 결정할 수 없다는 한계가 있습니다 [cite: 1-11].
+
+이번 포스트에서는 이러한 한계를 극복하기 위해 **함수적 인과 모델(Functional Causal Models, FCM)**을 다룹니다. 이 방법론들은 데이터 생성 과정(Data Generating Process)에 대한 추가적인 가정(비선형성 또는 비정규성)을 도입하여, $X \to Y$와 $Y \to X$의 **비대칭성(Asymmetry)**을 찾아냅니다.
+
+![Figure: 인과 방향의 식별 문제. 왼쪽은 $X \to Y$, 오른쪽은 $Y \to X$를 나타낸다. 단순히 두 변수의 결합 분포만 보아서는(가운데 VS), 두 인과 구조를 구별하기 어려운 경우가 많다.](./images/causal_direction_vs.png)
+
+# 2. Additive Noise Models (ANM)
+
+[cite_start]가장 직관적인 접근법은 데이터가 **비선형 함수(Nonlinear Function)**와 **가법 잡음(Additive Noise)**의 형태로 생성된다고 가정하는 것입니다[cite: 91, 114].
+
+## 2.1 The Concept
+
+두 변수 $X, Y$에 대해 다음과 같은 가법 잡음 모델(ANM)을 가정해 봅시다.
+
+$$y = f_y(x) + u_y \quad \text{where} \quad x \perp\!\!\perp u_y$$
+
+[cite_start]여기서 핵심 아이디어는 **"올바른 인과 방향으로 모델을 적합하면 잡음(Residual)이 원인 변수와 독립이지만, 반대 방향으로 적합하면 독립이 성립하지 않는다"**는 것입니다 [cite: 96-105].
+
+만약 실제 데이터 생성 과정이 $X \to Y$라면:
+1.  **Hypothesis 1 ($X \to Y$):** $y = f_y(x) + u_y$ 로 모델링했을 때, 잔차 $\hat{u}_y$는 $x$와 독립입니다 ($x \perp\!\!\perp u_y$).
+2.  **Hypothesis 2 ($Y \to X$):** 반대로 $x = g_x(y) + u_x$ 로 모델링하면, 일반적으로 잔차 $\hat{u}_x$는 $y$와 독립이지 않습니다 ($y \not\perp\!\!\perp u_x$).
+
+[cite_start]이 비대칭성은 $f$가 **비선형(Non-linear)**일 때 대부분 성립합니다[cite: 128].
+
+![Figure: ANM의 작동 원리. (상단) 실제 인과 관계가 $X \to Y$일 때 비선형 함수를 적합하면 잔차가 $X$와 독립적이다. (하단) 반대로 $Y \to X$로 가정하고 적합하면, 잔차의 분포가 $Y$의 값에 따라 달라지는(종속적인) 패턴을 보인다.](./images/anm_residual_plot.png)
+
+## 2.2 Algorithm
+
+[cite_start]ANM을 이용한 인과 발견 알고리즘은 다음과 같이 수행됩니다 [cite: 200-211]:
+
+1.  **Fit Forward:** 데이터 $(x_i, y_i)$에 대해 $y$를 $x$의 함수로 회귀분석하여 $\hat{f}_y$를 구합니다. (좋아하는 ML 알고리즘 사용 가능)
+2.  **Compute Residuals:** $\hat{u}_y = y - \hat{f}_y(x)$를 계산합니다.
+3.  **Test Independence:** $\hat{u}_y$와 $x$가 독립인지 검정합니다 (예: HSIC test).
+4.  **Fit Backward:** 반대로 $x$를 $y$의 함수로 회귀분석하여 $\hat{f}_x$를 구하고, 잔차 $\hat{u}_x = x - \hat{f}_x(y)$를 계산합니다.
+5.  **Test Independence:** $\hat{u}_x$와 $y$가 독립인지 검정합니다.
+6.  **Decide:** 한쪽 방향만 독립성이 성립하면 그 방향을 인과 방향으로 채택합니다.
+
+## 2.3 Extension: Post-Nonlinear (PNL) Model
+
+ANM은 관측된 변수에 노이즈가 직접 더해진다고 가정합니다. [cite_start]이를 더 일반화한 것이 **Post-Nonlinear Model (PNL)**입니다 [cite: 226-228].
+
+$$x_2 = f_2(f_1(x_1) + e_2)$$
+
+여기서 $f_2$는 역함수가 존재하는(invertible) 함수라고 가정합니다. [cite_start]이 경우 노이즈 $e_2$는 다음과 같이 표현됩니다[cite: 234]:
+
+$$e_2 = f_2^{-1}(x_2) - f_1(x_1)$$
+
+[cite_start]이 모델의 식별(Identifiability)은 $x_1$과 추정된 잔차 $\hat{e}_2$ 사이의 상호정보량(Mutual Information)을 최소화하는 문제, 즉 **Constrained Nonlinear ICA** 문제로 귀결됩니다 [cite: 243-244].
+
+$$I(x_1, \hat{e}_2) = -\mathbb{E}\log p_{\hat{e}_2}(\hat{e}_2) - \mathbb{E}\log|l'_2(x_2)| + H(x_1) - H(x_1, x_2)$$
+
+여기서 $l_2$는 $f_2^{-1}$에 대응하는 함수입니다. [cite_start]Zhang and Hyvarinen (2009)은 아주 특수한 경우를 제외하고는 PNL 모델이 식별 가능함을 보였습니다[cite: 246].
+
+# 3. Linear Non-Gaussian Acyclic Models (LiNGAM)
+
+함수 형태가 **선형(Linear)**이라도, 잡음의 분포가 **비정규분포(Non-Gaussian)**라면 인과 방향을 식별할 수 있습니다. [cite_start]이것이 바로 **LiNGAM**입니다 [cite: 300-302].
+
+## 3.1 Why Non-Gaussian?
+
+선형 모델 $Y = bX + \epsilon$과 $X = b_Y Y + \epsilon_Y$를 생각해 봅시다.
+만약 $X$와 $\epsilon$이 모두 **Gaussian(정규분포)**이라면, 결합 분포 $P(X, Y)$는 다변량 정규분포가 됩니다. 다변량 정규분포는 대칭적인 타원 형태를 띠기 때문에, $X$축을 기준으로 보나 $Y$축을 기준으로 보나 구조적 차이를 발견할 수 없습니다. [cite_start]즉, **Gaussian case는 식별 불가능(Unidentifiable)**합니다 [cite: 276, 296-298].
+
+하지만 변수들이 **Non-Gaussian(예: Uniform, Super-Gaussian)**이라면 이야기가 달라집니다. 결합 분포의 형태가 한쪽 방향으로는 독립성을 유지하지만, 역방향으로는 찌그러지거나 종속적인 패턴을 보이게 됩니다.
+
+![Figure: Gaussian vs Non-Gaussian의 식별 가능성. (Case 1) 데이터가 Gaussian일 때는 회귀선을 어느 방향으로 그어도 잔차 분포가 대칭적이라 구별이 불가능하다. (Case 2, 3) 데이터가 Uniform이나 Super-Gaussian일 때는, 올바른 인과 방향($X \to Y$)에서의 잔차는 독립적이지만, 역방향의 잔차는 명확한 종속성을 보인다.](./images/lingam_scatter_cases.png)
+
+## 3.2 Mathematical Formulation
+
+[cite_start]LiNGAM은 데이터를 다음과 같은 행렬 형태로 모델링합니다 [cite: 368-372]. 변수 벡터를 $x$, 인접 행렬(Adjacency Matrix)을 $B$, 외생 잡음 벡터를 $e$라고 할 때:
+
+$$x = Bx + e$$
+
+이 식을 $x$에 대해 정리하면 다음과 같습니다:
+
+$$(I - B)x = e$$
+$$x = (I - B)^{-1}e$$
+
+여기서 $B$는 인과 그래프가 DAG(Directed Acyclic Graph)이므로, 변수들을 인과 순서(Topological order)대로 재배열하면 **Strictly Lower Triangular Matrix**가 될 수 있습니다. 이는 $I-B$가 역행렬을 가짐을 보장합니다.
+
+## 3.3 The ICA Connection (The "Trick")
+
+[cite_start]위 식 $x = (I - B)^{-1}e$를 자세히 보면, 이는 **독립 성분 분석(Independent Component Analysis, ICA)**의 기본 문제와 동일합니다 [cite: 316-322].
+
+ICA 모델은 관측된 신호 $x$가 서로 독립인 원천 신호 $s$들의 선형 결합 $x = As$로 이루어져 있다고 봅니다. LiNGAM에서는:
+* 관측 신호 $x$: 데이터 변수들
+* 원천 신호 $s$: 서로 독립인 오차항 $e$ (비정규분포 가정)
+* Mixing Matrix $A$: $(I - B)^{-1}$
+
+[cite_start]따라서, ICA 알고리즘을 $x$에 적용하면 Mixing Matrix $A$를 추정할 수 있고, 이를 통해 $B$를 역산할 수 있습니다 [cite: 363-365].
+
+## 3.4 LiNGAM Algorithm Steps
+
+[cite_start]Shimizu (2006)가 제안한 LiNGAM 알고리즘의 핵심 단계는 다음과 같습니다 [cite: 375-391]:
+
+1.  **ICA Execution:** 데이터 행렬 $X$에 대해 ICA를 수행하여 $X = W_{ICA}^{-1} S$ 꼴의 분해를 얻습니다. 여기서 $S$는 독립 성분(오차항 추정치)입니다.
+2.  **Permutation & Scaling:** ICA는 성분의 순서(Permutation)와 스케일(Scaling)을 결정하지 못하는 불확정성이 있습니다.
+    * $W_{ICA}$의 행을 재배열(Permute)하고 스케일링하여, 대각 성분이 모두 0이 아닌 행렬 $\tilde{W}$를 만듭니다.
+    * LiNGAM의 가정($x = Bx + e$)에 맞추기 위해, $I - B$ 형태가 되도록 정규화합니다.
+3.  **Recover B:** 최종적으로 $B = I - W_{final}$을 계산합니다.
+4.  **Causal Order:** $B$가 하삼각행렬(Lower Triangular)에 가깝도록 변수 순서를 재배열하면 인과 순서(Causal Order)를 얻을 수 있습니다.
+
+![Figure: LiNGAM의 도식적 이해. 관측된 변수 $x_1, x_2, x_3$는 독립적인 에러 $e_1, e_2, e_3$들의 선형 결합으로 표현된다. ICA를 통해 섞여 있는 에러들을 분리해냄으로써 원래의 인과 구조인 화살표 방향을 역추적한다.](./images/lingam_concept_diagram.png)
+
+# 4. Score-based Approaches
+
+마지막으로, 최적화(Optimization) 관점에서 인과 구조를 찾는 접근법이 있습니다. [cite_start]이는 적절한 점수 함수(Score function) $L(f)$를 정의하고, 이를 최소화하는 DAG 구조를 찾는 것입니다 [cite: 397-400].
+
+$$\min_{f} L(f) \quad \text{subject to} \quad \mathcal{G}(f) \in \text{DAG}$$
+
+## 4.1 Score Matching and Leaf Identification
+
+Montagna et al. (2023)[cite_start]은 **Score Matching** 기법을 사용하여 잎 노드(Leaf node, 자식이 없는 노드)를 식별하는 방법을 제안했습니다 [cite: 406-410].
+
+* **Key Idea:** ANM $X_i = f_i(PA_i) + N_i$ 에서, 어떤 노드 $X_i$가 **Leaf**라면, 해당 노드의 잡음 $N_i$는 해당 노드의 점수 함수(Score function, $\nabla \log p(X)$)와 직접적인 관련이 있습니다.
+* [cite_start]구체적으로, $X_i$가 Leaf일 필요충분조건은 다음과 관련된 기댓값이 0이 되는 것입니다[cite: 420]:
+    $$X_i \text{ is a leaf} \iff \mathbb{E}[(h^*(R_i) - s_i(X))^2] = 0$$
+    여기서 $s_i(X)$는 Score function의 성분이며, $R_i$는 회귀 잔차입니다.
+
+이 성질을 이용하면 전체 그래프에서 Leaf를 하나씩 찾아 제거(peeling)해 나가는 방식으로 인과 순서(Topological Sort)를 복원할 수 있습니다.
+
+# 5. Summary
+
+이번 포스트에서는 조건부 독립성만으로는 해결할 수 없는 인과 방향 식별 문제를 해결하기 위한 **함수적 인과 모델(Functional Causal Models)**을 살펴보았습니다.
+
+| 모델 | 가정 (Assumption) | 핵심 원리 (Key Principle) | 식별 근거 |
+| :--- | :--- | :--- | :--- |
+| **ANM** | $Y = f(X) + U$ | 비선형 함수 (Nonlinear $f$) | 잔차의 독립성 비대칭 |
+| **PNL** | $Y = f_2(f_1(X) + E)$ | 비선형성 + 가역 함수 | Constrained Nonlinear ICA |
+| **LiNGAM** | $Y = bX + U$ | 선형성 + **Non-Gaussian** 잡음 | ICA를 통한 Mixing Matrix 복원 |
+
+이 방법론들은 "데이터의 분포적 형태(Distributional Shape)" 정보까지 활용하여 인과관계를 더 깊이 파고든다는 점에서 강력합니다. 특히 사회과학 데이터나 생물학 데이터처럼 변수 간 관계가 복잡한 경우, 이러한 가정들이 성립하는지 확인하고 적용해 보는 것이 중요합니다.
+
+---
+
+### 누락 방지 검증 체크리스트
+
+* **강의 자료 흐름 반영:**
+    * [x] Overview & Causal Discovery Difficulty (Slides 1-11)
+    * [x] Additive Noise Models (ANM) definition & algorithm (Slides 12-16, 203-212)
+    * [x] Post-Nonlinear (PNL) definition & identifiability (Slides 17-21, 226-246)
+    * [x] Identifiability of Bivariate ANM differential equation (Slides 21, 248-256) - *본문에서는 복잡한 미분방정식 수식은 생략하고 핵심 아이디어(Non-Gaussianity/Nonlinearity) 위주로 서술함.*
+    * [x] LiNGAM: Linear Non-Gaussian assumptions (Slides 22-29)
+    * [x] ICA and LiNGAM Logic ("The Trick") (Slides 30-36)
+    * [x] LiNGAM Algorithm steps (Slides 37-41)
+    * [x] Score-based Approaches & Montagna et al. (2023) (Slides 37-39, 416-427)
+* **주요 수식 포함:**
+    * [x] ANM equation: $y=f(x)+u$
+    * [x] PNL equations & Entropy minimization
+    * [x] LiNGAM matrix equation: $x = (I-B)^{-1}e$
+    * [x] Score matching condition
+* **이미지 설명:**
+    * [x] VS diagrams, Residual plots, LiNGAM scatter plots, Causal diagrams.

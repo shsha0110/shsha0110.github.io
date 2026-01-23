@@ -1,0 +1,213 @@
+---
+title: "[Causal Inference] 14. Regression Discontinuity Design"
+description: "Definition, Indentification and Estimation of RDD"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction
+
+**회귀 불연속 설계(Regression Discontinuity Design, RDD)**는 인과 추론에서 무작위 배정(Random Assignment)이 불가능할 때, 관찰 데이터(Observational Data)를 이용해 인과 효과를 추정하는 가장 강력한 **준실험(Quasi-experimental)** 설계 중 하나입니다.
+
+RDD의 핵심 아이디어는 매우 직관적입니다. 특정 변수가 **임계값(Cutoff)**을 넘느냐 넘지 않느냐에 따라 처치(Treatment) 여부가 기계적으로 결정되는 상황을 이용합니다. 이 임계값 바로 주변에 있는 개체들은 사실상 **무작위로 나뉜 것과 다름없다**고 가정할 수 있습니다. [cite_start]즉, 임계값의 아주 미세한 차이로 처치를 받은 그룹과 받지 못한 그룹을 비교함으로써 인과 효과를 식별해내는 것입니다[cite: 303].
+
+### Motivating Examples
+강의 자료에서는 다음과 같은 고전적인 예시들을 소개합니다:
+
+1.  [cite_start]**장학금 수여 (Thistlethwaite and Campbell, 1960)**[cite: 307]: 시험 점수가 특정 커트라인(예: 80점)을 넘으면 장학금을 받고, 못 넘으면 받지 못하는 경우. 79점을 받은 학생과 81점을 받은 학생은 실력 면에서 큰 차이가 없다고 가정할 수 있으므로, 두 학생 그룹의 미래 성과 차이는 장학금의 인과 효과로 볼 수 있습니다.
+2.  [cite_start]**대학 재정 지원**: 가구 소득이 특정 기준 이하인 학생에게만 지원금을 주는 경우[cite: 314].
+
+![Figure 1: RDD의 기본 아이디어. 임계값(Cutoff) $c$를 기준으로 처치 여부가 갈리며, 결과 변수(Y)의 불연속적인 점프(Jump)를 통해 인과 효과 $\gamma$를 추정한다.](./images/rdd_concept_plot.png)
+
+---
+
+# 2. Core Concepts
+
+RDD를 이해하기 위해 필요한 핵심 구성 요소들은 다음과 같습니다.
+
+* [cite_start]**Forcing Variable (Running Variable, $Z_i$)**: 처치 여부를 결정하는 연속형 변수입니다 (예: 시험 점수, 소득). [cite: 294]
+* **Cutoff (Threshold, $c$)**: 처치 여부가 갈리는 기준점입니다.
+* **Treatment Status ($X_i$)**: 개체 $i$가 처치를 받았는지 여부 ($X_i=1$ or $0$).
+
+### Sharp vs. Fuzzy RDD
+
+[cite_start]처치 할당 메커니즘에 따라 RDD는 크게 두 가지로 나뉩니다. [cite: 327]
+
+1.  **Sharp RD (단절적 RDD)**
+    * 처치 여부가 Forcing Variable과 Cutoff에 의해 **결정론적(Deterministic)**으로 정해집니다.
+    * 모든 개체에 대해 $X_i = 1\{Z_i \ge c\}$가 성립합니다.
+    * [cite_start]즉, 임계값을 넘으면 무조건 처치를 받고, 넘지 않으면 절대 받지 않습니다. [cite: 319]
+
+2.  **Fuzzy RD (확률적 RDD)**
+    * 임계값을 기준으로 처치 받을 **확률** $P(X_i=1)$이 불연속적으로 점프합니다.
+    * [cite_start]그러나 0에서 1로 완벽하게 변하지는 않습니다 (예: 기준을 넘겨도 처치를 거부하거나, 넘지 않아도 예외적으로 받는 경우). [cite: 347]
+
+> 이번 포스트에서는 **Sharp RD**를 중심으로 논의를 전개합니다.
+
+![Figure 2: Sharp RD vs. Fuzzy RD. Sharp RD(상단)는 처치 확률이 0에서 1로 완전히 바뀌는 반면, Fuzzy RD(하단)는 확률의 불연속적인 점프만 존재한다.](./images/sharp_vs_fuzzy_rd.png)
+
+---
+
+# 3. Mathematical Formulation & Identification
+
+우리의 관심 대상(Quantity of Interest)은 임계값 $c$에서의 **국소 평균 처치 효과(Local Average Treatment Effect, LATE)**입니다.
+
+$$
+\tau_{SRD} = \mathbb{E}[Y_i(1) - Y_i(0) | Z_i = c]
+$$
+
+[cite_start]여기서 $Y_i(1)$은 처치를 받았을 때의 잠재적 결과, $Y_i(0)$는 받지 않았을 때의 잠재적 결과입니다. [cite: 369]
+
+### The Identification Problem
+문제는 $Z_i$가 연속형 변수이기 때문에, 정확히 $Z_i = c$인 지점에서의 데이터를 관측할 확률은 0에 수렴한다는 점입니다. 심지어 $Z_i=c$인 데이터를 관측하더라도, Sharp RD 상황에서는 그 지점의 모든 사람이 처치를 받으므로 ($X_i=1$), 반대 상황인 $Y_i(0)$ (대조군 결과)는 결코 관측할 수 없습니다.
+
+따라서 우리는 $c$ 주변의 데이터를 이용해 **외삽(Extrapolation)**을 해야 합니다.
+
+### The Continuity Assumption
+이 외삽이 유효하기 위해서는 강력한 가정이 필요합니다. [cite_start]바로 **잠재적 결과의 조건부 기댓값(CEF)이 $Z_i$에 대해 연속(Continuous)**이어야 한다는 것입니다. [cite: 374]
+
+$$
+\lim_{z \to c} \mathbb{E}[Y_i(1) | Z_i=z] = \mathbb{E}[Y_i(1) | Z_i=c] \\
+\lim_{z \to c} \mathbb{E}[Y_i(0) | Z_i=z] = \mathbb{E}[Y_i(0) | Z_i=c]
+$$
+
+이 가정이 성립한다면, 우리는 관측된 데이터의 극한값을 이용해 보이지 않는 잠재적 결과를 대체할 수 있습니다.
+
+### Derivation of the Estimator
+[cite_start]식별 과정은 다음과 같이 유도됩니다. [cite: 376, 381]
+
+1.  **임계값 바로 오른쪽 ($z \downarrow c$)**:
+    이 영역의 사람들은 모두 처치를 받았습니다 ($X_i=1$). 따라서 관측된 결과 $Y_i$는 $Y_i(1)$입니다.
+    $$
+    \lim_{z \downarrow c} \mathbb{E}[Y_i | Z_i=z] = \lim_{z \downarrow c} \mathbb{E}[Y_i(1) | Z_i=z] = \mathbb{E}[Y_i(1) | Z_i=c]
+    $$
+    (연속성 가정에 의해)
+
+2.  **임계값 바로 왼쪽 ($z \uparrow c$)**:
+    이 영역의 사람들은 처치를 받지 않았습니다 ($X_i=0$). 관측된 결과 $Y_i$는 $Y_i(0)$입니다.
+    $$
+    \lim_{z \uparrow c} \mathbb{E}[Y_i | Z_i=z] = \lim_{z \uparrow c} \mathbb{E}[Y_i(0) | Z_i=z] = \mathbb{E}[Y_i(0) | Z_i=c]
+    $$
+
+3.  **최종 식별 식**:
+    $$
+    \tau_{SRD} = \underbrace{\lim_{z \downarrow c} \mathbb{E}[Y_i | Z_i=z]}_{\mu_+(c)} - \underbrace{\lim_{z \uparrow c} \mathbb{E}[Y_i | Z_i=z]}_{\mu_-(c)}
+    $$
+
+결론적으로 RDD의 인과 효과는 **임계값 $c$에서 우측 극한값과 좌측 극한값의 차이**로 정의됩니다.
+
+---
+
+# 4. Graphical Diagnostics (Validation)
+
+[cite_start]RDD 분석을 수행할 때, 모델링 이전에 반드시 확인해야 할 세 가지 시각적 진단 단계가 있습니다. [cite: 392]
+
+### 1. Outcomes by Running Variable
+실제로 결과 변수 $Y$가 임계값 $c$에서 불연속적으로 점프하는지 확인합니다. 점프가 없다면 처치 효과가 없다는 강력한 증거가 될 수 있습니다.
+
+### 2. Covariate Balance Check
+결과 변수 $Y$ 이외의 다른 공변량(Covariates, $W$)들이 임계값에서 점프를 보이는지 확인해야 합니다.
+* [cite_start]**원칙**: 공변량들은 임계값에서 **부드럽게(Smooth)** 이어져야 합니다. [cite: 414]
+* 만약 공변량이 점프한다면, $Y$의 점프가 처치 때문인지, 아니면 공변량의 차이 때문인지 구분할 수 없게 됩니다.
+
+### 3. Density of Running Variable (McCrary Test)
+Forcing Variable $Z$의 밀도 함수(Density)가 임계값에서 연속인지 확인합니다.
+* [cite_start]**Sorting / Bunching**: 만약 사람들이 임계값을 알고 의도적으로 자신의 점수나 소득을 조작하여 처치 대상이 되려 한다면(예: 장학금을 받기 위해 재시험을 쳐서 점수를 턱걸이로 맞춤), $c$ 근처의 밀도가 비정상적으로 솟아오르는 **Bunching** 현상이 발생합니다. [cite: 420]
+* [cite_start]이 경우 무작위 배정 가정이 깨지므로 RDD를 사용할 수 없습니다. [cite: 398]
+
+![Figure 3: McCrary Test 예시. 왼쪽 그림은 밀도가 연속적이므로 조작의 증거가 없지만, 오른쪽 그림은 임계값 직후 밀도가 급증하여 Sorting(조작)을 의심해야 한다.](./images/mccrary_test_density.png)
+
+---
+
+# 5. Estimation Methods
+
+이론적으로는 극한값을 구해야 하지만, 실제 데이터는 이산적이므로 $c$ 근처의 데이터를 어떻게 활용할지가 관건입니다.
+
+### Method 1: Local Averages (Kernel Regression)
+가장 단순한 방법은 임계값 $c$를 중심으로 폭(Bandwidth) $h$만큼의 구간 $[c-h, c+h]$ 데이터를 사용하여 평균을 비교하는 것입니다. [cite_start]이때 데이터 포인트에 가중치를 주는 **커널(Kernel)**을 사용할 수 있습니다. [cite: 431]
+
+* **Uniform Kernel**: 구간 내 모든 데이터에 동일한 가중치 (단순 평균 차이).
+* **Triangular Kernel**: $c$에 가까울수록 더 높은 가중치 부여. [cite_start]경계점(Boundary) 추정에 유리하여 많이 사용됩니다. [cite: 447]
+
+$$
+\min_{\alpha, \tau} \sum_{i=1}^N K\left(\frac{Z_i - c}{h}\right) (Y_i - \alpha - \tau X_i)^2
+$$
+
+### Method 2: Local Linear Regression (LLR)
+단순 평균(Kernel Regression)은 경계점(Boundary) 편향(Bias) 문제가 있습니다. 데이터가 한쪽에만 존재하기 때문입니다. [cite_start]이를 해결하기 위해 **국소 선형 회귀(Local Linear Regression)**를 사용하는 것이 표준입니다. [cite: 434]
+
+아이디어는 $c$의 왼쪽과 오른쪽에서 각각 선형 회귀선을 적합하여 $c$ 지점의 절편 차이를 구하는 것입니다.
+
+$$
+\hat{\tau}_{SRD} = \hat{\mu}_+(c) - \hat{\mu}_-(c)
+$$
+여기서 $\hat{\mu}_+(c)$와 $\hat{\mu}_-(c)$는 각각 우측 및 좌측 데이터로 추정한 회귀식의 $c$ 지점 예측값입니다.
+
+### Method 3: Practical Implementation
+[cite_start]실제 분석에서는 이 두 과정을 하나의 회귀식으로 통합하여 추정하는 것이 편리합니다. [cite: 446]
+
+$$
+\min_{\alpha, \beta, \tau, \gamma} \sum_{i \in [c-h, c+h]} \left( Y_i - \alpha - \beta(Z_i - c) - \tau X_i - \gamma(Z_i - c)X_i \right)^2
+$$
+
+이 식의 구성 요소를 뜯어보면:
+* $\alpha$: 임계값 좌측의 절편 (대조군의 $c$ 지점 기댓값)
+* $\beta(Z_i - c)$: 임계값 좌측의 기울기 (Running variable의 영향 통제)
+* $\tau$: **처치 효과 (우리가 구하고자 하는 값, 절편의 점프 크기)**
+* $\gamma(Z_i - c)X_i$: 임계값 우측에서의 기울기 변화 허용 (좌우 기울기가 다를 수 있음을 반영)
+
+[cite_start]여기에 커널 가중치 $K(\cdot)$를 곱해주면 **Local Linear Kernel Regression**이 됩니다. [cite: 449]
+
+### Bandwidth Selection ($h$)
+[cite_start]Bandwidth $h$의 선택은 **Bias-Variance Trade-off** 문제입니다. [cite: 451]
+* $h$가 크면: 데이터가 많아져 분산(Variance)은 줄지만, $c$에서 먼 데이터가 섞여 편향(Bias)이 커집니다.
+* $h$가 작으면: $c$에 아주 가까운 데이터만 써서 편향은 작지만, 데이터 수가 적어 분산이 커집니다.
+
+일반적으로 MSE(Mean Squared Error)를 최소화하는 최적의 $h$를 찾는 알고리즘을 사용합니다.
+
+---
+
+# 6. Extensions: Kink RD
+
+만약 처치 자체가 불연속적으로 변하지 않더라도, **처치의 강도를 결정하는 함수의 기울기(Slope)**가 불연속적으로 변한다면 어떨까요? [cite_start]이를 **Regression Kink Design (RKD)**라고 합니다. [cite: 453]
+
+* **Sharp Kink RD**: 함수 $E[Y|Z=z]$의 1계 도함수(기울기)에서의 불연속성을 이용해 식별합니다.
+* 정책이 특정 소득 구간부터 세율을 급격히 올리거나 혜택 감소율을 바꿀 때 적용할 수 있습니다.
+
+---
+
+# 7. Summary
+
+1.  **RDD**는 Forcing Variable의 임계값을 이용해 국소적으로 무작위 실험과 유사한 환경을 조성합니다.
+2.  **핵심 가정**은 결과 변수의 잠재적 분포가 임계값 근처에서 연속적이어야 한다는 것과, 개체들이 임계값을 기준으로 정밀하게 Sorting하지 않아야 한다는 것입니다.
+3.  **McCrary Density Test**와 **Covariate Balance Check**는 필수적인 진단 과정입니다.
+4.  추정 시에는 단순 평균보다는 **Local Linear Regression**을 Triangular Kernel과 함께 사용하는 것이 경계점 편향을 줄이는 데 효과적입니다.
+
+---
+
+### 강의자료 검증 체크리스트
+
+* **포함된 내용**:
+    * RDD의 정의 및 직관 (Slide 4-5)
+    * 주요 예시 (장학금, 재정지원) (Slide 6-7)
+    * Sharp vs. Fuzzy RD 구분 (Slide 8-9)
+    * 식별 전략 및 연속성 가정 (Slide 10-13)
+    * 그래프 분석 (Outcome, Covariate, Density) (Slide 14-16)
+    * Bunching/Sorting 개념 (Slide 19-20)
+    * 커널 회귀 및 Local Linear Regression 수식 (Slide 22-25)
+    * 실전 추정 식 (상호작용항 포함) (Slide 30-31)
+    * Bandwidth 선택의 Trade-off (Slide 32)
+    * Kink RD 개념 (Slide 33)
+
+* **생략된 내용**:
+    * 강의 슬라이드에 포함된 구체적인 참고문헌 리스트나 강사 정보 등 메타 데이터는 블로그 포스트의 성격에 맞게 서두나 인용으로 갈무리했습니다.
+    * Fuzzy RD의 구체적인 IV(도구변수) 추정 방식은 이번 자료가 Sharp RD 위주로 서술되어 있어, 개념적 정의 위주로 다루었습니다.
+
+이 포스트가 RDD를 처음 접하거나 다시 정리하려는 분들에게 도움이 되기를 바랍니다.

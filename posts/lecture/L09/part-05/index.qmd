@@ -1,0 +1,157 @@
+---
+title: "[Causal Inference] 09. Linear Structural Causal Models (Part 5)"
+description: "The Method of Auxiliary Variables"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: When Standard IVs Fail
+
+지난 포스트들에서 우리는 단일 도구 변수(IV)와 도구 변수 집합(Instrumental Sets)을 이용해 인과 효과를 식별하는 방법을 배웠습니다. 하지만 현실의 인과 그래프는 매우 복잡하여, 적절한 도구 변수 조건(특히 Exclusion Restriction이나 Unconfoundedness)을 만족하는 변수를 찾지 못할 때가 많습니다.
+
+이번 포스트에서는 **"이미 식별된(Solved) 파라미터를 이용해 새로운 도구 변수를 창조하는 방법"**, 즉 **보조 변수법(The Method of Auxiliary Variables)**에 대해 다룹니다. [cite_start]이는 마치 데이터에서 노이즈를 제거하여 순수한 신호만 남긴 뒤, 그 신호를 도구 변수로 사용하는 것과 같습니다[cite: 1981].
+
+---
+
+# 2. Motivating Problem: The "Almost" Instrument
+
+다음과 같은 인과 그래프를 살펴봅시다.
+
+![Figure 1: Z가 X의 원인이지만, 동시에 Y와 교란 요인(점선)을 공유하는 상황. Z는 Y에 대한 Back-door path를 열기 때문에 유효한 도구 변수가 아니다.](./images/problematic_graph_av.png)
+
+### [cite_start]The Model [cite: 1991]
+$$
+\begin{aligned}
+Z &= \epsilon_z \\
+X &= \lambda_{zx} Z + \epsilon_x \\
+Y &= \lambda_{xy} X + \epsilon_y
+\end{aligned}
+$$
+
+### The Challenge
+우리의 목표는 $\lambda_{xy}$를 식별하는 것입니다. 하지만 문제가 있습니다.
+1.  **Regression Fail:** $X$와 $Y$ 사이에 $X \leftarrow Z \leftrightarrow \dots \leftrightarrow Y$ 형태의 Back-door path가 존재하여 단순 회귀는 편향됩니다.
+2.  [cite_start]**Standard IV Fail:** $Z$를 도구 변수로 쓰고 싶지만, $Z$ 자체가 $Y$의 에러항($\epsilon_y$)과 상관관계(correlated errors, $\epsilon_{zy}$)를 가집니다[cite: 1984]. 즉, 도구 변수의 조건인 Unconfoundedness를 위반합니다.
+
+그렇다면 $\lambda_{xy}$는 영원히 식별 불가능한 것일까요?
+
+---
+
+# 3. The Method of Auxiliary Variables
+
+해결의 열쇠는 **"단계적 해결(Iterative Solving)"**에 있습니다. 우리는 $\lambda_{xy}$는 모르지만, $\lambda_{zx}$는 알 수 있습니다.
+
+## 3.1 Step 1: Identify $\lambda_{zx}$
+
+그래프를 보면 $Z$에서 $X$로 가는 관계에서 $Z$는 외생 변수(exogenous)입니다. [cite_start]따라서 $X$를 $Z$에 대해 회귀분석하면 $\lambda_{zx}$를 편향 없이 구할 수 있습니다[cite: 2004].
+
+$$
+\lambda_{zx} = \frac{Cov(Z, X)}{Var(Z)}
+$$
+
+## 3.2 Step 2: Create the Auxiliary Variable $X^*$
+
+이제 우리가 구한 $\lambda_{zx}$를 이용하여 $X$에서 $Z$의 영향을 제거한 새로운 변수, 즉 **잔차(Residual)**에 해당하는 변수를 정의해봅시다. [cite_start]이를 **Auxiliary Variable (AV)**라고 부르고 $X^*$로 표기합니다[cite: 2022, 2038].
+
+$$
+X^* \equiv X - \lambda_{zx} Z
+$$
+
+이 식에 원래 $X$의 구조방정식($X = \lambda_{zx} Z + \epsilon_x$)을 대입해보면 흥미로운 사실을 알게 됩니다.
+
+$$
+X^* = (\lambda_{zx} Z + \epsilon_x) - \lambda_{zx} Z = \epsilon_x
+$$
+
+즉, $X^*$는 $X$의 변동 중 $Z$와 무관한, 순수한 외생적 오차항($\epsilon_x$)과 같습니다.
+
+## 3.3 Step 3: Use $X^*$ as an Instrument
+
+이제 새로 만든 변수 $X^*$를 그래프 상에서 생각해봅시다.
+
+![Figure 2: 보조 변수 X*의 생성 과정. X*는 X의 오차항(epsilon_x)에 해당하며, Z나 Y의 교란 요인과 독립적이다.](./images/av_construction.png)
+
+1.  **Relevance:** $X^*$는 구성상 $X$의 일부분이므로 $X$와 당연히 연관되어 있습니다.
+2.  **Unconfoundedness:** $X^*$는 사실상 $\epsilon_x$입니다. 모형의 가정상 $\epsilon_x$는 다른 변수의 오차항($\epsilon_{zy}, \epsilon_y$)과 독립적입니다.
+
+[cite_start]따라서 **$X^*$는 $\lambda_{xy}$를 식별하기 위한 완벽한 도구 변수(IV)**가 됩니다! [cite: 2051]
+
+### Final Identification Formula
+[cite_start]$\lambda_{xy}$는 $X^*$를 도구 변수로 사용하여 다음과 같이 계산됩니다[cite: 2052]:
+
+$$
+\lambda_{xy} = \frac{Cov(X^*, Y)}{Cov(X^*, X)}
+$$
+
+이 과정은 마치 2단계 최소자승법(2SLS)과 유사하지만, 예측값($\hat{X}$)이 아닌 잔차($X^*$)를 도구 변수로 사용한다는 점에서 개념적 차이가 있습니다.
+
+---
+
+# 4. Generalization: AV Sets for Complex Graphs
+
+이 아이디어는 변수가 여러 개인 복잡한 그래프에서도 **Instrumental Sets (IS)**를 찾기 위해 확장될 수 있습니다.
+
+## 4.1 The Complex Scenario
+
+아래와 같이 $W$라는 공통 원인이 존재하는 복잡한 구조를 봅시다.
+
+![Figure 3: W가 Z1, Z2의 공통 원인이고, Z들이 X들에 얽혀 영향을 주는 복잡한 그래프. W 때문에 단순한 Instrumental Set 적용이 어렵다.](./images/complex_av_set_graph.png)
+
+* **목표:** $\lambda_{x_1 y}$를 식별하고 싶습니다.
+* **문제:** $W$가 존재하여 $Z \leftarrow W \dashrightarrow Y$와 같은 뒷문 경로가 열려 있습니다. [cite_start]따라서 $\{Z_1, Z_2\}$를 바로 도구 변수 집합으로 쓸 수 없습니다[cite: 2074].
+
+## 4.2 Applying the AV Method
+
+[cite_start]하지만 $W$에서 $Z$로 가는 계수 $\lambda_{wz_1}, \lambda_{wz_2}$가 식별 가능하다면(예: $W$가 관측 가능하거나 다른 방법으로 식별됨), 우리는 $W$의 영향을 제거한 보조 변수들을 만들 수 있습니다[cite: 2075, 2090].
+
+$$
+\begin{aligned}
+Z_1^* &= Z_1 - \lambda_{wz_1} W \\
+Z_2^* &= Z_2 - \lambda_{wz_2} W
+\end{aligned}
+$$
+
+[cite_start]이렇게 생성된 **Auxiliary Variables Set $\{Z_1^*, Z_2^*\}$**는 더 이상 $W$의 영향을 받지 않으며, $\{X_1, X_2\}$에 대한 유효한 **Instrumental Set**이 됩니다[cite: 2105].
+
+이제 우리는 지난 포스트에서 배운 Instrumental Set 공식을 적용하여 $\lambda_{x_1 y}$와 $\lambda_{x_2 y}$를 연립방정식으로 풀어낼 수 있습니다.
+
+---
+
+# 5. Conclusions: The Linear SCM Module
+
+지금까지 총 4편의 포스트에 걸쳐 선형 구조적 인과 모형(Linear SCM)에서의 식별 문제를 다루었습니다. [cite_start]핵심 내용을 요약하면 다음과 같습니다 [cite: 2107-2111].
+
+1.  **Linear SCM의 중요성:** 현실 세계의 많은 문제는 선형 모형으로 근사할 수 있으며, 이는 인과 추론에서 가장 널리 쓰이는 도구입니다.
+2.  **Regression $\neq$ Causation:** 회귀 계수는 단순히 상관관계를 보여줄 뿐이며, 구조적 인과 계수와는 다릅니다. 이를 혼동하는 것은 위험합니다.
+3.  **Identification Tools:**
+    * **Graphical Criteria:** Single-Door, Back-Door 기준을 통해 어떤 변수를 통제해야 하는지 알 수 있습니다.
+    * **Algebraic Methods:** Instrumental Variables (IV), Instrumental Sets, 그리고 오늘 배운 **Auxiliary Variables (AV)**까지, 그래프 구조를 이용해 연립방정식을 풀거나 새로운 변수를 창조하여 인과 효과를 식별할 수 있습니다.
+4.  **Power of Graphs:** 인과 그래프(Causal Diagram)는 복잡한 수식 전개 없이도 식별 가능성을 판단하고 적절한 전략을 수립하는 데 필수적인 지도 역할을 합니다.
+
+인과 추론의 여정은 여기서 끝나지 않습니다. 선형성을 넘어선 비선형 모형, 그리고 데이터 기반의 인과 구조 발견(Causal Discovery) 등 더 넓은 세계가 기다리고 있습니다.
+
+---
+
+### Lecture Coverage Checklist
+
+* [x] **Overview**: AV 방법론의 위치 및 목적 (Slide 1981)
+* [x] **Motivating Problem**:
+    * Back-door path와 correlated error가 공존하는 그래프 제시 (Slide 1982-1985)
+    * 기존 방법(Conditioning, IV)의 실패 이유 설명 (Slide 1994, 2001)
+* [x] **Method of Auxiliary Variables**:
+    * 기존 파라미터($\lambda_{zx}$) 활용 아이디어 (Slide 2004)
+    * 보조 변수 $X^*$의 정의 및 수식 유도 ($X^* = X - \lambda_{zx}Z$) (Slide 2022, 2038)
+    * $X^*$가 오차항($\sigma_x^e$)과 같음을 증명 (Slide 2038)
+    * $X^*$를 IV로 사용하여 $\lambda_{xy}$ 식별 공식 제시 (Slide 2051-2052)
+* [x] **Generalization (AV Sets)**:
+    * 복잡한 그래프(W 포함)에서의 문제 상황 (Slide 2054-2074)
+    * $W$의 효과를 제거한 $Z^*$ 생성 과정 (Slide 2094)
+    * 생성된 $Z^*$를 Instrumental Set으로 활용하는 논리 (Slide 2105)
+* [x] **Conclusion**: Linear SCM 모듈 전체 요약 (Slide 2107-2111)

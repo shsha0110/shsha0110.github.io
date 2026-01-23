@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.26">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="유성현">
+<meta name="dcterms.date" content="2026-01-23">
+<meta name="description" content="Empirical Validation: Benchmarking Weighted Split-CQR against Causal Forest, X-learner, and BART.">
+
+<title>[Paper Review] Conformal Inference of Counterfactuals and Individual Treatment Effects (Part 3) – shsha0110.github.io</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../../../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../../../">
+<script src="../../../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../../../site_libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="../../../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../../../site_libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../../../site_libs/bootstrap/bootstrap-5b4ad623e5705c0698d39aec6f10cf02.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<meta name="google-site-verification" content="wnUhrJyUH9DivslRuyTASn9K6KXZlRrojFuwYY1q2hI">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../../../../styles.css">
+</head>
+
+<body class="nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top quarto-banner">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../../../../index.html">
+    <span class="navbar-title">shsha0110.github.io</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../../../about.html"> 
+<span class="menu-text">About</span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/"> <i class="bi bi-github" role="img">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://twitter.com"> <i class="bi bi-twitter" role="img">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<header id="title-block-header" class="quarto-title-block default page-columns page-full">
+  <div class="quarto-title-banner page-columns page-full">
+    <div class="quarto-title column-body">
+      <h1 class="title">[Paper Review] Conformal Inference of Counterfactuals and Individual Treatment Effects (Part 3)</h1>
+                  <div>
+        <div class="description">
+          Empirical Validation: Benchmarking Weighted Split-CQR against Causal Forest, X-learner, and BART.
+        </div>
+      </div>
+                          <div class="quarto-categories">
+                <div class="quarto-category">Paper Review</div>
+              </div>
+                  </div>
+  </div>
+    
+  
+  <div class="quarto-title-meta">
+
+      <div>
+      <div class="quarto-title-meta-heading">Author</div>
+      <div class="quarto-title-meta-contents">
+               <p>유성현 </p>
+            </div>
+    </div>
+      
+      <div>
+      <div class="quarto-title-meta-heading">Published</div>
+      <div class="quarto-title-meta-contents">
+        <p class="date">January 23, 2026</p>
+      </div>
+    </div>
+    
+      
+    </div>
+    
+  
+  </header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction">1. Introduction</a></li>
+  <li><a href="#simulation-setup" id="toc-simulation-setup" class="nav-link" data-scroll-target="#simulation-setup">2. Simulation Setup</a>
+  <ul class="collapse">
+  <li><a href="#data-generation-process" id="toc-data-generation-process" class="nav-link" data-scroll-target="#data-generation-process">2.1 Data Generation Process</a></li>
+  <li><a href="#scenarios" id="toc-scenarios" class="nav-link" data-scroll-target="#scenarios">2.2 Scenarios</a></li>
+  </ul></li>
+  <li><a href="#competing-methods" id="toc-competing-methods" class="nav-link" data-scroll-target="#competing-methods">3. Competing Methods</a></li>
+  <li><a href="#results-coverage-performance" id="toc-results-coverage-performance" class="nav-link" data-scroll-target="#results-coverage-performance">4. Results: Coverage Performance</a>
+  <ul class="collapse">
+  <li><a href="#theoretical-vs.-empirical-coverage" id="toc-theoretical-vs.-empirical-coverage" class="nav-link" data-scroll-target="#theoretical-vs.-empirical-coverage">4.1 Theoretical vs.&nbsp;Empirical Coverage</a></li>
+  <li><a href="#coverage-of-cate" id="toc-coverage-of-cate" class="nav-link" data-scroll-target="#coverage-of-cate">4.2 Coverage of CATE</a></li>
+  <li><a href="#coverage-of-ite-main-result" id="toc-coverage-of-ite-main-result" class="nav-link" data-scroll-target="#coverage-of-ite-main-result">4.3 Coverage of ITE (Main Result)</a></li>
+  </ul></li>
+  <li><a href="#results-interval-length-efficiency" id="toc-results-interval-length-efficiency" class="nav-link" data-scroll-target="#results-interval-length-efficiency">5. Results: Interval Length &amp; Efficiency</a></li>
+  <li><a href="#results-conditional-coverage" id="toc-results-conditional-coverage" class="nav-link" data-scroll-target="#results-conditional-coverage">6. Results: Conditional Coverage</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">7. Summary</a>
+  <ul class="collapse">
+  <li><a href="#누락-방지-검증-compliance-checklist" id="toc-누락-방지-검증-compliance-checklist" class="nav-link" data-scroll-target="#누락-방지-검증-compliance-checklist">누락 방지 검증 (Compliance Checklist)</a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content quarto-banner-title-block" id="quarto-document-content">
+
+
+
+
+
+<section id="introduction" class="level1">
+<h1>1. Introduction</h1>
+<p>지난 포스트(Part 2)에서는 <strong>Weighted Split-CQR</strong> 알고리즘의 이론적 배경과 이중 강건성(Double Robustness)에 대해 살펴보았습니다. 이론적으로는 이 방법론이 성향 점수(Propensity Score)나 결과 모델(Outcome Model) 중 하나만 정확해도 유효한 커버리지를 제공함을 증명했습니다.</p>
+<p>이번 포스트(Part 3)에서는 <strong>수치 실험(Numerical Experiments)</strong>을 통해 이 이론이 실제 데이터(Simulation)에서 어떻게 작동하는지 확인합니다. 특히, CATE(조건부 평균 처치 효과) 추정에 널리 쓰이는 최신 방법론들(Causal Forest, X-learner, BART)과 비교하여, <strong>ITE(개별 처치 효과) 예측 구간</strong>의 성능을 집중적으로 분석합니다.</p>
+<hr>
+</section>
+<section id="simulation-setup" class="level1">
+<h1>2. Simulation Setup</h1>
+<p>[cite_start]저자들은 Wager and Athey (2018)의 설정을 변형하여 시뮬레이션을 설계했습니다[cite: 380].</p>
+<section id="data-generation-process" class="level2">
+<h2 class="anchored" data-anchor-id="data-generation-process">2.1 Data Generation Process</h2>
+<ul>
+<li><p><strong>Covariates (<span class="math inline">\(X\)</span>):</strong> <span class="math inline">\(X = (X_1, ..., X_d)^T\)</span>는 다변량 가우시안 분포에서 생성된 뒤 변환됩니다. <span class="math display">\[X_j = \Phi(X_j')\]</span> 여기서 <span class="math inline">\(\Phi\)</span>는 표준정규분포의 CDF이며, <span class="math inline">\(Var(X_j')=1\)</span>, <span class="math inline">\(Cov(X_j', X_{j'}') = \rho\)</span>입니다. [cite_start]<span class="math inline">\(\rho=0\)</span>이면 독립, <span class="math inline">\(\rho&gt;0\)</span>이면 상관관계가 존재합니다[cite: 381].</p></li>
+<li><p><strong>Potential Outcomes:</strong> [cite_start]순수한 반사실적(Counterfactual) 추론 문제를 다루기 위해 <span class="math inline">\(Y(0) \equiv 0\)</span>으로 고정합니다[cite: 383]. <span class="math inline">\(Y(1)\)</span>은 다음과 같이 생성됩니다:</p>
+<p><span class="math display">\[
+  \mathbb{E}[Y(1)|X] = f(X_1)f(X_2), \quad f(x) = \frac{2}{1+\exp\{-12(x-0.5)\}}
+  \]</span></p>
+<p><span class="math display">\[
+  Y(1) = \mathbb{E}[Y(1)|X] + \sigma(X)\epsilon, \quad \epsilon \sim N(0, 1)
+  \]</span></p>
+<p>[cite_start]이 설정은 비선형성(Non-linearity)을 포함하고 있습니다 [cite: 385-387].</p></li>
+<li><p><strong>Propensity Score:</strong> [cite_start]성향 점수 <span class="math inline">\(e(x)\)</span>는 다음과 같이 설정하여, 항상 <span class="math inline">\(0.25 \le e(x) \le 0.5\)</span> 범위에 있도록 하여 충분한 Overlap을 보장합니다 [cite: 389-394].</p>
+<p><span class="math display">\[
+  e(x) = \frac{1}{4}(1 + \beta_{2,4}(X_1))
+  \]</span> 여기서 <span class="math inline">\(\beta_{2,4}\)</span>는 Beta(2,4) 분포의 CDF입니다.</p></li>
+</ul>
+</section>
+<section id="scenarios" class="level2">
+<h2 class="anchored" data-anchor-id="scenarios">2.2 Scenarios</h2>
+<p>[cite_start]총 <span class="math inline">\(2 \times 2 \times 2 = 8\)</span>가지 시나리오를 고려합니다[cite: 395].</p>
+<ol type="1">
+<li><strong>Dimension:</strong> Low (<span class="math inline">\(d=10\)</span>) vs.&nbsp;High (<span class="math inline">\(d=100\)</span>)</li>
+<li><strong>Correlation:</strong> Uncorrelated (<span class="math inline">\(\rho=0\)</span>) vs.&nbsp;Correlated (<span class="math inline">\(\rho=0.9\)</span>)</li>
+<li><strong>Error Variance:</strong> Homoscedastic (<span class="math inline">\(\sigma^2(x) \equiv 1\)</span>) vs.&nbsp;Heteroscedastic (<span class="math inline">\(\sigma^2(x) = -\log X_1\)</span>)</li>
+</ol>
+<hr>
+</section>
+</section>
+<section id="competing-methods" class="level1">
+<h1>3. Competing Methods</h1>
+<p>본 연구의 방법론(Weighted Split-CQR)을 다음의 세 가지 널리 알려진 방법들과 비교합니다.</p>
+<ol type="1">
+<li><strong>Causal Forest (CF):</strong> <code>grf</code> 패키지 사용. Infinitesimal Jackknife를 사용해 CATE의 분산을 추정합니다. [cite_start]본래 ITE 구간 추정용은 아닙니다 [cite: 397-399].</li>
+<li><strong>X-learner:</strong> <code>causalToolbox</code> 패키지 사용. Bootstrap을 사용해 CATE의 분산을 추정합니다. [cite_start]역시 ITE용은 아닙니다 [cite: 400-402].</li>
+<li><strong>BART (Bayesian Additive Regression Trees):</strong> <code>bartMachine</code> 패키지 사용. [cite_start]베이지안 기법으로 Credible Interval(CATE용)과 Prediction Interval(ITE용)을 모두 생성할 수 있어 가장 강력한 경쟁자입니다 [cite: 403-406].</li>
+</ol>
+<p>[cite_start]<strong>Weighted Split-CQR (Our Method)</strong>은 성향 점수 추정에 Gradient Boosting을 사용하며, 조건부 분위수(Quantile) 추정에는 (1) Quantile RF, (2) Quantile Boosting, (3) BART 세 가지를 각각 적용하여 테스트했습니다 [cite: 407-408].</p>
+<hr>
+</section>
+<section id="results-coverage-performance" class="level1">
+<h1>4. Results: Coverage Performance</h1>
+<p>실험은 100번 반복되었으며, 매번 10,000개의 테스트 포인트에 대해 95% 신뢰구간/예측구간을 생성했습니다.</p>
+<section id="theoretical-vs.-empirical-coverage" class="level2">
+<h2 class="anchored" data-anchor-id="theoretical-vs.-empirical-coverage">4.1 Theoretical vs.&nbsp;Empirical Coverage</h2>
+<p>먼저 각 방법론이 이론적으로 보장하는 커버리지와 실제 시뮬레이션 결과를 요약한 표입니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/table2_summary.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: Table 2 - Summary of coverage guarantees. 이론적으로 Causal Forest와 X-learner는 CATE만 커버하도록 설계되었으며, ITE는 커버하지 못합니다. BART와 CQR만이 ITE 커버리지를 목표로 합니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>이론(Theory):</strong> CF와 X-learner는 CATE(<span class="math inline">\(\tau(x)\)</span>)에 대한 커버리지만 보장합니다. [cite_start]반면, CQR은 ITE(<span class="math inline">\(Y(1)-Y(0)\)</span>)에 대한 커버리지를 보장합니다 [cite: 428-430].</li>
+<li><strong>실제(Simulation):</strong> CATE에 대해서조차 CF와 X-learner는 커버리지가 불충분함을 보여줍니다. [cite_start]반면 CQR은 CATE와 ITE 모두에 대해 유효한 커버리지를 달성합니다 [cite: 433-438].</li>
+</ul>
+</section>
+<section id="coverage-of-cate" class="level2">
+<h2 class="anchored" data-anchor-id="coverage-of-cate">4.2 Coverage of CATE</h2>
+<p>아래 그림은 CATE(조건부 평균)에 대한 커버리지 결과입니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/figure1_cate_coverage.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: Figure 1 - Empirical 95% coverage of CATE. 8가지 시나리오에 대한 CATE 커버리지 결과입니다. 빨간 실선은 목표 수준인 0.95를 나타냅니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>[cite_start]<strong>CF &amp; X-learner:</strong> 모든 시나리오에서 저조한 성능을 보이며, 특히 고차원(<span class="math inline">\(d=100\)</span>)에서 성능이 급격히 하락합니다[cite: 468].</li>
+<li>[cite_start]<strong>BART:</strong> 대체로 좋은 성능을 보이지만, “Correlated Covariates + Heteroscedastic Errors” (가장 오른쪽 열) 시나리오에서는 커버리지가 무너지는 모습을 보입니다[cite: 470].</li>
+<li><strong>CQR (제안 방법):</strong> ITE를 타겟으로 설계되었음에도 불구하고, 모든 시나리오에서 95% 이상의 CATE 커버리지를 달성합니다. [cite_start]다소 보수적(Conservative)일 수 있으나, 안정적입니다 [cite: 471-473].</li>
+</ul>
+</section>
+<section id="coverage-of-ite-main-result" class="level2">
+<h2 class="anchored" data-anchor-id="coverage-of-ite-main-result">4.3 Coverage of ITE (Main Result)</h2>
+<p>이 논문의 핵심 주제인 <strong>개별 처치 효과(ITE)</strong>에 대한 커버리지입니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/figure2_ite_coverage.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3: Figure 2 - Empirical 95% coverage of ITE. ITE에 대한 커버리지 결과입니다. Causal Forest와 X-learner는 ITE 예측 구간을 생성하도록 설계되지 않았으므로 매우 낮은 커버리지를 보입니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>CF &amp; X-learner:</strong> 예상대로 ITE를 전혀 커버하지 못합니다. [cite_start]이는 CATE 신뢰 구간을 ITE 예측 구간으로 오해해서는 안 된다는 점을 시사합니다 [cite: 503-504].</li>
+<li>[cite_start]<strong>BART:</strong> 등분산(Homoscedastic) 환경에서는 완벽한 커버리지를 보이지만, 이분산(Heteroscedastic) 환경, 특히 상관관계가 있는 경우 성능이 떨어집니다 [cite: 505-506].</li>
+<li>[cite_start]<strong>CQR:</strong> <strong>모든 시나리오(차원, 상관관계, 이분산성 여부)에서 거의 정확한 95% 커버리지를 달성</strong>합니다[cite: 507].</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="results-interval-length-efficiency" class="level1">
+<h1>5. Results: Interval Length &amp; Efficiency</h1>
+<p>커버리지가 높다고 무조건 좋은 것은 아닙니다. 구간의 길이가 너무 넓으면 정보가치가 없기 때문입니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/figure3_interval_length.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 4: Figure 3 - Lengths of interval estimates for ITE. 파란색 수직선은 Oracle Interval(이상적인 길이)을 나타냅니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>CF &amp; X-learner:</strong> 구간 길이가 매우 짧습니다. [cite_start]앞서 보았듯 이는 커버리지 실패(Poor calibration)의 결과이므로 의미가 없습니다[cite: 508].</li>
+<li><strong>BART vs.&nbsp;CQR:</strong>
+<ul>
+<li>등분산(Homoscedastic) 환경에서 BART는 가장 짧은 구간을 생성합니다. [cite_start]CQR(with BART learner)도 이에 근접한 효율성을 보입니다 [cite: 509-510].</li>
+<li>이분산(Heteroscedastic) 환경에서 BART의 구간은 너무 짧아 커버리지 실패로 이어집니다. 반면 CQR은 커버리지를 유지하기 위해 구간 길이를 늘립니다. [cite_start]이때 CQR의 구간 길이 변동성이 커지는 경향이 있습니다[cite: 513].</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+<section id="results-conditional-coverage" class="level1">
+<h1>6. Results: Conditional Coverage</h1>
+<p>마지막으로, <strong>조건부 커버리지(Conditional Coverage)</strong>를 분석합니다. 이분산 설정(<span class="math inline">\(\sigma^2(x) = -\log X_1\)</span>)에서는 <span class="math inline">\(X_1 \to 0\)</span>일 때 분산이 무한대로 발산하므로, 예측하기 가장 어려운 영역입니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/figure4_conditional_coverage.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 5: Figure 4 - Estimated conditional coverage of ITE. x축은 조건부 분산의 분위수(Percentile)를 나타냅니다. 오른쪽으로 갈수록 예측이 어려운 데이터 포인트입니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>BART:</strong> 조건부 분산이 커질수록(x축의 오른쪽), 커버리지 확률이 급격히 떨어지는 것을 확인할 수 있습니다. [cite_start]평균적으로는 괜찮을지 몰라도, <strong>불확실성이 큰 환자군에 대해서는 리스크를 과소평가</strong>할 위험이 있습니다 [cite: 587-588].</li>
+<li><strong>CQR:</strong> 분산이 큰 영역에서도 커버리지를 안정적으로 유지(Flat curve)합니다. [cite_start]특히 Quantile RF나 Quantile Boosting을 사용한 CQR이 BART 기반 CQR보다 더 나은 조건부 커버리지를 보입니다[cite: 589].</li>
+</ul>
+<hr>
+</section>
+<section id="summary" class="level1">
+<h1>7. Summary</h1>
+<p>이번 실험 결과는 Weighted Split-CQR의 강력함을 실증적으로 보여주었습니다.</p>
+<ol type="1">
+<li><strong>Robustness:</strong> 기존 방법론(BART 포함)이 실패하는 고차원, 상관관계, 이분산성 환경에서도 CQR은 약속된 커버리지(95%)를 지켜냈습니다.</li>
+<li><strong>Safety:</strong> CATE를 위한 신뢰 구간(CF, X-learner)을 ITE 예측에 무리하게 사용할 경우, 불확실성을 심각하게 과소평가할 수 있음이 드러났습니다.</li>
+<li><strong>Adaptability:</strong> CQR은 데이터의 불확실성 수준(조건부 분산)에 따라 구간의 길이를 적절히 조절하여, 어려운 케이스에서도 신뢰할 수 있는 예측을 제공합니다.</li>
+</ol>
+<p>이로써 우리는 평균적인 효과를 넘어, 개별 환자에게 적용 가능한 안전하고 신뢰할 수 있는 인과추론 도구를 확보하게 되었습니다.</p>
+<hr>
+<section id="누락-방지-검증-compliance-checklist" class="level3">
+<h3 class="anchored" data-anchor-id="누락-방지-검증-compliance-checklist">누락 방지 검증 (Compliance Checklist)</h3>
+<ol type="1">
+<li><strong>내용 처리:</strong>
+<ul>
+<li>시뮬레이션 데이터 생성 과정(<span class="math inline">\(X\)</span>, <span class="math inline">\(Y(1)\)</span>, <span class="math inline">\(e(x)\)</span> 식) 포함? ✅</li>
+<li>비교 방법론(CF, X-learner, BART) 및 선정 이유 설명? ✅</li>
+<li>Table 2 (이론 vs 실제 커버리지 비교) 내용 포함? ✅</li>
+<li>Figure 1 (CATE Coverage) 분석 포함? ✅</li>
+<li>Figure 2 (ITE Coverage) 핵심 결과 포함? ✅</li>
+<li>Figure 3 (Interval Length) 효율성 분석 포함? ✅</li>
+<li>Figure 4 (Conditional Coverage) 이분산성 환경 분석 포함? ✅</li>
+</ul></li>
+<li><strong>수식 처리:</strong>
+<ul>
+<li>데이터 생성 <span class="math inline">\(f(x)\)</span>, <span class="math inline">\(e(x)\)</span>, <span class="math inline">\(\sigma^2(x)\)</span> 등의 수식 LaTeX 재현? ✅</li>
+</ul></li>
+<li><strong>형식:</strong>
+<ul>
+<li>Quarto YAML Header 작성? ✅</li>
+<li>이미지 문법 <code>![Alt](./path)</code> 사용 및 캡션 작성? ✅</li>
+<li>엄격한 Citation 형식 `` 준수? ✅</li>
+</ul></li>
+<li><strong>범위:</strong>
+<ul>
+<li>섹션 3.6의 내용에 집중하고 4번 섹션 이후 내용은 제외함. ✅</li>
+</ul></li>
+</ol>
+
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/shsha0110\.github\.io");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

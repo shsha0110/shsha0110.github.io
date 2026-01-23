@@ -1,0 +1,209 @@
+---
+title: "[Paper Review] Conformal Inference of Counterfactuals and Individual Treatment Effects (Part 2)"
+description: "From Covariate Shift to Double Robustness: How to construct valid counterfactual intervals using Weighted Conformal Prediction."
+author: "유성현"
+date: "2026-01-23"
+categories: [Paper Review]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# Overview
+
+* 지난 포스트(Part 1)에서는 평균 처치 효과(ATE)나 조건부 평균 처치 효과(CATE)가 갖는 한계를 지적하고, **개별 처치 효과(Individual Treatment Effect, ITE)**에 대한 불확실성을 정량화하는 것이 왜 중요한지 논의했습니다.
+
+* 이번 포스트(Part 2)에서는 본 논문의 핵심 방법론을 다룹니다. 
+* 저자들은 ITE 추정 문제를 **Covariate Shift(공변량 이동)** 문제로 재해석하고, **Weighted Conformal Inference(가중 컨포멀 추론)**를 통해 $Y(1)$과 $Y(0)$에 대한 신뢰할 수 있는 예측 구간을 구성하는 방법을 제시합니다. 
+* 특히, 이 방법이 랜덤화 실험(RCT)에서는 정확한(Exact) 커버리지를 보장하고, 관찰 연구(Observational Study)에서는 **이중 강건성(Doubly Robustness)**을 가짐을 이론적으로 증명합니다.
+
+---
+
+# 3. From Observables to Counterfactuals
+
+* 우리의 목표는 $Y(1)$과 $Y(0)$에 대한 예측 구간 $\hat{C}_1(x), \hat{C}_0(x)$를 구성하는 것입니다. 
+* 하지만 우리는 $Y(1)$을 처치군($T=1$)에서만, $Y(0)$를 대조군($T=0$)에서만 관찰할 수 있습니다.
+
+## 3.1 Counterfactuals and Covariate Shift
+
+* 반사실적 추론(Counterfactual Inference)은 기계학습에서 널리 연구된 **Covariate Shift** 문제의 특수한 형태로 볼 수 있습니다.
+
+* Strong Ignorability 가정($(Y(1), Y(0)) \perp T | X$) 하에서, 관측된 처치군 데이터의 결합 분포는 다음과 같습니다.
+
+$$
+P_{X|T=1} \times P_{Y(1)|X}
+$$
+
+* 하지만 우리가 추론하고자 하는 타겟 모집단(전체 모집단 또는 특정 타겟 집단)의 분포는 다음과 같습니다.
+
+$$
+Q_X \times P_{Y(1)|X}
+$$
+
+* 여기서 중요한 점은 **조건부 결과 분포 $P_{Y(1)|X}$는 동일**하지만, **공변량 분포가 $P_{X|T=1}$에서 $Q_X$로 변화**했다는 것입니다. 
+* 기존의 Conformal Inference는 훈련 데이터와 테스트 데이터의 분포가 동일하다는 가정(Exchangeability)에 의존하므로, 이러한 분포 변화(Shift)가 있을 때는 보정(Calibration)이 필요합니다.
+
+---
+
+## 3.2. Weighted Conformal Inference
+
+* 분포 변화에 대응하기 위해, 저자들은 Tibshirani et al. (2019b)이 제안한 **Weighted Conformal Inference**를 도입합니다.
+
+### Standard vs. Weighted Coverage
+
+* 표준 Conformal Prediction은 다음의 **Marginal Coverage**를 보장합니다.
+
+$$
+\mathbb{P}_{(X, Y) \sim P_X \times P_{Y|X}} (Y \in \hat{C}(X)) \ge 1 - \alpha
+$$ {#eq-formal-coverage}
+
+* 하지만 Covariate Shift가 존재하는 우리의 설정에서는, 타겟 분포 $Q_X$에 대한 커버리지가 필요합니다.
+
+$$
+\mathbb{P}_{(X, Y) \sim Q_X \times P_{Y|X}} (Y \in \hat{C}(X)) \ge 1 - \alpha
+$$ {#eq-shifted-coverage}
+
+* 이를 달성하기 위해, 우리는 훈련 분포 $P_X$와 타겟 분포 $Q_X$ 사이의 **우도비(Likelihood Ratio)**인 $w(x)$를 사용해야 합니다.
+
+$$
+w(x) = \frac{dQ_X(x)}{dP_X(x)}
+$$
+
+### Algorithm: Weighted Split-CQR
+
+* 본 논문에서는 Conformal Quantile Regression(CQR)을 확장한 **Weighted Split-CQR** 알고리즘을 사용합니다.
+
+![Figure 1: Algorithm 1 - Weighted Split-CQR. 이 알고리즘은 데이터를 학습(Training)과 교정(Calibration) 폴드로 나눈 뒤, 교정 데이터에서 계산된 Non-conformity Score들에 가중치 $w(x)$를 적용하여 예측 구간을 보정합니다.](./images/algorithm1_weighted_cqr.png)
+
+* **알고리즘의 핵심 단계**는 다음과 같습니다:
+
+1.  **Split:** 데이터를 훈련 집합 $\mathcal{Z}_{tr}$과 교정 집합 $\mathcal{Z}_{ca}$로 분할합니다.
+2.  **Fit:** $\mathcal{Z}_{tr}$을 사용하여 조건부 분위수 함수 $\hat{q}_{\alpha_{lo}}(x), \hat{q}_{\alpha_{hi}}(x)$를 학습합니다.
+3.  **Score:** $\mathcal{Z}_{ca}$의 각 데이터 포인트에 대해 Non-conformity Score $V_i$를 계산합니다.
+    $$V_i = \max \{ \hat{q}_{\alpha_{lo}}(X_i) - Y_i, Y_i - \hat{q}_{\alpha_{hi}}(X_i) \}$$
+4.  **Weight:** 각 포인트의 가중치 $W_i = \hat{w}(X_i)$를 계산하고, 이를 정규화하여 확률 질량 $\hat{p}_i(x)$를 구합니다.
+    $$\hat{p}_i(x) = \frac{W_i}{\sum_{j \in \mathcal{I}_{ca}} W_j + \hat{w}(x)}$$
+5.  **Calibrate:** 가중된 분포의 $(1-\alpha)$-th 분위수 $\eta(x)$를 계산하여 최종 구간을 생성합니다.
+    $$\hat{C}(x) = [\hat{q}_{\alpha_{lo}}(x) - \eta(x), \hat{q}_{\alpha_{hi}}(x) + \eta(x)]$$ {#eq-output-coverage}
+
+### Theoretical Guarantee (Proposition 1)
+* 만약 우도비 $w(x)$가 정확하다면, 이 알고리즘은 식 (2)의 커버리지를 정확히 만족합니다. 
+* $w(x)$를 추정해서 사용하더라도, 추정 오차가 작다면 커버리지는 근사적으로 보장됩니다.
+
+---
+
+## 3.3. The Role of Propensity Score
+
+* 그렇다면 이 가중치 $w(x)$는 인과추론에서 무엇에 해당할까요? 
+* 놀랍게도(혹은 자연스럽게도), 이것은 **성향 점수(Propensity Score)**와 직결됩니다.
+
+### Connection to IPW
+* 성향 점수 $e(x) = \mathbb{P}(T=1|X=x)$는 관찰 연구에서 ATE를 식별하는 데 핵심적인 역할을 합니다. 
+$$
+\begin{aligned}
+\mathbb{E}[Y(1) - Y(0)] &= \mathbb{E}[w_1(X){Y^{obs} I(T=1)} - w_0(X){Y^{obs} I(T=0)}] \\
+\text{where } w_1(x) &= \frac{1}{e(x)}, w_0(x) = \frac{1}{1- e(x)}
+\end{aligned}
+$$ {#eq-ate}
+
+* Inverse Propensity Weighting (IPW) 추정량은 다음과 같이 정의됩니다.
+$$
+\mathbb{E}[Y(1)] = \mathbb{E}\left[ \frac{Y^{obs} I(T=1)}{e(X)} \right]
+$$
+
+* Weighted Conformal Inference에서의 가중치 도출 과정은 IPW와 매우 유사합니다. 
+* 예를 들어, $Y(1)$에 대한 ATE 타입의 추론을 위해 베이즈 정리를 적용하면 다음과 같습니다.
+
+$$
+w_1(x) = \frac{dP_X(x)}{dP_{X|T=1}(x)} = \frac{dP_X(x)}{dP_X(x) e(x) / \mathbb{P}(T=1)} = \frac{\mathbb{P}(T=1)}{e(x)} \propto \frac{1}{e(x)}
+$$
+
+* Weighted Conformal Inference는 가중치의 스케일(상수배)에 불변(Invariant)하므로, 단순히 **성향 점수의 역수**를 가중치로 사용하면 됩니다.
+
+### Summary of Weight Functions
+* 추론 대상(ATE, ATT, ATC)이나 타겟 분포(Generalizability)에 따라 적절한 가중치 함수가 달라집니다.
+
+![Figure 2: Table 1 - Summary of weight functions for different inferential targets. 추론하고자 하는 대상(Target)에 따라 $Y(1)$과 $Y(0)$ 예측에 사용해야 할 가중치 함수 $w_1(x), w_0(x)$가 정리되어 있습니다.](./images/table1_weights.png)
+
+* **ATE:** $Y(1)$에는 $1/e(x)$, $Y(0)$에는 $1/(1-e(x))$를 사용.
+* **ATT (Effect on Treated):** $Y(1)$에 대해서는 가중치가 필요 없음(1), $Y(0)$에 대해서는 오즈(Odds)인 $e(x)/(1-e(x))$를 사용.
+* **Generalizability:** 타겟 분포와의 비율 $dQ/dP$를 추가적으로 곱해줌.
+
+---
+
+# 5. Theoretical Properties
+
+이 방법론은 두 가지 강력한 이론적 성질을 가집니다.
+
+## 5.1 Exactness for Randomized Trials (RCT)
+완전 순응(Perfect Compliance)이 있는 무작위 실험(RCT)의 경우, 성향 점수 $e(x)$는 연구자에 의해 설계되었으므로 **정확히 알 수 있습니다**[cite: 293].
+
+* 따라서 Weighted Conformal Inference는 **유한 샘플(Finite Sample)에서도 완벽한 커버리지를 보장**합니다.
+* 이는 점근적(Asymptotic) 이론에 의존하는 기존 방법론들과 차별화되는 지점입니다[cite: 294].
+* 심지어 Overlap 조건이 위배되어 $e(x) \approx 0$인 영역이 있더라도, 알고리즘은 자연스럽게 구간의 길이를 무한대로 늘려 커버리지를 방어합니다[cite: 296].
+
+## 5.2 Double Robustness (Doubly Robust)
+관찰 연구에서는 성향 점수 $e(x)$와 결과 모델(Quantile) $q(x)$를 모두 추정해야 합니다. 본 논문의 방법론은 **이중 강건성(Double Robustness)**을 가집니다. 즉, 다음 두 조건 중 **하나만 만족해도** 커버리지가 근사적으로 보장됩니다[cite: 310].
+
+1.  **성향 점수 모델이 정확함 ($\hat{e}(x) \approx e(x)$)**
+2.  **조건부 분위수 모델이 정확함 ($\hat{q}(x) \approx q(x)$)**
+
+### Intuition
+* 만약 $\hat{e} \approx e$라면: 가중치가 정확하므로, 분위수 모델 $\hat{q}$가 엉망이어도 Weighted CP의 원리에 의해 커버리지가 보장됩니다[cite: 312].
+* 만약 $\hat{q} \approx q$라면: 잔차(Residuals)의 분포가 안정화되어, 가중치가 부정확해도 $0$ 주변에서의 분포(Quantile of residuals)가 보존됩니다 [cite: 316-320].
+
+### Theorem 1 (Formal Statement)
+정리 1은 이를 수학적으로 정당화합니다. $\hat{e}_N$과 $\hat{q}_{\beta, N}$이 데이터 크기 $N$이 커짐에 따라 수렴할 때, 다음의 이중 강건성 커버리지를 만족합니다 [cite: 331-333].
+
+$$
+\lim_{N,n \to \infty} \mathbb{P}_{(X, Y(1)) \sim P_X \times P_{Y(1)|X}} (Y(1) \in \hat{C}_{N,n}(X)) \ge 1 - \alpha
+$$
+
+또한, 조건부 분위수 모델이 정확하게 추정된 경우(A2 조건), **조건부 커버리지(Conditional Coverage)** 또한 점근적으로 달성됩니다[cite: 337].
+
+$$
+\lim_{N,n \to \infty} \mathbb{P}_{X \sim P_X} (\mathbb{P}(Y(1) \in \hat{C}_{N,n}(X) | X) \le 1 - \alpha - \epsilon) = 0
+$$
+
+이는 이 방법론이 단순히 평균적인 커버리지만 맞추는 것이 아니라, 개별 환자 수준에서의 불확실성도 잘 포착할 수 있음을 시사합니다[cite: 345].
+
+---
+
+# 6. Summary
+
+이번 포스트에서는 ITE 추정을 위한 Weighted Conformal Inference의 메커니즘을 살펴보았습니다.
+
+1.  **Covariate Shift:** 인과추론의 결측값 문제를 분포 이동 문제로 치환하여 접근했습니다.
+2.  **Weighted CQR:** 타겟 분포와의 우도비(Likelihood Ratio)를 가중치로 사용하여 예측 구간을 보정했습니다.
+3.  **Propensity Score:** 이 가중치는 인과추론의 성향 점수와 수학적으로 동등함을 보였습니다.
+4.  **Double Robustness:** 성향 점수 혹은 결과 모델 중 하나만 정확해도 신뢰 구간의 타당성이 유지됨을 증명했습니다.
+
+다음 포스트(Part 3)에서는 이 방법론을 확장하여, 두 잠재적 결과가 모두 결측된 새로운 데이터(Study에 포함되지 않은 환자)에 대해 ITE 구간을 생성하는 방법과 실제 데이터 실험 결과를 다루겠습니다.
+
+---
+
+### 누락 방지 검증 (Compliance Checklist)
+
+1.  **내용 처리:**
+    * Covariate Shift 관점에서의 문제 정의 ($P_{obs}$ vs $Q_{target}$) 포함? ✅
+    * Weighted Conformal Inference의 필요성과 원리 설명? ✅
+    * Algorithm 1 (Weighted Split-CQR) 단계별 서술 및 이미지 Placeholder 포함? ✅
+    * 성향 점수(Propensity Score)와 가중치 $w(x)$의 관계 유도 ($1/e(x)$ 등)? ✅
+    * Table 1 (가중치 함수 요약) 내용 및 이미지 Placeholder 포함? ✅
+    * RCT에서의 Exact Coverage 성질 서술? ✅
+    * Double Robustness의 직관적 설명 및 Theorem 1 포함? ✅
+
+2.  **수식 처리:**
+    * Covariate Shift 분포 식, Coverage 기준 식 (8, 10), 가중치 식, IPW 식 등 LaTeX 재현? ✅
+    * Double Robustness 극한 식 (12, 13) 포함? ✅
+
+3.  **형식:**
+    * Quarto YAML Header 작성? ✅
+    * 이미지 문법 `![Alt](./path)` 사용? ✅
+    * 엄격한 Citation 형식 `` 준수? ✅
+
+4.  **범위:**
+    * 섹션 3.1 ~ 3.5 내용만 포함하며, 2번 및 3.6번 섹션 제외 확인. ✅

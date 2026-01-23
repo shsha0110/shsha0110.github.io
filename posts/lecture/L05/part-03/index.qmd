@@ -1,0 +1,189 @@
+---
+title: "[Causal Inference] 05. Adjustment Criterion (Part 3)"
+description: "Algorithm"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction
+
+이전 포스트들에서 우리는 **Adjustment Criterion**의 이론적 배경과 정의를 살펴보았습니다. 우리는 특정 변수 집합 $Z$가 주어졌을 때, 그것이 인과 효과 $P(y|do(x))$를 식별(Identification)하기 위해 유효한지(Admissible) 판별하는 방법을 알고 있습니다.
+
+하지만 현실적인 인과 추론 문제에서는 단순히 "이 $Z$가 유효한가?"를 묻는 것을 넘어, **"유효한 $Z$들을 어떻게 모두 찾을 것인가?"** 또는 **"어떤 $Z$를 선택하는 것이 최선인가?"**라는 질문에 직면하게 됩니다.
+
+## 1.1. Motivation: Why Find All Sets?
+[cite_start]일반적으로 주어진 인과 그래프 $\mathcal{G}$에서 Admissible Set은 하나가 아니라 여러 개 존재할 수 있습니다. [cite: 439] 그렇다면 우리는 왜 여러 집합을 고려해야 할까요?
+
+1.  **Measurement Cost (측정 비용):** 어떤 변수는 측정하기 매우 비싸거나 위험할 수 있습니다.
+2.  **Variance (분산):** 어떤 조정 집합은 다른 집합보다 추정량의 분산을 더 줄여줄 수 있습니다.
+3.  [cite_start]**Availability & Ethics:** 개인정보 보호나 공정성 이슈로 특정 변수를 사용할 수 없을 수 있습니다. [cite: 444]
+
+> **Example:**
+> 어떤 질병($X$)과 결과($Y$) 사이의 인과 효과를 추정할 때, 유전적 조건($A$)과 두통($B$)이 모두 각각 유효한 조정 집합이라고 가정해 봅시다 ($\{A\}$ is admissible, $\{B\}$ is admissible).
+> * $A$ (유전자): 검사 비용이 비쌈, 개인정보 이슈.
+> * $B$ (두통): 설문으로 쉽게 확인 가능.
+>
+> 이 경우, 이론적으로는 둘 다 유효하지만 현실적으로는 $B$를 선택하는 것이 훨씬 유리합니다. [cite_start]따라서 우리는 **가능한 모든 Admissible Set을 나열**하고, 그중 비용-효율적인 것을 선택할 필요가 있습니다. [cite: 446-454]
+
+---
+
+# 2. The Computational Challenge
+
+문제는 그래프의 크기가 커질수록 가능한 부분집합의 개수가 기하급수적으로 늘어난다는 점입니다.
+
+## 2.1. Exponential Search Space
+변수가 $n$개일 때, 가능한 변수 조합은 $2^n$개입니다. [cite_start]만약 우리가 "Magic Function" $f$를 가지고 있어서 모든 Admissible Set을 $O(1)$ 시간에 찾는다고 해도, 출력해야 할 집합의 개수 자체가 지수적으로 많다면 전체 실행 시간은 엄청나게 길어질 것입니다. [cite: 457]
+
+따라서 우리의 목표는 "전체 실행 시간을 줄이는 것"이 아니라(이는 불가능할 수 있음), **"첫 번째 답을 찾을 때까지, 그리고 하나의 답을 찾고 다음 답을 찾을 때까지 걸리는 시간"**을 합리적으로 유지하는 것입니다.
+
+## 2.2. Polynomial Delay
+우리는 **Polynomial Delay** 알고리즘을 목표로 합니다.
+알고리즘이 $O(n^d)$ (단, $d$는 상수) 시간 내에 다음 작업을 수행한다면 Polynomial Delay를 가진다고 합니다.
+
+1.  프로그램 시작 후 첫 번째 출력을 내놓을 때까지.
+2.  하나의 출력을 내놓고 다음 출력을 내놓을 때까지.
+3.  마지막 출력을 내놓고 종료할 때까지.
+
+![Figure 1: Concept of Polynomial Delay. 각 출력($s_1, s_2, \dots$) 사이의 간격이 입력 크기 $n$의 다항식 시간 $O(n^d)$ 이내로 제한된다.](./images/polynomial_delay_timeline.png)
+[cite_start]*(그림 설명: 시간 축 위에서 알고리즘이 해(solution) $s_1, s_2, \dots$를 출력하는 시점을 나타냄. 각 간격이 너무 길어지지 않도록 보장하는 것이 핵심임.)* [cite: 470-479]
+
+---
+
+# 3. Theoretical Foundation: Inclusion & Restriction
+
+효율적인 탐색을 위해 "Divide and Conquer(분할 정복)" 전략을 사용할 것입니다. 이를 위해서는 탐색 공간의 특정 가지(branch)에 해가 존재하는지 빠르게(Polynomial time에) 판단할 수 있는 도구가 필요합니다.
+
+## 3.1. The Lemma
+우리가 찾고자 하는 분리 집합(Separating Set) $Z$가 다음 조건을 만족한다고 가정해 봅시다.
+$$I \subseteq Z \subseteq R$$
+즉, $Z$는 반드시 $I$를 포함(Include)해야 하고, $R$에 포함(Restrict)되어야 합니다.
+
+이때, $X$와 $Y$를 분리하는 유효한 $Z$가 범위 $[I, R]$ 내에 존재하는지 확인하는 방법은 다음과 같습니다.
+
+> **Lemma (Existence of Separator in Range):**
+> 범위 $I \subseteq Z \subseteq R$ 내에 $X$와 $Y$를 분리하는 집합 $Z$가 **존재한다면**,
+> 특수하게 구성된 집합 **$Z_0$** 또한 $X$와 $Y$를 분리한다.
+>
+> $$Z_0 = An(X \cup Y \cup I) \cap R$$
+>
+> [cite_start]반대로, **$Z_0$가 $X$와 $Y$를 분리하지 못한다면, 해당 범위 내에 분리 집합은 존재하지 않는다.** [cite: 493-498]
+
+![Figure 2: Venn Diagram of Inclusion (I) and Restriction (R). $Z$는 $I$를 감싸고 $R$ 내부에 있어야 한다. $Z_0$는 이 조건 하에서 구성 가능한 가장 '조상'에 가까운 집합이다.](./images/inclusion_restriction_venn.png)
+[cite_start]*(그림 설명: $I$를 포함하고 $R$에 속하는 $Z$들의 공간. $Z_0$는 $X, Y, I$의 조상($An$)이면서 $R$에 속하는 교집합으로 정의됨.)* [cite: 492]
+
+## 3.2. Significance
+이 Lemma가 중요한 이유는 **탐색의 가지치기(Pruning)**를 가능하게 하기 때문입니다.
+우리는 $Z_0$를 구성하고 d-separation을 검사하는 것을 $O(n+m)$ (그래프 탐색 시간) 내에 수행할 수 있습니다. [cite_start]만약 $Z_0$가 실패하면, 그 하위의 모든 조합을 일일이 확인하지 않고 즉시 탐색을 중단할 수 있습니다. [cite: 508-509]
+
+---
+
+# 4. The Algorithm: `list-seps`
+
+이제 위 이론을 바탕으로 모든 Admissible Set을 찾는 알고리즘 `list-seps`를 정의합니다.
+
+## 4.1. Setup
+먼저, **Adjustment Criterion**의 조건 (i)(Proper Causal Path 보존)을 만족하기 위해, 절대 조정하면 안 되는 변수들의 집합 $F$를 정의합니다. 그리고 알고리즘 내부적으로 사용할 $F^+$를 정의합니다.
+
+$$F^+ = X \cup Y \cup F$$
+
+* $F$: $X$를 제외한 Proper Causal Path 상의 변수들과 그들의 후손.
+* $G'$: Proper Causal Path의 첫 번째 엣지를 모두 제거한 그래프. (Part 2에서 배운 내용)
+
+이제 우리는 $G'$에서 $X$와 $Y$를 분리하되, $F^+$의 원소는 포함하지 않는 $Z$를 찾으면 됩니다. [cite_start]이는 초기 조건 $I=\emptyset$, $R=V \setminus F^+$로 설정하여 해결할 수 있습니다. [cite: 529-533]
+
+## 4.2. Algorithm Structure (Divide and Conquer)
+[cite_start]함수 `list-seps(G, X, Y, I, R)`은 다음과 같이 재귀적으로 동작합니다. [cite: 596-602, 696-704]
+
+1.  **Existence Check:** 먼저 `exist-sep(G, X, Y, I, R)`을 호출합니다. (앞서 배운 Lemma 사용).
+    * 만약 `False`라면, 이 범위에 해가 없으므로 즉시 **Return** (가지치기).
+2.  **Output Check:** 만약 $I = R$이라면, 더 이상 선택의 여지가 없습니다. $I$가 유효한 집합이므로 **Output $I$**.
+3.  **Branching:** 아직 결정되지 않은 변수 $W \in R \setminus I$를 하나 선택합니다.
+    * **Case 1 (Include W):** $W$를 조정 집합에 포함시킵니다.
+        $\rightarrow$ `list-seps(G, X, Y, I ` $\cup$ `{W}, R)`
+    * **Case 2 (Exclude W):** $W$를 조정 집합에서 배제합니다.
+        $\rightarrow$ `list-seps(G, X, Y, I, R ` $\setminus$ `{W})`
+
+이 과정을 통해 유효한 집합이 있는 경로만 탐색하며(Polynomial Delay), 모든 해를 나열할 수 있습니다.
+
+---
+
+# 5. Worked Example
+
+다음 그래프를 통해 알고리즘을 단계별로 추적해 봅시다.
+
+![Figure 3: Running Example Graph. $X \to C \to Y$ (Proper Causal Path), $X \leftarrow A \to B \to Y$, $X \leftarrow D \leftarrow \dots$ 등의 구조를 가짐.](./images/running_example_graph.png)
+[cite_start]*(그림 설명: $X \to C \to Y$가 Proper Causal Path임. $A, B, D$는 교란 요인일 가능성이 있음. 점선 화살표는 Hidden Confounder 혹은 Back-door path를 의미.)* [cite: 535]
+
+## Step 1: Initialize
+* **Forbidden Set ($F$):** $C$는 Proper Causal Path 위에 있으므로 금지됩니다. $X, Y$도 포함할 수 없습니다.
+* **$F^+$:** $\{X, Y, C\}$
+* **Initial Range:**
+    * $I = \emptyset$
+    * $R = V \setminus F^+ = \{A, B, D\}$
+* [cite_start]**Graph $G'$:** $X \to C$ 엣지를 제거하여 Proper Causal Path를 끊습니다. [cite: 546-547]
+
+## Step 2: Recursion Tree Trace
+알고리즘은 변수를 하나씩 선택하며 $I$에 넣을지($I \cup W$), $R$에서 뺄지($R \setminus W$) 결정합니다.
+
+1.  **Start:** $I=\{\}, R=\{A, B, D\}$. `exist-sep` 통과(True).
+2.  **Pick D:**
+    * **Branch Left (Include D):** $I=\{D\}, R=\{A, B, D\}$.
+        * **Pick A:**
+            * **Include A:** $I=\{A, D\}, R=\{A, B, D\}$. ... $\rightarrow$ Output $\{A, B, D\}, \{A, D\}$...
+            * **Exclude A:** $R=\{B, D\}$. ...
+    * **Branch Right (Exclude D):** $R=\{A, B\}$.
+        * 여기서 만약 $D$가 없으면 $X$와 $Y$를 분리할 수 없다고 가정해 봅시다.
+        * [cite_start]그러면 `exist-sep`이 False를 반환하고, 이 가지(branch)는 더 이상 탐색하지 않고 **Pruning** 됩니다. [cite: 561-591]
+
+## Step 3: Result
+결과적으로 트리의 리프 노드(Leaf Node) 중에서 $I=R$인 지점들이 Admissible Set으로 출력됩니다. 예를 들어 $\{A, B, D\}, \{A, D\}, \{B, D\}$ 등이 출력될 수 있습니다. (구체적인 출력은 그래프의 d-separation 구조에 따라 결정됨).
+
+---
+
+# 6. Complexity Analysis
+
+이 알고리즘의 효율성은 다음과 같이 분석됩니다.
+
+1.  **Tree Depth:** 트리의 깊이는 최대 변수의 개수 $n$입니다.
+2.  **Work per Node:** 각 노드에서 `exist-sep`을 수행하는 데 $O(n+m)$ 시간이 걸립니다. ($Z_0$ 계산 및 d-sep 확인).
+3.  **Delay:** 하나의 출력을 찾기 위해 트리의 깊이만큼 내려갔다가 다시 올라오는 과정을 거칩니다. 잘못된 길로 들어서더라도 `exist-sep` 덕분에 즉시 되돌아옵니다.
+    * [cite_start]따라서, 출력과 출력 사이의 지연 시간(Delay)은 최악의 경우에도 **$O(n(n+m))$**입니다. [cite: 707]
+
+> **Conclusion:**
+> [cite_start]전체 해의 개수가 지수적일지라도, 우리는 $O(n^2)$ 정도의 합리적인 대기 시간으로 유효한 조정 집합들을 하나씩 끊임없이(stream) 얻을 수 있습니다. [cite: 708-709]
+
+---
+
+# 7. Summary
+
+* **Necessity:** 비용, 윤리, 분산 등의 이유로 *모든* Admissible Set을 탐색하는 것이 필요합니다.
+* **Challenge:** 단순 전수 조사는 지수 시간($2^n$)이 걸려 불가능합니다. 목표는 **Polynomial Delay**입니다.
+* **Key Tool:** $I \subseteq Z \subseteq R$ 범위 내에 해가 존재하는지 판별하는 Lemma($Z_0$)를 통해, 가망 없는 탐색 경로를 즉시 차단(Pruning)합니다.
+* **Algorithm:** `list-seps`는 $I$(포함)와 $R$(제한)을 갱신하며 재귀적으로 탐색하되, Lemma를 활용해 효율성을 보장합니다.
+* **Performance:** 이 알고리즘은 $O(n(n+m))$의 Delay를 보장하여, 대규모 그래프에서도 실용적으로 사용할 수 있습니다.
+
+이로써 Adjustment Criterion의 정의부터(Part 1, 2), 실제로 유효한 집합들을 찾아내는 알고리즘(Part 3)까지 모두 다루었습니다. 이제 여러분은 복잡한 인과 그래프가 주어져도 어떤 변수를 통제해야 하는지 완벽하게 분석할 수 있습니다.
+
+---
+
+### 누락 방지 검증 (Missing Content Check)
+
+강의 자료(PDF 0503 파일)의 내용을 기반으로 아래 항목들이 포함되었는지 확인합니다.
+
+* [cite_start][x] **Motivation:** 측정 비용, 분산, 프라이버시 등 여러 집합을 찾아야 하는 이유 [cite: 444]
+* [cite_start][x] **Computational Challenge:** 지수적 탐색 공간과 "Polynomial Delay"의 정의 [cite: 470-473]
+* [cite_start][x] **Theoretical Tool (Lemma):** $I \subseteq Z \subseteq R$ 조건 하의 존재성 판별법 ($Z_0$) [cite: 493-496]
+* [cite_start][x] **Algorithm Structure:** `list-seps` 함수의 재귀적 구조 (Include/Exclude) [cite: 596-602]
+* [cite_start][x] **Pruning Strategy:** `exist-sep`을 이용한 가지치기 [cite: 650-654]
+* [cite_start][x] **Running Example:** 그래프 예시를 통한 $I, R$ 변화 추적 [cite: 546-590]
+* [cite_start][x] **Time Complexity:** $O(n(n+m))$ Delay 분석 [cite: 707]
+* [cite_start][x] **Algorithm Setup:** $F^+$ 정의 및 초기 조건 [cite: 530-531]
+
+**Note:** 제공된 PDF의 모든 핵심 내용(페이지 1-22)이 본 포스트에 반영되었습니다.

@@ -1,0 +1,156 @@
+---
+title: "[Causal Inference] 11. IPW and Its Variants (Part 2)"
+description: "Doubly Robust Estimation"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: The Motivation
+
+[cite_start]인과 추론의 핵심 목표는 교란 변수(Confounding, $Z$)의 영향을 제거하여 처치($X$)와 결과($Y$) 사이의 인과관계를 밝혀내는 것입니다[cite: 241]. 이를 위해 우리는 지금까지 두 가지 주요 접근법을 배웠습니다.
+
+1.  [cite_start]**Outcome Regression (OR):** 결과 변수와 공변량의 관계($Y \sim Z$)를 모델링하는 방법[cite: 242].
+2.  [cite_start]**Propensity Score Weighting (IPW):** 처치 변수와 공변량의 관계($X \sim Z$)를 모델링하는 방법[cite: 243].
+
+각각의 방법은 강력하지만 치명적인 약점이 있습니다. 모델이 잘못 설정(Misspecification)되면 추정 결과에 편향(Bias)이 발생한다는 점입니다. 그렇다면, **이 두 방법을 결합하여 둘 중 하나만이라도 맞으면 올바른 결과를 얻을 수 있는 방법**은 없을까요? [cite_start]이것이 바로 **Doubly Robust (DR) Estimation**의 핵심 아이디어입니다[cite: 243, 271].
+
+![Figure 1: Doubly Robust Estimation의 개념도](./images/doubly_robust_concept.png)
+*Figure 1: Doubly Robust Estimation은 Outcome Regression 모델과 Propensity Score 모델을 결합합니다. 두 모델 중 하나만 정확하게 명시(Correctly Specified)되어도 ATE(Average Treatment Effect)를 일관성 있게(Consistently) 추정할 수 있음을 보여줍니다.*
+
+# 2. Recap: The Building Blocks
+
+DR 추정량을 유도하기 전에, 그 구성 요소가 되는 두 가지 추정량을 복습해 보겠습니다.
+
+## 2.1. Outcome Regression (OR) Estimator
+[cite_start]잠재적 결과(Potential Outcomes)의 실제 평균 모델을 $m_x(Z) = \mathbb{E}(Y(x)|Z)$라고 정의합니다[cite: 247]. 회귀 분석 등을 통해 이를 추정한 값을 $\hat{m}_x(Z)$라고 할 때, ATE에 대한 OR 추정량 $\hat{\tau}_{adj}$는 다음과 같습니다.
+
+$$
+\hat{\tau}_{adj} = \frac{1}{N} \sum_{i=1}^{N} \{ \hat{m}_1(Z_i) - \hat{m}_0(Z_i) \}
+$$
+
+[cite_start]또는 관측된 데이터를 활용하여 다음과 같이 표현할 수도 있습니다(Imputation 관점)[cite: 252].
+
+$$
+\hat{\tau}_{adj} = \frac{1}{N} \sum_{i=1}^{N} \left\{ X_i(Y_i - \hat{m}_0(Z_i)) + (1-X_i)(\hat{m}_1(Z_i) - Y_i) \right\}
+$$
+
+[cite_start]만약 회귀 모델 $\hat{m}_x(Z)$가 참(True)이라면, 이 추정량은 일치 추정량(Consistent)이며 효율적(Efficient)입니다[cite: 256].
+
+## 2.2. IPW Estimator
+[cite_start]성향 점수(Propensity Score) $e(Z) = P(X=1|Z)$를 추정한 값을 $\hat{e}(Z)$라고 할 때, IPW 추정량은 다음과 같습니다[cite: 262].
+
+$$
+\hat{\tau}_{ipw} = \sum_{i=1}^{N} \frac{Y_i X_i}{\hat{e}(Z_i)} - \sum_{i=1}^{N} \frac{Y_i (1-X_i)}{1-\hat{e}(Z_i)}
+$$
+
+[cite_start]성향 점수 모델이 참이라면 일치 추정량이지만, 가중치의 분산 문제로 인해 비효율적일 수 있습니다[cite: 263].
+
+# 3. The Doubly Robust (DR) Estimator
+
+Doubly Robust 추정량 $\hat{\tau}_{dr}$은 IPW 추정량에 OR 모델의 잔차(Residual)를 보정항으로 추가한 형태입니다. [cite_start]수식으로는 다음과 같이 정의됩니다[cite: 300, 318].
+
+$$
+\begin{aligned}
+\hat{\tau}_{dr} &= \frac{1}{N} \sum_{i=1}^{N} \left\{ \frac{X_i Y_i}{\hat{e}(Z_i)} - \frac{X_i - \hat{e}(Z_i)}{\hat{e}(Z_i)} \hat{m}_1(Z_i) \right\} \\
+&- \frac{1}{N} \sum_{i=1}^{N} \left\{ \frac{(1-X_i) Y_i}{1-\hat{e}(Z_i)} + \frac{X_i - \hat{e}(Z_i)}{1-\hat{e}(Z_i)} \hat{m}_0(Z_i) \right\}
+\end{aligned}
+$$
+
+이 식은 복잡해 보이지만, 두 부분으로 나누어 해석할 수 있습니다.
+
+1.  [cite_start]**Augmented IPW:** 기존 IPW 추정량에 Outcome Regression으로 예측한 값을 이용하여 가중치를 조절(Augmentation)합니다[cite: 319].
+2.  [cite_start]**Augmented OR:** 기존 OR 추정량에 IPW 가중치를 적용한 잔차를 더해 편향을 제거합니다[cite: 320].
+
+결국 두 해석은 수학적으로 동일한 식을 가리킵니다.
+
+# 4. Proof of Double Robustness
+
+이 추정량이 왜 "이중으로" 견고한지 증명해 보겠습니다. 분석의 편의를 위해 $\mu_1 = \mathbb{E}[Y(1)]$을 추정하는 부분인 $\hat{\mu}_{1,dr}$에 집중합니다. ($\mu_0$ 부분도 대칭적입니다) [cite_start][cite: 327].
+
+$$
+\hat{\mu}_{1,dr} = \frac{1}{N} \sum_{i=1}^{N} \left\{ \frac{X_i Y_i}{\hat{e}(Z_i)} - \frac{X_i - \hat{e}(Z_i)}{\hat{e}(Z_i)} \hat{m}_1(Z_i) \right\}
+$$
+
+## 4.1. Expectation Analysis
+[cite_start]대표본(Large Sample)에서 표본 평균을 기댓값으로 대체하고 정리하면 다음과 같습니다[cite: 333, 339].
+
+$$
+\begin{aligned}
+\mathbb{E}[\hat{\mu}_{1,dr}] &= \mathbb{E} \left[ \frac{XY}{e(Z)} - \frac{X-e(Z)}{e(Z)}m_1(Z) \right] \\
+&= \mathbb{E} \left[ \frac{X Y(1)}{e(Z)} \right] - \mathbb{E} \left[ \frac{X-e(Z)}{e(Z)} m_1(Z) \right] \\
+&= \mathbb{E}[Y(1)] + \underbrace{\mathbb{E} \left[ \frac{X-e(Z)}{e(Z)} \{ Y(1) - m_1(Z) \} \right]}_{\text{Error Term } R}
+\end{aligned}
+$$
+
+위 식에서 첫 번째 항은 우리가 원하는 참값 $\mathbb{E}[Y(1)]$이 되고, 두 번째 항은 오차항(Error Term) $R$이 됩니다. **Doubly Robust 성질이 성립하려면, 두 가지 시나리오 중 하나라도 만족할 때 $R=0$이 되어야 합니다.**
+
+## 4.2. Scenario 1: PS Incorrect, OR Correct
+[cite_start]가정: 성향 점수 모델 $e(Z)$는 틀렸지만($e(Z) \neq e_{true}(Z)$), 결과 회귀 모델 $m_1(Z)$는 정확하다($m_1(Z) = m_{1,true}(Z)$)[cite: 347].
+
+반복 기댓값의 법칙(Law of Iterated Expectations)을 사용하여 $Z$에 대해 조건부 기댓값을 취합니다.
+
+$$
+\begin{aligned}
+R &= \mathbb{E} \left[ \mathbb{E} \left\{ \frac{X-e(Z)}{e(Z)} \{ Y(1) - m_1(Z) \} \Bigg| Z \right\} \right] \\
+&= \mathbb{E} \left[ \frac{e_{true}(Z) - e(Z)}{e(Z)} \underbrace{\mathbb{E} \{ Y(1) - m_1(Z) | Z \}}_{(*)} \right]
+\end{aligned}
+$$
+
+[cite_start]여기서 $(*)$ 부분을 보면, $m_1(Z)$가 정확한 모델(True Outcome Model)이므로 $\mathbb{E}[Y(1)|Z] - m_{1,true}(Z) = 0$이 됩니다[cite: 349, 350].
+따라서 **$R = 0$** 입니다.
+
+## 4.3. Scenario 2: PS Correct, OR Incorrect
+[cite_start]가정: 성향 점수 모델 $e(Z)$는 정확하지만($e(Z) = e_{true}(Z)$), 결과 회귀 모델 $m_1(Z)$는 틀렸다($m_1(Z) \neq m_{1,true}(Z)$)[cite: 354].
+
+다시 반복 기댓값의 법칙을 적용합니다.
+
+$$
+\begin{aligned}
+R &= \mathbb{E} \left[ \mathbb{E} \left\{ \frac{X-e(Z)}{e(Z)} \{ Y(1) - m_1(Z) \} \Bigg| Z \right\} \right] \\
+&= \mathbb{E} \left[ \frac{\{ Y(1) - m_1(Z) \}}{e(Z)} \underbrace{\mathbb{E} \{ X - e(Z) | Z \}}_{(**)} \right]
+\end{aligned}
+$$
+
+[cite_start]여기서 $(**)$ 부분을 보면, $e(Z)$가 정확한 모델(True Propensity Score)이므로 $\mathbb{E}[X|Z] - e_{true}(Z) = 0$이 됩니다[cite: 356].
+따라서 **$R = 0$** 입니다.
+
+## 4.4. Conclusion
+두 시나리오 모두에서 오차항 $R$은 0으로 수렴합니다. [cite_start]즉, **PS 모델이나 OR 모델 중 하나만이라도 맞으면** $\hat{\tau}_{dr}$은 ATE에 대한 일치 추정량(Consistent Estimator)이 됩니다[cite: 359, 360, 364].
+
+# 5. Properties and Caveats
+
+## 5.1. Advantages
+1.  [cite_start]**Model Misspecification에 대한 보호:** 분석가에게 "두 번의 기회(Double chances to get it right)"를 제공합니다[cite: 366].
+2.  [cite_start]**Efficiency:** 두 모델이 모두 정확하다면, DR 추정량은 단순 IPW 추정량보다 분산이 작습니다(More efficient)[cite: 367].
+
+## 5.2. Limitations & Warnings
+1.  [cite_start]**Large Sample Property:** DR의 성질은 표본이 충분히 클 때(Asymptotic) 성립합니다[cite: 365].
+2.  **Variance Trade-off:** 만약 Outcome Regression 모델이 완벽하게 맞다면, DR 추정량은 단순 OR 추정량보다 분산이 큽니다. [cite_start]불필요한 가중치 보정이 노이즈를 추가하기 때문입니다[cite: 368].
+3.  **Kang and Schafer (2007)의 경고:** 실제 상황에서 두 모델이 모두 "적당히" 틀린 경우(Moderate Misspecification), DR 추정량의 편향과 분산이 오히려 매우 커질 수 있습니다. [cite_start]경험적으로는 Outcome Model의 정확도가 PS Model보다 더 중요한 역할을 하는 경향이 있습니다[cite: 371, 372, 375].
+
+# 6. Summary
+
+* **Doubly Robust Estimator**는 Outcome Regression과 IPW를 결합하여($\hat{\tau}_{dr}$), 두 모델 중 하나만 정확해도 일관성 있는 추정치를 제공합니다.
+* 수학적으로는 IPW 추정량에 회귀 모델의 잔차를 이용한 보정항을 추가한 형태입니다.
+* 증명을 통해 $E[Y(1)]$ 추정 시 오차항이 **PS가 맞을 때** 혹은 **OR이 맞을 때** 0이 됨을 확인했습니다.
+* 하지만 만능은 아닙니다. 두 모델이 모두 틀렸을 때는 성능이 급격히 저하될 수 있으므로, 모델 설정(Model Specification)에 여전히 주의를 기울여야 합니다.
+
+***
+
+### Verification Checklist
+
+* [x] **Doubly Robust의 기본 정의 및 동기 포함:** Section 1과 3에서 $X \sim Z$와 $Y \sim Z$ 모델의 결합 필요성 설명.
+* [x] **Outcome Regression 및 IPW Recap 포함:** Section 2에서 $\hat{\tau}_{adj}$, $\hat{\tau}_{ipw}$ 수식 포함.
+* [x] **DR 추정량의 수식($\hat{\tau}_{dr}$) 정확한 재현:** Section 3에서 Source 300, 318 수식 사용.
+* [x] **Double Robustness 증명(Scenario 1 & 2):** Section 4에서 반복 기댓값 법칙을 이용해 $R=0$ 유도 과정 상세 서술.
+* [x] **Estimator의 성질(Efficiency, Consistency) 및 한계:** Section 5에서 분산 비교 및 Kang & Schafer (2007) 인용 포함.
+* [x] **이미지 Placeholder 및 캡션:** DR 개념도 포함.
+* [x] **수식 LaTeX 처리:** 모든 주요 수식을 LaTeX로 작성.
+* [x] **인용(Citation) 표기:** Source 번호를 기반으로 형식 준수.

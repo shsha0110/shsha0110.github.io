@@ -1,0 +1,188 @@
+---
+title: "[Causal Inference] 12. Matching"
+description: "Nonparametric Imputation for Causal Inference: Exact, Nearest Neighbor, Propensity Score, and Balance Checking"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Motivation: Matching as Nonparametric Imputation
+
+인과추론(Causal Inference)의 근본적인 문제는 관측되지 않는 반사실(Counterfactual)을 추론하는 것입니다. 처치 집단(Treated units)과 통제 집단(Control units) 간의 비교를 통해 효과를 추정하고자 할 때, 우리는 종종 **처치 집단에 대한 평균 처치 효과(ATT, Average Treatment Effect for the Treated)**에 관심을 가집니다.
+
+$$
+\tau_{ATT} = E[Y(1) - Y(0) | T=1]
+$$
+
+여기서 $Y(1)$은 처치를 받았을 때의 결과, $Y(0)$는 처치를 받지 않았을 때의 결과입니다. $T=1$인 집단에게 $Y(1)$은 관측되지만, $Y(0)$는 관측되지 않습니다(Missing Data).
+
+## 1.1 Regression vs. Matching
+
+전통적인 회귀분석(Regression) 방식은 모델에 기반한 대체(Model-based Imputation)라고 볼 수 있습니다. 회귀분석을 통해 $\hat{Y}(0)$를 추정할 때, 선형성 등 특정 함수 형태(functional form)를 가정해야 합니다.
+
+$$
+\hat{\tau}_{reg} = \frac{1}{N_1} \sum_{i=1}^{N} T_i (Y_i - \hat{\mu}_0(X_i))
+$$
+
+반면, **매칭(Matching)**은 **비모수적 대체(Nonparametric Imputation)** 방법입니다. 함수 형태에 대한 강력한 가정 없이, 처치 집단과 특성(Covariates)이 유사한 통제 집단 데이터를 찾아 반사실을 대체합니다.
+
+![Figure 1: Matching의 기본 아이디어. 모집단(Population)에는 다양한 특성을 가진 개체들이 섞여 있지만, 매칭을 통해 처치 집단(파란색)과 유사한 특성을 가진 통제 집단(회색)만을 선별하여 연구 집단을 구성한다.](./images/population_matching_concept.png)
+
+위 그림과 같이, 충분히 큰 통제 집단(Reservoir of potential controls)이 존재한다면, 각 처치 개체에 대해 하나 이상의 유사한 통제 개체를 매칭할 수 있습니다.
+
+![Figure 2: 오리(Duck) 예시를 통한 매칭의 직관적 이해. 왼쪽의 프로그램 참여 오리들(Treated)과 특성이 가장 유사한 오른쪽의 비교군 오리들(Controls)을 일대일 혹은 일대다로 연결하여 비교 집단을 형성한다.](./images/matching_ducks_example.png)
+
+# 2. Matching Estimators
+
+매칭을 통해 구성된 집합 $\mathcal{H}_i$를 처치 개체 $i$와 유사한 특성을 공유하는 통제 개체들의 인덱스 집합(Matched set)이라고 합시다. 매칭 추정량(Matching Estimator)은 다음과 같이 정의됩니다.
+
+$$
+\hat{\tau}_{match} = \frac{1}{N_1} \sum_{i=1}^{N} T_i \left( Y_i - \frac{1}{|\mathcal{H}_i|} \sum_{j \in \mathcal{H}_i} Y_j \right)
+$$
+
+즉, 각 처치 개체 $i$에 대해 매칭된 통제 개체들의 결과값 평균으로 $Y_i(0)$를 대체(Impute)하여 차이를 구한 뒤, 이를 전체 처치 집단에 대해 평균 낸 것입니다.
+
+# 3. Types of Matching Methods
+
+매칭을 수행하는 방법은 '유사성'을 어떻게 정의하고, 어떻게 짝을 지을 것인가에 따라 다양하게 나뉩니다.
+
+## 3.1 Exact Matching & Coarsened Exact Matching (CEM)
+
+**Exact Matching**은 말 그대로 공변량 $X$가 완전히 동일한 개체끼리 매칭하는 것입니다.
+이 경우 처치 집단과 통제 집단 간의 공변량 분포가 완벽하게 일치하므로($\tilde{F}(X|T=1) = \tilde{F}(X|T=0)$), $X$로 인한 편향(Bias)을 완전히 제거할 수 있습니다.
+
+하지만 차원의 저주(Curse of Dimensionality)로 인해 공변량이 많거나 연속형 변수가 포함된 경우, 정확히 일치하는 짝을 찾는 것은 현실적으로 불가능(Infeasible)합니다.
+
+이에 대한 대안으로 **CEM(Coarsened Exact Matching)**이 사용됩니다.
+* 연속형 변수 등을 구간화(Discretize/Coarsen)하여 범주형으로 만듭니다.
+* 예를 들어, 나이를 20대, 30대로 묶거나 소득을 구간별로 나누어 매칭합니다.
+* 여전히 일부 처치 개체는 매칭되는 짝이 없어 버려질 수 있습니다(Lack of overlap).
+
+> **Caveat: The King Charles vs. Ozzy Osbourne Example**
+> 
+> ![Figure 3: 표면적 특성의 함정. King Charles III와 Ozzy Osbourne은 모두 1948년생 남성, 영국 성장, 두 번의 결혼, 부유하고 유명함, 성에 거주함이라는 공통적인 인구통계학적 특성을 공유하지만, 그들의 라이프스타일과 건강 상태는 완전히 다르다.](./images/charles_vs_ozzy.png)
+>
+> 위 예시는 제한된 공변량만으로 매칭했을 때의 위험성을 보여줍니다. 관측된 변수가 같더라도 관측되지 않은 중요한 특성이 다를 수 있으므로(Unobserved Confounding), 매칭 변수 선정에 신중해야 합니다.
+
+## 3.2 Nearest Neighbor (NN) Matching
+
+가장 널리 사용되는 방법 중 하나로, 거리(Distance) 척도를 정의하고 가장 가까운 $M$개의 통제 개체를 찾는 방식입니다.
+
+### Distance Metrics
+두 개체 $i, j$ 사이의 거리를 측정하는 방법으로는 주로 유클리디안 거리 혹은 마할라노비스 거리가 사용됩니다.
+
+**Mahalanobis Distance:**
+공변량 간의 상관관계를 고려하고 스케일을 표준화한 거리 척도입니다. 공분산 행렬을 $\Sigma$라고 할 때:
+
+$$
+d(X_i, X_j) = \sqrt{(X_i - X_j)' \Sigma^{-1} (X_i - X_j)}
+$$
+
+만약 $\Sigma = I$라면 유클리디안 거리가 되며, 대각행렬이라면 정규화된 유클리디안 거리가 됩니다.
+
+### Algorithms: Greedy vs. Optimal
+
+1.  **Greedy Algorithm:**
+    * 처치 개체들을 무작위 혹은 특정 순서(예: Propensity Score 순)로 정렬합니다.
+    * 순서대로 가장 가까운 통제 개체를 찾아 매칭하고, 비복원 추출인 경우 해당 통제 개체를 목록에서 제외합니다.
+    * 계산이 빠르지만, 전체적으로 최적의 매칭을 보장하지 않습니다(초반에 좋은 대조군을 다 써버릴 수 있음).
+
+2.  **Optimal Matching:**
+    * 전체 처치 개체와 통제 개체 간의 거리 총합을 최소화하는 조합을 찾습니다.
+    * 네트워크 흐름 문제(Network Flow Problem)로 환원되며, **헝가리안 알고리즘(Hungarian Algorithm)** 등을 사용해 해결합니다.
+
+### Bias-Variance Trade-off in NN Matching
+고정된 $M$개의 매칭을 사용할 때 편향-분산 상충관계가 존재합니다.
+* $M$이 작으면(예: 1:1 매칭): 가장 유사한 개체만 쓰므로 **편향(Bias)은 작지만, 분산(Variance)은 큽니다.**
+* $M$이 크면: 덜 유사한 개체도 포함되므로 **분산은 작아지지만, 편향은 커집니다.**
+
+> **Note:** Abadie & Imbens (2006)에 따르면, 연속형 공변량의 개수($p$)가 늘어날수록 NN 매칭 추정량의 편향은 $O(N^{-1/p})$ 오더로 증가합니다. 즉, 고차원 데이터에서는 단순 NN 매칭이 비효율적일 수 있습니다.
+
+## 3.3 Kernel Matching
+
+NN 매칭이 가장 가까운 몇 개만 선택하는 것이라면, 커널 매칭은 밴드위스(Bandwidth, $h$) 내에 있는 모든 통제 개체를 사용하여 가중 평균을 구하는 방식입니다. 거리가 가까울수록 더 큰 가중치를 부여합니다.
+
+$$
+w_i(j) = \frac{K\left(\frac{X_j - X_i}{h}\right)}{\sum_{k: T_k=0} K\left(\frac{X_k - X_i}{h}\right)}
+$$
+
+## 3.4 Propensity Score Matching (PSM)
+
+공변량이 매우 많은 경우(High-dimensional), 직접 매칭(Direct Matching)은 어렵습니다. 이를 해결하기 위해 **성향 점수(Propensity Score)**를 이용하여 차원을 축소합니다.
+
+$$
+e(X) = P(T=1 | X)
+$$
+
+Rosenbaum & Rubin의 정리에 따라, $X$ 대신 $e(X)$에 대해 매칭해도 편향을 제거할 수 있습니다.
+실제로는 로지스틱 회귀 등을 통해 추정된 $\hat{e}(X)$를 사용하거나, 선형 예측값(Linear Predictor)인 **Logit** 스케일에서 매칭을 수행하는 것이 일반적입니다.
+
+$$
+d(i, j) = |\text{logit}(\hat{e}(X_i)) - \text{logit}(\hat{e}(X_j))|
+$$
+
+# 4. Tuning and Implementation Details
+
+매칭은 '예술(Art)'에 가깝다고 할 정도로 튜닝해야 할 요소가 많습니다.
+
+1.  **Replacement (복원 vs. 비복원):**
+    * **With Replacement:** 통제 개체가 여러 처치 개체에 중복 매칭될 수 있습니다. 편향을 낮출 수 있고 순서 의존성이 없지만, 추정량의 분산이 복잡해집니다. 극단적인 성향 점수를 가진 개체가 과도하게 사용될 수 있습니다.
+    * **Without Replacement:** 한 통제 개체는 한 번만 사용됩니다. 분석이 용이하지만, 매칭 순서에 따라 결과가 달라질 수 있습니다.
+
+2.  **Caliper:**
+    * 단순히 가장 가까운 개체를 찾는 것을 넘어, 허용 가능한 최대 거리(Caliper)를 설정합니다(예: 표준편차의 0.2배).
+    * 이 범위를 벗어나는 처치 개체는 매칭에서 제외(Drop)하여 균형(Balance)을 개선합니다.
+
+3.  **Ratio (1:1 vs 1:k):**
+    * 통제 집단의 크기가 처치 집단보다 훨씬 클 경우 1:Many 매칭을 통해 정보를 더 많이 활용할 수 있습니다.
+
+# 5. Diagnostics: Checking Covariate Balance
+
+매칭이 성공적으로 수행되었는지 확인하기 위해 **공변량 균형(Covariate Balance)**을 점검해야 합니다. T-test는 표본 크기에 의존하므로 적절하지 않으며, **표준화된 평균 차이(Standardized Mean Difference, SMD)**를 주로 사용합니다.
+
+$$
+\text{SMD} = \frac{\bar{X}_{treated} - \bar{X}_{control}}{\sqrt{\frac{s^2_{treated} + s^2_{control}}{2}}}
+$$
+
+일반적으로 SMD의 절댓값이 0.1(혹은 0.25) 이만이면 균형이 잘 맞춰진 것으로 간주합니다. 이를 시각화한 것이 **Love Plot**입니다.
+
+![Figure 4: Love Plot 예시. 매칭 전(빨간색 점)에는 처치 집단과 통제 집단 간 공변량의 표준화된 차이가 크지만, 매칭 후(파란색 점)에는 대부분의 변수에서 차이가 0 근처로 줄어들어 균형이 맞춰졌음을 보여준다.](./images/love_plot_example.png)
+
+또한 경험적 누적분포함수(eCDF)를 비교하거나 Kolmogorov-Smirnov 테스트를 통해 전체 분포의 차이를 검정하기도 합니다.
+
+# 6. Appendix: Stratification
+
+매칭과 유사한 개념으로 층화(Stratification)가 있습니다. 성향 점수 등을 기준으로 데이터를 $K$개의 구간(Strata)으로 나누고, 각 구간 내에서 처치 효과를 계산하여 가중 평균하는 방식입니다.
+
+Cochran (1968)은 $K=5$개의 층(Quintiles)으로만 나누어도, 공변량으로 인한 편향의 약 90%를 제거할 수 있음을 보였습니다.
+
+$$
+\hat{\tau}_{strat} = \sum_{k=1}^{K} (\bar{Y}_{k,1} - \bar{Y}_{k,0}) \frac{N_k}{N}
+$$
+
+# 7. Discussion
+
+매칭은 인과추론 분석의 **전처리(Pre-processing)** 단계로 이해하는 것이 좋습니다.
+1.  매칭을 통해 공변량 균형이 맞는 데이터셋을 구성합니다.
+2.  이후 회귀분석 등을 추가로 수행하여(Doubly Robust), 잔여 불균형(Residual Imbalance)을 보정하고 효율성을 높일 수 있습니다.
+
+매칭 그 자체가 분석의 끝이 아니라, **모델 의존성을 줄이고 데이터를 정제하는 과정**이라는 점이 핵심입니다.
+
+---
+
+### 강의 자료 반영 검증 체크리스트
+
+1.  **Motivation & Definition**: ATT, Regression vs Matching 비교 설명 완료.
+2.  **Algorithms**: Exact, CEM, NN(Greedy/Optimal), Kernel, PSM 모두 포함.
+3.  **Distance Metrics**: Mahalanobis, Propensity Score, Logit scale 설명 완료.
+4.  **Tuning**: Replacement, Caliper, $M$ (Bias-Variance tradeoff) 설명 완료.
+5.  **Derivations**: Abadie & Imbens (2006) Bias $O(N^{-1/p})$, Weighting formula 등 수식 포함.
+6.  **Diagnostics**: SMD, Love Plot, eCDF 설명 및 이미지 플레이스홀더 배치 완료.
+7.  **Appendix**: Stratification 및 Cochran(1968)의 90% Bias removal 언급 완료.
+8.  **Caveats**: King Charles 예시 및 Overlap 문제 언급 완료.

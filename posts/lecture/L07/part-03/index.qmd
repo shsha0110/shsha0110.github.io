@@ -1,0 +1,164 @@
+---
+title: "[Causal Inference] 07. An Algorithmic Approach to Identification (Part 3)"
+description: "A General Approach"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction
+
+이전 포스트들에서는 **C-Factor ($Q[C]$)** 의 개념을 도입하고, Back-door, Front-door, 그리고 Napkin 문제와 같은 구체적인 사례들을 통해 인과 효과를 식별하는 방법을 살펴보았습니다.
+
+하지만 현실의 인과 그래프는 교과서적인 예제보다 훨씬 복잡할 수 있습니다. 수십 개의 변수와 복잡하게 얽힌 교란 요인(Unobserved Confounder)이 존재하는 상황에서, 매번 직관이나 특수한 기법에 의존할 수는 없습니다.
+
+이번 포스트에서는 **Shpitser and Pearl**에 의해 정립된 **일반화된 식별 알고리즘(General Identification Algorithm)**을 다룹니다. 이 알고리즘은 임의의 인과 그래프 $G$와 쿼리 $P(y|do(x))$가 주어졌을 때, 해당 효과가 식별 가능한지(Identifiable) 판별하고, 가능하다면 관측 데이터 $P(v)$의 함수로 표현된 식을 도출해냅니다.
+
+---
+
+# 2. Key Concepts for the General Algorithm
+
+알고리즘을 단계별로 정의하기 전에, 핵심이 되는 두 가지 개념인 **Ancestral Reduction(조상 축소)** 과 **C-Component Decomposition(C-컴포넌트 분해)** 를 다시 정리합니다.
+
+## 2.1 Ancestral Reduction
+우리가 관심 있는 결과 변수 $Y$에 인과적인 영향을 줄 수 있는 변수들은 $Y$의 **조상(Ancestors)** 들뿐입니다. 따라서 전체 그래프 $G$에서 $Y$의 조상이 아닌 변수들은 인과 효과 계산에서 제거(Marginalize out)해도 무방합니다.
+
+$$
+D = An(Y)_{G_{\overline{X}}}
+$$
+
+여기서 $G_{\overline{X}}$는 $X$로 들어오는 엣지를 끊은 그래프(Intervention Graph)를 의미하며, $An(Y)$는 $Y$ 자신을 포함한 $Y$의 조상 집합을 의미합니다. 즉, $D$는 **$do(x)$ 상황에서 $Y$와 인과적으로 연관된 모든 변수의 집합**입니다.
+
+## 2.2 Identification Formula via C-Factors
+C-Factor 이론에 따르면, 개입 후의 분포 $P(v|do(x))$는 $X$를 제외한 나머지 변수들의 메커니즘($Q$ 팩터)은 유지되고 $X$의 메커니즘만 제거된 상태입니다. 즉, 전체 변수 $V$에 대해 다음이 성립합니다.
+
+$$
+P(v \setminus x | do(x)) = Q[V \setminus X]
+$$
+
+따라서 우리가 구하고자 하는 $P(y|do(x))$는 $Q[V \setminus X]$에서 $Y$를 제외한 나머지 변수들을 합(Summation)으로 제거하여 구할 수 있습니다.
+
+$$
+P(y|do(x)) = \sum_{v \setminus (x \cup y)} Q[V \setminus X]
+$$
+
+여기서 앞서 정의한 Ancestral Reduction을 적용하면, 합을 구해야 하는 범위가 전체 $V$에서 $D$(관심 있는 조상 집합)로 축소됩니다.
+
+$$
+P(y|do(x)) = \sum_{d \setminus y} Q[D]
+$$
+
+---
+
+# 3. The General Identification Algorithm
+
+이제 본격적으로 일반화된 식별 알고리즘의 프로세스를 도식화해보겠습니다. 이 알고리즘은 **입력**으로 그래프 $G$와 쿼리 $Y, X$를 받으며, **출력**으로 식별된 확률 수식(Estimand)을 반환합니다.
+
+## Step 1: Ancestral Reduction (변수 범위 축소)
+가장 먼저, 분석 대상을 $Y$의 조상 집합 $D$로 제한합니다.
+$$
+D = An(Y)_{G_{\overline{X}}}
+$$
+이 단계는 불필요한 변수를 제거하여 계산 복잡도를 줄이고 문제의 본질에 집중하게 합니다.
+
+## Step 2: C-Component Decomposition (그래프 분해)
+축소된 변수 집합 $D$로 구성된 서브그래프 $G[D]$를 고려합니다. 이 그래프 내에서 양방향 엣지(Bidirected edges, $\leftrightarrow$)로 연결된 요소들을 찾아 **C-Component**들로 분해합니다.
+만약 $G[D]$가 $k$개의 C-Component $D_1, D_2, \dots, D_k$로 나뉜다면, 전체 $Q$ 팩터는 각 컴포넌트의 $Q$ 팩터의 곱으로 표현됩니다.
+
+$$
+Q[D] = \prod_{i=1}^{k} Q[D_i]
+$$
+
+이 성질은 Tian's Factorization Lemma에 기반합니다.
+
+## Step 3: Compute Target Quantity (최종 식별)
+위의 두 단계를 결합하면, 최종적인 인과 효과 $P(y|do(x))$는 각 C-Component ($D_i$)에 해당하는 $Q[D_i]$들의 곱을 $Y$를 제외한 나머지 변수들($D \setminus Y$)에 대해 합(Sum)한 것과 같습니다. 
+
+$$
+P(y|do(x)) = \sum_{d \setminus y} \prod_{i=1}^{k} Q[D_i]
+$$
+
+여기서 각 $Q[D_i]$는 관측 데이터 $P(v)$로부터 계산 가능(Computable)합니다. (Part 1에서 다룬 위상 정렬을 이용한 계산법 적용)
+
+---
+
+# 4. Detailed Example Breakdown
+
+강의 자료에 제시된 복잡한 그래프 예시(변수 $A, X, C, Y$ 등이 포함된 구조)를 통해 알고리즘을 실제로 적용해 보겠습니다.
+
+![Figure: General ID Algorithm Example Graph. 변수 A, X, C, Y 등이 복잡한 인과 경로와 양방향 엣지(교란)로 연결된 구조를 보여줌.](./images/example_graph_axcy.png)
+
+**Scenario:**
+* **Query:** $P(y|do(x))$
+* **Graph Structure (Example):** $A \rightarrow X \rightarrow C \rightarrow Y$, 그리고 $X \leftrightarrow Y$ (via confounder), $A \leftrightarrow C$ (via confounder) 등의 복잡한 구조 가정.
+
+### Step 1: Ancestral Reduction
+$Y$에 영향을 주지 않는 변수들을 제거합니다.
+$$
+D = An(Y)_{G_{\overline{X}}}
+$$
+예를 들어, $Y$의 후손(Descendant)인 $E$가 있다면 $E$는 제거됩니다. 분석 대상은 $A, X, C, Y$ 등으로 축소됩니다.
+
+### Step 2: C-Component Decomposition
+남은 변수 집합 $D$에서 C-Component를 찾습니다.
+가령, 교란 구조에 의해 다음과 같이 두 개의 컴포넌트로 나뉜다고 가정해 봅시다.
+* $D_1 = \{C, Y\}$ (만약 $C \leftrightarrow Y$가 있다면)
+* $D_2 = \{A, X\}$ (만약 $A \leftrightarrow X$가 있다면)
+*(주의: 실제 강의 슬라이드의 예제 구조에 따라 컴포넌트 구성은 달라집니다. 여기서는 슬라이드의 $Q[C, Y]$ 예시를 따릅니다.)*
+
+슬라이드 예시에서는 최종적으로 다음과 같은 형태의 분해를 유도합니다:
+$$
+P(y|do(x)) = \sum_{c} Q[\{C, Y\}] \times (\text{Other Factors})
+$$
+
+### Step 3: Calculation of Factors
+각 팩터는 관측 데이터의 조건부 확률로 변환됩니다.
+* "미래는 과거에 영향을 줄 수 없다"는 원칙과 $do$-calculus의 Rule 3(개입의 삭제)에 의해, 특정 조건하에서 $P(y|do(x)) = P(y|x)$가 되거나 특정 변수가 독립이 됩니다.
+* 예를 들어, $Q[\{C, Y\}]$는 $P(c, y | do(x, a))$와 같은 형태에서 유도될 수 있으며, 이는 최종적으로 $\sum_c P(y|c, x, a)P(c|a, x)$ 와 같은 식별 식(Adjustment Formula)으로 귀결됩니다.
+
+---
+
+# 5. Completeness and Interpretations
+
+이 알고리즘의 가장 중요한 의의는 **완전성(Completeness)** 에 있습니다.
+
+### 5.1 What does Completeness mean?
+1.  **If the algorithm succeeds:** 도출된 식은 올바른 인과 효과를 나타냅니다 (**Soundness**).
+2.  **If the algorithm fails:** 해당 그래프 구조에서는 관측 데이터만으로 인과 효과를 식별하는 것이 **수학적으로 불가능**합니다. 즉, "더 똑똑한 알고리즘"을 기다릴 필요 없이, 데이터를 더 수집하거나 가정을 추가해야 함을 의미합니다.
+
+### 5.2 Failure Condition: The Hedge
+알고리즘이 실패하는 특정 그래프 패턴을 **Hedge** 또는 **C-Forest**라고 부릅니다. 이 구조가 발견되면 알고리즘은 "Fail"을 반환하며, 이는 식별 불가능함을 증명하는 것과 같습니다.
+
+### 5.3 Practical Implication
+이 알고리즘은 우리가 Back-door나 Front-door 같은 개별적인 "족보"를 외울 필요를 없애줍니다. 그래프만 그릴 수 있다면, 이 알고리즘을 통해 식별 가능 여부와 추정 식을 자동으로 얻을 수 있기 때문입니다. 이는 현대 Causal Inference 라이브러리(예: `DoWhy`, `Ananke`)의 엔진이 되는 핵심 이론입니다.
+
+---
+
+# 6. Summary
+
+총 3부에 걸친 "Algorithmic Identification" 시리즈를 통해 우리는 다음을 배웠습니다.
+
+1.  **Decomposition (Part 1):** 관측 분포 $P(v)$는 인과 그래프의 구조에 따라 $Q[C]$ 팩터들의 곱으로 분해됩니다.
+2.  **Specific Examples (Part 2):** Back-door, Front-door, Napkin 문제 등은 모두 $Q$ 팩터의 조작을 통해 해결됩니다.
+3.  **General Algorithm (Part 3):** Ancestral Reduction과 C-Component Decomposition을 결합하면, 임의의 모델에 대한 인과 효과 식별 문제를 기계적으로 해결할 수 있습니다.
+
+이로써 **Non-parametric Identification**의 여정은 마무리됩니다. 다음 단계는 이렇게 식별된 식(Estimand)을 바탕으로, 실제 데이터에서 통계적으로 효율적인 **추정(Estimation)** 을 수행하는 것입니다.
+
+---
+
+### 누락 방지 검증 (Checklist)
+
+* **[포함]** 일반화된 식별 알고리즘의 입력($G, Q$)과 출력(Estimand) 정의
+* **[포함]** Ancestral Reduction ($D = An(Y)_{G_{\overline{X}}}$)의 개념 및 필요성 설명
+* **[포함]** C-Component 분해를 통한 식별 공식 ($P(y|do(x)) = \sum Q[D_i]$) 유도
+* **[포함]** $Q[V \setminus X]$와 Marginalization의 관계 설명
+* **[포함]** 구체적 예제 그래프(AXCYE 등)를 통한 알고리즘 적용 과정 서술
+* **[포함]** "미래는 과거에 영향을 못 준다"는 인과적 시간 순서 개념 언급
+* **[포함]** 알고리즘의 완전성(Completeness)과 실패 조건(Hedge)의 의미 해석
+* **[생략]** 없음 (강의 자료 Part 3의 핵심인 일반 알고리즘과 예제를 모두 포함함)

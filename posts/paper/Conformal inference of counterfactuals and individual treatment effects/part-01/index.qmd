@@ -1,0 +1,182 @@
+---
+title: "[Paper Review] Conformal Inference of Counterfactuals and Individual Treatment Effects (Part 1)"
+description: "Moving beyond ATE/CATE: A framework for uncertainty quantification in Individual Treatment Effects using Conformal Inference."
+author: "유성현"
+date: "2026-01-23"
+categories: [Paper Review]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. From Average Effects to Individual Effects
+
+* Causal Inference (인과추론) 분야에서 지난 수십 년간의 연구는 주로 모집단에 대한 **평균 처치 효과(Average Treatment Effect, ATE)**를 추정하는 데 집중해 왔습니다. 
+* 식별(Identification), 추정(Estimation), 그리고 불확실성 정량화(Uncertainty Quantification)에 대한 광범위한 통계적 이론이 이를 뒷받침하고 있습니다.
+* 하지만 평균 효과(ATE)는 처치 효과의 분포를 매우 거칠게(coarse) 요약한 것에 불과합니다.
+* 경우에 따라서는 ATE만으로 개입(Intervention)의 타당성을 판단하는 것이 불충분하거나, 심지어 오해를 불러일으킬 수도 있습니다.
+
+> **Motivating Example: The 70/30 Drug Scenario**
+>
+> 어떤 약물이 환자의 70%를 완치시키지만, 나머지 30%의 환자에게는 증상을 훨씬 악화시킨다고 가정해 봅시다.
+> 
+> * 이 경우 **ATE(평균 효과)**는 "양수(Positive)"로 계산될 수 있습니다.
+> * 하지만 이 평균값만 보고 약물 승인을 결정하는 것이 윤리적으로나 의학적으로 올바른지는 불분명합니다.
+
+* 이것은 인위적인 예시가 아닙니다. 실제 임상 시험에서 명확한 결과가 나오지 않는 경우는 흔하며, 이러한 이질성(Heterogeneity)은 매우 일반적입니다.
+
+## The Importance of ITE (Individual Treatment Effect)
+* 의학 분야에서는 이미 "환자의 개별성(Individuality)"을 치료 결정의 핵심에 두어야 한다는 목소리가 높습니다.
+* NAM은 2018년 보고서를 통해 "One-size-fits-all(천편일률적인)" 접근 방식은 부적절하며, 임상적 특성과 개인의 선호도에 따른 맞춤형 치료가 필요함을 강조했습니다.
+* 이러한 **개별 처치 효과(Individual Treatment Effect, ITE)**에 대한 관심은 의학뿐만 아니라 정치학, 심리학, 사회학, 경제학 등 다양한 분야로 확장되고 있습니다.
+
+---
+
+# 2. From Point Estimates to Interval Estimates
+
+* 기존 연구들은 ATE의 한계를 극복하기 위해 **조건부 평균 처치 효과(Conditional Average Treatment Effect, CATE)**에 주목했습니다.
+* 하지만 본 논문은 CATE와 같은 점 추정(Point Estimate)을 넘어, 신뢰할 수 있는 **구간 추정(Interval Estimate)**으로 나아가야 함을 주장합니다.
+
+## 2.1 Problem Setup
+
+* 이 논문은 Neyman(1923)과 Rubin(1974)의 **잠재적 결과 프레임워크(Potential Outcome Framework)**를 따릅니다.
+
+* **Sample Size:** $n$명의 대상(Subjects)
+* **Treatment Indicator:** $T_i \in \{0, 1\}$ (Binary)
+* **Potential Outcomes:** $(Y_i(1), Y_i(0))$
+    * $Y_i(1)$: 처치를 받았을 때의 결과
+    * $Y_i(0)$: 처치를 받지 않았을 때의 결과
+* **Covariates:** $X_i$ (특성 벡터)
+
+* 데이터는 i.i.d. 분포 $(Y(1), Y(0), T, X)$에서 생성된다고 가정합니다.
+$$(Y_i(1), Y_i(0), T_i, X_i)\overset{\mathrm{iid}}{\sim}(Y(1), Y(0), T, X)$$
+
+### Key Assumption 1: SUTVA
+* SUTVA(Stable Unit Treatment Value Assumption) 하에서 관측된 결과 $Y_i^{obs}$는 다음과 같이 정의됩니다.
+
+$$
+Y_i^{obs} = \begin{cases} 
+Y_i(1) & \text{if } T_i = 1 \\
+Y_i(0) & \text{if } T_i = 0
+\end{cases}
+$$
+
+* 우리가 알고자 하는 **개별 처치 효과(ITE)** $\tau_i$는 다음과 같이 정의됩니다.
+
+$$
+\tau_i \triangleq Y_i(1) - Y_i(0) \label{eq:einstein}
+$$ {#eq-ite}
+
+* 여기서 인과추론의 근본적인 문제(Fundamental Problem of Causal Inference)가 발생합니다. 
+* 각 개체에 대해 $Y_i(1)$과 $Y_i(0)$ 중 **오직 하나만 관측**되며, 나머지는 결측(Missing)됩니다.
+
+### Key Assumption 2: Strong Ignorability
+* 본 논문은 **Strong Ignorability** 가정을 전제합니다.
+
+$$
+(Y(1), Y(0)) \perp T \mid X
+$$ {#eq-strong-ignorability}
+
+* 즉, 공변량 $X$가 주어졌을 때, 처치 할당 $T$와 잠재적 결과들은 독립입니다. 
+* 이는 처치 할당과 결과 모두에 영향을 미치는 **측정되지 않은 교란 요인(Unmeasured Confounder)이 없음**을 의미합니다.
+
+## 2.2 Traditional Inference Targets
+
+* 대부분의 머신러닝 기반 인과추론 방법론은 **CATE**를 추정하는 데 집중합니다. 
+* CATE, $\tau(x)$는 다음과 같이 정의됩니다.
+
+$$
+\tau(x) \triangleq \mathbb{E}[Y(1) - Y(0) \mid X=x]
+$$ {#eq-strong-cate}
+
+* 이 함수는 두 조건부 평균 함수 $m_1(x)$와 $m_0(x)$의 차이로 분해할 수 있습니다.
+
+$$
+\begin{aligned}
+\tau(x) &= m_1(x) - m_0(x) \\
+\text{where } m_1(x) &= \mathbb{E}[Y(1) \mid X=x] \\
+m_0(x) &= \mathbb{E}[Y(0) \mid X=x]
+\end{aligned}
+$$
+
+* Strong Ignorability 가정 하에서, 이들은 관측 데이터의 조건부 기댓값인 $\mathbb{E}[Y^{obs} \mid X=x, T=t]$로 식별 가능합니다.
+
+### Why CATE is Insufficient?
+* CATE는 ATE보다 풍부한 정보를 제공하지만, 여전히 **평균(Expectation)**에 불과합니다. 
+* 의사결정 시 중요할 수 있는 **반응 변수의 내재적 변동성(Inherent Variability)**을 무시합니다.
+
+* 또한, 고차원 회귀 함수(High-dimensional regression function)의 추정치 주변에 신뢰할 수 있는 신뢰대(Confidence Band)를 형성하는 것은 매우 어렵습니다.
+* 정규 근사(Normal approximation)나 부트스트랩 같은 표준 기법들은 이러한 추정량의 변동성을 과소평가(Underestimate)하는 경향이 있습니다.
+
+> **Note on Conditional Quantile Treatment Effect (CQTE)**
+>
+> 대안으로 CQTE가 제시되기도 하지만, 이는 $Y(1)$과 $Y(0)$의 주변(Marginal) 분위수의 차이일 뿐입니다. 
+>
+> 우리가 진정으로 원하는 **ITE의 분위수(Quantiles of $Y(1)-Y(0)$)**는 두 잠재적 결과의 결합 분포(Joint Distribution)를 알 수 없기 때문에 식별 불가능(Unidentifiable)합니다.
+
+## 2.3 Coverage of Interval Estimates
+
+* 이 연구의 목표는 $Y(1)$, $Y(0)$, 그리고 최종적으로 ITE $\tau_i$를 포함하는 **예측 구간(Prediction Interval)**을 구성하는 것입니다.
+
+* 예를 들어, 사전 지정된 유의 수준 $\alpha$에 대해 $Y(1)$에 대한 구간 $\hat{C}_1(x)$는 다음의 **주변 커버리지(Marginal Coverage)**를 만족해야 합니다.
+
+$$
+\mathbb{P}(Y(1) \in \hat{C}_1(X)) \ge 1 - \alpha
+$$ {#eq-marginal-coverage}
+
+* 마찬가지로 ITE에 대해서도 다음을 만족하는 $\hat{C}_{ITE}(x)$를 찾고자 합니다.
+
+$$
+\mathbb{P}(Y(1) - Y(0) \in \hat{C}_{ITE}(X)) \ge 1 - \alpha
+$$ {#eq-marginal-coverage-ite}
+
+### The Oracle Estimate
+* 만약 우리가 $X=x$일 때 $Y(1)$의 참 분위수(True Quantile) $q_{\beta}(x)$를 완벽하게 알고 있다면, 오라클 구간(Oracle Estimate)은 다음과 같이 설정될 것입니다.
+
+$$
+C_1(x) = [q_{\alpha/2}(x), q_{1-\alpha/2}(x)]
+$$
+
+* 현실에서는 제한된 샘플 크기와 모델 불확실성으로 인해 $q_{\beta}(x)$를 정확히 추정하기 어렵습니다.
+
+> **Marginal vs. Conditional Coverage**
+>
+> 위 식 (4), (5)는 $X$에 대한 평균적인(Marginal) 커버리지를 의미합니다. 
+> 
+> 특정 환자 $x$에 대한 조건부 커버리지(Conditional Coverage)를 보장하는 것은 가정 없이는 불가능하다고 알려져 있습니다. 
+> 
+> 하지만 본 연구는 조건부 커버리지에 근접하는 합리적인 근사(Approximation)를 목표로 합니다.
+
+## 2.4 General Coverage Criteria (Transportability)
+
+* 전통적인 인과추론에서는 ATE보다 **처치군에 대한 평균 처치 효과(ATT, Average Treatment Effect on the Treated)**를 선호하기도 합니다. 
+* 이는 $T=1$인 집단의 특성을 반영합니다.
+
+$$
+\mathbb{P}(Y(t) \in \hat{C}_t(X) \mid T=1) \ge 1 - \alpha \quad (t = 0, 1)
+$$ {#eq-marginal-coverage}
+
+* 이를 일반화하여, 연구 집단(Study Population)과 타겟 집단(Target Population)의 분포가 다를 때(Covariate Shift), 타겟 집단의 공변량 분포 $Q_X$를 고려한 일반화된 커버리지 기준을 세울 수 있습니다.
+
+$$
+\mathbb{P}_{(X, Y(t)) \sim Q_X \times P_{Y(t)|X}} (Y(t) \in \hat{C}_t(X)) \ge 1 - \alpha \quad (t = 0, 1)
+$$ {#eq-general-coverage}
+
+* 만약 $Q_X = P_{X|T=1}$이라면, 이는 ATT 관점에서의 커버리지가 됩니다.
+* 이러한 접근은 **일반화 가능성(Generalizability)** 또는 **이식 가능성(Transportability)** 문제로 확장될 수 있습니다.
+
+---
+
+# 3. Summary & Next Steps
+
+* 본 포스트에서는 ATE와 CATE의 한계를 짚어보고, 개별 처치 효과(ITE)에 대한 불확실성을 정량화하기 위한 문제 정의(Problem Setup)를 살펴보았습니다.
+
+* 핵심 요약은 다음과 같습니다:
+* 1.  **ITE의 중요성:** 평균 효과는 개인 수준의 리스크를 가릴 수 있으므로 ITE 구간 추정이 필요함.
+* 2.  **CATE의 한계:** CATE는 조건부 '평균'일 뿐이며, 결과 변수의 내재적 변동성과 추정 오차를 충분히 반영하지 못함.
+* 3.  **목표:** Conformal Inference를 통해 $Y(1), Y(0), \tau_i$에 대한 유효한(Valid) 예측 구간을 생성하는 것.
+
+* 다음 포스트(Part 2)에서는 이 논문의 핵심 방법론인 **Counterfactual Inference**와, 모델이 잘못 명시되어도 커버리지를 보장하는 **Doubly Robust** 특성에 대해 다루겠습니다.

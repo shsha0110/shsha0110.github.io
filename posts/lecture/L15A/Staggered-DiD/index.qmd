@@ -1,0 +1,193 @@
+---
+title: "[Causal Inference] 15A. Staggered DiD"
+description: "Staggered Difference-in-Differences"
+author: "유성현"
+date: "2026-01-25"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction
+
+전통적인 이중차분법(Difference-in-Differences, DiD)은 두 개의 그룹(Treatment/Control)과 두 개의 시점(Pre/Post)이 존재하는 2x2 Canonical Design에서 인과 효과를 추정하는 강력한 도구입니다. 그러나 실제 현실 데이터, 특히 정책 시행이나 서비스 도입과 같은 환경에서는 모든 실험군이 동시에 처치를 받는 경우는 드뭅니다.
+
+대신, **Staggered Adoption Design (SAD)**이라 불리는, 처치 시점이 유닛마다 다른 상황이 훨씬 빈번하게 발생합니다. 예를 들어, 어떤 지역은 정책을 2020년에 도입하고, 어떤 지역은 2021년에 도입하는 식입니다.
+
+이번 포스트에서는 전통적인 Two-Way Fixed Effects (TWFE) 회귀분석이 이러한 Staggered setup에서 왜 편향된(biased) 추정치를 낳는지 살펴보고, 이를 해결하기 위한 최신 방법론인 **Callaway and Sant'Anna (2021)**의 프레임워크를 상세히 정리해보겠습니다.
+
+![Figure 1: Staggered Adoption의 개념도. 실험군 A, B, C가 서로 다른 시점에 처치를 받기 시작하며, Never-Treated Group은 끝까지 처치를 받지 않는다.](./images/staggered_timeline.png)
+> **Figure 1 설명**: Staggered Treatment Timing을 나타내는 도식입니다.
+> - **Treated Group A**: 가장 먼저 처치를 받기 시작함.
+> - **Treated Group B**: A보다 나중에 처치를 받기 시작함.
+> - **Treated Group C**: 가장 늦게 처치를 받기 시작함.
+> - **Never-Treated Group**: 관찰 기간 내내 처치를 받지 않음.
+> - 핵심은 처치를 받은 유닛은 다시 통제 상태로 돌아가지 않는다는(Irreversible) 가정입니다.
+
+---
+
+# 2. Why TWFE Fails in Staggered DiD?
+
+## 2.1. The Limitation of TWFE
+일반적으로 연구자들은 패널 데이터에서 다음과 같은 **Two-Way Fixed Effects (TWFE)** 선형 회귀 모형을 사용하여 $\beta$를 인과 효과(ATT)로 해석해 왔습니다.
+
+$$
+Y_{it} = \alpha_i + \lambda_t + \beta D_{it} + \epsilon_{it}
+$$
+
+여기서 $D_{it}$는 유닛 $i$가 시점 $t$에 처치를 받았으면 1, 아니면 0인 더미 변수입니다.
+하지만 처치 시점이 다양하고(Staggered), 처치 효과가 시간에 따라 변하거나(Dynamic), 유닛마다 다르다면(Heterogeneous), $\beta$는 우리가 원하는 **Average Treatment Effect on the Treated (ATT)**와 일치하지 않습니다.
+
+## 2.2. The Problem of "Bad Comparisons"
+Goodman-Bacon (2021) 등의 연구에 따르면, TWFE 추정량은 가능한 모든 2x2 DiD 비교의 가중 평균으로 분해됩니다. 이때 **"Bad Comparisons" (Invalid Comparisons)** 문제가 발생합니다.
+
+* **Valid Comparisons (좋은 비교):**
+    * Treated Unit vs. Never-treated Unit
+    * Treated Unit vs. Not-yet-treated Unit
+* **Invalid Comparisons (나쁜 비교):**
+    * **Later-treated vs. Earlier-treated (Already-treated):** 늦게 처치를 받는 그룹을 실험군으로, 이미 처치를 받은 그룹을 통제군으로 사용하는 경우입니다.
+    * **문제점:** 만약 처치 효과가 시간에 따라 변한다면(Dynamic Effects), 이미 처치를 받은 그룹의 결과값 변화($\Delta Y$)에는 **시간 트렌드뿐만 아니라 처치 효과의 변화분**이 섞여 있습니다. 이를 통제군으로 사용하면 평행 추세 가정(Parallel Trends)이 깨지게 되어 편향(Bias)이 발생합니다.
+
+![Figure 2: Staggered DiD 상황에서의 Outcome 변화. A, B, C 그룹의 결과값이 처치 시점에 따라 계단식으로 상승하는 모습을 보인다.](./images/outcome_trends.png)
+> **Figure 2 설명**: 각 그룹(A, B, C)의 시간에 따른 Outcome $Y$의 변화를 나타냅니다.
+> - 점선(세모 마커)은 반사실적(Counterfactual) 상황, 즉 처치를 받지 않았을 때의 잠재적 결과를 의미합니다.
+> - 실선(동그라미 마커)은 관측된 결과입니다.
+> - 각 그룹이 처치를 받는 시점 이후로 Outcome이 급격히 상승하는 것을 볼 수 있으며, 이는 처치 효과의 이질성(Heterogeneity)을 시사합니다.
+
+---
+
+# 3. Mathematical Framework (Callaway & Sant'Anna)
+
+이러한 문제를 해결하기 위해 Callaway & Sant'Anna (2021)은 **Group-Time ATT**라는 개념을 도입합니다.
+
+## 3.1. Notation & Definitions
+
+* **Time Periods:** $t = 1, ..., \mathcal{T}$
+* **Treatment Group ($G_g$):** 시점 $g$에 처음으로 처치를 받기 시작한 유닛들의 집합. (즉, $G_i = g$이면 유닛 $i$는 시점 $g$부터 처치 상태).
+* **Never-Treated Group ($C$):** 관찰 기간 동안 처치를 받지 않은 유닛 ($G_i = \infty$ 또는 $C_i = 1$).
+* **Potential Outcomes:**
+    * $Y_{it}(0)$: 시점 $t$에서 처치를 받지 않았을 때의 잠재적 결과.
+    * $Y_{it}(g)$: 시점 $t$에서, 시점 $g$에 처치를 받기 시작했을 때의 잠재적 결과.
+* **Observed Outcome:**
+    $$
+    Y_{it} = Y_{it}(0) \cdot \mathbb{1}\{G_i > t\} + Y_{it}(G_i) \cdot \mathbb{1}\{G_i \le t\}
+    $$
+    즉, 처치 전에는 $Y(0)$를, 처치 후에는 해당 처치 시점에 종속된 $Y(g)$를 관측합니다.
+
+## 3.2. Group-Time Average Treatment Effect, $ATT(g, t)$
+
+가장 핵심적인 파라미터는 **특정 처치 그룹 $g$가 특정 시점 $t$에 누리는 평균 처치 효과**입니다.
+
+$$
+ATT(g, t) = \mathbb{E}[Y_t(g) - Y_t(0) \mid G=g]
+$$
+
+이 정의는 매우 직관적입니다. "시점 $g$에 처치를 받은 사람들이, 시점 $t$에 실제로 겪은 효과"를 의미합니다. 만약 $t \ge g$라면 처치 효과(Post-treatment effect)이고, $t < g$라면 처치 전 효과(Pre-treatment effect, 일반적으로 0이어야 함)가 됩니다.
+
+---
+
+# 4. Identification Strategy
+
+$ATT(g, t)$를 식별(Identification)하기 위해서는 관측되지 않은 반사실적 결과 $Y_t(0)$를 대체할 수 있는 적절한 통제군이 필요합니다. 이를 위해 **Parallel Trends Assumption (평행 추세 가정)**이 필요합니다.
+
+## 4.1. Parallel Trends Assumptions
+
+CS(2021) 방법론은 연구자가 통제군을 어떻게 정의하느냐에 따라 두 가지 버전의 가정을 제시합니다.
+
+### Option 1: Based on Never-Treated Units
+처치를 전혀 받지 않은 그룹($C=1$)을 통제군으로 사용합니다.
+
+$$
+\mathbb{E}[Y_t(0) - Y_{t-1}(0) \mid G=g] = \mathbb{E}[Y_t(0) - Y_{t-1}(0) \mid C=1]
+$$
+
+* **해석:** 처치가 없었다면, 그룹 $g$의 결과값 변화 추세는 Never-treated 그룹의 변화 추세와 같았을 것이다.
+
+### Option 2: Based on Not-Yet-Treated Units
+시점 $t$까지 아직 처치를 받지 않은 그룹들($D_s=0$)을 통제군으로 사용합니다.
+
+$$
+\mathbb{E}[Y_t(0) - Y_{t-1}(0) \mid G=g] = \mathbb{E}[Y_t(0) - Y_{t-1}(0) \mid D_t=0, G \ne g]
+$$
+
+* **해석:** 처치가 없었다면, 그룹 $g$의 변화 추세는 해당 시점에 아직 처치를 받지 않은 그룹들의 추세와 같았을 것이다.
+* **장점:** Never-treated 그룹이 없거나 매우 작을 때 유용합니다.
+
+## 4.2. Derivation of the Estimator
+
+Never-treated 가정을 사용할 때, $ATT(g, t)$는 다음과 같이 유도됩니다.
+
+1.  **목표:** $\mathbb{E}[Y_t(g) - Y_t(0) \mid G=g]$ 구하기.
+2.  **분해:** 기대값의 선형성에 의해:
+    $$
+    ATT(g,t) = \mathbb{E}[Y_t(g) \mid G=g] - \mathbb{E}[Y_t(0) \mid G=g]
+    $$
+    앞항 $\mathbb{E}[Y_t(g) \mid G=g]$는 데이터에서 관측 가능합니다($t \ge g$일 때). 뒷항은 반사실적이므로 관측 불가합니다.
+3.  **평행 추세 가정 적용:**
+    $$
+    \mathbb{E}[Y_t(0) - Y_{g-1}(0) \mid G=g] = \mathbb{E}[Y_t(0) - Y_{g-1}(0) \mid C=1]
+    $$
+    이를 $Y_t(0)$에 대해 정리하면(Baseline 시점을 $g-1$로 설정):
+    $$
+    \mathbb{E}[Y_t(0) \mid G=g] = \mathbb{E}[Y_{g-1}(0) \mid G=g] + \underbrace{\mathbb{E}[Y_t(0) - Y_{g-1}(0) \mid C=1]}_{\text{Control Group's Trend}}
+    $$
+4.  **최종 식:**
+    $$
+    ATT(g, t) = \underbrace{\mathbb{E}[Y_t - Y_{g-1} \mid G=g]}_{\text{Change for Treated}} - \underbrace{\mathbb{E}[Y_t - Y_{g-1} \mid C=1]}_{\text{Change for Control}}
+    $$
+
+즉, 각 그룹-시점별($g, t$)로 고전적인 2x2 DiD를 수행하는 것과 같습니다. 이때 중요한 것은 **"이미 처치된 그룹"을 통제군으로 섞지 않는다**는 점입니다.
+
+---
+
+# 5. Aggregation: Summary Parameters
+
+$ATT(g, t)$를 구하면 너무 많은 파라미터가 생성됩니다 (예: 그룹 5개 $\times$ 기간 10개 = 50개). 따라서 이를 해석 가능한 형태로 요약(Aggregation)해야 합니다.
+
+## 5.1. Event-Study Aggregation ($\theta_D(e)$)
+처치 후 경과 시간(Event time, $e$)에 따른 동태적 효과를 보고 싶을 때 사용합니다. $e = t - g$ (처치 후 경과 기간).
+
+$$
+\theta_{D}(e) = \sum_{g} w_g \cdot ATT(g, g+e)
+$$
+여기서 $w_g$는 각 그룹의 샘플 비중입니다.
+* $e=0$: 처치 원년의 효과
+* $e=1, 2, \dots$: 처치 1년 후, 2년 후 효과 (Dynamic Effects)
+* $e < 0$: 처치 전 효과 (Pre-trend test로 활용 가능)
+
+## 5.2. Simple Overall Aggregation ($\theta_S^O$)
+단일 숫자로 전체 처치 효과를 요약하고 싶을 때 사용합니다.
+
+$$
+\theta_{S}^{O} = \frac{1}{\sum P(G=g)} \sum_{g} \sum_{t \ge g} ATT(g, t) P(G=g)
+$$
+이는 모든 $ATT(g,t)$ (단, $t \ge g$)를 평균 낸 값으로, "처치를 받은 모든 기간 동안의 평균 효과"로 해석됩니다.
+
+---
+
+# 6. Conclusion & Checklist
+
+Staggered DiD 환경에서 단순 TWFE를 사용하는 것은 이질적 처치 효과(Heterogeneous Treatment Effects)가 존재할 때 심각한 편향을 초래할 수 있습니다. Callaway & Sant'Anna (2021) 등의 현대적 방법론은 **"Clean Control" (Never-treated or Not-yet-treated)** 만을 사용하여 $ATT(g,t)$를 식별하고, 이를 적절히 집계(Aggregation)함으로써 이 문제를 해결합니다.
+
+연구자들은 이제 단순히 `lm(y ~ treat + time + unit_fe)`를 돌리기보다는, 자신의 데이터 구조(처치 시점의 다양성)와 처치 효과의 특성(동태성)을 고려하여 적절한 Estimator를 선택해야 합니다.
+
+### Lecture Contents Checklist
+본 포스트는 제공된 강의 자료를 기반으로 작성되었으며, 다음 항목들을 포함하고 있습니다.
+
+* [x] **Staggered Adoption의 정의와 시각화:** (Slide 3-5)
+* [x] **기존 TWFE의 한계:** "Bad Comparisons" 및 이질성 문제 (Slide 7, 10)
+* [x] **주요 용어 정의:** Static/Dynamic effects, Heterogeneity (Slide 9)
+* [x] **Notation:** $Y_{it}(g)$, $G_i$, $C_i$ 등의 엄밀한 정의 (Slide 12-14)
+* [x] **핵심 가정(Assumptions):** Never-treated 및 Not-yet-treated 기반의 평행 추세 가정 (Slide 15-16, 19)
+* [x] **Identification:** $ATT(g,t)$의 정의 및 유도 (Slide 17-18)
+* [x] **Aggregation Methods:** Event-study형 및 Overall Average형 집계 (Slide 20-21)
+* [x] **최신 대안 방법론 언급:** Callaway & Sant'Anna, Sun & Abraham 등 (Slide 11, 23)
+
+### References
+* [1] Causality Lab. (2025). *Staggered Difference-in-Differences* [Lecture slides]. Seoul National University.
+* [2] Callaway, B., & Sant'Anna, P. H. (2021). Difference-in-differences with multiple time periods. *Journal of Econometrics*, 225(2), 200-230.
+* [3] Goodman-Bacon, A. (2021). Difference-in-differences with variation in treatment timing. *Journal of Econometrics*, 225(2), 254-277.

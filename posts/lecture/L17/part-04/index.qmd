@@ -1,0 +1,146 @@
+---
+title: "[Causal Inference] Selection Bias & Generalized Adjustment"
+description: "Recovering Causal Effects from Selection-Biased Data"
+author: "유성현"
+date: "2026-01-25"
+categories: [Causal Inference, Data Science, Methodology]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: The "Man-Made" Bias
+
+데이터 과학에서 우리는 종종 **"데이터가 스스로 말하게 하라(Let the data speak)"**는 격언을 듣습니다. 하지만 데이터가 수집되는 과정에서 이미 입이 막혀 있거나, 왜곡된 목소리만 내고 있다면 어떨까요? 이것이 바로 **선택 편향(Selection Bias)**의 문제입니다.
+
+[cite_start]선택 편향은 데이터 샘플링 과정에서 특정 개체가 우선적으로 포함되거나 배제됨으로써 발생합니다[cite: 2228]. 이는 단순한 통계적 오차를 넘어, 인과 추론의 타당성을 근본적으로 위협하는 주요 장애물입니다.
+
+### Confounding vs. Selection Bias
+우리는 앞서 교란(Confounding)에 대해 다뤘습니다. [cite_start]두 편향은 근본적으로 다릅니다 [cite: 2287-2295].
+* **Confounding:** 자연(Nature)적으로 발생하는 Treatment와 Outcome 사이의 정보 흐름(Common Cause)입니다. "치료를 받은 사람이 더 건강해서 결과가 좋은가?"의 문제입니다.
+* **Selection Bias:** 인간(Man-made)에 의해, 혹은 측정 장비에 의해 발생하는 데이터 수집 과정의 편향입니다. "특정 조건을 만족하는 사람만 설문에 응답했는가?"의 문제입니다.
+
+![Figure 1: Confounding vs Selection Bias. 왼쪽은 Z가 X와 Y에 영향을 주는 교란(Confounding) 구조이고, 오른쪽은 X와 Y가 S(선택 여부)에 영향을 주는 선택 편향(Selection Bias) 구조이다. S=1인 샘플만 관측됨으로써 X와 Y 사이에 허위 상관관계(Spurious Correlation)가 발생한다.](./images/confounding_vs_selection.png)
+
+이 포스트에서는 선택 편향이 있는 데이터($S=1$)만 관측 가능한 상황에서, 어떻게 전체 모집단의 분포($P(y|x)$)나 인과 효과($P(y|do(x))$)를 복원(Recover)할 수 있는지 다룹니다.
+
+---
+
+# 2. Modeling Selection Bias with Causal Graphs
+
+[cite_start]선택 편향을 수학적으로 다루기 위해 우리는 **선택 노드(Selection Node) $S$**를 인과 그래프에 도입합니다 [cite: 2263-2286].
+
+* **Definition:** $S$는 이진 변수로, $S=1$인 샘플만 데이터셋에 포함됩니다.
+* **Problem:** 우리의 목표는 $S=1$ 조건부 분포 $P(v|S=1)$로부터, 모집단 분포 $P(v)$ 혹은 인과 효과 $P(y|do(x))$를 추정하는 것입니다.
+
+### The Origin of Selection Bias (Collider Bias)
+선택 편향은 그래프상에서 **Collider** 구조로 설명될 수 있습니다.
+예를 들어, 두 개의 독립적인 변수 $X$(재능)와 $Y$(미모)가 있고, 이 두 가지를 모두 갖춘 사람만이 연예인이 되어 TV에 나온다($S=1$)고 가정해 봅시다.
+
+$$
+X \rightarrow S \leftarrow Y
+$$
+
+전체 모집단에서 $X$와 $Y$는 독립($X \perp Y$)이지만, 우리가 관측하는 TV 속 세상($S=1$)에서는 $X$와 $Y$ 사이에 강한 음의 상관관계가 생깁니다(Berkson's Paradox). 즉, 재능이 없으면 미모라도 뛰어나야 하기 때문입니다.
+
+---
+
+# 3. Recoverability without External Information
+
+[cite_start]가장 먼저 던져야 할 질문은 **"편향된 데이터만 가지고 편향을 제거할 수 있는가?"**입니다 [cite: 2329-2345].
+
+### Theorem: Recoverability of Conditional Probability
+우리가 구하고 싶은 분포가 $Q = P(y|x)$이고, 가진 데이터가 $P(y|x, S=1)$일 때, 복원 가능 조건은 다음과 같습니다.
+
+$$
+P(y|x) \text{ is recoverable} \iff Y \perp S \mid X
+$$
+
+즉, 그래프상에서 $X$가 주어졌을 때 $Y$와 $S$가 **d-separation** 되어야 합니다.
+
+* **직관:** $X$라는 조건(예: 나이)을 알면, 데이터에 선택되었는지 여부($S$)가 결과($Y$)에 대한 추가적인 정보를 주지 않아야 합니다. 이 경우 $P(y|x) = P(y|x, S=1)$이 성립하여, 편향된 데이터를 그대로 사용할 수 있습니다.
+
+---
+
+# 4. Recoverability with External Information
+
+만약 $Y \perp S \mid X$ 조건이 성립하지 않는다면 어떻게 해야 할까요? [cite_start]이때는 편향되지 않은 **외부 데이터(External Data)**의 도움이 필요합니다 [cite: 2346-2373].
+
+* **Biased Data:** $P(y, x, c | S=1)$ (풍부하지만 편향됨)
+* **Unbiased External Data:** $P(c, x)$ (일부 변수에 대한 모집단 통계, 예: 인구센서스)
+
+### Theorem: Sufficiency for Recoverability
+다음 조건을 만족하는 변수 집합 $C$가 존재하면 $P(y|x)$를 복원할 수 있습니다.
+
+1.  $Y \perp S \mid \{C, X\}$ in Graph $G$
+2.  $P(C, X)$ is estimable (외부 데이터 존재)
+
+[cite_start]이때 복원 공식은 다음과 같습니다[cite: 2361]:
+
+$$
+P(y|x) = \sum_{c} P(y|x, c, S=1) P(c|x)
+$$
+
+* **해석:** $C$라는 변수(예: 지역, 소득)를 통해 선택 편향의 고리를 끊을 수 있다면, 편향된 데이터에서 $C$별 $Y$의 분포를 구하고($P(y|x,c,S=1)$), 이를 외부 데이터의 $C$ 분포($P(c|x)$)로 가중 평균(Re-weighting)하여 모집단 분포를 재구성합니다.
+
+![Figure 2: 외부 정보를 이용한 복원 가능성 판단 예시. C={W1, W2}를 조건부로 했을 때 S와 Y가 독립이 된다면(d-separation), 외부의 P(W1, W2) 데이터를 이용하여 편향을 제거할 수 있다. 반면 C가 S와 Y 사이의 경로를 차단하지 못하면 복원 불가능하다.](./images/recoverability_external_c.png)
+
+---
+
+# 5. Generalized Adjustment Criterion
+
+이제 가장 일반적이고 강력한 시나리오를 다룹니다. 현실의 데이터는 **교란(Confounding)과 선택 편향(Selection Bias)이 동시에 존재**합니다. [cite_start]우리는 $P(y|do(x))$를 구하기 위해 이 두 마리 토끼를 동시에 잡아야 합니다 [cite: 2428-2462].
+
+### Definition: Generalized Adjustment Set
+[cite_start]변수 집합 $(Z, Z^T)$가 다음 세 가지 조건을 만족하면, 이를 통해 인과 효과를 식별할 수 있습니다 [cite: 2456-2461]. 여기서 $Z^T \subseteq Z$는 편향 없이 측정 가능한 외부 데이터가 있는 부분집합입니다.
+
+1.  **Causal Path protection:** $Z$는 $X \to Y$로 가는 어떠한 적절한 인과 경로(Proper Causal Path)도 차단해서는 안 됩니다. (과도한 통제 방지)
+2.  **Back-door Blocking:** $Z \cup \{S\}$는 $X$와 $Y$ 사이의 모든 **비인과적 경로(Non-causal paths)**를 차단해야 합니다. (교란 제거)
+3.  **Selection Blocking:** $Z^T$는 $X$와 $Y$ 사이의 인과 경로가 끊어진 그래프에서, $Y$와 $S$를 d-separation 시켜야 합니다. (선택 편향 제거)
+
+### The Generalized Adjustment Formula
+[cite_start]위 조건이 만족될 때, 인과 효과는 다음과 같이 계산됩니다[cite: 2472]:
+
+$$
+P(y|do(x)) = \sum_{z} P(y|x, z, S=1) P(z \setminus z^T | z^T, S=1) P(z^T)
+$$
+
+* $P(y|x, z, S=1)$: 편향된 데이터에서 추정한 모형.
+* $P(z \setminus z^T | z^T, S=1)$: 편향된 데이터에서 $Z$ 내부 변수 간의 관계.
+* $P(z^T)$: 외부에서 가져온 편향 없는 모집단 데이터.
+
+![Figure 3: Generalized Adjustment 예시. 교란 요인과 선택 편향 메커니즘이 복잡하게 얽힌 그래프에서, 적절한 Z 집합(일부는 biased, 일부는 external)을 찾아내어 인과 효과를 계산하는 과정을 보여준다.](./images/generalized_adjustment_graph.png)
+
+이 공식은 기존의 Back-door Adjustment Formula ($P(y|do(x)) = \sum_z P(y|x,z)P(z)$)를 선택 편향이 있는 상황으로 확장한 것입니다. $S=1$ 조건이 붙은 항들과 외부 데이터 $P(z^T)$가 결합되는 형태를 주목하세요.
+
+---
+
+# 6. Summary: The Power of Causal Data Science
+
+이번 포스트를 통해 우리는 데이터 과학의 난제인 **선택 편향**을 인과 그래프를 통해 체계적으로 해결하는 방법을 배웠습니다.
+
+1.  **Problem Identification:** 선택 편향은 데이터 수집 과정의 인과 구조($S$ 노드)로 모델링됩니다.
+2.  **Pure Recoverability:** 외부 데이터 없이도 $Y \perp S | X$ 조건이 만족되면 복원 가능합니다.
+3.  **External Data Fusion:** 외부 데이터($P(c)$)가 있다면, 이를 연결고리(Re-weighting bridge)로 사용하여 복원할 수 있습니다.
+4.  **Generalized Adjustment:** 교란과 선택 편향이 섞여 있어도, **Generalized Adjustment Criterion**을 통해 올바른 통제 변수 집합($Z$)과 외부 데이터($Z^T$)를 찾아내어 인과 효과를 편향 없이 추정할 수 있습니다.
+
+[cite_start]Bareinboim과 Tian 등의 연구에 따르면, 이 알고리즘들은 **완전(Complete)**합니다[cite: 2477]. 즉, 이 방법으로 복원할 수 없다면, 주어진 가정하에서는 그 어떤 방법으로도 편향을 제거하는 것이 불가능하다는 뜻입니다.
+
+---
+### **Appendix: Verification Checklist**
+
+* **포함된 내용:**
+    * [x] 선택 편향의 정의 (Preferential inclusion) 및 Confounding과의 차이점 비교
+    * [x] 선택 노드(S)를 포함한 인과 그래프 모델링
+    * [x] 외부 정보 없는 복원 가능성 조건 ($Y \perp S | X$) 및 정리(Theorem)
+    * [x] 외부 정보($P(c,x)$)를 이용한 복원 가능성(Sufficiency) 및 복원 공식 유도
+    * [x] Confounding과 Selection Bias가 동시에 존재하는 상황 (Generalized Adjustment)
+    * [x] Generalized Adjustment Criterion의 3가지 조건 상세 서술
+    * [x] Generalized Adjustment Formula ($P(y|do(x))$)의 LaTeX 수식 정확한 재현
+    * [x] 주요 도표(Origin of Bias, Recoverability examples)에 대한 Placeholder 및 캡션
+
+* **생략된 내용:**
+    * 강의 자료 마지막 부분의 Odds Ratio 관련 내용은 Selection Bias의 통계적 변형(Statistical Variant)으로 소개되었으나, 인과 추론(Causal Inference)의 핵심 흐름인 $P(y|do(x))$ 복원에 집중하기 위해 본문에서는 간략히 언급하거나 생략하고 Recoverability Theorem에 집중함.

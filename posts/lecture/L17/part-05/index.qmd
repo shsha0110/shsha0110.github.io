@@ -1,0 +1,224 @@
+---
+title: "[Causal Inference] Missing Data & Graphical Models: m-graphs"
+description: "Recovering from Selection Bias using Causal Graphical Models (Mohan & Pearl, 2021)"
+author: "유성현"
+date: "2026-01-25"
+categories: [Causal Inference, Missing Data, Graphical Models]
+format:
+  html:
+    toc: true
+    number-sections: true
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+## 1. Introduction: Missingness is a Causal Concept
+
+데이터 분석, 특히 사회과학이나 의료 데이터를 다룰 때 결측치(Missing Data)는 피할 수 없는 현실입니다. [cite_start]설문조사에서 응답자가 특정 문항을 건너뛰거나, 센서가 오작동하거나, 환자가 과거 기록을 기억하지 못하는 등 다양한 이유로 발생합니다[cite: 13, 14, 15].
+
+통계학 문헌, 특히 Rubin의 선구적인 연구 이후 대부분의 결측치 처리 방식은 **MAR(Missing At Random)** 가정을 기반으로 합니다. [cite_start]이는 Maximum Likelihood나 Multiple Imputation의 수렴성을 보장하기 위한 필수적인 가정이지만, 실제 데이터에서 이 가정이 성립하는지 검증하는 것은 매우 어렵습니다[cite: 19, 20, 21, 23].
+
+Mohan과 Pearl(2021)은 결측치 문제를 **통계적 문제(Statistical Problem)가 아닌 인과적 문제(Causal Problem)**로 재정의합니다. 데이터가 왜 비었는지에 대한 "이유(Reason)"는 데이터 생성 과정(Data Generating Process)의 일부이기 때문입니다. [cite_start]본 포스트에서는 그래프 모형(Graphical Models), 특히 **m-graphs**를 통해 결측 메커니즘을 시각화하고, 데이터의 복원 가능성(Recoverability)을 판단하는 방법을 정리합니다[cite: 31, 32].
+
+---
+
+## 2. Formalism: The m-graph
+
+결측 데이터 문제를 그래프로 표현하기 위해, 우리는 변수를 관측 여부와 역할에 따라 분류하고 **Proxy Variable**이라는 개념을 도입합니다.
+
+### 2.1. Variables Classification
+[cite_start]Causal DAG $G$의 노드들은 다음 다섯 가지 카테고리로 분류됩니다[cite: 115, 116]:
+
+1.  $U$: **Latent Variables** (관측되지 않는 잠재 변수)
+2.  $V_o$: **Fully Observed Variables** (모든 레코드에서 관측된 변수)
+3.  $V_m$: **Missing Variables** (적어도 하나의 레코드에서 결측이 발생한 변수)
+4.  $R$: **Missingness Mechanisms** (결측을 유발하는 인과적 메커니즘을 나타내는 변수)
+5.  $V^*$: **Proxy Variables** (실제로 관측된 변수)
+
+### 2.2. The Proxy Variable Mechanism
+[cite_start]변수 $X$가 결측될 수 있다면, 우리는 실제 값 $X$와 결측 여부를 결정하는 스위치 $R_X$를 통해 관측된 값 $X^*$를 다음과 같이 정의합니다[cite: 49, 50].
+
+$$
+X^* = f(R_X, X) = \begin{cases} 
+X & \text{if } R_X = 0 \quad (\text{Observed}) \\
+m & \text{if } R_X = 1 \quad (\text{Missing})
+\end{cases}
+$$
+
+여기서 $m$은 결측(missing value)을 나타내는 기호입니다. [cite_start]$R_X=1$이면 변수의 값은 가려지고(masked), $R_X=0$이면 드러납니다(revealed)[cite: 54, 55].
+
+![Figure 1: 비만도(Obesity) 예시를 통한 m-graph의 기본 구조. G(성별), A(나이)는 완전히 관측되지만, O(비만도)는 결측 메커니즘 $R_O$에 의해 $O^*$로 관측된다.](./images/basic_proxy_structure.png)
+
+> **Figure 1 설명**: 위 그림은 학교 데이터 예시를 보여줍니다. $G$(Gender)와 $A$(Age)는 학교 기록부에 있어 완전히 관측되지만($V_o$), $O$(Obesity)는 학생이 응답을 거부할 수 있어 결측이 발생합니다($V_m$). [cite_start]$R_O$는 $O$가 결측될지 여부를 결정하는 변수이며, 실제로 우리가 데이터셋에서 보는 것은 $O^*$($V^*$)입니다[cite: 39, 44, 45, 49].
+
+---
+
+## 3. Categories of Missingness in Graphs
+
+Rubin의 분류법인 MCAR, MAR, MNAR을 m-graph 상에서의 조건부 독립성(Conditional Independence)으로 명확히 정의할 수 있습니다. [cite_start]그래프 구조를 통해 데이터가 어떤 결측 유형에 속하는지 시각적으로 판별(Inspection)이 가능해집니다[cite: 34].
+
+### 3.1. MCAR (Missing Completely At Random)
+결측이 완전히 무작위로 발생하는 경우입니다. [cite_start]설문지를 잃어버리는 등의 상황이 이에 해당합니다[cite: 69].
+
+* **정의**: 결측 메커니즘 $R$이 데이터의 모든 변수($V_m, V_o, U$)와 독립입니다.
+* [cite_start]**그래프 조건**: $R$ 변수들과 $V_o \cup V_m$ 사이에 엣지가 없습니다[cite: 138, 143].
+
+$$
+V_m, V_o, U \perp \mathbb{R}
+$$
+
+![Figure 2: MCAR의 그래프 구조. $R_O$로 들어오는 화살표가 없다. 즉, 나이(A)나 성별(G), 실제 비만도(O)가 결측 여부($R_O$)에 영향을 주지 않는다.](./images/mcar_graph.png)
+
+### 3.2. MAR (Missing At Random)
+결측이 **완전히 관측된 변수($V_o$)**에만 의존하여 발생하는 경우입니다. [cite_start]예를 들어, 10대($A$)들이 반항심에 몸무게를 보고하지 않는 경우 등입니다[cite: 77].
+
+* [cite_start]**정의**: 관측된 변수 $V_o$가 주어졌을 때, 결측 메커니즘 $R$은 나머지 변수들과 독립입니다[cite: 146].
+* [cite_start]**그래프 조건**: (i) $R$과 부분적으로 관측된 변수($V_m$) 사이에 엣지가 없고, (ii) $R$과 $V_o$ 사이에 양방향 엣지(bidirected edge, Latent confounder)가 없어야 합니다[cite: 147].
+
+$$
+V_m, U \perp \mathbb{R} \mid V_o
+$$
+
+![Figure 3: MAR의 그래프 구조. 나이(A)가 결측 메커니즘($R_O$)에 영향을 준다($A \rightarrow R_O$). 즉, 결측 여부는 관측된 나이에 따라 달라진다.](./images/mar_graph.png)
+
+### 3.3. MNAR (Missing Not At Random)
+데이터가 MCAR나 MAR이 아닌 모든 경우입니다. 특히, 결측된 변수 그 자체가 결측 원인이 되는 경우가 포함됩니다. [cite_start]예를 들어, 비만인 학생($O$)이 부끄러워서 몸무게를 숨기는 경우입니다[cite: 87, 112].
+
+* **특징**: $R$ 변수로 들어오는 화살표가 결측 변수($V_m$)나 잠재 변수($U$)에서 시작됩니다.
+
+![Figure 4: MNAR의 그래프 구조. 실제 비만도(O)가 결측 여부($R_O$)에 직접 영향을 준다($O \rightarrow R_O$). 비만일수록 응답하지 않을 확률이 높아지는 메커니즘이다.](./images/mnar_graph.png)
+
+---
+
+## 4. Recoverability: Can We Restore the Truth?
+
+[cite_start]**Recoverability(복원 가능성)**란, 결측이 포함된 관측 데이터($V^*, V_o, R$)의 분포로부터 우리가 알고 싶은 원래 분포(Target Distribution, $P(V_o, V_m)$)를 일관되게(consistently) 추정할 수 있는지에 대한 문제입니다[cite: 35].
+
+### 4.1. Recoverability of MCAR
+MCAR의 경우, $R_O$는 모든 변수와 독립이므로, 데이터를 삭제(List-wise deletion)하고 남은 데이터만 써도 편향(Bias)이 없습니다.
+
+$$
+P(G, O, A) = P(G, O, A \mid R_O = 0)
+$$
+
+$R_O = 0$인 조건 하에서는 $O = O^*$이므로,
+
+$$
+= P(G, O^*, A \mid R_O = 0)
+$$
+
+[cite_start]즉, 관측된 데이터만으로 원래 분포를 완벽히 복원할 수 있습니다[cite: 187, 189].
+
+### 4.2. Recoverability of MAR
+MAR의 경우, 단순 삭제는 편향을 낳지만, 조건부 확률을 이용해 복원할 수 있습니다. 예를 들어 $A \rightarrow R_O$인 상황(Figure 3)을 봅시다.
+
+[cite_start]우리는 결합 확률 $P(G, O, A)$를 다음과 같이 분해(Factorization)할 수 있습니다[cite: 198]:
+$$
+P(G, O, A) = P(G, O \mid A)P(A)
+$$
+
+그래프에서 $A$는 $R_O$와 $\{G, O\}$ 사이를 **d-separation** 합니다. [cite_start]따라서 $R_O$에 조건을 걸어도 확률은 변하지 않습니다[cite: 199].
+$$
+P(G, O \mid A) = P(G, O \mid A, R_O = 0)
+$$
+
+$R_O=0$일 때 $O=O^*$이므로, 최종적으로 관측 가능한 변수들로 표현됩니다:
+$$
+P(G, O, A) = P(G, O^* \mid A, R_O = 0)P(A)
+$$
+
+[cite_start]이것이 MAR 상황에서 데이터를 복원하는 핵심 논리입니다[cite: 202].
+
+### 4.3. The Challenge of MNAR
+MNAR, 예를 들어 $O \rightarrow R_O$인 경우(Figure 4), 위와 같은 분해나 d-separation을 사용할 수 없습니다. [cite_start]$O$를 관측하지 못했는데 $O$가 결측 원인이 되므로, 일반적으로 복원이 불가능(Non-recoverable)합니다[cite: 218, 224].
+
+하지만 **모든 MNAR이 복원 불가능한 것은 아닙니다.** m-graph 구조에 따라 MNAR임에도 복원 가능한 특수한 케이스들이 존재합니다.
+
+---
+
+## 5. Advanced Recoverability Theorems
+
+MNAR 상황에서도 복원 가능한 조건을 다루는 두 가지 중요한 정리가 있습니다.
+
+### 5.1. Sequential Factorization (순차적 분해)
+[cite_start]타겟 분포 $Q$를 인수분해했을 때, 각 인수가 $P(Y_i | X_i)$ 꼴을 띠고, 각각의 $Y_i$가 $X_i$가 주어졌을 때 자신의 결측 메커니즘 $R_{Y_i}$과 독립이라면 복원 가능합니다[cite: 247].
+
+$$
+P(Y_i \mid X_i) = P(Y_i^* \mid X_i^*, R_{Y_i}=0, R_{X_i}=0)
+$$
+
+### 5.2. R-Factorization Theorem
+전체 결합 분포 $P(V)$의 복원 가능성에 대한 필요충분조건입니다. [cite_start]$R$ 변수들 간에 엣지가 없다고 가정할 때, 다음 두 조건에 해당하는 변수 $X \in V_m$이 **없다면** 복원 가능합니다[cite: 254, 255, 256].
+
+1.  $X$와 $R_X$가 이웃(neighbor)함.
+2.  $X$와 $R_X$가 $V_m \cup V_o$ 내의 collider들로만 이루어진 경로로 연결됨.
+
+[cite_start]복원 가능하다면, 분포는 다음과 같이 주어집니다[cite: 258]:
+
+$$
+P(V) = \frac{P(R=0, V^*)}{\prod_i P(R_i=0 \mid Mb_{R_i}^o, Mb_{R_i}^m, R_{Mb_{R_i}^m}=0)}
+$$
+
+여기서 $Mb_{R_i}$는 $R_i$의 Markov Blanket을 의미합니다.
+
+---
+
+## 6. Case Study: Recovering Causal Effect ($P(y|do(z))$)
+
+[cite_start]마지막으로, 결측 데이터가 있는 상황에서 인과 효과(Causal Effect)를 추정하는 예제를 살펴보겠습니다[cite: 261].
+
+![Figure 5: Causal Effect 복원 예시 그래프. $W \rightarrow Z \rightarrow Y$의 인과 경로가 있고, $W$가 $Y$의 결측($R_Y$)에 영향을 주며, $W$와 $Y$ 사이에 잠재적 교란 요인(dashed bidirectional edge)이 존재하는 복잡한 MNAR 상황이다.](./images/causal_effect_recovery_graph.png)
+
+> **Figure 5 설명**: 이 그래프에서 우리는 $Z$가 $Y$에 미치는 인과 효과 $P(y|do(z))$를 알고 싶습니다. 하지만 $Y$에는 결측이 있고, 결측 메커니즘 $R_Y$는 $W$에 의존합니다($W \rightarrow R_Y$). 또한 $W$와 $Y$ 사이에는 Confounder가 있습니다.
+
+**유도 과정:**
+
+1.  **Backdoor Adjustment**: $W$가 $Z \rightarrow Y$ 관계의 confounder 역할을 하므로, $W$에 대해 조정(adjustment)을 수행합니다.
+    $$P(y \mid do(z)) = \sum_w P(y \mid w, z) P(w)$$
+    [cite_start]*(주의: 슬라이드 수식 [cite: 269]에서는 $P(y|do(z))$를 바로 전개하지만, 여기서는 이해를 돕기 위해 Backdoor 기준을 적용한 형태를 풀어서 설명합니다. 슬라이드의 전개는 do-calculus와 결측 매커니즘 분해를 결합한 것입니다.)*
+
+    슬라이드의 유도 과정을 따라가면:
+    $$P(y \mid do(z)) = P(y \mid do(z), r_y) \quad \text{($R_y$는 개입 이후 변수가 아님)}$$
+    
+    $R_y$가 조건부에 포함되면, 우리는 $Y$ 대신 $Y^*$를 사용할 수 있습니다 ($Y = Y^*$ when $R_Y=0$ or implicit context).
+    $$= P(y^* \mid do(z), r_y)$$
+    
+    이 확률을 $W$를 통해 분해합니다:
+    $$= \sum_w P(y^* \mid w, do(z), r_y) P(w \mid do(z), r_y)$$
+
+    그래프 상의 독립성을 활용합니다. $Z$에 개입($do(z)$)하면 $W$에서 오는 화살표는 무시되거나, $W$가 $Z$의 부모이므로 $do(z)$와 독립일 수 있습니다. 중요한 점은 $Y^*$가 관측 가능해진다는 것입니다.
+    
+    [cite_start]최종적으로 슬라이드는 다음과 같은 형태의 복원식을 제시합니다[cite: 269]:
+    $$= \sum_w P(y^* \mid w, z, r_y) P(w \mid r_y)$$
+
+    이 식의 의미는, **결측이 있는 상태($Y^*$)에서도, 결측 메커니즘($R_Y$)과 관련된 변수($W$)들을 적절히 통제하면 원래의 인과 효과를 계산해낼 수 있다**는 것입니다.
+
+---
+
+## 7. Conclusion
+
+이번 포스트에서는 결측 데이터 문제를 인과적 관점에서 바라보는 **m-graph** 프레임워크를 다뤘습니다.
+
+1.  [cite_start]**Transparency**: 그래프 모델은 결측의 원인(Missingness Mechanism)을 명시적으로 표현하여, MAR/MCAR 가정을 시각적으로 검증(Testability)할 수 있게 해줍니다[cite: 32, 36].
+2.  **Recoverability**: 단순히 데이터를 삭제하거나 평균을 채워 넣는 것이 아니라, 그래프 구조에 기반하여 이론적으로 타당한 복원 공식을 유도할 수 있습니다.
+3.  [cite_start]**Beyond MAR**: 기존 통계학에서 다루기 어려웠던 MNAR 상황에서도, 구조적 특성을 이용해(Sequential Factorization 등) 편향 없는 추정이 가능함을 확인했습니다[cite: 24, 253].
+
+[cite_start]통계학자와 데이터 과학자는 결측치를 단순한 "전처리 대상"이 아니라, **데이터 생성 과정의 일부**로 보고 모델링해야 합니다[cite: 272].
+
+---
+
+### 누락 방지 검증 체크리스트
+
+* **포함된 내용**:
+    * [x] 결측 데이터의 동기 및 기존 방법론(Rubin)의 한계
+    * [x] m-graph의 정의 및 구성 요소 ($V^*, R$ 등)
+    * [x] MCAR, MAR, MNAR의 그래프적 정의 및 예시
+    * [x] MCAR, MAR, MNAR 상황별 복원 가능성(Recoverability) 유도 과정
+    * [x] 고급 정리: Sequential Factorization, R-Factorization Theorem 수식
+    * [x] Causal Effect ($P(y|do(z))$) 복원 예제
+* **생략된 내용**:
+    * 슬라이드 24의 복잡한 MNAR 예제 ($Z_1, Z_2, X, Y$)에 대한 세부 유도 과정은 R-Factorization Theorem의 일반론으로 갈음하고, 대신 Causal Effect 예제를 상세히 다루었습니다. (흐름상 핵심 정리를 보여주는 것이 더 중요하다고 판단)
+    * JASA 논문 원문의 증명(Proof) 등은 슬라이드 범위를 벗어나므로 제외했습니다.
+
+---

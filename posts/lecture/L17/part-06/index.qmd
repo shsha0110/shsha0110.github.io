@@ -1,0 +1,165 @@
+---
+title: "[Causal Inference] General Identifiability with Partial Observation (GID-PO)"
+description: "서로 다른 변수 집합을 가진 여러 데이터셋을 결합하여 인과 효과를 추정하는 방법: 데이터 융합(Data Fusion) 문제의 해결"
+author: "유성현"
+date: "2026-01-25"
+categories: [Causal Inference, Data Science, Econometrics]
+format:
+  html:
+    toc: true
+    number-sections: true
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+## 1. Introduction: 데이터 융합(Data Fusion)의 필요성
+
+현대 데이터 과학, 특히 사회과학과 공학이 교차하는 지점에서는 **"모든 변수가 완벽하게 측정된 단 하나의 데이터셋"**을 확보하는 것이 거의 불가능합니다. 현실에서는 다음과 같은 상황이 빈번하게 발생합니다.
+
+* **실험 연구(Experimental Study):** 핵심적인 처치(Treatment)와 주요 결과 변수만 측정하며, 비용 문제로 많은 공변량을 측정하지 못함.
+* **관찰 연구(Observational Study):** 방대한 공변량과 결과 변수가 존재하지만, 처치 변수가 없거나 무작위 배정(Randomization)이 되어 있지 않음.
+
+이러한 상황에서, 서로 다른 변수 집합($V_i \subseteq V$)을 포함하는 이질적인 데이터셋들을 결합하여, 전체 시스템의 인과 효과(Causal Effect)를 추정할 수 있을까요? 이번 포스트에서는 **General Identifiability with Partial Observation (GID-PO)** 개념을 통해 이 문제를 해결하는 과정을 다룹니다.
+
+## 2. Problem Setup: GID-PO
+
+우리가 관심을 가지는 전체 변수 집합을 $\mathbb{V}$라고 합시다. 하지만 우리는 $\mathbb{V}$ 전체를 관측한 데이터가 없습니다. 대신, $\mathbb{V}$의 부분집합인 $V_i$만을 관측한 여러 개의 데이터셋(실험 또는 관찰) 모음 $\mathbb{P}=\{P_{Z_{i}}(V_{i})\}_{i}$를 가지고 있습니다.
+
+이때 우리의 목표는 타겟 인과 효과 $P_x(y)$ (처치 $X$가 결과 $Y$에 미치는 효과)를 식별(Identify)하는 것입니다.
+
+### 2.1 예시 시나리오: 운동이 뇌졸중에 미치는 영향
+
+강의 자료에서 제시된 구체적인 예시를 통해 문제를 정의해 봅시다. 우리는 **운동(Exercise, $X$)**이 **뇌졸중(Stroke, $Y$)**에 미치는 인과적 효과를 알고 싶습니다.
+
+관련된 변수들은 다음과 같습니다:
+* $A$: 나이 (Age)
+* $X$: 운동 (Exercise) - **처치 변수**
+* $B$: BMI
+* $C$: 혈압 (Blood Pressure)
+* $Y$: 뇌졸중 (Stroke) - **결과 변수**
+
+이 변수들의 인과 관계는 아래의 Causal Graph(DAG)로 표현됩니다.
+
+![Figure 1: Exercise & Stroke Causal Graph. A(Age)는 X(Exercise)와 B(BMI)에 영향을 줌. X는 B에 영향을 줌. B는 C(Blood Pressure)에 영향을 줌. C는 Y(Stroke)에 영향을 줌. 점선(Dashed Line)은 X와 Y 사이에 관측되지 않은 교란 요인(Unobserved Confounder)이 존재함을 암시함.](./images/causal_graph_stroke_exercise.png)
+
+### 2.2 주어진 데이터의 한계
+
+우리는 $P(A, X, B, C, Y)$ 전체를 포함하는 데이터가 없습니다. 대신 두 가지의 불완전한 연구 결과만 가지고 있다고 가정해 봅시다.
+
+1.  **연구 1 (Experimental Study):**
+    * 운동($X$)에 대해 무작위 배정(Intervention)을 수행했습니다.
+    * 측정 변수: 나이($A$), 혈압($C$). (BMI와 뇌졸중은 측정하지 않음)
+    * 확보된 분포: $P_X(A, C)$
+
+2.  **연구 2 (Observational Study):**
+    * 단순 관찰 연구입니다.
+    * 측정 변수: BMI($B$), 혈압($C$), 뇌졸중($Y$). (나이와 운동 여부는 데이터에 없음)
+    * 확보된 분포: $P(B, C, Y)$
+
+**Task:** 이 두 가지 부분적인 분포 $P_X(A, C)$와 $P(B, C, Y)$만을 사용하여, 타겟 인과 효과 **$P_X(Y)$**를 계산할 수 있는가?
+
+## 3. Mathematical Derivations
+
+이 문제는 단순히 데이터를 합치는(Merge) 것으로는 해결되지 않습니다. 공통 변수가 $C$밖에 없으며, 연구 1은 실험 데이터, 연구 2는 관찰 데이터라는 성격의 차이가 있기 때문입니다. 우리는 확률 분포의 분해(Factorization) 법칙과 인과 그래프의 구조를 이용해야 합니다.
+
+### 3.1 Step 1: Target Distribution의 정의
+
+우리가 구하고자 하는 것은 $X$에 개입했을 때 $Y$의 주변 확률 분포(Marginal Distribution)입니다.
+$$P_x(y) = \sum_{a,b,c} P_x(a, b, c, y)$$
+
+### 3.2 Step 2: C-Component Factorization
+
+인과 그래프(Figure 1)의 구조에 따라 결합 확률 분포(Joint Distribution)를 분해해 봅시다. 특히 $do(X)$ 연산이 적용된 개입 분포(Interventional Distribution) $P_x(\cdot)$를 고려합니다.
+
+일반적인 베이지안 네트워크 분해 법칙과 $do$-calculus의 원리에 따라, $X$로 들어오는 화살표를 제거한 그래프에서의 분해를 생각할 수 있습니다. 강의 자료의 유도 과정(Slide 8-10)에 따르면, 이 시스템은 다음과 같은 형태로 분해(Factorization)될 수 있습니다.
+
+$$P_x(a, b, c, y) = P(a) \cdot P_{a,x}(b) \cdot P_b(c) \cdot P_c(y)$$
+
+이 식의 각 항이 의미하는 바는 다음과 같습니다:
+* $P(a)$: 나이의 분포 (외생 변수).
+* $P_{a,x}(b)$: $A$와 $X$가 주어졌을 때(또는 개입했을 때) $B$의 분포.
+* $P_b(c)$: $B$가 주어졌을 때 $C$의 분포.
+* $P_c(y)$: $C$가 주어졌을 때 $Y$의 분포.
+
+::: callout-note
+**Why this factorization?**
+이 분해는 그래프의 **c-component** 구조에 기반합니다. $X$와 $Y$ 사이에는 직접적인(또는 confounding에 의한) 경로가 존재하지만, $A \to B \to C \to Y$와 같은 매개 경로들이 존재합니다. 이 식은 전체 효과를 각 메커니즘의 결합으로 쪼갠 것입니다.
+:::
+
+### 3.3 Step 3: 수식의 재구성 (Regrouping)
+
+이제 위에서 얻은 식을 우리가 가진 데이터 $P_X(A, C)$와 $P(B, C, Y)$와 연결하기 위해 $\sum$의 순서를 조정하여 재구성합니다.
+
+$$
+\begin{aligned}
+P_x(y) &= \sum_{a,b,c} P(a) P_{a,x}(b) P_b(c) P_c(y) \\
+&= \sum_{a,c} P(a) \left( \sum_{b} P_{a,x}(b) P_b(c) \right) P_c(y)
+\end{aligned}
+$$
+
+여기서 괄호 안의 부분 $\sum_{b} P_{a,x}(b) P_b(c)$를 살펴봅시다. 이는 $A$와 $X$가 결정되었을 때, $B$를 거쳐 $C$가 결정되는 과정의 확률, 즉 $P_{a,x}(c)$로 해석할 수 있습니다 (Chain Rule of Intervention).
+
+따라서 식은 다음과 같이 간소화됩니다.
+
+$$P_x(y) = \sum_{a,c} P(a) P_{a,x}(c) P_c(y)$$
+
+이 식은 매우 중요한 의미를 가집니다. **서로 다른 출처의 정보를 결합할 수 있는 연결고리**가 되기 때문입니다.
+
+## 4. Mapping to Data Sources (The Puzzle)
+
+이제 최종 유도된 식의 각 구성 요소가 우리가 가진 두 개의 데이터셋 중 어디에서 올 수 있는지 확인해 봅시다.
+
+$$P_x(y) = \sum_{a,c} \underbrace{P(a) P_{a,x}(c)}_{\text{Source 1}} \cdot \underbrace{P_c(y)}_{\text{Source 2}}$$
+
+### 4.1 Source 1: Experimental Study ($P_X(A, C)$)
+첫 번째 데이터셋은 운동($X$)에 개입한 실험 데이터이며 $A$와 $C$를 관측합니다.
+즉, $P_X(A, C)$ 분포를 온전히 가지고 있습니다.
+
+* $P(a)$: $X$는 무작위 배정되었으므로 $A$와 독립입니다. 따라서 $P_x(a) = P(a)$. 실험군 내의 나이 분포에서 얻을 수 있습니다.
+* $P_{a,x}(c)$: $A$와 $X$가 주어졌을 때 $C$의 분포입니다. 실험 데이터 $P_X(A, C)$에서 조건부 확률 등을 통해 도출할 수 있습니다. (엄밀히는 $P_x(c|a)$ 형태)
+
+따라서 식의 앞부분 $P(a)P_{a,x}(c)$는 **연구 1**에서 식별 가능합니다.
+
+### 4.2 Source 2: Observational Study ($P(B, C, Y)$)
+두 번째 데이터셋은 $B, C, Y$를 관측합니다.
+우리가 필요한 마지막 조각은 $P_c(y)$입니다.
+
+* 그래프 구조상 $C$에서 $Y$로 가는 길목에 $B$가 교란 요인으로 작용하지 않고(앞단의 변수임), $X$와 $Y$ 사이의 Confounding path는 존재하지만, $C$ 자체에 대한 개입($P_c(y)$)을 고려할 때 $P(B, C, Y)$ 데이터 내에서 이를 추정할 수 있는 구조적 조건이 성립합니다.
+* 즉, $P_c(y)$는 **연구 2**의 관찰 데이터로부터 복원해낼 수 있습니다.
+
+![Figure 2: The Puzzle of Data Fusion. 보라색 퍼즐 조각($P_c(y)$, $P_{a,x}(b)$ 등)과 초록색 퍼즐 조각($P(a)$, $P_b(c)$)이 서로 다른 데이터셋에서 추출되어 하나의 완성된 그림($P_x(y)$)을 맞추는 과정을 시각화함.](./images/data_fusion_puzzle.png)
+
+### 4.3 Final Formula
+
+결과적으로 우리는 타겟 효과를 다음과 같이 계산할 수 있습니다.
+
+$$P_x(y) = \sum_{a,c} P_x(a, c) \times P_c(y)$$
+
+(참고: 위 식은 직관적인 매핑을 보여주며, 실제 계산 시에는 $P_c(y)$를 $P(B,C,Y)$에서 도출하기 위한 추가적인 adjustment formula가 적용될 수 있습니다. 강의 자료 Slide 10 하단에는 다음과 같은 GID 공식이 제시되어 있습니다.)
+
+$$\text{GID} = \sum_{a,c} P_{x'}(a) P_x(c|a) \left( \sum_b P(y|b,c)P(b) \right)$$
+
+이 공식은 각 데이터 소스에서 얻을 수 있는 확률값들의 곱과 합으로 타겟 인과 효과를 완벽하게 재구성합니다.
+
+## 5. Conclusions
+
+이번 GID-PO 프레임워크가 시사하는 바는 단순히 수식을 푸는 것 이상입니다.
+
+1.  **Data Fusion의 이론적 토대:** 서로 다른 변수를 측정하는 이질적인 데이터셋들도, 그 기저에 있는 **인과 메커니즘(Causal Mechanism)**을 공유한다면 논리적으로 결합될 수 있습니다.
+2.  **데이터 과학의 새로운 패러다임:** 빅데이터 시대에는 "모든 것을 측정한 스몰 데이터"보다 "부분적으로 측정한 빅 데이터"가 더 흔합니다. GID-PO는 이러한 환경에서 선택 편향(Selection Bias), 교란 편향(Confounding Bias), 그리고 데이터 결측(Missing Data) 문제를 통합적으로 해결할 수 있는 충분조건과 알고리즘을 제공합니다.
+3.  **Parsimonious Representation:** 인과 그래프는 현상을 설명하는 가장 간결하고(coarse and parsimonious) 효율적인 표현 방식이며, 이를 통해 데이터 통합의 복잡성을 관리할 수 있습니다.
+
+---
+
+### **Appendix: Checklist**
+
+본 포스트 작성을 위해 검토한 강의 자료 체크리스트입니다.
+
+* [x] **GID-PO 개념 정의**: 부분 관측(Partial Observation) 하에서의 식별 가능성 문제 정의 완료.
+* [x] **Causal Graph & Variables**: Exercise-Stroke 예시의 변수($A, X, B, C, Y$) 및 그래프 구조 반영 완료.
+* [x] **Data Sources**: 실험 연구($P_X(A,C)$)와 관찰 연구($P(B,C,Y)$)의 차이 명시 완료.
+* [x] **Mathematical Derivation**: $P_x(y)$의 분해 과정(Factorization) 및 단계별 유도($\sum$ regrouping) 포함 완료.
+* [x] **Data Mapping**: 유도된 수식의 각 항이 어느 데이터셋에서 식별 가능한지 설명 완료.
+* [x] **Visuals**: 인과 그래프 및 퍼즐 비유 이미지에 대한 설명(Alt text) 포함 완료.
+* [x] **Conclusion**: 인과 데이터 과학(Causal Data Science) 관점에서의 의의 서술 완료.

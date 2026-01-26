@@ -14,106 +14,176 @@ format:
 
 # 1. Introduction
 
-인과 추론(Causal Inference)에서 패널 데이터(Panel Data)를 분석할 때 가장 널리 쓰이는 두 가지 방법론은 **이중차분법(Difference-in-Differences, DiD)**과 **합성 대조군 방법(Synthetic Control Method, SCM)**입니다.
+* 인과 추론(Causal Inference)에서 패널 데이터(Panel Data)를 분석할 때 가장 널리 쓰이는 두 가지 방법론은 **이중차분법(Difference-in-Differences, DiD)**과 **통제집단합성법(Synthetic Control Method, SCM)**입니다.
 
-하지만 이 두 방법론은 각각의 한계점을 가지고 있습니다. DiD는 엄격한 '평행 추세 가정(Parallel Trends Assumption)'에 의존하며, SCM은 처치 유닛(treated unit)과 대조 유닛(control unit)의 레벨(level)을 강제로 맞추려다 보니 데이터의 활용도가 떨어질 수 있습니다.
+* 하지만 이 두 방법론은 각각의 한계점을 가지고 있습니다. 
+    * DiD는 엄격한 '평행 추세 가정(Parallel Trends Assumption)'에 의존합니다.
+    * SCM은 처치 유닛(treated unit)과 대조 유닛(control unit)의 레벨(level)을 강제로 맞추려고 합니다.
 
-이번 포스트에서는 Arkhangelsky et al. (2021)이 제안한 **Synthetic Difference-in-Differences (SDiD)**를 다룹니다. SDiD는 DiD와 SCM의 장점을 결합하여, **가중치(weights)**를 통해 평행 추세를 보정하고 이원 고정 효과(Two-way Fixed Effects)를 통해 강건성(robustness)을 확보하는 방법론입니다.
+* 이번 포스트에서는 Arkhangelsky et al. (2021)이 제안한 **Synthetic Difference-in-Differences (SDiD)**를 다룹니다. 
+* SDiD는 DiD와 SCM의 장점을 결합하여, **가중치(weights)**를 통해 평행 추세를 보정하고 이원 고정 효과(Two-way Fixed Effects)를 통해 강건성(robustness)을 확보하는 방법론입니다.
 
 ![Figure 1: DiD, SC, SDiD의 추정 방식 비교. (좌) DiD는 전체 대조군의 평균 추세를 평행 이동하여 반사실(counterfactual)을 추정함. (중) SC는 처치 이전 기간의 outcome 레벨까지 정확히 일치시키는 가중치를 찾음. (우) SDiD는 추세(trend)만 평행하게 맞추면 되며(절편 허용), 가중치를 통해 평행 추세 가정을 만족시키는 대조군을 합성함.](./images/did_sc_sdid_comparison.png)
 
 ---
 
-# 2. Recap: DiD and SCM
+# 2. Recap: Fixed Effects
 
-SDiD를 이해하기 위해서는 기존 두 방법론의 핵심과 차이를 명확히 짚고 넘어가야 합니다.
+* SDiD는 기존 방법론들의 한계를 극복하기 위해 등장했습니다. 
+* 이를 이해하기 위해서는 먼저 **고정 효과(Fixed Effects)**의 개념을 이해해야 합니다.
+* 패널 데이터 분석에서 관측되지 않는 이질성(Unobserved Heterogeneity)을 통제하는 것은 인과 추론의 핵심입니다. 
+* 이를 위해 우리는 주로 **이원 고정 효과(Two-Way Fixed Effects, TWFE)** 모델을 사용합니다.
 
-## 2.1. Difference-in-Differences (DiD)
-DiD는 처치군(Treated)과 대조군(Control)의 **시간에 따른 변화량의 차이**를 비교하여 인과 효과를 추정합니다.
-* **핵심 가정:** 평행 추세 가정 (Parallel Trends Assumption). 처치가 없었다면 두 그룹의 결과 변수($Y$)는 같은 추세로 변했을 것이라고 가정합니다.
-* **특징:** 그룹 간의 불변하는 차이(Time-invariant differences, unit fixed effect)를 허용합니다. 즉, 시작점이 달라도 추세만 같으면 됩니다.
+$$
+Y_{it} = \mu + \alpha_i + \beta_t + \tau X_{it} + \varepsilon_{it}
+$$
 
-## 2.2. Synthetic Control Method (SCM)
-SCM은 비교 사례 연구(Comparative Case Studies)에서 주로 사용되며, 단일 처치 유닛에 대해 다수의 잠재적 대조 유닛들을 조합(합성)하여 처치 유닛과 가장 유사한 가상의 대조군을 만들어냅니다.
-* **특징:** 대조 유닛들에 **가중치(Unit weights)**를 부여합니다.
-* **차이점:** SCM은 시간 고정 효과(time fixed effects)는 포함하지만, **유닛 고정 효과(unit fixed effects)나 전체 절편(intercept)은 포함하지 않는** 경우가 일반적입니다.
+* **Unit Fixed Effect ($\alpha_i$)**: 
+    * 개별 유닛 $i$가 고유하게 가지는 특성으로, **시간이 지나도 변하지 않는(Time-invariant)** 요인입니다. 
+    * e.g. 국가의 지리적 위치, 회사의 기업 문화
+* **Time Fixed Effect ($\beta_t$)**: 
+    * 특정 시점 $t$에 모든 유닛에게 공통적으로 영향을 미치는 충격으로, **유닛 간에 차이가 없는(Unit-invariant)** 요인입니다.
+    * e.g. 거시경제적 쇼크, 팬데믹
+
+* SDiD의 핵심 동기는 기존의 방법론들이 이 $\alpha_i$와 $\beta_t$를 다루는 방식에서 각각 장단점이 뚜렷하다는 점에 착안합니다.
 
 ---
 
 # 3. Synthetic Difference-in-Differences (SDiD)
 
-SDiD는 SCM처럼 처치 이전(pre-treatment) 추세를 맞추기 위해 재가중(reweighting)을 수행하면서도, DiD처럼 유닛 수준의 레벨 차이(additive unit-level shifts)에 불변(invariant)하도록 설계되었습니다.
+* SDiD는 SCM처럼 처치 이전(pre-treatment) 추세를 맞추기 위해 재가중(reweighting)을 수행하면서도, DiD처럼 유닛 수준의 레벨 차이(additive unit-level shifts)에 불변(invariant)하도록 설계되었습니다.
 
 ## 3.1. Setting & Notation
-* $N$개의 유닛과 $T$개의 시간(periods)으로 구성된 균형 패널(Balanced Panel)을 가정합니다.
-* $Y_{it}$: 유닛 $i$, 시간 $t$에서의 결과 변수
-* $X_{it} \in \{0, 1\}$: 이진 처치 여부
-* **Control Units:** $i = 1, \dots, N_{co}$ (처치를 받지 않음)
-* **Treated Units:** $i = N_{co} + 1, \dots, N$ (시간 $T_{pre}$ 이후 처치 받음)
+
+* SDiD 모델을 이해하기 위한 기본적인 데이터 구조와 파라미터 정의는 다음과 같습니다.
+
+### Data Structure
+* **Balanced Panel:** $N$개의 유닛과 $T$개의 시간(periods)으로 구성된 균형 패널 데이터를 가정합니다.
+* $Y_{it}$: 유닛 $i$, 시간 $t$에서의 결과 변수(Outcome).
+* $X_{it} \in \{0, 1\}$: 이진 처치 여부(Binary treatment indicator).
+* **Units Breakdown:**
+    * **Control Units ($N_{co}$):** $i = 1, \dots, N_{co}$ (처치를 전혀 받지 않음).
+    * **Treated Units ($N_{tr}$):** $i = N_{co} + 1, \dots, N$ (시간 $T_{pre}$ 이후 처치를 받음).
     * $N_{tr} = N - N_{co}$
 
+### Model Parameters (Fixed Effects)
+* 기존 DiD와 마찬가지로 Two-Way Fixed Effects(TWFE) 구조를 기반으로 합니다.
+  * $\mu$: **Global Intercept (전체 절편)**. 
+    * 모든 유닛과 시점에 공통적으로 적용되는 기저 수준(Base level)입니다.
+  * $\alpha_i$: **Unit Fixed Effects (유닛 고정 효과)**. 
+    * 유닛 $i$가 가진 고유한 특성으로, **시간에 따라 변하지 않는(Time-invariant)** 이질성을 포착합니다.
+  * $\beta_t$: **Time Fixed Effects (시간 고정 효과)**. 
+    * 특정 시점 $t$에 모든 유닛에게 공통적으로 영향을 미치는 충격으로, **유닛 간에 차이가 없는(Unit-invariant)** 요인입니다.
+
+### SDiD Weights
+* SDiD는 위 파라미터를 추정하기 전에, 데이터의 균형을 맞추기 위한 두 가지 가중치를 먼저 계산합니다.
+  * $\omega_i$: **Unit Weights (유닛 가중치)**. 
+    * 처치군의 **추세(Trend)**와 유사한 대조군을 합성하기 위해 대조 유닛들에 부여하는 가중치입니다.
+  * $\lambda_t$: **Time Weights (시간 가중치)**. 
+    * 처치 이전 기간(Pre-treatment) 중, 처치 이후 기간(Post-treatment)과 유사한 시점을 강조하기 위해 부여하는 가중치입니다.
+ 
 ## 3.2. Formulations Comparison
-세 가지 추정량(Estimator)은 **최적화 문제(Minimization Problem)**로 정식화하여 비교할 때 그 차이가 명확해집니다. 우리는 평균 인과 효과 $\tau$를 추정하고자 합니다.
+
+* 세 가지 추정량(Estimator)은 **최적화 문제(Minimization Problem)**로 정식화하여 비교할 때 그 차이가 명확해집니다. 
+* 우리는 평균 인과 효과 $\tau$를 추정하고자 합니다.
 
 ### (1) DiD Estimator
-DiD는 가중치 없이 Two-way Fixed Effects(TWFE) 회귀를 수행하는 것과 같습니다.
+* DiD는 **평행 추세 가정(Parallel Trends Assumption)**에 기반하여 인과 효과를 추정하며, 수식적으로 **Unit Fixed Effect ($\alpha_i$)를 허용**합니다.
 
-$$
-\hat{\tau}^{DiD} = \underset{\alpha, \beta, \mu, \tau}{\arg \min} \left\{ \sum_{i=1}^{N}\sum_{t=1}^{T} (Y_{it} - \mu - \alpha_i - \beta_t - \tau X_{it})^2 \right\}
-$$
+* **Mechanism**
+    * 처치군과 대조군 사이에 레벨(Level) 차이가 있더라도, 그 차이가 시불변($\alpha_{tr} \neq \alpha_{co}$)한다면, 변화량의 차이(Difference-in-Differences)를 구하는 과정에서 $\alpha_i$가 상쇄되어 사라집니다.
 
-* $\alpha_i$: Unit fixed effects
-* $\beta_t$: Time fixed effects
-* 가중치 없음 (모든 관측치가 동일하게 기여)
+* **Formulation**
+    * 회귀분석 관점에서 DiD는 **가중치 없이(unweighted)** TWFE 문제를 푸는 것과 같습니다.
+    $$
+    \hat{\tau}^{DiD} = \underset{\alpha, \beta, \mu, \tau}{\arg \min} \left\{ \sum_{i=1}^{N}\sum_{t=1}^{T} (Y_{it} - \mu - \alpha_i - \beta_t - \tau X_{it})^2 \right\}
+    $$
+
+* **Limitation**
+    * 모든 대조군 유닛에 동일한 가중치($1/N_{co}$)를 부여합니다. 
+    * 따라서 평행 추세 가정이 위배되는(추세가 다른) 유닛들이 대조군에 섞여 있을 경우 편향(Bias)이 발생할 수 있습니다.
 
 ### (2) SCM Estimator
-SCM은 유닛 가중치 $\hat{\omega}_i$를 사용하지만, 유닛 고정 효과($\alpha_i$)가 빠져 있습니다.
+* SCM은 처치 유닛과 가장 유사한 가상의 대조군(Synthetic Control)을 만들기 위해 대조군 유닛들에 **가중치(Unit weights, $\omega_i$)**를 부여합니다.
 
-$$
-\hat{\tau}^{SCM} = \underset{\beta, \mu, \tau}{\arg \min} \left\{ \sum_{i=1}^{N}\sum_{t=1}^{T} (Y_{it} - \mu - \beta_t - \tau X_{it})^2 \cdot \hat{\omega}_i \right\}
-$$
+* **Mechanism**
+    * SCM은 처치 이전 기간의 결과 변수($Y$)의 **경로(Path)와 레벨(Level)**을 모두 맞추려고 시도합니다. 
+    * 즉, 추세뿐만 아니라 절대적인 수치까지 일치시키려 합니다.
+
+* **Formulation**
+    * 전통적인 SCM 추정식은 시간 고정 효과($\beta_t$)는 포함하지만, **Unit Fixed Effect ($\alpha_i$)와 전체 절편(Intercept)을 제외**합니다.
+    $$
+    \hat{\tau}^{SCM} = \underset{\beta, \mu, \tau}{\arg \min} \left\{ \sum_{i=1}^{N}\sum_{t=1}^{T} (Y_{it} - \mu - \beta_t - \tau X_{it})^2 \cdot \hat{\omega}_i \right\}
+    $$
+
+* **Limitation**
+    * $\alpha_i$를 모델에 포함하지 않기 때문에, SCM은 처치군과 대조군 간의 레벨 차이(Intercept shift)를 허용하지 않습니다.
+    * 즉, **"평행 이동"을 허용하지 않고 절대적인 수치까지 맞춰야 하므로**, 완벽하게 일치하는 대조군을 찾지 못하면(Interpolation bias) 추정 성능이 떨어질 수 있습니다.
 
 ### (3) SDiD Estimator
-SDiD는 **유닛 가중치 $\hat{\omega}_i$**와 **시간 가중치 $\hat{\lambda}_t$**를 모두 사용하며, **유닛 및 시간 고정 효과($\alpha_i, \beta_t$)**를 모두 포함합니다.
+* SDiD는 **유닛 가중치 $\hat{\omega}_i$**와 **시간 가중치 $\hat{\lambda}_t$**를 모두 사용하며, 동시에 **유닛 및 시간 고정 효과($\alpha_i, \beta_t$)**를 모두 포함합니다.
 
-$$
-\hat{\tau}^{SDiD} = \underset{\alpha, \beta, \mu, \tau}{\arg \min} \left\{ \sum_{i=1}^{N}\sum_{t=1}^{T} (Y_{it} - \mu - \alpha_i - \beta_t - \tau X_{it})^2 \cdot \hat{\omega}_i \cdot \hat{\lambda}_t \right\}
-$$
+* **Mechanism**
+    * **Local Regression:** 가중치($\omega, \lambda$)를 통해 처치군과 유사한 대조군, 처치 시점과 유사한 시점을 강조합니다.
+    * **Robustness:** 고정 효과($\alpha, \beta$)를 통해 가중치로 설명되지 않는 시스템적인 차이(Systematic differences)를 제거합니다.
 
-이 수식에서 SDiD의 핵심 철학이 드러납니다:
-1.  **Local Regression:** 가중치($\omega, \lambda$)를 통해 처치군과 유사한 대조군, 처치 시점과 유사한 시점을 강조합니다.
-2.  **Robustness:** 고정 효과($\alpha, \beta$)를 통해 시스템적인 차이를 제거합니다.
+* **Formulation**
+    
+    $$
+    \hat{\tau}^{SDiD} = \underset{\alpha, \beta, \mu, \tau}{\arg \min} \left\{ \sum_{i=1}^{N}\sum_{t=1}^{T} (Y_{it} - \mu - \alpha_i - \beta_t - \tau X_{it})^2 \cdot \hat{\omega}_i \cdot \hat{\lambda}_t \right\}
+    $$
+
+* **Key Advantage**
+    * SCM의 유연성(Flexibility)과 DiD의 강건성(Robustness)을 결합하여, 레벨이 달라도 추세가 유사한 유닛들을 효과적으로 매칭하고 편향을 줄입니다.
+  
+---
+
+## Summary: Comparison of Methodologies
+
+* 아래 표는 DiD, SCM, 그리고 SDiD가 고정 효과(Fixed Effect)와 가중치(Weights)를 다루는 방식의 핵심적인 차이를 요약합니다.
+
+| 구분 | **DiD** | **SCM** | **SDiD** |
+| :--- | :--- | :--- | :--- |
+| **Unit Fixed Effect ($\alpha_i$)** | **포함 (Included)**<br>레벨 차이(Intercept) 허용 | **미포함 (Excluded)**<br>절편 허용 안 함 | **포함 (Included)**<br>레벨 차이(Intercept) 허용 |
+| **가중치 (Weights)** | **없음 (Unweighted)**<br>모든 대조군 동일 가중치 | **Unit Weights ($\omega_i$)**<br>유사한 유닛에 가중치 부여 | **Unit($\omega_i$) + Time($\lambda_t$)**<br>유사한 유닛 및 시점 강조 |
+| **매칭 조건 (Matching)** | **추세 (Trend)**만 평행하면 됨 | **레벨 (Level)**까지 정확히 일치해야 함 | **추세 (Trend)**만 평행하면 됨 |
+| **장점과 한계** | $\alpha_i$를 허용하지만,<br>가중치가 없어 유연성 부족 | 가중치로 유연하게 맞추지만,<br>레벨까지 맞춰야 하는 제약 존재 | **SCM의 유연성(가중치)**과<br>**DiD의 강건성(FE)**을 결합 |
+
+* 결론적으로 **SDiD**는 SCM처럼 가중치를 사용하여 데이터에 유연하게 적합(Fit)시키면서도, DiD처럼 유닛 고정 효과를 도입하여 레벨이 아닌 **추세(Trend)만 맞추면 되도록** 설계된, 두 방법론의 장점을 결합한 접근법입니다.
+
 
 ---
 
 # 4. SDiD Algorithm Description
 
-SDiD 알고리즘은 크게 세 단계로 구성됩니다: **(1) 유닛 가중치 계산**, **(2) 시간 가중치 계산**, **(3) 가중 회귀 분석**.
+* SDiD 알고리즘은 크게 세 단계로 구성됩니다: **(1) 유닛 가중치 계산**, **(2) 시간 가중치 계산**, **(3) 가중 회귀 분석**.
 
 ## Step 1: Compute Unit Weights ($\hat{\omega}_i$)
-처치 이전 기간($T_{pre}$) 동안, 대조군들의 가중 합이 처치군의 평균 추세를 따르도록 만듭니다.
+* 처치 이전 기간($T_{pre}$) 동안, 대조군들의 가중 합이 처치군의 평균 추세를 따르도록 만듭니다.
 
 $$
 \hat{\omega} = \underset{\omega_0, \omega_{co}}{\arg \min} \left( || \overline{y}_{pre, tr} - (\omega_0 + \omega_{co} Y_{pre, co}) ||_2^2 + \zeta^2 T_{pre} ||\omega_{co}||_2^2 \right)
 $$
 
-여기서:
-* $\overline{y}_{pre, tr}$: 처치군들의 처치 이전 평균 추세 (벡터)
-* $Y_{pre, co}$: 대조군들의 처치 이전 데이터 행렬 ($T_{pre} \times N_{co}$)
-* **$\omega_0$ (Intercept):** SDiD의 결정적 차이점입니다. SCM과 달리 절편을 허용합니다. 즉, **레벨(Level)을 맞출 필요 없이 추세(Trend)만 평행하게 맞추면 됩니다.**
-* **$L_2$ Regularization ($\zeta$):** Ridge penalty를 사용하여 가중치가 특정 유닛에 쏠리는 것을 방지하고(dispersed weights), 대조군 전체에 고르게 분포되도록 합니다.
+* 여기서:
+  * $\overline{y}_{pre, tr}$: 처치군들의 처치 이전 평균 추세 (벡터)
+  * $Y_{pre, co}$: 대조군들의 처치 이전 데이터 행렬 ($T_{pre} \times N_{co}$)
+  * **$\omega_0$ (Intercept):** SDiD의 결정적 차이점입니다. SCM과 달리 절편을 허용합니다. 즉, **레벨(Level)을 맞출 필요 없이 추세(Trend)만 평행하게 맞추면 됩니다.**
+  * **$L_2$ Regularization ($\zeta$):** Ridge penalty를 사용하여 가중치가 특정 유닛에 쏠리는 것을 방지하고(dispersed weights), 대조군 전체에 고르게 분포되도록 합니다.
 
 ### Regularization Parameter $\zeta$
-정규화 파라미터 $\zeta$는 데이터의 변동성에 기반하여 다음과 같이 결정됩니다.
+* 정규화 파라미터 $\zeta$는 데이터의 변동성에 기반하여 다음과 같이 결정됩니다.
 
 $$
 \zeta = (N_{tr} \cdot T_{post})^{1/4} \hat{\sigma}(\Delta_{it})
 $$
 
-이때 $\Delta_{it}$는 결과 변수의 1차 차분(first difference, $Y_{it} - Y_{i(t-1)}$)이며, $\hat{\sigma}$는 이 차분 값들의 표준편차입니다. 이는 시계열적 변동성이 클수록 페널티를 강하게 주어 과적합을 막겠다는 의도입니다.
+* 이때 $\Delta_{it}$는 결과 변수의 1차 차분(first difference, $Y_{it} - Y_{i(t-1)}$)이며, $\hat{\sigma}$는 이 차분 값들의 표준편차입니다.
+* 이는 시계열적 변동성이 클수록 페널티를 강하게 주어 과적합을 막겠다는 의도입니다.
 
 ## Step 2: Compute Time Weights ($\hat{\lambda}_t$)
-SDiD는 특이하게 **시간 가중치**도 계산합니다. 이는 처치 이전 시점들($1 \dots T_{pre}$) 중, 처치 이후 시점($T_{post}$)과 유사한 시점에 더 큰 가중치를 부여하기 위함입니다.
+* SDiD는 **시간 가중치**도 계산합니다. 
+* * 이는 처치 이전 시점들($1 \dots T_{pre}$) 중, 처치 이후 시점($T_{post}$)과 유사한 시점에 더 큰 가중치를 부여하기 위함입니다.
 
 $$
 \hat{\lambda} = \underset{\lambda_0, \lambda_{pre}}{\arg \min} || \overline{y}_{post, co} - (\lambda_0 + \lambda_{pre} Y_{pre, co}) ||_2^2
@@ -123,13 +193,13 @@ $$
 * 이 과정은 대조군 내에서 "처치 이전 기간의 가중 합"이 "처치 이후 기간"과 유사해지도록 만듭니다. 이를 통해 시간적 편향(bias)을 제거합니다.
 
 ## Step 3: Weighted DiD Regression
-구해진 $\hat{\omega}_i$와 $\hat{\lambda}_t$를 사용하여 최종적으로 가중 이원 고정 효과(Weighted TWFE) 회귀를 수행합니다.
+* 구해진 $\hat{\omega}_i$와 $\hat{\lambda}_t$를 사용하여 최종적으로 가중 이원 고정 효과(Weighted TWFE) 회귀를 수행합니다.
 
 $$
 (\hat{\tau}^{SDiD}, \hat{\mu}, \hat{\alpha}, \hat{\beta}) = \underset{\tau, \mu, \alpha, \beta}{\arg \min} \left\{ \sum_{i=1}^{N}\sum_{t=1}^{T} (Y_{it} - \mu - \alpha_i - \beta_t - \tau X_{it})^2 \hat{\omega}_i \hat{\lambda}_t \right\}
 $$
 
-이 회귀분석의 $\hat{\tau}$ 값이 바로 SDiD가 추정한 인과 효과입니다.
+* 이 회귀분석의 $\hat{\tau}$ 값이 바로 SDiD가 추정한 인과 효과입니다.
 
 ---
 
@@ -152,26 +222,3 @@ $$
 2.  **Regularization:** 유닛 가중치 계산 시 $L_2$ Norm을 사용하여 가중치가 특정 소수 유닛에 집중되는 SCM의 문제를 완화하고, 대조군 전반에 퍼지도록 합니다.
 3.  **Time Weights:** DiD나 SCM에는 없는 **시간 가중치($\lambda_t$)**를 도입하여, 처치 전후 기간의 구조적 차이에서 오는 편향을 보정합니다.
 4.  **Efficiency:** 유닛/시간 고정 효과와 가중치를 동시에 활용함으로써 추정량의 분산을 줄이고 인과 효과 추정의 신뢰도를 높입니다.
-
----
-
-### [작성 검증 체크리스트]
-
-* **1. 개념 포함 여부:**
-    * [x] DiD, SCM, SDiD의 개념적 차이 및 비교 (Slides 3-5, 14-15)
-    * [x] 평행 추세 가정 및 Unit/Time Fixed Effect 설명 (Slides 3, 15)
-    * [x] SDiD의 핵심 아이디어 (Reweighting + Fixed Effects) (Slide 5)
-
-* **2. 수식 정확성:**
-    * [x] 세 가지 Estimator (DiD, SCM, SDiD)의 최소화 문제 수식 비교 (Slide 6)
-    * [x] Unit Weights $\omega$ 최적화 식 및 Intercept $\omega_0$ 포함 (Slide 9)
-    * [x] Regularization parameter $\zeta$ 및 $L_2$ penalty 설명 (Slides 10-11)
-    * [x] Time Weights $\lambda$ 최적화 식 (Slide 12)
-    * [x] 최종 SDiD Estimator 수식 (Slide 8)
-
-* **3. 알고리즘 흐름:**
-    * [x] Input $\to$ Unit Weights $\to$ Time Weights $\to$ Regression 순서 서술 (Slide 8)
-
-* **4. 누락 확인:**
-    * 강의 자료의 모든 슬라이드(1~17) 내용을 반영함.
-    * 참고문헌(Arkhangelsky et al., 2021) 언급 완료.

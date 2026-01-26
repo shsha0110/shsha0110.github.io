@@ -23,9 +23,16 @@
 
 <section id="introduction" class="level1">
 <h1>1. Introduction</h1>
-<p>인과 추론(Causal Inference)에서 패널 데이터(Panel Data)를 분석할 때 가장 널리 쓰이는 두 가지 방법론은 <strong>이중차분법(Difference-in-Differences, DiD)</strong>과 <strong>합성 대조군 방법(Synthetic Control Method, SCM)</strong>입니다.</p>
-<p>하지만 이 두 방법론은 각각의 한계점을 가지고 있습니다. DiD는 엄격한 ’평행 추세 가정(Parallel Trends Assumption)’에 의존하며, SCM은 처치 유닛(treated unit)과 대조 유닛(control unit)의 레벨(level)을 강제로 맞추려다 보니 데이터의 활용도가 떨어질 수 있습니다.</p>
-<p>이번 포스트에서는 Arkhangelsky et al.&nbsp;(2021)이 제안한 <strong>Synthetic Difference-in-Differences (SDiD)</strong>를 다룹니다. SDiD는 DiD와 SCM의 장점을 결합하여, <strong>가중치(weights)</strong>를 통해 평행 추세를 보정하고 이원 고정 효과(Two-way Fixed Effects)를 통해 강건성(robustness)을 확보하는 방법론입니다.</p>
+<ul>
+<li><p>인과 추론(Causal Inference)에서 패널 데이터(Panel Data)를 분석할 때 가장 널리 쓰이는 두 가지 방법론은 <strong>이중차분법(Difference-in-Differences, DiD)</strong>과 <strong>통제집단합성법(Synthetic Control Method, SCM)</strong>입니다.</p></li>
+<li><p>하지만 이 두 방법론은 각각의 한계점을 가지고 있습니다.</p>
+<ul>
+<li>DiD는 엄격한 ’평행 추세 가정(Parallel Trends Assumption)’에 의존합니다.</li>
+<li>SCM은 처치 유닛(treated unit)과 대조 유닛(control unit)의 레벨(level)을 강제로 맞추려고 합니다.</li>
+</ul></li>
+<li><p>이번 포스트에서는 Arkhangelsky et al.&nbsp;(2021)이 제안한 <strong>Synthetic Difference-in-Differences (SDiD)</strong>를 다룹니다.</p></li>
+<li><p>SDiD는 DiD와 SCM의 장점을 결합하여, <strong>가중치(weights)</strong>를 통해 평행 추세를 보정하고 이원 고정 효과(Two-way Fixed Effects)를 통해 강건성(robustness)을 확보하는 방법론입니다.</p></li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="https://shsha0110.github.io/posts/lecture/L15A/SDiD/images/did_sc_sdid_comparison.png" class="img-fluid figure-img"></p>
@@ -34,80 +41,248 @@
 </div>
 <hr>
 </section>
-<section id="recap-did-and-scm" class="level1">
-<h1>2. Recap: DiD and SCM</h1>
-<p>SDiD를 이해하기 위해서는 기존 두 방법론의 핵심과 차이를 명확히 짚고 넘어가야 합니다.</p>
-<section id="difference-in-differences-did" class="level2">
-<h2 class="anchored" data-anchor-id="difference-in-differences-did">2.1. Difference-in-Differences (DiD)</h2>
-<p>DiD는 처치군(Treated)과 대조군(Control)의 <strong>시간에 따른 변화량의 차이</strong>를 비교하여 인과 효과를 추정합니다. * <strong>핵심 가정:</strong> 평행 추세 가정 (Parallel Trends Assumption). 처치가 없었다면 두 그룹의 결과 변수(<img src="https://latex.codecogs.com/png.latex?Y">)는 같은 추세로 변했을 것이라고 가정합니다. * <strong>특징:</strong> 그룹 간의 불변하는 차이(Time-invariant differences, unit fixed effect)를 허용합니다. 즉, 시작점이 달라도 추세만 같으면 됩니다.</p>
-</section>
-<section id="synthetic-control-method-scm" class="level2">
-<h2 class="anchored" data-anchor-id="synthetic-control-method-scm">2.2. Synthetic Control Method (SCM)</h2>
-<p>SCM은 비교 사례 연구(Comparative Case Studies)에서 주로 사용되며, 단일 처치 유닛에 대해 다수의 잠재적 대조 유닛들을 조합(합성)하여 처치 유닛과 가장 유사한 가상의 대조군을 만들어냅니다. * <strong>특징:</strong> 대조 유닛들에 <strong>가중치(Unit weights)</strong>를 부여합니다. * <strong>차이점:</strong> SCM은 시간 고정 효과(time fixed effects)는 포함하지만, <strong>유닛 고정 효과(unit fixed effects)나 전체 절편(intercept)은 포함하지 않는</strong> 경우가 일반적입니다.</p>
+<section id="recap-fixed-effects" class="level1">
+<h1>2. Recap: Fixed Effects</h1>
+<ul>
+<li>SDiD는 기존 방법론들의 한계를 극복하기 위해 등장했습니다.</li>
+<li>이를 이해하기 위해서는 먼저 <strong>고정 효과(Fixed Effects)</strong>의 개념을 이해해야 합니다.</li>
+<li>패널 데이터 분석에서 관측되지 않는 이질성(Unobserved Heterogeneity)을 통제하는 것은 인과 추론의 핵심입니다.</li>
+<li>이를 위해 우리는 주로 <strong>이원 고정 효과(Two-Way Fixed Effects, TWFE)</strong> 모델을 사용합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AY_%7Bit%7D%20=%20%5Cmu%20+%20%5Calpha_i%20+%20%5Cbeta_t%20+%20%5Ctau%20X_%7Bit%7D%20+%20%5Cvarepsilon_%7Bit%7D%0A"></p>
+<ul>
+<li><strong>Unit Fixed Effect (<img src="https://latex.codecogs.com/png.latex?%5Calpha_i">)</strong>:
+<ul>
+<li>개별 유닛 <img src="https://latex.codecogs.com/png.latex?i">가 고유하게 가지는 특성으로, <strong>시간이 지나도 변하지 않는(Time-invariant)</strong> 요인입니다.</li>
+<li>e.g.&nbsp;국가의 지리적 위치, 회사의 기업 문화</li>
+</ul></li>
+<li><strong>Time Fixed Effect (<img src="https://latex.codecogs.com/png.latex?%5Cbeta_t">)</strong>:
+<ul>
+<li>특정 시점 <img src="https://latex.codecogs.com/png.latex?t">에 모든 유닛에게 공통적으로 영향을 미치는 충격으로, <strong>유닛 간에 차이가 없는(Unit-invariant)</strong> 요인입니다.</li>
+<li>e.g.&nbsp;거시경제적 쇼크, 팬데믹</li>
+</ul></li>
+<li>SDiD의 핵심 동기는 기존의 방법론들이 이 <img src="https://latex.codecogs.com/png.latex?%5Calpha_i">와 <img src="https://latex.codecogs.com/png.latex?%5Cbeta_t">를 다루는 방식에서 각각 장단점이 뚜렷하다는 점에 착안합니다.</li>
+</ul>
 <hr>
-</section>
 </section>
 <section id="synthetic-difference-in-differences-sdid" class="level1">
 <h1>3. Synthetic Difference-in-Differences (SDiD)</h1>
-<p>SDiD는 SCM처럼 처치 이전(pre-treatment) 추세를 맞추기 위해 재가중(reweighting)을 수행하면서도, DiD처럼 유닛 수준의 레벨 차이(additive unit-level shifts)에 불변(invariant)하도록 설계되었습니다.</p>
+<ul>
+<li>SDiD는 SCM처럼 처치 이전(pre-treatment) 추세를 맞추기 위해 재가중(reweighting)을 수행하면서도, DiD처럼 유닛 수준의 레벨 차이(additive unit-level shifts)에 불변(invariant)하도록 설계되었습니다.</li>
+</ul>
 <section id="setting-notation" class="level2">
 <h2 class="anchored" data-anchor-id="setting-notation">3.1. Setting &amp; Notation</h2>
 <ul>
-<li><img src="https://latex.codecogs.com/png.latex?N">개의 유닛과 <img src="https://latex.codecogs.com/png.latex?T">개의 시간(periods)으로 구성된 균형 패널(Balanced Panel)을 가정합니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?Y_%7Bit%7D">: 유닛 <img src="https://latex.codecogs.com/png.latex?i">, 시간 <img src="https://latex.codecogs.com/png.latex?t">에서의 결과 변수</li>
-<li><img src="https://latex.codecogs.com/png.latex?X_%7Bit%7D%20%5Cin%20%5C%7B0,%201%5C%7D">: 이진 처치 여부</li>
-<li><strong>Control Units:</strong> <img src="https://latex.codecogs.com/png.latex?i%20=%201,%20%5Cdots,%20N_%7Bco%7D"> (처치를 받지 않음)</li>
-<li><strong>Treated Units:</strong> <img src="https://latex.codecogs.com/png.latex?i%20=%20N_%7Bco%7D%20+%201,%20%5Cdots,%20N"> (시간 <img src="https://latex.codecogs.com/png.latex?T_%7Bpre%7D"> 이후 처치 받음)
+<li>SDiD 모델을 이해하기 위한 기본적인 데이터 구조와 파라미터 정의는 다음과 같습니다.</li>
+</ul>
+<section id="data-structure" class="level3">
+<h3 class="anchored" data-anchor-id="data-structure">Data Structure</h3>
 <ul>
+<li><strong>Balanced Panel:</strong> <img src="https://latex.codecogs.com/png.latex?N">개의 유닛과 <img src="https://latex.codecogs.com/png.latex?T">개의 시간(periods)으로 구성된 균형 패널 데이터를 가정합니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?Y_%7Bit%7D">: 유닛 <img src="https://latex.codecogs.com/png.latex?i">, 시간 <img src="https://latex.codecogs.com/png.latex?t">에서의 결과 변수(Outcome).</li>
+<li><img src="https://latex.codecogs.com/png.latex?X_%7Bit%7D%20%5Cin%20%5C%7B0,%201%5C%7D">: 이진 처치 여부(Binary treatment indicator).</li>
+<li><strong>Units Breakdown:</strong>
+<ul>
+<li><strong>Control Units (<img src="https://latex.codecogs.com/png.latex?N_%7Bco%7D">):</strong> <img src="https://latex.codecogs.com/png.latex?i%20=%201,%20%5Cdots,%20N_%7Bco%7D"> (처치를 전혀 받지 않음).</li>
+<li><strong>Treated Units (<img src="https://latex.codecogs.com/png.latex?N_%7Btr%7D">):</strong> <img src="https://latex.codecogs.com/png.latex?i%20=%20N_%7Bco%7D%20+%201,%20%5Cdots,%20N"> (시간 <img src="https://latex.codecogs.com/png.latex?T_%7Bpre%7D"> 이후 처치를 받음).</li>
 <li><img src="https://latex.codecogs.com/png.latex?N_%7Btr%7D%20=%20N%20-%20N_%7Bco%7D"></li>
 </ul></li>
 </ul>
 </section>
+<section id="model-parameters-fixed-effects" class="level3">
+<h3 class="anchored" data-anchor-id="model-parameters-fixed-effects">Model Parameters (Fixed Effects)</h3>
+<ul>
+<li>기존 DiD와 마찬가지로 Two-Way Fixed Effects(TWFE) 구조를 기반으로 합니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cmu">: <strong>Global Intercept (전체 절편)</strong>.
+<ul>
+<li>모든 유닛과 시점에 공통적으로 적용되는 기저 수준(Base level)입니다.</li>
+</ul></li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Calpha_i">: <strong>Unit Fixed Effects (유닛 고정 효과)</strong>.
+<ul>
+<li>유닛 <img src="https://latex.codecogs.com/png.latex?i">가 가진 고유한 특성으로, <strong>시간에 따라 변하지 않는(Time-invariant)</strong> 이질성을 포착합니다.</li>
+</ul></li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cbeta_t">: <strong>Time Fixed Effects (시간 고정 효과)</strong>.
+<ul>
+<li>특정 시점 <img src="https://latex.codecogs.com/png.latex?t">에 모든 유닛에게 공통적으로 영향을 미치는 충격으로, <strong>유닛 간에 차이가 없는(Unit-invariant)</strong> 요인입니다.</li>
+</ul></li>
+</ul></li>
+</ul>
+</section>
+<section id="sdid-weights" class="level3">
+<h3 class="anchored" data-anchor-id="sdid-weights">SDiD Weights</h3>
+<ul>
+<li>SDiD는 위 파라미터를 추정하기 전에, 데이터의 균형을 맞추기 위한 두 가지 가중치를 먼저 계산합니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Comega_i">: <strong>Unit Weights (유닛 가중치)</strong>.
+<ul>
+<li>처치군의 <strong>추세(Trend)</strong>와 유사한 대조군을 합성하기 위해 대조 유닛들에 부여하는 가중치입니다.</li>
+</ul></li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Clambda_t">: <strong>Time Weights (시간 가중치)</strong>.
+<ul>
+<li>처치 이전 기간(Pre-treatment) 중, 처치 이후 기간(Post-treatment)과 유사한 시점을 강조하기 위해 부여하는 가중치입니다.</li>
+</ul></li>
+</ul></li>
+</ul>
+</section>
+</section>
 <section id="formulations-comparison" class="level2">
 <h2 class="anchored" data-anchor-id="formulations-comparison">3.2. Formulations Comparison</h2>
-<p>세 가지 추정량(Estimator)은 <strong>최적화 문제(Minimization Problem)</strong>로 정식화하여 비교할 때 그 차이가 명확해집니다. 우리는 평균 인과 효과 <img src="https://latex.codecogs.com/png.latex?%5Ctau">를 추정하고자 합니다.</p>
+<ul>
+<li>세 가지 추정량(Estimator)은 <strong>최적화 문제(Minimization Problem)</strong>로 정식화하여 비교할 때 그 차이가 명확해집니다.</li>
+<li>우리는 평균 인과 효과 <img src="https://latex.codecogs.com/png.latex?%5Ctau">를 추정하고자 합니다.</li>
+</ul>
 <section id="did-estimator" class="level3">
 <h3 class="anchored" data-anchor-id="did-estimator">(1) DiD Estimator</h3>
-<p>DiD는 가중치 없이 Two-way Fixed Effects(TWFE) 회귀를 수행하는 것과 같습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7B%5Ctau%7D%5E%7BDiD%7D%20=%20%5Cunderset%7B%5Calpha,%20%5Cbeta,%20%5Cmu,%20%5Ctau%7D%7B%5Carg%20%5Cmin%7D%20%5Cleft%5C%7B%20%5Csum_%7Bi=1%7D%5E%7BN%7D%5Csum_%7Bt=1%7D%5E%7BT%7D%20(Y_%7Bit%7D%20-%20%5Cmu%20-%20%5Calpha_i%20-%20%5Cbeta_t%20-%20%5Ctau%20X_%7Bit%7D)%5E2%20%5Cright%5C%7D%0A"></p>
 <ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Calpha_i">: Unit fixed effects</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cbeta_t">: Time fixed effects</li>
-<li>가중치 없음 (모든 관측치가 동일하게 기여)</li>
+<li><p>DiD는 <strong>평행 추세 가정(Parallel Trends Assumption)</strong>에 기반하여 인과 효과를 추정하며, 수식적으로 <strong>Unit Fixed Effect (<img src="https://latex.codecogs.com/png.latex?%5Calpha_i">)를 허용</strong>합니다.</p></li>
+<li><p><strong>Mechanism</strong></p>
+<ul>
+<li>처치군과 대조군 사이에 레벨(Level) 차이가 있더라도, 그 차이가 시불변(<img src="https://latex.codecogs.com/png.latex?%5Calpha_%7Btr%7D%20%5Cneq%20%5Calpha_%7Bco%7D">)한다면, 변화량의 차이(Difference-in-Differences)를 구하는 과정에서 <img src="https://latex.codecogs.com/png.latex?%5Calpha_i">가 상쇄되어 사라집니다.</li>
+</ul></li>
+<li><p><strong>Formulation</strong></p>
+<ul>
+<li>회귀분석 관점에서 DiD는 <strong>가중치 없이(unweighted)</strong> TWFE 문제를 푸는 것과 같습니다. <img src="https://latex.codecogs.com/png.latex?%0A%20%20%5Chat%7B%5Ctau%7D%5E%7BDiD%7D%20=%20%5Cunderset%7B%5Calpha,%20%5Cbeta,%20%5Cmu,%20%5Ctau%7D%7B%5Carg%20%5Cmin%7D%20%5Cleft%5C%7B%20%5Csum_%7Bi=1%7D%5E%7BN%7D%5Csum_%7Bt=1%7D%5E%7BT%7D%20(Y_%7Bit%7D%20-%20%5Cmu%20-%20%5Calpha_i%20-%20%5Cbeta_t%20-%20%5Ctau%20X_%7Bit%7D)%5E2%20%5Cright%5C%7D%0A%20%20"></li>
+</ul></li>
+<li><p><strong>Limitation</strong></p>
+<ul>
+<li>모든 대조군 유닛에 동일한 가중치(<img src="https://latex.codecogs.com/png.latex?1/N_%7Bco%7D">)를 부여합니다.</li>
+<li>따라서 평행 추세 가정이 위배되는(추세가 다른) 유닛들이 대조군에 섞여 있을 경우 편향(Bias)이 발생할 수 있습니다.</li>
+</ul></li>
 </ul>
 </section>
 <section id="scm-estimator" class="level3">
 <h3 class="anchored" data-anchor-id="scm-estimator">(2) SCM Estimator</h3>
-<p>SCM은 유닛 가중치 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Comega%7D_i">를 사용하지만, 유닛 고정 효과(<img src="https://latex.codecogs.com/png.latex?%5Calpha_i">)가 빠져 있습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7B%5Ctau%7D%5E%7BSCM%7D%20=%20%5Cunderset%7B%5Cbeta,%20%5Cmu,%20%5Ctau%7D%7B%5Carg%20%5Cmin%7D%20%5Cleft%5C%7B%20%5Csum_%7Bi=1%7D%5E%7BN%7D%5Csum_%7Bt=1%7D%5E%7BT%7D%20(Y_%7Bit%7D%20-%20%5Cmu%20-%20%5Cbeta_t%20-%20%5Ctau%20X_%7Bit%7D)%5E2%20%5Ccdot%20%5Chat%7B%5Comega%7D_i%20%5Cright%5C%7D%0A"></p>
+<ul>
+<li><p>SCM은 처치 유닛과 가장 유사한 가상의 대조군(Synthetic Control)을 만들기 위해 대조군 유닛들에 <strong>가중치(Unit weights, <img src="https://latex.codecogs.com/png.latex?%5Comega_i">)</strong>를 부여합니다.</p></li>
+<li><p><strong>Mechanism</strong></p>
+<ul>
+<li>SCM은 처치 이전 기간의 결과 변수(<img src="https://latex.codecogs.com/png.latex?Y">)의 <strong>경로(Path)와 레벨(Level)</strong>을 모두 맞추려고 시도합니다.</li>
+<li>즉, 추세뿐만 아니라 절대적인 수치까지 일치시키려 합니다.</li>
+</ul></li>
+<li><p><strong>Formulation</strong></p>
+<ul>
+<li>전통적인 SCM 추정식은 시간 고정 효과(<img src="https://latex.codecogs.com/png.latex?%5Cbeta_t">)는 포함하지만, <strong>Unit Fixed Effect (<img src="https://latex.codecogs.com/png.latex?%5Calpha_i">)와 전체 절편(Intercept)을 제외</strong>합니다. <img src="https://latex.codecogs.com/png.latex?%0A%20%20%5Chat%7B%5Ctau%7D%5E%7BSCM%7D%20=%20%5Cunderset%7B%5Cbeta,%20%5Cmu,%20%5Ctau%7D%7B%5Carg%20%5Cmin%7D%20%5Cleft%5C%7B%20%5Csum_%7Bi=1%7D%5E%7BN%7D%5Csum_%7Bt=1%7D%5E%7BT%7D%20(Y_%7Bit%7D%20-%20%5Cmu%20-%20%5Cbeta_t%20-%20%5Ctau%20X_%7Bit%7D)%5E2%20%5Ccdot%20%5Chat%7B%5Comega%7D_i%20%5Cright%5C%7D%0A%20%20"></li>
+</ul></li>
+<li><p><strong>Limitation</strong></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Calpha_i">를 모델에 포함하지 않기 때문에, SCM은 처치군과 대조군 간의 레벨 차이(Intercept shift)를 허용하지 않습니다.</li>
+<li>즉, <strong>“평행 이동”을 허용하지 않고 절대적인 수치까지 맞춰야 하므로</strong>, 완벽하게 일치하는 대조군을 찾지 못하면(Interpolation bias) 추정 성능이 떨어질 수 있습니다.</li>
+</ul></li>
+</ul>
 </section>
 <section id="sdid-estimator" class="level3">
 <h3 class="anchored" data-anchor-id="sdid-estimator">(3) SDiD Estimator</h3>
-<p>SDiD는 <strong>유닛 가중치 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Comega%7D_i"></strong>와 <strong>시간 가중치 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Clambda%7D_t"></strong>를 모두 사용하며, <strong>유닛 및 시간 고정 효과(<img src="https://latex.codecogs.com/png.latex?%5Calpha_i,%20%5Cbeta_t">)</strong>를 모두 포함합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7B%5Ctau%7D%5E%7BSDiD%7D%20=%20%5Cunderset%7B%5Calpha,%20%5Cbeta,%20%5Cmu,%20%5Ctau%7D%7B%5Carg%20%5Cmin%7D%20%5Cleft%5C%7B%20%5Csum_%7Bi=1%7D%5E%7BN%7D%5Csum_%7Bt=1%7D%5E%7BT%7D%20(Y_%7Bit%7D%20-%20%5Cmu%20-%20%5Calpha_i%20-%20%5Cbeta_t%20-%20%5Ctau%20X_%7Bit%7D)%5E2%20%5Ccdot%20%5Chat%7B%5Comega%7D_i%20%5Ccdot%20%5Chat%7B%5Clambda%7D_t%20%5Cright%5C%7D%0A"></p>
-<p>이 수식에서 SDiD의 핵심 철학이 드러납니다: 1. <strong>Local Regression:</strong> 가중치(<img src="https://latex.codecogs.com/png.latex?%5Comega,%20%5Clambda">)를 통해 처치군과 유사한 대조군, 처치 시점과 유사한 시점을 강조합니다. 2. <strong>Robustness:</strong> 고정 효과(<img src="https://latex.codecogs.com/png.latex?%5Calpha,%20%5Cbeta">)를 통해 시스템적인 차이를 제거합니다.</p>
+<ul>
+<li><p>SDiD는 <strong>유닛 가중치 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Comega%7D_i"></strong>와 <strong>시간 가중치 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Clambda%7D_t"></strong>를 모두 사용하며, 동시에 <strong>유닛 및 시간 고정 효과(<img src="https://latex.codecogs.com/png.latex?%5Calpha_i,%20%5Cbeta_t">)</strong>를 모두 포함합니다.</p></li>
+<li><p><strong>Mechanism</strong></p>
+<ul>
+<li><strong>Local Regression:</strong> 가중치(<img src="https://latex.codecogs.com/png.latex?%5Comega,%20%5Clambda">)를 통해 처치군과 유사한 대조군, 처치 시점과 유사한 시점을 강조합니다.</li>
+<li><strong>Robustness:</strong> 고정 효과(<img src="https://latex.codecogs.com/png.latex?%5Calpha,%20%5Cbeta">)를 통해 가중치로 설명되지 않는 시스템적인 차이(Systematic differences)를 제거합니다.</li>
+</ul></li>
+<li><p><strong>Formulation</strong></p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%20%20%5Chat%7B%5Ctau%7D%5E%7BSDiD%7D%20=%20%5Cunderset%7B%5Calpha,%20%5Cbeta,%20%5Cmu,%20%5Ctau%7D%7B%5Carg%20%5Cmin%7D%20%5Cleft%5C%7B%20%5Csum_%7Bi=1%7D%5E%7BN%7D%5Csum_%7Bt=1%7D%5E%7BT%7D%20(Y_%7Bit%7D%20-%20%5Cmu%20-%20%5Calpha_i%20-%20%5Cbeta_t%20-%20%5Ctau%20X_%7Bit%7D)%5E2%20%5Ccdot%20%5Chat%7B%5Comega%7D_i%20%5Ccdot%20%5Chat%7B%5Clambda%7D_t%20%5Cright%5C%7D%0A%20%20"></p></li>
+<li><p><strong>Key Advantage</strong></p>
+<ul>
+<li>SCM의 유연성(Flexibility)과 DiD의 강건성(Robustness)을 결합하여, 레벨이 달라도 추세가 유사한 유닛들을 효과적으로 매칭하고 편향을 줄입니다.</li>
+</ul></li>
+</ul>
 <hr>
 </section>
+</section>
+<section id="summary-comparison-of-methodologies" class="level2">
+<h2 class="anchored" data-anchor-id="summary-comparison-of-methodologies">Summary: Comparison of Methodologies</h2>
+<ul>
+<li>아래 표는 DiD, SCM, 그리고 SDiD가 고정 효과(Fixed Effect)와 가중치(Weights)를 다루는 방식의 핵심적인 차이를 요약합니다.</li>
+</ul>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">구분</th>
+<th style="text-align: left;"><strong>DiD</strong></th>
+<th style="text-align: left;"><strong>SCM</strong></th>
+<th style="text-align: left;"><strong>SDiD</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>Unit Fixed Effect (<img src="https://latex.codecogs.com/png.latex?%5Calpha_i">)</strong></td>
+<td style="text-align: left;"><strong>포함 (Included)</strong><br>레벨 차이(Intercept) 허용</td>
+<td style="text-align: left;"><strong>미포함 (Excluded)</strong><br>절편 허용 안 함</td>
+<td style="text-align: left;"><strong>포함 (Included)</strong><br>레벨 차이(Intercept) 허용</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>가중치 (Weights)</strong></td>
+<td style="text-align: left;"><strong>없음 (Unweighted)</strong><br>모든 대조군 동일 가중치</td>
+<td style="text-align: left;"><strong>Unit Weights (<img src="https://latex.codecogs.com/png.latex?%5Comega_i">)</strong><br>유사한 유닛에 가중치 부여</td>
+<td style="text-align: left;"><strong>Unit(<img src="https://latex.codecogs.com/png.latex?%5Comega_i">) + Time(<img src="https://latex.codecogs.com/png.latex?%5Clambda_t">)</strong><br>유사한 유닛 및 시점 강조</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>매칭 조건 (Matching)</strong></td>
+<td style="text-align: left;"><strong>추세 (Trend)</strong>만 평행하면 됨</td>
+<td style="text-align: left;"><strong>레벨 (Level)</strong>까지 정확히 일치해야 함</td>
+<td style="text-align: left;"><strong>추세 (Trend)</strong>만 평행하면 됨</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>장점과 한계</strong></td>
+<td style="text-align: left;"><img src="https://latex.codecogs.com/png.latex?%5Calpha_i">를 허용하지만,<br>가중치가 없어 유연성 부족</td>
+<td style="text-align: left;">가중치로 유연하게 맞추지만,<br>레벨까지 맞춰야 하는 제약 존재</td>
+<td style="text-align: left;"><strong>SCM의 유연성(가중치)</strong>과<br><strong>DiD의 강건성(FE)</strong>을 결합</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>결론적으로 <strong>SDiD</strong>는 SCM처럼 가중치를 사용하여 데이터에 유연하게 적합(Fit)시키면서도, DiD처럼 유닛 고정 효과를 도입하여 레벨이 아닌 <strong>추세(Trend)만 맞추면 되도록</strong> 설계된, 두 방법론의 장점을 결합한 접근법입니다.</li>
+</ul>
+<hr>
 </section>
 </section>
 <section id="sdid-algorithm-description" class="level1">
 <h1>4. SDiD Algorithm Description</h1>
-<p>SDiD 알고리즘은 크게 세 단계로 구성됩니다: <strong>(1) 유닛 가중치 계산</strong>, <strong>(2) 시간 가중치 계산</strong>, <strong>(3) 가중 회귀 분석</strong>.</p>
+<ul>
+<li>SDiD 알고리즘은 크게 세 단계로 구성됩니다: <strong>(1) 유닛 가중치 계산</strong>, <strong>(2) 시간 가중치 계산</strong>, <strong>(3) 가중 회귀 분석</strong>.</li>
+</ul>
 <section id="step-1-compute-unit-weights-hatomega_i" class="level2">
 <h2 class="anchored" data-anchor-id="step-1-compute-unit-weights-hatomega_i">Step 1: Compute Unit Weights (<img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Comega%7D_i">)</h2>
-<p>처치 이전 기간(<img src="https://latex.codecogs.com/png.latex?T_%7Bpre%7D">) 동안, 대조군들의 가중 합이 처치군의 평균 추세를 따르도록 만듭니다.</p>
+<ul>
+<li>처치 이전 기간(<img src="https://latex.codecogs.com/png.latex?T_%7Bpre%7D">) 동안, 대조군들의 가중 합이 처치군의 평균 추세를 따르도록 만듭니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7B%5Comega%7D%20=%20%5Cunderset%7B%5Comega_0,%20%5Comega_%7Bco%7D%7D%7B%5Carg%20%5Cmin%7D%20%5Cleft(%20%7C%7C%20%5Coverline%7By%7D_%7Bpre,%20tr%7D%20-%20(%5Comega_0%20+%20%5Comega_%7Bco%7D%20Y_%7Bpre,%20co%7D)%20%7C%7C_2%5E2%20+%20%5Czeta%5E2%20T_%7Bpre%7D%20%7C%7C%5Comega_%7Bco%7D%7C%7C_2%5E2%20%5Cright)%0A"></p>
-<p>여기서: * <img src="https://latex.codecogs.com/png.latex?%5Coverline%7By%7D_%7Bpre,%20tr%7D">: 처치군들의 처치 이전 평균 추세 (벡터) * <img src="https://latex.codecogs.com/png.latex?Y_%7Bpre,%20co%7D">: 대조군들의 처치 이전 데이터 행렬 (<img src="https://latex.codecogs.com/png.latex?T_%7Bpre%7D%20%5Ctimes%20N_%7Bco%7D">) * <strong><img src="https://latex.codecogs.com/png.latex?%5Comega_0"> (Intercept):</strong> SDiD의 결정적 차이점입니다. SCM과 달리 절편을 허용합니다. 즉, <strong>레벨(Level)을 맞출 필요 없이 추세(Trend)만 평행하게 맞추면 됩니다.</strong> * <strong><img src="https://latex.codecogs.com/png.latex?L_2"> Regularization (<img src="https://latex.codecogs.com/png.latex?%5Czeta">):</strong> Ridge penalty를 사용하여 가중치가 특정 유닛에 쏠리는 것을 방지하고(dispersed weights), 대조군 전체에 고르게 분포되도록 합니다.</p>
+<ul>
+<li>여기서:
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Coverline%7By%7D_%7Bpre,%20tr%7D">: 처치군들의 처치 이전 평균 추세 (벡터)</li>
+<li><img src="https://latex.codecogs.com/png.latex?Y_%7Bpre,%20co%7D">: 대조군들의 처치 이전 데이터 행렬 (<img src="https://latex.codecogs.com/png.latex?T_%7Bpre%7D%20%5Ctimes%20N_%7Bco%7D">)</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?%5Comega_0"> (Intercept):</strong> SDiD의 결정적 차이점입니다. SCM과 달리 절편을 허용합니다. 즉, <strong>레벨(Level)을 맞출 필요 없이 추세(Trend)만 평행하게 맞추면 됩니다.</strong></li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?L_2"> Regularization (<img src="https://latex.codecogs.com/png.latex?%5Czeta">):</strong> Ridge penalty를 사용하여 가중치가 특정 유닛에 쏠리는 것을 방지하고(dispersed weights), 대조군 전체에 고르게 분포되도록 합니다.</li>
+</ul></li>
+</ul>
 <section id="regularization-parameter-zeta" class="level3">
 <h3 class="anchored" data-anchor-id="regularization-parameter-zeta">Regularization Parameter <img src="https://latex.codecogs.com/png.latex?%5Czeta"></h3>
-<p>정규화 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Czeta">는 데이터의 변동성에 기반하여 다음과 같이 결정됩니다.</p>
+<ul>
+<li>정규화 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Czeta">는 데이터의 변동성에 기반하여 다음과 같이 결정됩니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A%5Czeta%20=%20(N_%7Btr%7D%20%5Ccdot%20T_%7Bpost%7D)%5E%7B1/4%7D%20%5Chat%7B%5Csigma%7D(%5CDelta_%7Bit%7D)%0A"></p>
-<p>이때 <img src="https://latex.codecogs.com/png.latex?%5CDelta_%7Bit%7D">는 결과 변수의 1차 차분(first difference, <img src="https://latex.codecogs.com/png.latex?Y_%7Bit%7D%20-%20Y_%7Bi(t-1)%7D">)이며, <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Csigma%7D">는 이 차분 값들의 표준편차입니다. 이는 시계열적 변동성이 클수록 페널티를 강하게 주어 과적합을 막겠다는 의도입니다.</p>
+<ul>
+<li>이때 <img src="https://latex.codecogs.com/png.latex?%5CDelta_%7Bit%7D">는 결과 변수의 1차 차분(first difference, <img src="https://latex.codecogs.com/png.latex?Y_%7Bit%7D%20-%20Y_%7Bi(t-1)%7D">)이며, <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Csigma%7D">는 이 차분 값들의 표준편차입니다.</li>
+<li>이는 시계열적 변동성이 클수록 페널티를 강하게 주어 과적합을 막겠다는 의도입니다.</li>
+</ul>
 </section>
 </section>
 <section id="step-2-compute-time-weights-hatlambda_t" class="level2">
 <h2 class="anchored" data-anchor-id="step-2-compute-time-weights-hatlambda_t">Step 2: Compute Time Weights (<img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Clambda%7D_t">)</h2>
-<p>SDiD는 특이하게 <strong>시간 가중치</strong>도 계산합니다. 이는 처치 이전 시점들(<img src="https://latex.codecogs.com/png.latex?1%20%5Cdots%20T_%7Bpre%7D">) 중, 처치 이후 시점(<img src="https://latex.codecogs.com/png.latex?T_%7Bpost%7D">)과 유사한 시점에 더 큰 가중치를 부여하기 위함입니다.</p>
+<ul>
+<li>SDiD는 <strong>시간 가중치</strong>도 계산합니다.</li>
+<li><ul>
+<li>이는 처치 이전 시점들(<img src="https://latex.codecogs.com/png.latex?1%20%5Cdots%20T_%7Bpre%7D">) 중, 처치 이후 시점(<img src="https://latex.codecogs.com/png.latex?T_%7Bpost%7D">)과 유사한 시점에 더 큰 가중치를 부여하기 위함입니다.</li>
+</ul></li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7B%5Clambda%7D%20=%20%5Cunderset%7B%5Clambda_0,%20%5Clambda_%7Bpre%7D%7D%7B%5Carg%20%5Cmin%7D%20%7C%7C%20%5Coverline%7By%7D_%7Bpost,%20co%7D%20-%20(%5Clambda_0%20+%20%5Clambda_%7Bpre%7D%20Y_%7Bpre,%20co%7D)%20%7C%7C_2%5E2%0A"></p>
 <ul>
 <li><img src="https://latex.codecogs.com/png.latex?%5Coverline%7By%7D_%7Bpost,%20co%7D">: 대조군의 처치 이후 평균 (스칼라 혹은 벡터)</li>
@@ -116,9 +291,13 @@
 </section>
 <section id="step-3-weighted-did-regression" class="level2">
 <h2 class="anchored" data-anchor-id="step-3-weighted-did-regression">Step 3: Weighted DiD Regression</h2>
-<p>구해진 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Comega%7D_i">와 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Clambda%7D_t">를 사용하여 최종적으로 가중 이원 고정 효과(Weighted TWFE) 회귀를 수행합니다.</p>
+<ul>
+<li>구해진 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Comega%7D_i">와 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Clambda%7D_t">를 사용하여 최종적으로 가중 이원 고정 효과(Weighted TWFE) 회귀를 수행합니다.</li>
+</ul>
 <p><img src="https://latex.codecogs.com/png.latex?%0A(%5Chat%7B%5Ctau%7D%5E%7BSDiD%7D,%20%5Chat%7B%5Cmu%7D,%20%5Chat%7B%5Calpha%7D,%20%5Chat%7B%5Cbeta%7D)%20=%20%5Cunderset%7B%5Ctau,%20%5Cmu,%20%5Calpha,%20%5Cbeta%7D%7B%5Carg%20%5Cmin%7D%20%5Cleft%5C%7B%20%5Csum_%7Bi=1%7D%5E%7BN%7D%5Csum_%7Bt=1%7D%5E%7BT%7D%20(Y_%7Bit%7D%20-%20%5Cmu%20-%20%5Calpha_i%20-%20%5Cbeta_t%20-%20%5Ctau%20X_%7Bit%7D)%5E2%20%5Chat%7B%5Comega%7D_i%20%5Chat%7B%5Clambda%7D_t%20%5Cright%5C%7D%0A"></p>
-<p>이 회귀분석의 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Ctau%7D"> 값이 바로 SDiD가 추정한 인과 효과입니다.</p>
+<ul>
+<li>이 회귀분석의 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Ctau%7D"> 값이 바로 SDiD가 추정한 인과 효과입니다.</li>
+</ul>
 <hr>
 </section>
 </section>
@@ -149,38 +328,9 @@
 <li><strong>Time Weights:</strong> DiD나 SCM에는 없는 <strong>시간 가중치(<img src="https://latex.codecogs.com/png.latex?%5Clambda_t">)</strong>를 도입하여, 처치 전후 기간의 구조적 차이에서 오는 편향을 보정합니다.</li>
 <li><strong>Efficiency:</strong> 유닛/시간 고정 효과와 가중치를 동시에 활용함으로써 추정량의 분산을 줄이고 인과 효과 추정의 신뢰도를 높입니다.</li>
 </ol>
-<hr>
-<section id="작성-검증-체크리스트" class="level3">
-<h3 class="anchored" data-anchor-id="작성-검증-체크리스트">[작성 검증 체크리스트]</h3>
-<ul>
-<li><strong>1. 개념 포함 여부:</strong>
-<ul class="task-list">
-<li><label><input type="checkbox" checked="">DiD, SCM, SDiD의 개념적 차이 및 비교 (Slides 3-5, 14-15)</label></li>
-<li><label><input type="checkbox" checked="">평행 추세 가정 및 Unit/Time Fixed Effect 설명 (Slides 3, 15)</label></li>
-<li><label><input type="checkbox" checked="">SDiD의 핵심 아이디어 (Reweighting + Fixed Effects) (Slide 5)</label></li>
-</ul></li>
-<li><strong>2. 수식 정확성:</strong>
-<ul class="task-list">
-<li><label><input type="checkbox" checked="">세 가지 Estimator (DiD, SCM, SDiD)의 최소화 문제 수식 비교 (Slide 6)</label></li>
-<li><label><input type="checkbox" checked="">Unit Weights <img src="https://latex.codecogs.com/png.latex?%5Comega"> 최적화 식 및 Intercept <img src="https://latex.codecogs.com/png.latex?%5Comega_0"> 포함 (Slide 9)</label></li>
-<li><label><input type="checkbox" checked="">Regularization parameter <img src="https://latex.codecogs.com/png.latex?%5Czeta"> 및 <img src="https://latex.codecogs.com/png.latex?L_2"> penalty 설명 (Slides 10-11)</label></li>
-<li><label><input type="checkbox" checked="">Time Weights <img src="https://latex.codecogs.com/png.latex?%5Clambda"> 최적화 식 (Slide 12)</label></li>
-<li><label><input type="checkbox" checked="">최종 SDiD Estimator 수식 (Slide 8)</label></li>
-</ul></li>
-<li><strong>3. 알고리즘 흐름:</strong>
-<ul class="task-list">
-<li><label><input type="checkbox" checked="">Input <img src="https://latex.codecogs.com/png.latex?%5Cto"> Unit Weights <img src="https://latex.codecogs.com/png.latex?%5Cto"> Time Weights <img src="https://latex.codecogs.com/png.latex?%5Cto"> Regression 순서 서술 (Slide 8)</label></li>
-</ul></li>
-<li><strong>4. 누락 확인:</strong>
-<ul>
-<li>강의 자료의 모든 슬라이드(1~17) 내용을 반영함.</li>
-<li>참고문헌(Arkhangelsky et al., 2021) 언급 완료.</li>
-</ul></li>
-</ul>
 
 
 
-</section>
 </section>
 
  ]]></description>

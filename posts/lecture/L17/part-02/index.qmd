@@ -107,8 +107,8 @@ $$P(y|x, do(z)) = \frac{P(x,y|do(z))}{P(x|do(z))}$$
 $$
 \begin{aligned}
 P(y|do(x)) &= \sum_{w} P(y|do(x), w) P(w|do(x)) \quad \text{(Law of Total Probability)} \\
-&= \sum_{w} P(y|do(x), do(w)) P(w|do(x)) \quad \text{(Composition Rule)} \\
-&= \sum_{w} \underbrace{P(y|do(w))}_{Q[Y]} \underbrace{P(w|do(x))}_{Q[W]} \quad \text{(Rule 3: Deletion of } do(x) \text{)}
+&= \sum_{w} P(y|do(x), do(w)) P(w|do(x)) \quad \text{(Rule 2: Action/Observation Exchange of W)} \\
+&= \sum_{w} \underbrace{P(y|do(w))}_{Q[Y]} \underbrace{P(w|do(x))}_{Q[W]} \quad \text{(Rule 3: Removing Action of } X \text{)}
 \end{aligned}
 $$
 
@@ -126,10 +126,10 @@ $$
 $$
 \begin{aligned}
 Q[Y] &= P(y|do(w)) \\
-&= P(y|do(w, z)) \quad \text{(Rule 3: Exclusion of } Z \text{)} \\
-&= \sum_{x} P(y|do(w, z), x) P(x|do(w, z)) \quad \text{(Conditioning on } X \text{)} \\
-&= \sum_{x} P(y|do(w, z), x) P(x|do(z)) \quad \text{(Rule 3: } W \text{ does not affect } X \text{)} \\
-&= \sum_{x} \underbrace{P(y|do(z), w, x)}_{\text{Available in Data}} \underbrace{P(x|do(z))}_{\text{Available in Data}} \quad \text{(Rule 2: Exchangeability)}
+&= P(y|do(w, z)) \quad \text{(Rule 3: Adding Action of } Z \text{)} \\
+&= \sum_{x} P(y|do(w, z), x) P(x|do(w, z)) \quad \text{(Law of Total Probability on } X \text{)} \\
+&= \sum_{x} P(y|do(w, z), x) P(x|do(z)) \quad \text{(Rule 3: Removing Action of } W \text{)} \\
+&= \sum_{x} \underbrace{P(y|do(z), w, x)}_{\text{Available in Data}} \underbrace{P(x|do(z))}_{\text{Available in Data}} \quad \text{(Rule 2: Action/Observation Exchange of } W \text{)}
 \end{aligned}
 $$
 
@@ -142,8 +142,8 @@ $$
 $$
 \begin{aligned}
 Q[W] &= P(w|do(x)) \\
-&= P(w|do(x, z)) \quad \text{(Rule 3: Exclusion of } Z \text{)} \\
-&= \underbrace{P(w|do(z), x)}_{\text{Available in Data}} \quad \text{(Rule 2: Exchangeability)}
+&= P(w|do(x, z)) \quad \text{(Rule 3: Adding Action of } Z \text{)} \\
+&= \underbrace{P(w|do(z), x)}_{\text{Available in Data}} \quad \text{(Rule 2: Action/Observation Exchange of } X \text{)}
 \end{aligned}
 $$
 
@@ -156,7 +156,6 @@ $$
 $$
 P(y|do(x)) = \sum_{w} \left[ \left( \sum_{x'} P(y|do(z), w, x')P(x'|do(z)) \right) \times P(w|do(z), x) \right]
 $$
-* (여기서 $x'$는 내부 합의 더미 변수이며, 바깥쪽의 $x$와 구분하기 위해 사용되었습니다.)*
 
 * **결론:** 이처럼 복잡한 인과 그래프에서도 문제를 더 작은 단위(C-component)로 쪼개고, 각 단위를 가용한 실험 데이터($do(z)$)로 환원(Reduce)시킴으로써 인과 효과를 식별해 낼 수 있습니다.
 
@@ -164,9 +163,10 @@ $$
 
 # 4. Example: Drug-Drug Interactions (Combining Experiments)
 
-이 이론의 가장 강력한 응용 사례는 **약물 상호작용(Drug-Drug Interaction)** 분석입니다. 개별 약물 실험 데이터만 있을 때, 두 약물을 동시에 처방했을 때의 효과를 예측할 수 있을까요? [cite: 415-460]
+* 이 이론의 가장 강력한 응용 사례는 **약물 상호작용(Drug-Drug Interaction)** 분석입니다. 
+* 개별 약물 실험 데이터만 있을 때, 두 약물을 동시에 처방했을 때의 효과를 예측할 수 있을까요?
 
-### 4.1. Problem Setup
+## 4.1. Problem Setup
 * **Variables:**
     * $X_1$: 고혈압 치료제 (Anti-hypertensive drug)
     * $X_2$: 당뇨 치료제 (Anti-diabetic drug)
@@ -178,44 +178,47 @@ $$
 * **Target Query:**
     * Joint Intervention: $P(y|do(x_1, x_2))$
 
-![Figure 4: 약물 상호작용 인과 그래프. X1은 B에 영향을 주고, B는 Y에 영향을 준다. X2는 Y에 직접 영향을 준다. X1과 B, X2와 Y, B와 Y 사이에는 교란 요인(점선)이 존재한다. 목표는 X1과 X2를 동시에 개입했을 때 Y의 분포를 구하는 것이다.](./images/drug_interaction_graph.png)
+![Figure 4: 약물 상호작용 인과 그래프. X1은 B에 영향을 주고, B는 Y에 영향을 준다. X2는 Y에 직접 영향을 준다. X1과 B, X2와 Y, X1와 X2 사이에는 교란 요인(점선)이 존재한다. 목표는 X1과 X2를 동시에 개입했을 때 Y의 분포를 구하는 것이다.](./images/drug_interaction_graph.png)
 
-### 4.2. Derivation
-우리는 $P(y|do(x_1, x_2))$를 구해야 합니다. 혈압 $B$가 $X_1$과 $Y$ 사이의 매개체 역할을 한다는 점에 착안하여 식을 전개합니다 [cite: 570-577].
+## 4.2. Derivation
+* 우리는 $P(y|do(x_1, x_2))$를 구해야 합니다. 혈압 $B$가 $X_1$과 $Y$ 사이의 매개체 역할을 한다는 점에 착안하여 식을 전개합니다.
 
 1.  **Total Probability Theorem over B:**
     $$P(y|do(x_1, x_2)) = \sum_{b} P(y|do(x_1, x_2), b) P(b|do(x_1, x_2))$$
 
 2.  **Factor 1: $P(y|do(x_1, x_2), b)$**
-    그래프에서 $X_1$은 $B$로 가는 화살표를 제외하면 $Y$에 직접 영향을 주지 않습니다(Block). 따라서 $X_1$을 조건부에서 제거할 수 있습니다.
+    * 그래프에서 $X_1$은 $B$로 가는 화살표를 제외하면 $Y$에 직접 영향을 주지 않습니다(Block). 
+    * 따라서 $X_1$을 조건부에서 제거할 수 있습니다(Rule 3).
     $$P(y|do(x_1, x_2), b) = P(y|do(x_2), b)$$
-    이 항은 **Study 2 ($do(x_2)$)** 데이터에서 $B$를 관측함으로써 얻을 수 있습니다 ($P_{x_2}(y|b)$).
+    * 이 항은 **Study 2 ($do(x_2)$)** 데이터에서 $B$를 관측함으로써 얻을 수 있습니다 ($P_{x_2}(y|b)$).
 
 3.  **Factor 2: $P(b|do(x_1, x_2))$**
-    그래프에서 $X_2$는 $B$에 영향을 주지 않습니다 ($Y$에만 영향). 따라서 $X_2$를 제거할 수 있습니다.
+    * 그래프에서 $X_2$는 $B$에 영향을 주지 않습니다 ($Y$에만 영향). 
+    * 따라서 $X_2$를 제거할 수 있습니다.
     $$P(b|do(x_1, x_2)) = P(b|do(x_1))$$
-    이 항은 **Study 1 ($do(x_1)$)** 데이터에서 바로 얻을 수 있습니다 ($P_{x_1}(b)$).
+    * 이 항은 **Study 1 ($do(x_1)$)** 데이터에서 바로 얻을 수 있습니다 ($P_{x_1}(b)$).
 
 ### 4.3. Final Formula
 $$
 P(y|do(x_1, x_2)) = \sum_{b} P_{x_1}(b) P_{x_2}(y|b)
 $$
 
-이 결과는 매우 강력합니다. **두 약물을 동시에 사용하는 실험을 한 번도 수행하지 않았음에도**, 개별 약물 실험 데이터를 수학적으로 결합하여 그 효과를 정확히 예측할 수 있기 때문입니다.
+* 이 결과는 매우 강력합니다. 
+* **두 약물을 동시에 사용하는 실험을 한 번도 수행하지 않았음에도**, 개별 약물 실험 데이터를 수학적으로 결합하여 그 효과를 정확히 예측할 수 있기 때문입니다.
 
 ---
 
 # 5. Algorithm for General Identifiability (g-ID)
 
-위의 사례들을 일반화하면 **General Identifiability (g-ID)** 알고리즘을 만들 수 있습니다 [cite: 488-511].
+* 위의 사례들을 일반화하면 **General Identifiability (g-ID)** 알고리즘을 만들 수 있습니다.
 
-### The g-ID Algorithm Flow
+## The g-ID Algorithm Flow
 1.  **Decomposition (분해):**
-    주어진 쿼리 $Q = P_x(y)$를 Causal Graph의 구조(C-components)를 이용하여 더 작은 **Factors (요인들)**의 곱과 합($\sum \prod$)으로 분해합니다.
+    * 주어진 쿼리 $Q = P_x(y)$를 Causal Graph의 구조(C-components)를 이용하여 더 작은 **Factors (요인들)**의 곱과 합($\sum \prod$)으로 분해합니다.
     $$Q = \sum \prod P_{\bullet}(\bullet)$$
 
 2.  **Identification (식별):**
-    분해된 각 Factor가 가용한 데이터 소스 집합 $\mathbb{P} = \{ P(obs), P(do(z_1)), P(do(z_2)), \dots \}$ 중 하나로부터 식별 가능한지 확인합니다.
+    * 분해된 각 Factor가 가용한 데이터 소스 집합 $\mathbb{P} = \{ P(obs), P(do(z_1)), P(do(z_2)), \dots \}$ 중 하나로부터 식별 가능한지 확인합니다.
     
     ![Figure 5: g-ID 알고리즘의 도식화. 쿼리(좌측)가 여러 Factor로 분해되고, 각 Factor가 우측의 가용 데이터 소스(P_z1, P_zm...) 중 하나와 매칭되어 식별되는 과정을 보여준다.](./images/gid_algorithm_flow.png)
 
@@ -223,33 +226,15 @@ $$
     * 만약 모든 Factor가 데이터 소스로부터 식별 가능하다면 $\rightarrow$ **Identifiable**.
     * 하나라도 식별 불가능한 Factor가 남는다면 $\rightarrow$ **Fail**.
 
-### Significance
-이 알고리즘과 Do-calculus는 Experimental Identifiability 문제에 대해 **Completeness(완전성)**를 가집니다. 즉, 이 알고리즘으로 식별할 수 없다면, 그 인과 효과는 주어진 데이터와 그래프 가정하에서는 이론적으로 식별이 불가능한 것입니다[cite: 586].
+## Significance
+* 이 알고리즘과 Do-calculus는 Experimental Identifiability 문제에 대해 **Completeness(완전성)**를 가집니다. 
+* 즉, 이 알고리즘으로 식별할 수 없다면, 그 인과 효과는 주어진 데이터와 그래프 가정하에서는 이론적으로 식별이 불가능한 것입니다.
 
 ---
 
 # 6. Conclusion
 
-이번 포스트에서는 Causal Data Science의 첫 번째 차원인 **Experimental Conditions**를 다루었습니다.
-
-* **z-ID:** 직접 실험할 수 없는 변수의 효과를 대리 실험($Z$)을 통해 식별하는 방법.
-* **Data Fusion:** 서로 다른 실험 데이터($do(x_1), do(x_2)$)를 결합하여 새로운 인과 효과를 추론하는 메커니즘.
-* **g-ID Algorithm:** 이를 일반화하여 복잡한 쿼리를 분해하고 가용 데이터와 매핑하는 체계적인 방법론.
-
-다음 포스트에서는 두 번째 차원인 **Environmental Conditions (Transportability)**, 즉 한 집단(예: 쥐, LA)에서 얻은 결과를 다른 집단(예: 인간, NY)으로 일반화하는 방법에 대해 다루겠습니다.
-
----
-### **Appendix: Verification Checklist**
-
-* **포함된 내용:**
-    * [x] Experimental Conditions (General Identifiability)의 정의 및 필요성
-    * [x] Diet-Cholesterol-Heart Attack 예시를 통한 z-ID 모티베이션
-    * [x] z-ID 식별 공식 및 유도 ($P(y|x, do(z))$)
-    * [x] 복잡한 그래프에서의 수식 유도 (Subtleties, c-component factorization 논리)
-    * [x] Drug-Drug Interaction 예시와 단계별 수식 유도 (Joint intervention)
-    * [x] g-ID 알고리즘의 2단계 구조 (Decomposition -> Identification)
-    * [x] Do-calculus의 Completeness 언급
-    * [x] 모든 주요 수식의 LaTeX 구현 및 Figure Placeholder
-
-* **생략된 내용:**
-    * "Missing Data" 및 "Selection Bias"에 대한 상세 내용은 PDF의 Overview(Slide 1)와 결론부(Slide 21 이후)에만 짧게 언급되어 있고, 본문 슬라이드(Slide 2-20)는 Experimental Identifiability에 집중되어 있어, 이번 포스트도 g-ID에 집중하여 작성함.
+* 이번 포스트에서는 Causal Data Science의 첫 번째 차원인 **Experimental Conditions**를 다루었습니다.
+  * **z-ID:** 직접 실험할 수 없는 변수의 효과를 대리 실험($Z$)을 통해 식별하는 방법.
+  * **Data Fusion:** 서로 다른 실험 데이터($do(x_1), do(x_2)$)를 결합하여 새로운 인과 효과를 추론하는 메커니즘.
+  * **g-ID Algorithm:** 이를 일반화하여 복잡한 쿼리를 분해하고 가용 데이터와 매핑하는 체계적인 방법론.

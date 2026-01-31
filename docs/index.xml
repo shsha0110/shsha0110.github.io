@@ -10,7 +10,1540 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>A blog built with Quarto</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Thu, 29 Jan 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Fri, 30 Jan 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>[Paper Review] DAG-GNN: Experiments and Conclusion</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/paper/DAG-GNN: DAG Structure Learning with Graph Neural Networks/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-the-challenge-of-structure-learning" class="level1">
+<h1>1. Introduction: The Challenge of Structure Learning</h1>
+<ul>
+<li><p>인과추론(Causal Inference)과 머신러닝의 교차점에서, 데이터의 생성 과정을 설명하는 <strong>방향성 비순환 그래프(Directed Acyclic Graph, DAG)</strong>를 학습하는 것은 매우 중요한 문제입니다. 이를 <strong>Structure Learning</strong>이라고 부릅니다.</p></li>
+<li><p>Bayesian Network(BN)의 구조인 DAG는 변수 간의 조건부 독립성을 표현하며, Pearl(1988) 이후 의학, 유전학, 경제학 등 다양한 분야에서 인과관계를 파악하는 도구로 사용되어 왔습니다.</p></li>
+<li><p>하지만 데이터의 결합 분포(Joint Distribution)로부터 “Faithful”한 DAG를 찾아내는 것은 악명 높은 난제입니다.</p></li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>Faithfulness란?</strong></p>
+<p>그래프 <img src="https://latex.codecogs.com/png.latex?G">와 결합 분포 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D">가 서로 “Faithful”하다는 것은, <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D">에서 성립하는 모든 조건부 독립성이 그래프 <img src="https://latex.codecogs.com/png.latex?G">에서도 (d-separation을 통해) 나타나고, 그 역도 성립함을 의미합니다.</p>
+</blockquote>
+<section id="the-combinatorial-problem-기존의-한계" class="level2">
+<h2 class="anchored" data-anchor-id="the-combinatorial-problem-기존의-한계">The Combinatorial Problem (기존의 한계)</h2>
+<ul>
+<li><p>DAG 구조 학습이 어려운 근본적인 이유는 <strong>탐색 공간(Search Space)의 방대함</strong> 때문입니다.</p></li>
+<li><p>노드(변수)의 개수가 늘어날 때, 가능한 그래프의 수는 초지수적(Superexponential)으로 증가합니다.</p></li>
+<li><p>이는 NP-hard 문제로 알려져 있습니다.</p></li>
+<li><p>전통적인 접근 방식은 크게 두 가지로 나뉩니다:</p></li>
+<li><ol type="1">
+<li><strong>Score-based Methods:</strong></li>
+</ol>
+<ul>
+<li>가능한 그래프 구조에 대해 점수(BIC, BDeu 등)를 매기고, 이 점수를 최적화하는 그래프를 찾습니다.</li>
+<li>하지만 그래프는 반드시 Acyclic(비순환)이어야 한다는 조합적 제약 조건(Combinatorial Constraint) 때문에, 전역 최적해를 찾는 것이 매우 어렵습니다.</li>
+<li>따라서 탐욕적 탐색(Greedy Search)이나 트리 구조(Tree-structure) 가정 같은 근사법을 사용해야 했습니다.</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>Constraint-based Methods:</strong></li>
+</ol>
+<ul>
+<li>변수 간의 조건부 독립성 검정(Independence Test)을 수행하여 엣지를 연결하거나 제거합니다 (예: PC Algorithm).</li>
+<li>데이터 효율성이나 다중 가설 검정의 오류 문제 등이 존재합니다.</li>
+</ul></li>
+</ul>
+</section>
+<section id="the-paradigm-shift-from-discrete-to-continuous" class="level2">
+<h2 class="anchored" data-anchor-id="the-paradigm-shift-from-discrete-to-continuous">The Paradigm Shift: From Discrete to Continuous</h2>
+<ul>
+<li>최근 <strong>Zheng et al.&nbsp;(2018)</strong>의 연구(흔히 <strong>NOTEARS</strong>로 알려짐)는 이 분야에 혁신적인 돌파구를 마련했습니다.</li>
+<li>그들은 조합적 문제였던 “Acyclicity Constraint”를 미분 가능한 연속 함수 형태로 재정의했습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ah(A)%20=%20%5Ctext%7BTr%7D(e%5E%7BA%20%5Ccirc%20A%7D)%20-%20d%20=%200%0A"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?A">는 인접 행렬(Adjacency Matrix), <img src="https://latex.codecogs.com/png.latex?d">는 노드의 개수입니다.</li>
+<li>이 제약 조건 덕분에 구조 학습 문제는 이제 <strong>연속 최적화(Continuous Optimization)</strong> 문제로 변환되어, 경사 하강법(Gradient Descent)과 같은 표준적인 최적화 기법을 사용할 수 있게 되었습니다.</li>
+</ul>
+<section id="limitation-of-existing-continuous-methods" class="level3">
+<h3 class="anchored" data-anchor-id="limitation-of-existing-continuous-methods">Limitation of Existing Continuous Methods</h3>
+<ul>
+<li>하지만 Zheng et al.&nbsp;(2018)의 접근법에도 한계가 있었습니다:
+<ul>
+<li><ol type="1">
+<li><strong>선형성 가정 (Linearity Assumption):</strong> 기본적으로 선형 구조 방정식 모델(Linear SEM)을 가정합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>분포의 제약:</strong> 최소제곱(Least-squares) 손실 함수를 사용하므로, 실제 데이터의 복잡한 분포를 반영하기 어렵습니다.</li>
+</ol></li>
+</ul></li>
+<li>현실 세계의 데이터는 비선형적 관계를 가지며, 단순한 선형 모델로는 포착할 수 없는 복잡한 메커니즘으로 생성됩니다.</li>
+</ul>
+</section>
+</section>
+<section id="dag-gnn-a-deep-generative-approach" class="level2">
+<h2 class="anchored" data-anchor-id="dag-gnn-a-deep-generative-approach">DAG-GNN: A Deep Generative Approach</h2>
+<ul>
+<li>본 논문(Yu et al., 2019)은 딥러닝의 강력한 표현력을 활용하여 기존의 선형 가정을 극복하고자 합니다. 저자들은 <strong>DAG-GNN</strong>이라는 새로운 아키텍처를 제안합니다.</li>
+</ul>
+<section id="key-idea-vae-graph-neural-networks" class="level3">
+<h3 class="anchored" data-anchor-id="key-idea-vae-graph-neural-networks">Key Idea: VAE + Graph Neural Networks</h3>
+<ul>
+<li><p>이 모델의 핵심은 <strong>Variational Autoencoder (VAE)</strong> 프레임워크에 <strong>Graph Neural Network (GNN)</strong>을 결합한 것입니다.</p></li>
+<li><p><strong>Deep Generative Model:</strong> 신경망은 “Universal Approximator”입니다. 이를 통해 변수 간의 복잡한 비선형 관계를 모델링합니다.</p></li>
+<li><p><strong>Encoder/Decoder Parameterization:</strong> VAE의 인코더와 디코더를 일반적인 MLP가 아닌, 특별히 설계된 <strong>GNN</strong>으로 파라미터화합니다.</p></li>
+<li><p><strong>Evidence Lower Bound (ELBO):</strong> 모델의 목적 함수(Score)는 VAE의 ELBO가 됩니다. 이는 데이터의 우도(Likelihood)를 최대화하는 방향으로 학습됨을 의미합니다.</p></li>
+</ul>
+</section>
+<section id="a-new-acyclicity-constraint" class="level3">
+<h3 class="anchored" data-anchor-id="a-new-acyclicity-constraint">A New Acyclicity Constraint</h3>
+<ul>
+<li><p>또한, 저자들은 NOTEARS에서 제안된 행렬 지수(Matrix Exponential) 제약 조건 대신, 딥러닝 프레임워크에서 구현하기 더 용이하고 수치적으로 안정적인 <strong>다항식(Polynomial) 형태의 새로운 제약 조건</strong>을 제안합니다.</p></li>
+<li><p><strong>NOTEARS</strong> (Zheng et al., 2018): <img src="https://latex.codecogs.com/png.latex?Tr(e%5E%7BA%20%5Ccirc%20A%7D)%20-%20d%20=%200"></p></li>
+<li><p><strong>DAG-GNN 제안:</strong> 수치적 안정성을 높인 변형된 형태를 사용합니다.</p></li>
+</ul>
+</section>
+</section>
+<section id="main-contributions" class="level2">
+<h2 class="anchored" data-anchor-id="main-contributions">Main Contributions</h2>
+<ul>
+<li><p>이 논문의 Introduction에서 강조하는 주요 기여점은 다음과 같이 네 가지로 요약할 수 있습니다.</p></li>
+<li><ol type="1">
+<li><strong>Deep Generative Model 기반 접근:</strong></li>
+</ol>
+<ul>
+<li>기존의 Linear SEM을 넘어, VAE를 사용하여 데이터의 복잡한 비선형 분포를 포착하고 샘플링할 수 있는 모델을 제안했습니다.</li>
+<li>그래프 구조(Weighted Adjacency Matrix)는 잠재 변수가 아니라, 신경망 파라미터와 함께 학습되는 명시적인 파라미터로 설정됩니다.</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>다양한 데이터 타입 지원:</strong></li>
+</ol>
+<ul>
+<li>VAE 프레임워크의 특성상, 디코더의 출력 분포(Likelihood)를 적절히 설정함으로써 연속형 변수뿐만 아니라 이산형(Discrete) 변수도 자연스럽게 처리할 수 있습니다.</li>
+</ul></li>
+<li><ol start="3" type="1">
+<li><strong>벡터 값 노드(Vector-valued Nodes) 지원:</strong></li>
+</ol>
+<ul>
+<li>GNN을 사용하므로 각 노드가 단순 스칼라 값이 아닌 벡터 값을 가질 수 있습니다. 이는 각 노드가 여러 특징(Feature)을 가지는 복잡한 시나리오에 적용 가능함을 의미합니다.</li>
+</ul></li>
+<li><ol start="4" type="1">
+<li><strong>개선된 Acyclicity Constraint:</strong></li>
+</ol>
+<ul>
+<li>기존의 행렬 지수 제약 조건이 자동 미분(Automatic Differentiation) 라이브러리에서 구현하기 까다로울 수 있다는 점을 지적하며, 더 실용적이고 수치적으로 안정적인 다항식 기반의 대안을 제시했습니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="background-and-related-work" class="level1">
+<h1>2. Background and Related Work</h1>
+<ul>
+<li>DAG-GNN이 제안하는 새로운 방법론을 이해하기 위해서는, 먼저 <strong>구조 학습(Structure Learning)</strong>이 무엇인지, 그리고 지금까지 연구자들이 이 난제를 해결하기 위해 어떤 접근 방식을 취해왔는지 살펴볼 필요가 있습니다.</li>
+<li>본 포스트에서는 논문의 <strong>Background</strong> 섹션을 바탕으로 인과 그래프 학습의 기술적 흐름을 정리합니다.</li>
+</ul>
+<section id="problem-definition-faithfulness-structure-learning" class="level2">
+<h2 class="anchored" data-anchor-id="problem-definition-faithfulness-structure-learning">Problem Definition: Faithfulness &amp; Structure Learning</h2>
+<ul>
+<li>가장 먼저 정립해야 할 개념은 데이터와 그래프 사이의 관계입니다.</li>
+<li>DAG(Directed Acyclic Graph) <img src="https://latex.codecogs.com/png.latex?G">와 결합 분포(Joint Distribution) <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D">가 서로 <strong>Faithful</strong>하다는 것은 다음을 의미합니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>Faithfulness Condition (Pearl, 1988)</strong></p>
+<p>분포 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D">에서 성립하는 모든 조건부 독립성(Conditional Independence)이 그래프 <img src="https://latex.codecogs.com/png.latex?G">에서의 <strong>d-separation</strong> 조건에 의해 정확히 함의(entail)될 때, 그리고 그 역도 성립할 때 <img src="https://latex.codecogs.com/png.latex?G">와 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D">는 Faithful하다고 합니다.</p>
+</blockquote>
+<ul>
+<li><strong>구조 학습(Structure Learning)</strong>이란, 미지의 분포로부터 생성된 i.i.d. 샘플 데이터 <img src="https://latex.codecogs.com/png.latex?D">가 주어졌을 때, 이 분포와 Faithful한 관계에 있는 (미지의) DAG <img src="https://latex.codecogs.com/png.latex?G">를 복원해내는 과정을 말합니다.</li>
+</ul>
+</section>
+<section id="traditional-approaches-the-era-of-discrete-search" class="level2">
+<h2 class="anchored" data-anchor-id="traditional-approaches-the-era-of-discrete-search">Traditional Approaches: The Era of Discrete Search</h2>
+<ul>
+<li>전통적으로 DAG를 학습하는 알고리즘은 크게 <strong>Score-based</strong> 방법과 <strong>Constraint-based</strong> 방법으로 나뉩니다.</li>
+</ul>
+<section id="score-based-approaches" class="level3">
+<h3 class="anchored" data-anchor-id="score-based-approaches">1) Score-based Approaches</h3>
+<p>이 접근법은 그래프의 ’적합도’를 평가하는 점수(Score)를 정의하고, 이 점수를 최적화하는 그래프 구조를 탐색합니다.</p>
+<ul>
+<li><strong>점수 기준 (Score Criteria):</strong> 주로 베이지안 관점의 점수들이 사용됩니다. 대표적으로 BDeu, BIC(Bayesian Information Criterion) 등이 있으며, 이들은 <strong>Decomposable</strong>(분해 가능), <strong>Consistent</strong>(일치성), <strong>Score Equivalent</strong>(점수 등가성) 등의 좋은 수학적 성질을 가집니다.</li>
+<li><strong>탐색 알고리즘 (Search Procedures):</strong> 가능한 모든 그래프를 탐색하는 것은 불가능하므로 다양한 전략이 사용됩니다.
+<ul>
+<li><em>Hill-climbing:</em> 지역적 최적해를 찾아가는 탐욕적 방법 (Heckerman et al., 1995 등)</li>
+<li><em>Forward-backward search</em> (Chickering, 2002)</li>
+<li><em>Dynamic Programming</em> (Singh &amp; Moore, 2005 등)</li>
+<li><em>A* Search:</em> 최단 경로 탐색 알고리즘 응용 (Yuan &amp; Malone, 2013)</li>
+<li><em>Integer Programming:</em> 정수 계획법을 통한 최적화 (Cussens, 2011 등)</li>
+</ul></li>
+</ul>
+</section>
+<section id="constraint-based-approaches" class="level3">
+<h3 class="anchored" data-anchor-id="constraint-based-approaches">2) Constraint-based Approaches</h3>
+<ul>
+<li><p>이 방식은 변수 쌍 사이의 조건부 독립성 검정(Independence Test)을 수행하여 엣지의 존재 여부를 결정합니다.</p></li>
+<li><p><strong>대표 알고리즘:</strong> SGS, PC (Spirtes et al.), IC (Pearl), FCI (Zhang) 등이 있습니다.</p></li>
+<li><p>독립성 검정 결과를 바탕으로 엣지를 제거하거나 방향을 설정하여 그래프를 완성합니다.</p></li>
+</ul>
+</section>
+<section id="hybrid-approaches-approximations" class="level3">
+<h3 class="anchored" data-anchor-id="hybrid-approaches-approximations">3) Hybrid Approaches &amp; Approximations</h3>
+<ul>
+<li><p>순수한 Score-based나 Constraint-based 방법의 단점을 보완하기 위한 시도들도 있습니다.</p></li>
+<li><p><strong>Hybrid:</strong> MMHC (Tsamardinos et al., 2003)와 같이 Constraint-based 방법으로 후보군을 줄인 뒤 Score-based로 최적화하는 방식입니다.</p></li>
+<li><p><strong>Approximations:</strong> 탐색 공간을 줄이기 위해 Tree-width를 제한하거나(Nie et al., 2014), 트리 구조를 가정하는(Chow &amp; Liu, 1968) 등의 가정을 도입하기도 합니다.</p></li>
+</ul>
+</section>
+</section>
+<section id="the-computational-bottleneck" class="level2">
+<h2 class="anchored" data-anchor-id="the-computational-bottleneck">The Computational Bottleneck</h2>
+<ul>
+<li><p>이러한 전통적 방법론들이 직면한 가장 큰 문제는 <strong>NP-Hardness</strong>입니다.</p></li>
+<li><p>변수의 수가 늘어남에 따라 가능한 DAG의 수는 초지수적(Superexponential)으로 증가합니다.</p></li>
+<li><p>따라서 많은 알고리즘이 이산형 변수(Discrete variables)로 대상을 한정하거나, 변수들이 결합 가우시안 분포(Jointly Gaussian)를 따른다고 가정해야만 했습니다.</p></li>
+</ul>
+</section>
+<section id="the-paradigm-shift-continuous-optimization" class="level2">
+<h2 class="anchored" data-anchor-id="the-paradigm-shift-continuous-optimization">The Paradigm Shift: Continuous Optimization</h2>
+<ul>
+<li><p>최근 <strong>Zheng et al.&nbsp;(2018)</strong>의 연구(NOTEARS)는 이 분야에 새로운 패러다임을 제시했습니다.</p></li>
+<li><p><strong>핵심 아이디어:</strong> 이산적인 탐색 과정(Discrete Search Procedure)을 <strong>등식 제약조건(Equality Constraint)이 있는 연속 최적화 문제</strong>로 변환했습니다.</p></li>
+<li><p><strong>장점:</strong> 경사 하강법(Gradient Descent)과 같은 연속 최적화 기법을 사용하여 DAG 구조를 학습할 수 있게 되었습니다.</p></li>
+<li><p><strong>한계:</strong> 이 접근법은 구조 복원 성능이 우수하지만, 설명의 편의를 위해 <strong>선형 구조 방정식 모델(Linear SEM)</strong>에만 적용된다는 한계가 있었습니다.</p></li>
+</ul>
+</section>
+<section id="neural-network-approaches" class="level2">
+<h2 class="anchored" data-anchor-id="neural-network-approaches">Neural Network Approaches</h2>
+<ul>
+<li><p>최근에는 신경망(Neural Network)을 이용한 접근 방식도 등장하기 시작했습니다.</p></li>
+<li><p><strong>GAN-style Approach (Kalainathan et al., 2018):</strong></p>
+<ul>
+<li>각 변수마다 별도의 생성 모델(Generative Model)을 두고, 생성된 샘플과 실제 데이터의 분포를 구분하는 판별자(Discriminator)를 두는 GAN 스타일의 방법론입니다.</li>
+<li><strong>한계:</strong> 확장성(Scalability)은 좋아 보이지만, 결정적으로 <strong>비순환성(Acyclicity)이 강제되지 않는다</strong>는 문제가 있습니다. 즉, 학습된 결과가 DAG임을 보장할 수 없습니다.</li>
+</ul></li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>Summary:</strong> 기존의 전통적 방법은 탐색 공간 문제로 확장이 어렵고, 최근 등장한 연속 최적화 방법(NOTEARS)은 선형성에 갇혀 있으며, 기존의 딥러닝 접근(GAN)은 DAG 구조를 보장하지 못합니다. <strong>DAG-GNN</strong>은 이러한 한계점들을 극복하기 위해 제안되었습니다.</p>
+</blockquote>
+<hr>
+</section>
+</section>
+<section id="neural-dag-structure-learning" class="level1">
+<h1>3. Neural DAG Structure Learning</h1>
+<ul>
+<li>본 논문은 선형 구조 방정식 모델(Linear SEM)을 일반화(Generalize)하여 딥러닝 기반의 생성 모델(Deep Generative Model)을 구축하는 것을 목표로 합니다.</li>
+<li>첫 단계로, 가장 기본이 되는 <strong>Linear SEM</strong>의 수식적 구조와 그 의미를 먼저 명확히 짚고 넘어가겠습니다.</li>
+</ul>
+<section id="linear-structural-equation-model-linear-sem" class="level2">
+<h2 class="anchored" data-anchor-id="linear-structural-equation-model-linear-sem">3.1. Linear Structural Equation Model (Linear SEM)</h2>
+<ul>
+<li>우리가 찾고자 하는 DAG(Directed Acyclic Graph)의 구조는 <strong>가중치가 있는 인접 행렬(Weighted Adjacency Matrix)</strong> <img src="https://latex.codecogs.com/png.latex?A">로 표현됩니다.</li>
+</ul>
+<section id="notation-및-정의" class="level3">
+<h3 class="anchored" data-anchor-id="notation-및-정의">Notation 및 정의</h3>
+<ul>
+<li><p>먼저 모델링에 필요한 변수들을 정의합니다.</p></li>
+<li><p><strong><img src="https://latex.codecogs.com/png.latex?m"></strong>: 노드(변수)의 개수입니다.</p></li>
+<li><p><strong><img src="https://latex.codecogs.com/png.latex?A%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20m%7D"></strong>:</p>
+<ul>
+<li>DAG의 가중치 인접 행렬입니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?A_%7Bij%7D">가 0이 아니라면 <img src="https://latex.codecogs.com/png.latex?i">에서 <img src="https://latex.codecogs.com/png.latex?j">로 가는 엣지가 존재함을 의미합니다.</li>
+</ul></li>
+<li><p><strong><img src="https://latex.codecogs.com/png.latex?X%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20d%7D"></strong>:</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?m">개의 변수에 대한 데이터 행렬입니다.</li>
+<li>일반적인 문헌에서 변수는 스칼라(<img src="https://latex.codecogs.com/png.latex?d=1">)로 취급되지만, 본 논문에서는 이를 <img src="https://latex.codecogs.com/png.latex?d">-차원 벡터로 일반화(Generalize)하여 <strong>Vector-valued Node</strong>를 다룹니다.</li>
+<li>각 행(Row)은 하나의 변수(노드)에 대응하고, 각 열(Column)은 해당 변수의 특징(Feature) 혹은 샘플 차원을 의미합니다.</li>
+</ul></li>
+<li><p><strong><img src="https://latex.codecogs.com/png.latex?Z%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20d%7D"></strong>:</p>
+<ul>
+<li>노이즈 행렬(Noise Matrix)입니다.</li>
+<li>외생 변수(Exogenous variable)에 해당합니다.</li>
+</ul></li>
+</ul>
+</section>
+<section id="선형-관계식-the-model" class="level3">
+<h3 class="anchored" data-anchor-id="선형-관계식-the-model">선형 관계식 (The Model)</h3>
+<ul>
+<li>Linear SEM은 변수 <img src="https://latex.codecogs.com/png.latex?X">가 부모 변수들의 선형 결합(Linear Combination)과 노이즈 <img src="https://latex.codecogs.com/png.latex?Z">의 합으로 생성된다고 가정합니다. 이를 행렬식으로 표현하면 다음과 같습니다.</li>
+</ul>
+<p><span id="eq-(1)"><img src="https://latex.codecogs.com/png.latex?%0AX%20=%20A%5ET%20X%20+%20Z%0A%5Ctag%7B1%7D"></span></p>
+<ul>
+<li>이 식은 <strong>“현재 노드의 값(<img src="https://latex.codecogs.com/png.latex?X">)은 부모 노드들의 값(<img src="https://latex.codecogs.com/png.latex?A%5ET%20X">)에 가중치를 곱해 더한 뒤, 고유한 노이즈(<img src="https://latex.codecogs.com/png.latex?Z">)를 더한 것과 같다”</strong>는 인과적 메커니즘을 나타냅니다.</li>
+</ul>
+</section>
+<section id="from-structure-to-generation-derivation" class="level3">
+<h3 class="anchored" data-anchor-id="from-structure-to-generation-derivation">From Structure to Generation (Derivation)</h3>
+<ul>
+<li>이제 이 구조 방정식(Structural Equation)을 데이터를 생성하는 <strong>생성 모델(Generative Model)</strong>의 관점으로 전환해보겠습니다.</li>
+<li>이를 위해서는 <img src="https://latex.codecogs.com/png.latex?Z">에서 <img src="https://latex.codecogs.com/png.latex?X">를 만들어내는 과정으로 수식을 변형해야 합니다.</li>
+</ul>
+<section id="topological-sort" class="level4">
+<h4 class="anchored" data-anchor-id="topological-sort">Topological Sort</h4>
+<ul>
+<li><p>DAG의 가장 중요한 성질 중 하나는, 그래프 내에 사이클(Cycle)이 없기 때문에 모든 노드를 <strong>위상 정렬(Topological Order)</strong> 순서로 나열할 수 있다는 점입니다.</p></li>
+<li><p>만약 노드들을 위상 정렬 순서대로 재배열한다면, 인접 행렬 <img src="https://latex.codecogs.com/png.latex?A">는 <strong>엄격한 상삼각 행렬(Strictly Upper Triangular Matrix)</strong>이 됩니다.</p>
+<ul>
+<li>즉, 대각 성분과 그 아래 성분들이 모두 0이 됩니다 (<img src="https://latex.codecogs.com/png.latex?A_%7Bij%7D%20=%200%20%5Ctext%7B%20for%20%7D%20i%20%5Cge%20j">).</li>
+<li>이는 어떤 노드도 자기 자신이나 자신의 후손(descendant)으로부터 영향을 받지 않음을 수학적으로 보장합니다.</li>
+</ul></li>
+</ul>
+</section>
+<section id="transformation" class="level4">
+<h4 class="anchored" data-anchor-id="transformation">Transformation</h4>
+<ul>
+<li>식 (1)을 <img src="https://latex.codecogs.com/png.latex?X">에 대해 정리하는 과정을 단계별로 유도해보겠습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0AX%20-%20A%5ET%20X%20&amp;=%20Z%20%5C%5C%0A(I%20-%20A%5ET)X%20&amp;=%20Z%20%5C%5C%0AX%20&amp;=%20(I%20-%20A%5ET)%5E%7B-1%7D%20Z%0A%5Cend%7Baligned%7D%0A"></p>
+</section>
+<section id="equivalence-with-ancestral-sampling" class="level4">
+<h4 class="anchored" data-anchor-id="equivalence-with-ancestral-sampling">Equivalence with Ancestral Sampling</h4>
+<p><span id="eq-(2)"><img src="https://latex.codecogs.com/png.latex?%0AX%20=%20(I%20-%20A%5ET)%5E%7B-1%7D%20Z%0A%5Ctag%7B2%7D"></span></p>
+<ul>
+<li>이 식은 <strong>“DAG를 따르는 Ancestral Sampling”</strong> 과정을 수학적으로 압축해 놓은 형태입니다. 그 이유를 단계별로 살펴보겠습니다.</li>
+</ul>
+<section id="ancestral-sampling이란" class="level5">
+<h5 class="anchored" data-anchor-id="ancestral-sampling이란">Ancestral Sampling이란?</h5>
+<ul>
+<li><strong>Ancestral Sampling(조상 샘플링)</strong>은 베이지안 네트워크에서 데이터를 생성하는 가장 표준적인 방법입니다.</li>
+<li>인과관계의 흐름(부모 <img src="https://latex.codecogs.com/png.latex?%5Cto"> 자식)에 따라 순차적으로 값을 결정하는 방식입니다.
+<ul>
+<li><ol type="1">
+<li><strong>Top-down:</strong> 부모가 없는 루트 노드(조상)의 값을 먼저 노이즈(<img src="https://latex.codecogs.com/png.latex?Z">)로부터 결정합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Propagation:</strong> 그 결정된 값이 자식 노드로 전파되어, 자식 노드의 값 결정에 영향을 줍니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li>이 과정을 위상 정렬(Topological Sort) 순서대로 끝까지 반복합니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+</section>
+<section id="neumann-series를-통한-연결" class="level5">
+<h5 class="anchored" data-anchor-id="neumann-series를-통한-연결">Neumann Series를 통한 연결</h5>
+<ul>
+<li>식 (2) 의 역행렬 부분 <img src="https://latex.codecogs.com/png.latex?(I%20-%20A%5ET)%5E%7B-1%7D">을 <strong>노이만 급수(Neumann Series)</strong>를 이용해 전개합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A(I%20-%20A%5ET)%5E%7B-1%7D%20=%20I%20+%20A%5ET%20+%20(A%5ET)%5E2%20+%20(A%5ET)%5E3%20+%20%5Cdots%0A"></p>
+<ul>
+<li>이 전개식을 식 2에 대입하면 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AX%20=%20%5Cunderbrace%7BI%20%5Ccdot%20Z%7D_%7B%5Ctext%7BSelf%7D%7D%20+%20%5Cunderbrace%7BA%5ET%20%5Ccdot%20Z%7D_%7B%5Ctext%7BParents%7D%7D%20+%20%5Cunderbrace%7B(A%5ET)%5E2%20%5Ccdot%20Z%7D_%7B%5Ctext%7BGrandparents%7D%7D%20+%20%5Cdots%0A"></p>
+</section>
+<section id="행렬-거듭제곱ak의-의미" class="level5">
+<h5 class="anchored" data-anchor-id="행렬-거듭제곱ak의-의미">행렬 거듭제곱(<img src="https://latex.codecogs.com/png.latex?A%5Ek">)의 의미</h5>
+<ul>
+<li>여기서 행렬의 거듭제곱 항들은 그래프 이론에서 <strong>경로(Path)</strong>의 개념과 일치합니다.
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?I"> (0-hop):</strong> 자기 자신의 고유한 노이즈(<img src="https://latex.codecogs.com/png.latex?Z">)입니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?A%5ET"> (1-hop):</strong> 부모 노드들로부터 직접 받는 영향입니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?(A%5ET)%5E2"> (2-hop):</strong> 부모를 거쳐서 오는 <strong>조부모(Grandparents)</strong>의 영향입니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?(A%5ET)%5Ek"> (<img src="https://latex.codecogs.com/png.latex?k">-hop):</strong> <img src="https://latex.codecogs.com/png.latex?k">단계를 거쳐서 오는 <strong><img src="https://latex.codecogs.com/png.latex?k">대 조상</strong>들의 영향입니다.</li>
+</ul></li>
+<li>즉, <img src="https://latex.codecogs.com/png.latex?X%20=%20(I%20-%20A%5ET)%5E%7B-1%7D%20Z">라는 수식은 <strong>“나의 값(<img src="https://latex.codecogs.com/png.latex?X">)은 내 고유한 성향(<img src="https://latex.codecogs.com/png.latex?Z">)뿐만 아니라, 부모, 조부모 등 모든 조상들의 영향력이 누적되어 형성된 것이다”</strong>라는 Ancestral Sampling의 철학을 행렬 연산 한 번으로 표현한 것입니다.</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled" title="보충: 왜 거듭제곱이 경로인가? (수학적 귀납법 증명)">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>보충: 왜 거듭제곱이 경로인가? (수학적 귀납법 증명)
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-1" class="callout-1-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>행렬 <img src="https://latex.codecogs.com/png.latex?A">의 거듭제곱 <img src="https://latex.codecogs.com/png.latex?A%5Ek">의 <img src="https://latex.codecogs.com/png.latex?(i,%20j)"> 성분이 <strong>노드 <img src="https://latex.codecogs.com/png.latex?i">에서 <img src="https://latex.codecogs.com/png.latex?j">로 가는 길이 <img src="https://latex.codecogs.com/png.latex?k">인 모든 경로의 가중치 합</strong>임을 수학적 귀납법으로 간단히 증명할 수 있습니다.</p>
+<p><strong>명제 <img src="https://latex.codecogs.com/png.latex?P(k)">:</strong> <img src="https://latex.codecogs.com/png.latex?(A%5Ek)_%7Bij%7D">는 <img src="https://latex.codecogs.com/png.latex?i%20%5Cto%20j">로 가는 길이 <img src="https://latex.codecogs.com/png.latex?k">인 경로들의 가중치 합이다.</p>
+<p><strong>1. 기초 단계 (Base Case, <img src="https://latex.codecogs.com/png.latex?k=1">):</strong> 정의에 의해 <img src="https://latex.codecogs.com/png.latex?(A%5E1)_%7Bij%7D%20=%20A_%7Bij%7D">입니다. 이는 <img src="https://latex.codecogs.com/png.latex?i">에서 <img src="https://latex.codecogs.com/png.latex?j">로 직접 연결된 엣지(길이 1)의 가중치이므로 명제 <img src="https://latex.codecogs.com/png.latex?P(1)">은 참입니다.</p>
+<p><strong>2. 귀납 가정 (Inductive Step):</strong> 임의의 자연수 <img src="https://latex.codecogs.com/png.latex?k">에 대해 <img src="https://latex.codecogs.com/png.latex?P(k)">가 참이라고 가정합니다. 즉, <img src="https://latex.codecogs.com/png.latex?(A%5Ek)_%7Bit%7D">는 <img src="https://latex.codecogs.com/png.latex?i%20%5Cto%20t">로 가는 길이 <img src="https://latex.codecogs.com/png.latex?k">인 경로의 합입니다.</p>
+<p>이제 <img src="https://latex.codecogs.com/png.latex?k+1">일 때를 살펴봅니다. 행렬 곱셈의 정의에 따라: <img src="https://latex.codecogs.com/png.latex?%0A(A%5E%7Bk+1%7D)_%7Bij%7D%20=%20(A%5Ek%20%5Ccdot%20A)_%7Bij%7D%20=%20%5Csum_%7Bt%7D%20(A%5Ek)_%7Bit%7D%20%5Ccdot%20A_%7Btj%7D%0A"></p>
+<p>이 수식의 의미를 해석해 보면: * <img src="https://latex.codecogs.com/png.latex?(A%5Ek)_%7Bit%7D">: <img src="https://latex.codecogs.com/png.latex?i">에서 중간 노드 <img src="https://latex.codecogs.com/png.latex?t">까지 가는 길이 <img src="https://latex.codecogs.com/png.latex?k">인 경로 (귀납 가정) * <img src="https://latex.codecogs.com/png.latex?A_%7Btj%7D">: <img src="https://latex.codecogs.com/png.latex?t">에서 도착 노드 <img src="https://latex.codecogs.com/png.latex?j">로 가는 길이 <img src="https://latex.codecogs.com/png.latex?1">인 엣지 * <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bt%7D">: 가능한 모든 중간 경유지 <img src="https://latex.codecogs.com/png.latex?t">에 대해 합산</p>
+<p>즉, <strong>“<img src="https://latex.codecogs.com/png.latex?i">에서 <img src="https://latex.codecogs.com/png.latex?t">까지 <img src="https://latex.codecogs.com/png.latex?k">걸음으로 간 뒤, <img src="https://latex.codecogs.com/png.latex?t">에서 <img src="https://latex.codecogs.com/png.latex?j">로 1걸음 더 가는 모든 경우의 수”</strong>를 더한 것이므로, 이는 <img src="https://latex.codecogs.com/png.latex?i">에서 <img src="https://latex.codecogs.com/png.latex?j">로 가는 <strong>길이 <img src="https://latex.codecogs.com/png.latex?k+1">인 모든 경로의 합</strong>과 같습니다.</p>
+<p><strong>3. 결론:</strong> 수학적 귀납법에 의해 모든 자연수 <img src="https://latex.codecogs.com/png.latex?k">에 대해 명제 <img src="https://latex.codecogs.com/png.latex?P(k)">는 참입니다. 따라서 <img src="https://latex.codecogs.com/png.latex?(A%5ET)%5Ek">는 <img src="https://latex.codecogs.com/png.latex?k">단계를 거친 조상들의 영향력을 의미하게 됩니다.</p>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="결론-vae-도입의-동기" class="level4">
+<h4 class="anchored" data-anchor-id="결론-vae-도입의-동기">결론: VAE 도입의 동기</h4>
+<ul>
+<li>이러한 관점은 DAG 구조 학습 문제를 새로운 시각으로 바라보게 합니다.</li>
+<li>복잡한 인과관계 추론 문제를 <strong>“노이즈 <img src="https://latex.codecogs.com/png.latex?Z">를 데이터 <img src="https://latex.codecogs.com/png.latex?X">로 매핑하는 인코더/디코더를 학습하는 문제”</strong>로 치환할 수 있습니다.</li>
+<li>이것이 바로 저자들이 생성 모델의 대표 주자인 <strong>VAE(Variational Autoencoder)</strong>를 도입하여, 인코더와 디코더를 통해 <img src="https://latex.codecogs.com/png.latex?A">를 학습하고자 한 핵심적인 <strong>동기(Motivation)</strong>입니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="proposed-graph-neural-network-model" class="level2">
+<h2 class="anchored" data-anchor-id="proposed-graph-neural-network-model">3.2. Proposed Graph Neural Network Model</h2>
+<ul>
+<li>앞선 섹션에서 우리는 Linear SEM이 다음과 같이 노이즈 <img src="https://latex.codecogs.com/png.latex?Z">를 데이터 <img src="https://latex.codecogs.com/png.latex?X">로 변환하는 선형 과정으로 표현됨을 확인했습니다.</li>
+<li>본 섹션에서는 이 수식을 <strong>Graph Neural Network(GNN)</strong>의 관점에서 재해석하고, 이를 바탕으로 비선형 관계까지 포착할 수 있는 <strong>DAG-GNN</strong>만의 독창적인 아키텍처를 검토합니다.</li>
+</ul>
+<section id="linear-sem-as-a-graph-neural-network" class="level3">
+<h3 class="anchored" data-anchor-id="linear-sem-as-a-graph-neural-network">Linear SEM as a Graph Neural Network</h3>
+<ul>
+<li>저자들은 위 식 (2)를 딥러닝 커뮤니티의 관점에서 다음과 같은 일반적인 함수 꼴로 바라봅니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AX%20=%20f_A(Z)%0A"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?f_A">는 그래프 구조(인접 행렬 <img src="https://latex.codecogs.com/png.latex?A">)에 의해 파라미터화된 함수입니다.</li>
+<li>즉, <strong>“노드 특징(Feature)인 <img src="https://latex.codecogs.com/png.latex?Z">를 입력받아, 그래프 구조를 통과시켜 고차원 표현인 <img src="https://latex.codecogs.com/png.latex?X">를 반환하는 과정”</strong>으로 해석할 수 있습니다.</li>
+</ul>
+<section id="existing-gnn-architectures" class="level4">
+<h4 class="anchored" data-anchor-id="existing-gnn-architectures">Existing GNN Architectures</h4>
+<ul>
+<li>대부분의 최신 GNN 모델들(GCN, GraphSAGE, GAT 등)도 이와 유사한 형태를 띱니다.</li>
+<li>예를 들어, 널리 쓰이는 <strong>GCN (Graph Convolutional Network)</strong>의 수식은 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%0AX%20=%20%5Chat%7BA%7D%20%5Ccdot%20%5Ctext%7BReLU%7D(%5Chat%7BA%7D%20Z%20W%5E1)%20%5Ccdot%20W%5E2%0A">
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Chat%7BA%7D">: 정규화된 인접 행렬 (Normalized Adjacency Matrix)</li>
+<li><img src="https://latex.codecogs.com/png.latex?W%5E1,%20W%5E2">: 학습 가능한 가중치 행렬</li>
+</ul></li>
+<li>하지만 일반적인 GNN은 주어진 고정된 그래프 위에서 노드 임베딩을 학습하는 것이 목표인 반면, 우리의 목표는 <strong>그래프 구조 <img src="https://latex.codecogs.com/png.latex?A"> 자체를 학습</strong>하는 것입니다.</li>
+</ul>
+</section>
+</section>
+<section id="the-dag-gnn-architecture" class="level3">
+<h3 class="anchored" data-anchor-id="the-dag-gnn-architecture">The DAG-GNN Architecture</h3>
+<ul>
+<li>저자들은 Linear SEM의 구조적 특성(<img src="https://latex.codecogs.com/png.latex?(I-A%5ET)%5E%7B-1%7D">)을 그대로 계승하면서, 신경망의 표현력을 더하기 위해 <strong>새로운 GNN 아키텍처</strong>를 제안합니다.</li>
+</ul>
+<section id="the-proposed-equation" class="level4">
+<h4 class="anchored" data-anchor-id="the-proposed-equation">The Proposed Equation</h4>
+<p>제안하는 모델의 핵심 수식은 다음과 같습니다.</p>
+<p><span id="eq-(3)"><img src="https://latex.codecogs.com/png.latex?%0AX%20=%20f_2%20%5Cleft(%20(I%20-%20A%5ET)%5E%7B-1%7D%20f_1(Z)%20%5Cright)%0A%5Ctag%7B3%7D"></span></p>
+<ul>
+<li><p>이 수식은 세 단계의 변환 과정으로 구성됩니다:</p></li>
+<li><ol type="1">
+<li><strong>Transforming Noise (<img src="https://latex.codecogs.com/png.latex?f_1(Z)">):</strong></li>
+</ol>
+<ul>
+<li>입력 노이즈 <img src="https://latex.codecogs.com/png.latex?Z">를 비선형 함수 <img src="https://latex.codecogs.com/png.latex?f_1"> (MLP 등)을 통해 변환합니다.</li>
+<li>이는 단순한 가우시안 노이즈가 아닌 복잡한 잠재 분포를 표현하기 위함입니다.</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>Structural Aggregation (<img src="https://latex.codecogs.com/png.latex?(I-A%5ET)%5E%7B-1%7D">):</strong></li>
+</ol>
+<ul>
+<li>변환된 신호들이 DAG 구조 <img src="https://latex.codecogs.com/png.latex?A">에 따라 전파(Propagation)됩니다.</li>
+<li>이 부분은 Linear SEM의 인과적 흐름을 그대로 따르며, 부모 노드의 영향력이 자식 노드로 전달되는 과정을 수학적으로 구현합니다.</li>
+</ul></li>
+<li><ol start="3" type="1">
+<li><strong>Transforming into Data Space (<img src="https://latex.codecogs.com/png.latex?f_2(%5Ccdot)">):</strong></li>
+</ol>
+<ul>
+<li>구조적 정보가 반영된 신호를 다시 비선형 함수 <img src="https://latex.codecogs.com/png.latex?f_2">를 통해 관측 데이터 공간(<img src="https://latex.codecogs.com/png.latex?X">)으로 매핑합니다.</li>
+</ul></li>
+</ul>
+</section>
+</section>
+<section id="generalizing-the-linear-sem-interpretation" class="level3">
+<h3 class="anchored" data-anchor-id="generalizing-the-linear-sem-interpretation">Generalizing the Linear SEM (Interpretation)</h3>
+<ul>
+<li><p>이 모델이 중요한 이유는, 이것이 기존의 <strong>Linear SEM을 비선형(Non-linear)으로 일반화(Generalize)</strong>한 형태이기 때문입니다.</p></li>
+<li><p>만약 <img src="https://latex.codecogs.com/png.latex?f_2">가 <strong>역함수(Invertible)를 가진다</strong>고 가정해봅시다. 그렇다면 식 (3)의 양변에 <img src="https://latex.codecogs.com/png.latex?f_2%5E%7B-1%7D">를 취하고 정리하여 다음과 같은 관계를 유도할 수 있습니다.</p></li>
+</ul>
+<section id="derivation" class="level4">
+<h4 class="anchored" data-anchor-id="derivation">Derivation</h4>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0AX%20&amp;=%20f_2((I%20-%20A%5ET)%5E%7B-1%7D%20f_1(Z))%20%5C%5C%0Af_2%5E%7B-1%7D(X)%20&amp;=%20(I%20-%20A%5ET)%5E%7B-1%7D%20f_1(Z)%20%5C%5C%0A(I%20-%20A%5ET)%20f_2%5E%7B-1%7D(X)%20&amp;=%20f_1(Z)%20%5C%5C%0Af_2%5E%7B-1%7D(X)%20-%20A%5ET%20f_2%5E%7B-1%7D(X)%20&amp;=%20f_1(Z)%20%5C%5C%0Af_2%5E%7B-1%7D(X)%20&amp;=%20A%5ET%20f_2%5E%7B-1%7D(X)%20+%20f_1(Z)%0A%5Cend%7Baligned%7D%0A"></p>
+</section>
+<section id="generalized-sem" class="level4">
+<h4 class="anchored" data-anchor-id="generalized-sem">Generalized SEM</h4>
+<ul>
+<li>결과적으로 다음과 같은 <strong>Generalized SEM</strong> 식을 얻게 됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cunderbrace%7Bf_2%5E%7B-1%7D(X)%7D_%7B%5Ctext%7BTransformed%20Data%7D%7D%20=%20A%5ET%20%5Cunderbrace%7Bf_2%5E%7B-1%7D(X)%7D_%7B%5Ctext%7BParents%7D%7D%20+%20%5Cunderbrace%7Bf_1(Z)%7D_%7B%5Ctext%7BTransformed%20Noise%7D%7D%0A"></p>
+<ul>
+<li><strong>Linear SEM (<img src="https://latex.codecogs.com/png.latex?X%20=%20A%5ET%20X%20+%20Z">)과의 비교:</strong>
+<ul>
+<li>Linear SEM은 데이터 <img src="https://latex.codecogs.com/png.latex?X"> 자체가 선형 결합을 이룹니다.</li>
+<li>DAG-GNN은 데이터 <img src="https://latex.codecogs.com/png.latex?X">를 적절히 비선형 변환한 <strong><img src="https://latex.codecogs.com/png.latex?f_2%5E%7B-1%7D(X)"> 공간에서 선형 관계(<img src="https://latex.codecogs.com/png.latex?A%5ET">)가 성립</strong>한다고 가정합니다.</li>
+<li>또한 노이즈 역시 단순 합이 아니라 <img src="https://latex.codecogs.com/png.latex?f_1(Z)"> 형태로 비선형적으로 결합됩니다.</li>
+</ul></li>
+<li>이러한 설계를 통해 DAG-GNN은 변수 간의 관계가 복잡한 비선형일 때도, 이를 잠재 공간(Latent Space)에서의 구조적 관계로 포착할 수 있게 됩니다.</li>
+</ul>
+</section>
+</section>
+<section id="note-on-implementation" class="level3">
+<h3 class="anchored" data-anchor-id="note-on-implementation">Note on Implementation</h3>
+<ul>
+<li>저자들은 <img src="https://latex.codecogs.com/png.latex?f_1">과 <img src="https://latex.codecogs.com/png.latex?f_2">를 구체적으로 어떤 신경망으로 구현할지에 대해서는 후속 섹션으로 미루고 있습니다.</li>
+<li>다만 중요한 제약 사항 하나를 언급합니다:</li>
+</ul>
+<blockquote class="blockquote">
+<p>“<img src="https://latex.codecogs.com/png.latex?f_2">의 마지막 활성화 함수(Activation function)는 반드시 변수 <img src="https://latex.codecogs.com/png.latex?X">의 타입(Domain)과 일치해야 한다.”</p>
+</blockquote>
+<ul>
+<li>예를 들어, <img src="https://latex.codecogs.com/png.latex?X">가 실수형(Continuous)이라면 Identity 함수를, 이진형(Binary)이라면 Sigmoid 등을 사용해야 한다는 뜻입니다. 이는 추후 논의될 <strong>Discrete Variable</strong> 처리를 위한 포석입니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="model-learning-with-variational-autoencoder" class="level2">
+<h2 class="anchored" data-anchor-id="model-learning-with-variational-autoencoder">3.3. Model Learning with Variational Autoencoder</h2>
+<ul>
+<li>이제 우리의 목표는 주어진 데이터 <img src="https://latex.codecogs.com/png.latex?X%5E1,%20%5Cdots,%20X%5En">을 가장 잘 설명하는 모델 파라미터(신경망 가중치 및 그래프 구조 <img src="https://latex.codecogs.com/png.latex?A">)를 찾는 것입니다.</li>
+<li>본 섹션에서는 이를 위해 <strong>Variational Autoencoder (VAE)</strong> 프레임워크를 도입하는 과정과 그 수학적 배경을 상세히 다룹니다.</li>
+</ul>
+<section id="the-challenge-of-intractability" class="level3">
+<h3 class="anchored" data-anchor-id="the-challenge-of-intractability">The Challenge of Intractability</h3>
+<ul>
+<li><p>일반적으로 확률 모델의 학습은 관측 데이터의 <strong>로그 우도(Log-Likelihood)</strong>, 또는 <strong>로그 증거(Log-Evidence)</strong>를 최대화하는 방향으로 진행됩니다.</p></li>
+<li><p>데이터 샘플 <img src="https://latex.codecogs.com/png.latex?X%5E1,%20%5Cdots,%20X%5En">이 주어졌을 때, 평균 로그 증거는 다음과 같습니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cfrac%7B1%7D%7Bn%7D%20%5Csum_%7Bk=1%7D%5En%20%5Clog%20p(X%5Ek)%20=%20%5Cfrac%7B1%7D%7Bn%7D%20%5Csum_%7Bk=1%7D%5En%20%5Clog%20%5Cint%20p(X%5Ek%20%7C%20Z)%20p(Z)%20%5C,%20dZ%0A"></p>
+<ul>
+<li>여기서 문제가 발생합니다.
+<ul>
+<li>우변의 적분 <img src="https://latex.codecogs.com/png.latex?%5Cint%20p(X%5Ek%20%7C%20Z)%20p(Z)%20%5C,%20dZ">는 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">의 모든 가능한 값에 대해 주변화(Marginalization)를 수행해야 합니다.</li>
+<li>하지만 <img src="https://latex.codecogs.com/png.latex?Z">가 고차원이거나 <img src="https://latex.codecogs.com/png.latex?p(X%7CZ)">가 복잡한 신경망(Neural Network)으로 구성된 경우, 이 적분은 해석적으로 구하는 것이 불가능하며(Intractable), 수치적으로 근사하기에도 계산 비용이 매우 큽니다.</li>
+</ul></li>
+<li>따라서 저자들은 이 문제를 해결하기 위해 <strong>변분 베이즈(Variational Bayes)</strong> 방법론을 도입합니다.</li>
+</ul>
+</section>
+<section id="the-evidence-lower-bound-elbo" class="level3">
+<h3 class="anchored" data-anchor-id="the-evidence-lower-bound-elbo">The Evidence Lower Bound (ELBO)</h3>
+<ul>
+<li>계산 불가능한 사후 분포 <img src="https://latex.codecogs.com/png.latex?p(Z%7CX)">를 근사하기 위해, 우리는 다루기 쉬운 분포인 <strong>변분 사후 분포(Variational Posterior)</strong> <img src="https://latex.codecogs.com/png.latex?q(Z%7CX)">를 도입합니다.</li>
+</ul>
+<section id="derivation-of-elbo" class="level4">
+<h4 class="anchored" data-anchor-id="derivation-of-elbo">Derivation of ELBO</h4>
+<ul>
+<li><p>로그 증거 <img src="https://latex.codecogs.com/png.latex?%5Clog%20p(X)">에서 출발하여 <strong>ELBO(Evidence Lower Bound)</strong>를 유도하는 과정은 다음과 같습니다. (편의상 <img src="https://latex.codecogs.com/png.latex?X%5Ek">를 <img src="https://latex.codecogs.com/png.latex?X">로 표기합니다.)</p></li>
+<li><ol type="1">
+<li><strong>로그 내부의 분모/분자에 <img src="https://latex.codecogs.com/png.latex?q(Z%7CX)"> 곱하기:</strong> <img src="https://latex.codecogs.com/png.latex?%0A%20%20%5Cbegin%7Baligned%7D%0A%20%20%5Clog%20p(X)%20&amp;=%20%5Clog%20%5Cint%20p(X%7CZ)%20p(Z)%20%5C,%20dZ%20%5C%5C%20%20%0A%20%20&amp;=%20%5Clog%20%5Cint%20p(X,%20Z)%20%5C,%20dZ%20%5C%5C%0A%20%20&amp;=%20%5Clog%20%5Cint%20p(X,%20Z)%20%5Cfrac%7Bq(Z%7CX)%7D%7Bq(Z%7CX)%7D%20%5C,%20dZ%0A%20%20%5Cend%7Baligned%7D%0A%20%20"></li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>기댓값 형태로 변환:</strong> <img src="https://latex.codecogs.com/png.latex?%0A%20%20%5Cbegin%7Baligned%7D%0A%20%20&amp;=%20%5Clog%20%5Cint%20%5Cfrac%7Bp(X,%20Z)%7D%7Bq(Z%7CX)%7D%20q(Z%7CX)%20%5C,%20dZ%20%5C%5C%0A%20%20&amp;=%20%5Clog%20%5Cmathbb%7BE%7D_%7Bq(Z%7CX)%7D%20%5Cleft%5B%20%5Cfrac%7Bp(X,%20Z)%7D%7Bq(Z%7CX)%7D%20%5Cright%5D%0A%20%20%5Cend%7Baligned%7D%0A%20%20"></li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><strong>젠센 부등식(Jensen’s Inequality) 적용:</strong></li>
+</ol>
+<ul>
+<li>로그 함수는 오목(Concave) 함수이므로 <img src="https://latex.codecogs.com/png.latex?%5Clog(%5Cmathbb%7BE%7D%5BY%5D)%20%5Cge%20%5Cmathbb%7BE%7D%5B%5Clog(Y)%5D">가 성립합니다. <img src="https://latex.codecogs.com/png.latex?%0A%20%20%5Cge%20%5Cmathbb%7BE%7D_%7Bq(Z%7CX)%7D%20%5Cleft%5B%20%5Clog%20%5Cfrac%7Bp(X,%20Z)%7D%7Bq(Z%7CX)%7D%20%5Cright%5D%0A%20%20"></li>
+</ul></li>
+<li><ol start="4" type="1">
+<li><strong>항 분리 및 정리 (ELBO의 도출):</strong></li>
+</ol>
+<ul>
+<li>로그의 성질을 이용해 항을 분리하고, <img src="https://latex.codecogs.com/png.latex?Z">와 관련된 항들을 묶어 정리합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%20%20%5Cbegin%7Baligned%7D%0A%20%20%5Cmathcal%7BL%7D%20&amp;=%20%5Cmathbb%7BE%7D_%7Bq(Z%7CX)%7D%20%5Cleft%5B%20%5Clog%20%5Cfrac%7Bp(X%7CZ)p(Z)%7D%7Bq(Z%7CX)%7D%20%5Cright%5D%20%5C%5C%0A%20%20&amp;=%20%5Cmathbb%7BE%7D_%7Bq(Z%7CX)%7D%20%5CBig%5B%20%5Clog%20p(X%7CZ)%20+%20%5Cunderbrace%7B%5Clog%20p(Z)%20-%20%5Clog%20q(Z%7CX)%7D_%7B%5Ctext%7BLatent%20Variable%20Terms%7D%7D%20%5CBig%5D%0A%20%20%5Cend%7Baligned%7D%0A%20%20"></p>
+<ul>
+<li>여기서 <strong>KL Divergence(Kullback-Leibler Divergence)</strong>의 정의를 도입하여 식을 간결하게 정리할 수 있습니다.</li>
+<li>두 확률분포 <img src="https://latex.codecogs.com/png.latex?q">와 <img src="https://latex.codecogs.com/png.latex?p">의 차이를 측정하는 KL Divergence는 다음과 같이 정의됩니다. <img src="https://latex.codecogs.com/png.latex?D_%7B%5Ctext%7BKL%7D%7D(q%20%7C%7C%20p)%20=%20%5Cmathbb%7BE%7D_%7Bx%20%5Csim%20q%7D%20%5B%20%5Clog%20q(x)%20-%20%5Clog%20p(x)%20%5D"></li>
+<li>위 식의 뒷부분(<img src="https://latex.codecogs.com/png.latex?%5Clog%20p(Z)%20-%20%5Clog%20q(Z%7CX)">)은 KL Divergence 정의와 부호가 반대입니다. 따라서 마이너스(<img src="https://latex.codecogs.com/png.latex?-">)를 밖으로 빼내어 형태를 맞춥니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%20%20%5Cbegin%7Baligned%7D%0A%20%20&amp;=%20%5Cmathbb%7BE%7D_%7Bq(Z%7CX)%7D%20%5B%5Clog%20p(X%7CZ)%5D%20-%20%5Cmathbb%7BE%7D_%7Bq(Z%7CX)%7D%20%5B%5Cunderbrace%7B%5Clog%20q(Z%7CX)%20-%20%5Clog%20p(Z)%7D_%7BD_%7B%5Ctext%7BKL%7D%7D(q%7C%7Cp)%20%5Ctext%7B%20Form%7D%7D%20%5D%20%5C%5C%0A%20%20&amp;=%20%5Cmathbb%7BE%7D_%7Bq(Z%7CX)%7D%20%5B%5Clog%20p(X%7CZ)%5D%20-%20D_%7B%5Ctext%7BKL%7D%7D(q(Z%7CX)%20%7C%7C%20p(Z))%0A%20%20%5Cend%7Baligned%7D%0A%20%20"></p>
+<ul>
+<li>최종적으로 식 (4)에 해당하는 <strong>ELBO(Evidence Lower Bound)</strong>를 얻게 됩니다.</li>
+</ul></li>
+</ul>
+<p><span id="eq-(4)"><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BL%7D_%7B%5Ctext%7BELBO%7D%7D%20%5Cequiv%20-D_%7B%5Ctext%7BKL%7D%7D%20%5CBig(%20q(Z%7CX%5Ek)%20%5C,%7C%7C%5C,%20p(Z)%20%5CBig)%20+%20%5Cmathbb%7BE%7D_%7Bq(Z%7CX%5Ek)%7D%20%5CBig%5B%20%5Clog%20p(X%5Ek%7CZ)%20%5CBig%5D%0A%5Ctag%7B4%7D"></span></p>
+</section>
+<section id="interpretation-of-elbo" class="level4">
+<h4 class="anchored" data-anchor-id="interpretation-of-elbo">Interpretation of ELBO</h4>
+<ul>
+<li><p>식 (4)는 두 가지 직관적인 항으로 구성됩니다.</p></li>
+<li><ol type="1">
+<li><strong>Reconstruction Loss:</strong> <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D_%7Bq(Z%7CX%5Ek)%7D%20%5B%5Clog%20p(X%5Ek%7CZ)%5D"></li>
+</ol>
+<ul>
+<li>잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">로부터 데이터 <img src="https://latex.codecogs.com/png.latex?X">를 복원할 확률(Likelihood)을 최대화합니다.</li>
+<li>Autoencoder의 복원 오차 최소화와 대응됩니다.</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>Regularization Term:</strong> <img src="https://latex.codecogs.com/png.latex?-D_%7B%5Ctext%7BKL%7D%7D(q(Z%7CX%5Ek)%20%7C%7C%20p(Z))"></li>
+</ol>
+<ul>
+<li>우리가 근사한 사후 분포 <img src="https://latex.codecogs.com/png.latex?q(Z%7CX)">가 사전 분포 <img src="https://latex.codecogs.com/png.latex?p(Z)">(일반적으로 표준 정규분포)와 얼마나 다른지를 측정합니다.</li>
+<li>이 차이를 최소화(음수이므로 최대화)하여, 잠재 공간이 과도하게 찌그러지는 것을 방지합니다.</li>
+</ul></li>
+<li><p>결론적으로, 실제 로그 증거와 ELBO의 차이는 KL Divergence <img src="https://latex.codecogs.com/png.latex?D_%7B%5Ctext%7BKL%7D%7D(q(Z%7CX)%20%7C%7C%20p(Z%7CX))%20%5Cge%200"> 만큼 발생하므로, <strong>ELBO를 최대화하는 것은 로그 증거의 하한(Lower Bound)을 최대화하는 것</strong>과 같습니다.</p></li>
+</ul>
+</section>
+</section>
+<section id="architecture-encoder-and-decoder" class="level3">
+<h3 class="anchored" data-anchor-id="architecture-encoder-and-decoder">Architecture: Encoder and Decoder</h3>
+<ul>
+<li>VAE 프레임워크를 DAG-GNN에 적용하기 위해, Encoder와 Decoder를 구체적인 신경망 구조로 정의해야 합니다.</li>
+</ul>
+<section id="decoder-generative-model" class="level4">
+<h4 class="anchored" data-anchor-id="decoder-generative-model">Decoder (Generative Model)</h4>
+<ul>
+<li>Decoder는 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">에서 데이터 <img src="https://latex.codecogs.com/png.latex?X">를 생성하는 역할을 합니다.</li>
+<li>이는 3.2절에서 정의한 <strong>Generalized SEM (식 3)</strong>과 정확히 일치합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7BDecoder:%20%7D%20%5Cquad%20X%20=%20f_2%20%5Cleft(%20(I%20-%20A%5ET)%5E%7B-1%7D%20f_1(Z)%20%5Cright)%0A"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?(I-A%5ET)%5E%7B-1%7D"> 항은 <img src="https://latex.codecogs.com/png.latex?Z">의 정보가 그래프 구조를 따라 퍼져나가며(Propagation) <img src="https://latex.codecogs.com/png.latex?X">를 형성하는 과정을 담당합니다.</li>
+</ul>
+</section>
+<section id="encoder-inference-model" class="level4">
+<h4 class="anchored" data-anchor-id="encoder-inference-model">Encoder (Inference Model)</h4>
+<ul>
+<li>Encoder는 관측된 데이터 <img src="https://latex.codecogs.com/png.latex?X">로부터 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">를 추론하는 역할을 합니다.</li>
+<li>저자들은 Decoder의 역연산 개념을 적용하여 다음과 같은 <strong>Encoder 구조</strong>를 제안합니다.</li>
+</ul>
+<p><span id="eq-(5)"><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7BEncoder:%20%7D%20%5Cquad%20Z%20=%20f_4%20%5Cleft(%20(I%20-%20A%5ET)%20f_3(X)%20%5Cright)%0A%5Ctag%7B5%7D"></span></p>
+<ul>
+<li>이 수식의 의미는 다음과 같습니다:
+<ul>
+<li><ol type="1">
+<li><strong><img src="https://latex.codecogs.com/png.latex?f_3(X)">:</strong></li>
+</ol>
+<ul>
+<li>데이터 <img src="https://latex.codecogs.com/png.latex?X">를 비선형 변환합니다. 개념적으로 Decoder의 <img src="https://latex.codecogs.com/png.latex?f_2">의 역함수 역할을 수행합니다.</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong><img src="https://latex.codecogs.com/png.latex?(I%20-%20A%5ET)">:</strong></li>
+</ol>
+<ul>
+<li>Decoder에서는 역행렬 <img src="https://latex.codecogs.com/png.latex?(I-A%5ET)%5E%7B-1%7D">을 사용해 정보를 확산시켰다면, Encoder에서는 그 역연산인 <img src="https://latex.codecogs.com/png.latex?(I-A%5ET)">를 곱합니다.</li>
+<li>이는 섞여 있는 정보들로부터 <strong>부모 노드의 영향을 제거</strong>하여 독립적인 노이즈(Latent factor)를 발라내는 과정으로 해석할 수 있습니다.</li>
+</ul></li>
+<li><ol start="3" type="1">
+<li><strong><img src="https://latex.codecogs.com/png.latex?f_4(%5Ccdot)">:</strong></li>
+</ol>
+<ul>
+<li>최종적으로 비선형 변환을 통해 <img src="https://latex.codecogs.com/png.latex?Z"> 공간으로 매핑합니다. 개념적으로 Decoder의 <img src="https://latex.codecogs.com/png.latex?f_1">의 역함수 역할을 합니다.</li>
+</ul></li>
+</ul></li>
+</ul>
+</section>
+<section id="parameterization" class="level4">
+<h4 class="anchored" data-anchor-id="parameterization">Parameterization</h4>
+<ul>
+<li><strong>함수:</strong> <img src="https://latex.codecogs.com/png.latex?f_1,%20f_2"> (Decoder)와 <img src="https://latex.codecogs.com/png.latex?f_3,%20f_4"> (Encoder)는 모두 MLP(Multi-Layer Perceptron)로 파라미터화됩니다.</li>
+<li><strong>분포:</strong>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?q(Z%7CX)">와 <img src="https://latex.codecogs.com/png.latex?p(X%7CZ)">는 각각 가우시안 분포 등을 가정하며, 신경망은 이 분포의 평균(<img src="https://latex.codecogs.com/png.latex?%5Cmu">)과 분산(<img src="https://latex.codecogs.com/png.latex?%5Csigma%5E2">)을 출력하도록 설계됩니다.</li>
+<li>구체적인 분포의 형태와 활성화 함수는 데이터 <img src="https://latex.codecogs.com/png.latex?X">의 타입(연속형 vs 이산형)에 따라 결정됩니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="architecture-and-loss-function" class="level2">
+<h2 class="anchored" data-anchor-id="architecture-and-loss-function">3.4. Architecture and Loss Function</h2>
+<ul>
+<li>이전 섹션에서 우리는 DAG 구조 학습을 위한 VAE 프레임워크를 정의했습니다.</li>
+<li>이제 추상적인 수식(<img src="https://latex.codecogs.com/png.latex?f_1,%20f_2,%20f_3,%20f_4">)을 넘어, 실제로 모델을 어떻게 구현하고 학습시킬지 구체적인 <strong>Architecture</strong>와 <strong>Loss Function</strong>을 정의할 차례입니다.</li>
+<li>이 과정에서 우리는 입력 데이터 <img src="https://latex.codecogs.com/png.latex?X">와 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">의 확률 분포를 가정하고, 이를 바탕으로 ELBO(Evidence Lower Bound)를 계산 가능한 수식으로 유도합니다.</li>
+</ul>
+<section id="distribution-specifications" class="level3">
+<h3 class="anchored" data-anchor-id="distribution-specifications">Distribution Specifications</h3>
+<ul>
+<li>모델 학습을 위해서는 변수들의 확률 분포를 명시해야 합니다.</li>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?Z">는 모두 <img src="https://latex.codecogs.com/png.latex?m%20%5Ctimes%20d"> 차원의 행렬입니다 (<img src="https://latex.codecogs.com/png.latex?m">: 노드 수, <img src="https://latex.codecogs.com/png.latex?d">: 특징 차원).</li>
+</ul>
+<section id="prior-distribution-pz" class="level4">
+<h4 class="anchored" data-anchor-id="prior-distribution-pz">Prior Distribution <img src="https://latex.codecogs.com/png.latex?p(Z)"></h4>
+<ul>
+<li>잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">의 사전 분포(Prior)는 가장 일반적인 가정인 <strong>Standard Matrix Normal</strong> 분포를 따릅니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ap(Z)%20=%20%5Cmathcal%7BMN%7D_%7Bm%20%5Ctimes%20d%7D(0,%20I,%20I)%0A"></p>
+<ul>
+<li>이는 <img src="https://latex.codecogs.com/png.latex?Z">의 모든 원소 <img src="https://latex.codecogs.com/png.latex?Z_%7Bij%7D">가 평균이 0이고 분산이 1인 독립적인 정규분포(i.i.d. Gaussian)를 따른다는 것을 의미하며, 계산의 편의성을 위해 다음과 같이 요소별(element-wise) 분포로 취급할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?p(Z_%7Bij%7D)%20=%20%5Cmathcal%7BN%7D(0,%201)"></li>
+</ul>
+</section>
+</section>
+<section id="encoder-architecture-inference-model" class="level3">
+<h3 class="anchored" data-anchor-id="encoder-architecture-inference-model">Encoder Architecture (Inference Model)</h3>
+<ul>
+<li><p>Encoder는 데이터 <img src="https://latex.codecogs.com/png.latex?X">를 입력받아 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">의 분포 <img src="https://latex.codecogs.com/png.latex?q(Z%7CX)">를 추론합니다.</p></li>
+<li><p><strong>가정:</strong> <img src="https://latex.codecogs.com/png.latex?q(Z%7CX)">는 <strong>Factored Gaussian</strong> (대각 공분산을 갖는 정규분포)을 따른다고 가정합니다.</p></li>
+<li><p><strong>구성:</strong> 평균 행렬 <img src="https://latex.codecogs.com/png.latex?M_Z%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20d%7D">와 표준편차 행렬 <img src="https://latex.codecogs.com/png.latex?S_Z%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20d%7D">를 출력합니다.</p></li>
+<li><p><strong>함수 매핑:</strong></p>
+<ul>
+<li>앞선 섹션의 <img src="https://latex.codecogs.com/png.latex?f_3"> (데이터 변환): <strong>MLP (Multi-Layer Perceptron)</strong></li>
+<li>앞선 섹션의 <img src="https://latex.codecogs.com/png.latex?f_4"> (잠재 공간 매핑): <strong>Identity Mapping</strong></li>
+</ul></li>
+<li><p>이를 수식으로 표현하면 다음과 같습니다.</p></li>
+</ul>
+<p><span id="eq-(6)"><img src="https://latex.codecogs.com/png.latex?%0A%5BM_Z%20%7C%20%5Clog%20S_Z%5D%20=%20%5Cunderbrace%7B(I%20-%20A%5ET)%7D_%7B%5Ctext%7BStructure%20Removal%7D%7D%20%5Cunderbrace%7B%5Ctext%7BMLP%7D(X,%20W%5E1,%20W%5E2)%7D_%7B%5Ctext%7BFeature%20Transform%7D%7D%0A%5Ctag%7B6%7D"></span></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BMLP%7D(X,%20W%5E1,%20W%5E2)%20:=%20%5Ctext%7BReLU%7D(X%20W%5E1)%20W%5E2"> 입니다.</li>
+</ul>
+<section id="interpretation" class="level4">
+<h4 class="anchored" data-anchor-id="interpretation">Interpretation</h4>
+<ul>
+<li>식 (6)을 보면 <img src="https://latex.codecogs.com/png.latex?(I-A%5ET)"> 연산이 MLP <strong>다음에</strong> 적용됩니다.</li>
+<li>이는 MLP를 통해 데이터의 비선형 특징을 추출한 뒤, <img src="https://latex.codecogs.com/png.latex?(I-A%5ET)"> 선형 변환을 통해 변수 간의 인과적 종속성(Parent effect)을 제거(Decorrelation)하여 독립적인 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">를 만들어내겠다는 의도입니다.</li>
+</ul>
+</section>
+</section>
+<section id="decoder-architecture-generative-model" class="level3">
+<h3 class="anchored" data-anchor-id="decoder-architecture-generative-model">Decoder Architecture (Generative Model)</h3>
+<ul>
+<li><p>Decoder는 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">로부터 데이터 <img src="https://latex.codecogs.com/png.latex?X">를 복원(Reconstruction)합니다.</p></li>
+<li><p><strong>가정:</strong> <img src="https://latex.codecogs.com/png.latex?p(X%7CZ)"> 역시 <strong>Factored Gaussian</strong>을 따른다고 가정합니다.</p></li>
+<li><p><strong>구성:</strong> 평균 행렬 <img src="https://latex.codecogs.com/png.latex?M_X%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20d%7D">와 표준편차 행렬 <img src="https://latex.codecogs.com/png.latex?S_X%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20d%7D">를 출력합니다.</p></li>
+<li><p><strong>함수 매핑:</strong></p>
+<ul>
+<li>앞선 섹션의 <img src="https://latex.codecogs.com/png.latex?f_1"> (노이즈 변환): <strong>Identity Mapping</strong></li>
+<li>앞선 섹션의 <img src="https://latex.codecogs.com/png.latex?f_2"> (데이터 복원): <strong>MLP</strong></li>
+</ul></li>
+<li><p>이를 수식으로 표현하면 다음과 같습니다.</p></li>
+</ul>
+<p><span id="eq-(7)"><img src="https://latex.codecogs.com/png.latex?%0A%5BM_X%20%7C%20%5Clog%20S_X%5D%20=%20%5Cunderbrace%7B%5Ctext%7BMLP%7D%7D_%7B%5Ctext%7BData%20Generation%7D%7D%20%5Cleft(%20%5Cunderbrace%7B(I%20-%20A%5ET)%5E%7B-1%7D%20Z%7D_%7B%5Ctext%7BStructure%20Propagation%7D%7D,%20W%5E3,%20W%5E4%20%5Cright)%0A%5Ctag%7B7%7D"></span></p>
+<section id="interpretation-1" class="level4">
+<h4 class="anchored" data-anchor-id="interpretation-1">Interpretation</h4>
+<ul>
+<li>저자들은 <img src="https://latex.codecogs.com/png.latex?f_1">과 <img src="https://latex.codecogs.com/png.latex?f_2">의 위치를 바꾸어 실험해 보았으나, 현재의 설계(내부에 Identity, 외부에 MLP)가 성능이 더 좋았다고 보고합니다.</li>
+<li>그 이유는 식 (7)의 설계가 <strong>Linear SEM의 구조적 변환 <img src="https://latex.codecogs.com/png.latex?(I-A%5ET)%5E%7B-1%7DZ">를 강조</strong>하기 때문입니다.</li>
+<li>구조적 전파(Propagation)가 먼저 일어난 뒤 MLP가 비선형성을 입히는 방식이 비선형 데이터 생성 과정을 더 잘 포착한다는 것입니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/paper/DAG-GNN: DAG Structure Learning with Graph Neural Networks/images/dag_gnn_architecture_schematic.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: DAG-GNN의 전체 아키텍처 (Continuous Variables). 입력 <img src="https://latex.codecogs.com/png.latex?X">가 MLP와 <img src="https://latex.codecogs.com/png.latex?(I-A%5ET)">를 거쳐 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">의 통계량(<img src="https://latex.codecogs.com/png.latex?M_Z,%20S_Z">)으로 인코딩되고, 샘플링된 <img src="https://latex.codecogs.com/png.latex?Z">는 <img src="https://latex.codecogs.com/png.latex?(I-A%5ET)%5E%7B-1%7D">와 MLP를 거쳐 다시 <img src="https://latex.codecogs.com/png.latex?X">의 통계량(<img src="https://latex.codecogs.com/png.latex?M_X,%20S_X">)으로 디코딩된다.</figcaption>
+</figure>
+</div>
+</section>
+</section>
+<section id="loss-function-derivation-elbo" class="level3">
+<h3 class="anchored" data-anchor-id="loss-function-derivation-elbo">Loss Function Derivation (ELBO)</h3>
+<ul>
+<li>이제 정의된 분포(<img src="https://latex.codecogs.com/png.latex?p(Z),%20q(Z%7CX),%20p(X%7CZ)">)를 바탕으로, VAE의 목적 함수인 <strong>ELBO</strong>를 구체적인 수식으로 유도해 봅시다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BL%7D_%7B%5Ctext%7BELBO%7D%7D%20=%20-D_%7B%5Ctext%7BKL%7D%7D(q(Z%7CX)%20%7C%7C%20p(Z))%20+%20%5Cmathbb%7BE%7D_%7Bq(Z%7CX)%7D%5B%5Clog%20p(X%7CZ)%5D%0A"></p>
+<section id="kl-divergence-term-regularization" class="level4">
+<h4 class="anchored" data-anchor-id="kl-divergence-term-regularization">KL Divergence Term (Regularization)</h4>
+<ul>
+<li><p>이 항은 근사 분포 <img src="https://latex.codecogs.com/png.latex?q(Z%7CX)">가 사전 분포 <img src="https://latex.codecogs.com/png.latex?p(Z)">와 얼마나 다른지를 측정합니다.</p></li>
+<li><p>두 분포가 모두 가우시안일 경우, 복잡한 적분 없이도 파라미터(<img src="https://latex.codecogs.com/png.latex?M_Z,%20S_Z">)만으로 계산 가능한 <strong>Closed Form(닫힌 해)</strong>이 존재합니다.</p></li>
+<li><p><strong>가정:</strong></p>
+<ul>
+<li><strong>Variational Posterior:</strong> <img src="https://latex.codecogs.com/png.latex?q(Z%7CX)%20=%20%5Cmathcal%7BN%7D(M_Z,%20S_Z%5E2)"> (Factored Gaussian)</li>
+<li><strong>Prior:</strong> <img src="https://latex.codecogs.com/png.latex?p(Z)%20=%20%5Cmathcal%7BN%7D(0,%20I)"> (Standard Normal)</li>
+</ul></li>
+<li><p>모든 변수가 독립(Independent)이므로, 단일 원소 <img src="https://latex.codecogs.com/png.latex?z%20%5Csim%20q(z)%20=%20%5Cmathcal%7BN%7D(%5Cmu,%20%5Csigma%5E2)">와 <img src="https://latex.codecogs.com/png.latex?p(z)%20=%20%5Cmathcal%7BN%7D(0,%201)"> 사이의 KL Divergence를 먼저 유도한 뒤 합산하면 됩니다.</p></li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled" title="상세 유도: 두 가우시안 사이의 KL Divergence">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-2-contents" aria-controls="callout-2" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>상세 유도: 두 가우시안 사이의 KL Divergence
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-2" class="callout-2-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p><strong>1. 정의:</strong> <img src="https://latex.codecogs.com/png.latex?D_%7B%5Ctext%7BKL%7D%7D(q%7C%7Cp)%20=%20%5Cmathbb%7BE%7D_%7Bz%20%5Csim%20q%7D%20%5B%5Clog%20q(z)%20-%20%5Clog%20p(z)%5D"></p>
+<p><strong>2. 로그 확률밀도함수 전개:</strong> <img src="https://latex.codecogs.com/png.latex?%5Clog%20q(z)%20=%20-%5Cfrac%7B1%7D%7B2%7D%5Clog(2%5Cpi)%20-%20%5Clog%5Csigma%20-%20%5Cfrac%7B(z-%5Cmu)%5E2%7D%7B2%5Csigma%5E2%7D"> <img src="https://latex.codecogs.com/png.latex?%5Clog%20p(z)%20=%20-%5Cfrac%7B1%7D%7B2%7D%5Clog(2%5Cpi)%20-%20%5Cfrac%7Bz%5E2%7D%7B2%7D"></p>
+<p><strong>3. 차이 계산:</strong> <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Clog%20q(z)%20-%20%5Clog%20p(z)%20&amp;=%20%5Cleft(%20-%5Clog%5Csigma%20-%20%5Cfrac%7B(z-%5Cmu)%5E2%7D%7B2%5Csigma%5E2%7D%20%5Cright)%20-%20%5Cleft(%20-%20%5Cfrac%7Bz%5E2%7D%7B2%7D%20%5Cright)%20%5C%5C%0A&amp;=%20-%5Clog%5Csigma%20+%20%5Cfrac%7B1%7D%7B2%7Dz%5E2%20-%20%5Cfrac%7B(z-%5Cmu)%5E2%7D%7B2%5Csigma%5E2%7D%0A%5Cend%7Baligned%7D%0A"></p>
+<p><strong>4. 기댓값(<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D_q">) 취하기:</strong> <img src="https://latex.codecogs.com/png.latex?z%20%5Csim%20%5Cmathcal%7BN%7D(%5Cmu,%20%5Csigma%5E2)">일 때, <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D%5Bz%5E2%5D%20=%20%5Cmu%5E2%20+%20%5Csigma%5E2"> 이고 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D%5B(z-%5Cmu)%5E2%5D%20=%20%5Csigma%5E2"> 임을 이용합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmathbb%7BE%7D_q%20%5B%5Cdots%5D%20&amp;=%20-%5Clog%5Csigma%20+%20%5Cfrac%7B1%7D%7B2%7D(%5Cmu%5E2%20+%20%5Csigma%5E2)%20-%20%5Cfrac%7B%5Csigma%5E2%7D%7B2%5Csigma%5E2%7D%20%5C%5C%0A&amp;=%20-%5Clog%5Csigma%20+%20%5Cfrac%7B1%7D%7B2%7D%5Cmu%5E2%20+%20%5Cfrac%7B1%7D%7B2%7D%5Csigma%5E2%20-%20%5Cfrac%7B1%7D%7B2%7D%20%5C%5C%0A&amp;=%20%5Cfrac%7B1%7D%7B2%7D%20(%5Csigma%5E2%20+%20%5Cmu%5E2%20-%202%5Clog%5Csigma%20-%201)%0A%5Cend%7Baligned%7D%0A"></p>
+</div>
+</div>
+</div>
+<ul>
+<li>위의 스칼라 유도 결과를 행렬 전체(<img src="https://latex.codecogs.com/png.latex?m%20%5Ctimes%20d">)에 대해 합산하면 다음과 같습니다.</li>
+</ul>
+<p><span id="eq-(8)"><img src="https://latex.codecogs.com/png.latex?%0AD_%7B%5Ctext%7BKL%7D%7D%5CBig(q(Z%7CX)%20%5C,%7C%7C%5C,%20p(Z)%5CBig)%20=%20%5Cfrac%7B1%7D%7B2%7D%20%5Csum_%7Bi=1%7D%5Em%20%5Csum_%7Bj=1%7D%5Ed%20%5Cleft(%20%5Cunderbrace%7B(S_Z)_%7Bij%7D%5E2%7D_%7B%5Csigma%5E2%7D%20+%20%5Cunderbrace%7B(M_Z)_%7Bij%7D%5E2%7D_%7B%5Cmu%5E2%7D%20-%20%5Cunderbrace%7B2%5Clog(S_Z)_%7Bij%7D%7D_%7B2%5Clog%5Csigma%7D%20-%201%20%5Cright)%0A%5Ctag%7B8%7D"></span></p>
+<ul>
+<li><strong>의의:</strong> 이 식은 적분(Sampling)이 필요 없으므로 계산이 매우 빠르고, 역전파(Backpropagation)를 통한 미분이 용이하여 안정적인 학습을 가능하게 합니다.</li>
+<li><strong>역할:</strong> 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">가 평균 0, 분산 1인 분포에서 너무 멀어지지 않도록 강제하는 <strong>Regularizer</strong> 역할을 수행합니다.</li>
+</ul>
+</section>
+<section id="reconstruction-term-likelihood" class="level4">
+<h4 class="anchored" data-anchor-id="reconstruction-term-likelihood">Reconstruction Term (Likelihood)</h4>
+<ul>
+<li>두 번째 항은 모델이 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">로부터 관측 데이터 <img src="https://latex.codecogs.com/png.latex?X">를 얼마나 잘 복원하는지를 나타내는 <strong>복원 오차(Reconstruction Error)</strong>입니다.</li>
+<li>이 수식이 유도되는 과정은 <strong>Factored Gaussian 가정</strong>에 의해 다음과 같이 논리적으로 전개됩니다.</li>
+</ul>
+<section id="step-1-factored-gaussian-가정-행렬-to-스칼라-분해" class="level5">
+<h5 class="anchored" data-anchor-id="step-1-factored-gaussian-가정-행렬-to-스칼라-분해"><strong>Step 1: Factored Gaussian 가정 (행렬 <img src="https://latex.codecogs.com/png.latex?%5Cto"> 스칼라 분해)</strong></h5>
+<ul>
+<li><p>우리가 구해야 할 것은 전체 데이터 행렬 <img src="https://latex.codecogs.com/png.latex?X">에 대한 우도 <img src="https://latex.codecogs.com/png.latex?P(X%7CZ)">입니다.</p></li>
+<li><p>앞서 우리는 <img src="https://latex.codecogs.com/png.latex?p(X%7CZ)">가 <strong>Factored Gaussian</strong>을 따른다고 가정했습니다.</p></li>
+<li><p>이는 <img src="https://latex.codecogs.com/png.latex?Z">가 주어졌을 때 <img src="https://latex.codecogs.com/png.latex?X">의 각 원소 <img src="https://latex.codecogs.com/png.latex?X_%7Bij%7D">가 서로 <strong>조건부 독립(Conditionally Independent)</strong>임을 의미합니다.</p></li>
+<li><p>따라서 결합 확률(Joint Probability)은 개별 스칼라 확률들의 곱으로 분해됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP(X%7CZ)%20=%20%5Cprod_%7Bi=1%7D%5Em%20%5Cprod_%7Bj=1%7D%5Ed%20p(X_%7Bij%7D%20%7C%20Z)%0A"></p>
+</section>
+<section id="step-2-로그-변환과-덧셈으로의-전환-prod-to-sum" class="level5">
+<h5 class="anchored" data-anchor-id="step-2-로그-변환과-덧셈으로의-전환-prod-to-sum"><strong>Step 2: 로그 변환과 덧셈으로의 전환 (<img src="https://latex.codecogs.com/png.latex?%5Cprod%20%5Cto%20%5Csum">)</strong></h5>
+<ul>
+<li>목적 함수는 <strong>로그 우도(Log-Likelihood)</strong>입니다. 양변에 로그를 취하면, 거대한 곱셈이 덧셈(Summation)으로 변환됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Clog%20P(X%7CZ)%20=%20%5Csum_%7Bi=1%7D%5Em%20%5Csum_%7Bj=1%7D%5Ed%20%5Clog%20p(X_%7Bij%7D%20%7C%20Z)%0A"></p>
+<ul>
+<li>이제 문제는 복잡한 행렬 연산에서 <strong>“개별 요소(<img src="https://latex.codecogs.com/png.latex?X_%7Bij%7D">)의 스칼라 가우시안 로그 우도를 구해서 더하는 문제”</strong>로 단순화되었습니다.</li>
+</ul>
+</section>
+<section id="step-3-스칼라-가우시안-로그-우도-계산" class="level5">
+<h5 class="anchored" data-anchor-id="step-3-스칼라-가우시안-로그-우도-계산"><strong>Step 3: 스칼라 가우시안 로그 우도 계산</strong></h5>
+<ul>
+<li>단일 변수 <img src="https://latex.codecogs.com/png.latex?x">가 평균 <img src="https://latex.codecogs.com/png.latex?%5Cmu">, 표준편차 <img src="https://latex.codecogs.com/png.latex?%5Csigma">인 정규분포를 따를 때, 그 로그 확률밀도함수는 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Clog%20p(x%20%7C%20%5Cmu,%20%5Csigma)%20&amp;=%20%5Clog%20%5Cleft(%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%5Cpi%7D%5Csigma%7D%20e%5E%7B-%5Cfrac%7B(x-%5Cmu)%5E2%7D%7B2%5Csigma%5E2%7D%7D%20%5Cright)%20%5C%5C%0A&amp;=%20%5Cunderbrace%7B-%5Clog(%5Csqrt%7B2%5Cpi%7D)%7D_%7B%5Ctext%7BConstant%20%7D%20c%7D%20-%20%5Clog%20%5Csigma%20-%20%5Cfrac%7B(x%20-%20%5Cmu)%5E2%7D%7B2%5Csigma%5E2%7D%0A%5Cend%7Baligned%7D%0A"></p>
+<ul>
+<li>이 식을 위 Step 2의 합산 기호 안에 대입합니다.</li>
+</ul>
+</section>
+<section id="step-4-몬테카를로-근사-monte-carlo-approximation" class="level5">
+<h5 class="anchored" data-anchor-id="step-4-몬테카를로-근사-monte-carlo-approximation"><strong>Step 4: 몬테카를로 근사 (Monte Carlo Approximation)</strong></h5>
+<ul>
+<li><p>마지막으로 기댓값 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D_%7Bq(Z%7CX)%7D">를 계산하기 위해, 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">를 <img src="https://latex.codecogs.com/png.latex?L">번 샘플링하여 그 평균으로 적분을 근사합니다.</p></li>
+<li><p>이 모든 단계를 종합하면 식 (9)를 얻게 됩니다.</p></li>
+</ul>
+<p><span id="eq-(9)"><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbb%7BE%7D_%7Bq(Z%7CX)%7D%20%5CBig%5B%20%5Clog%20p(X%7CZ)%20%5CBig%5D%20%5Capprox%20%5Cfrac%7B1%7D%7BL%7D%20%5Csum_%7Bl=1%7D%5EL%20%5Csum_%7Bi=1%7D%5Em%20%5Csum_%7Bj=1%7D%5Ed%20%5Cleft(%20%5Cunderbrace%7B-%20%5Cfrac%7B(X_%7Bij%7D%20-%20(M_X%5E%7B(l)%7D)_%7Bij%7D)%5E2%7D%7B2(S_X%5E%7B(l)%7D)_%7Bij%7D%5E2%7D%7D_%7B%5Ctext%7BWeighted%20MSE%7D%7D%20%5Cunderbrace%7B-%20%5Clog(S_X%5E%7B(l)%7D)_%7Bij%7D%7D_%7B%5Ctext%7BUncertainty%20Penalty%7D%7D%20%5Cright)%20-%20c%0A%5Ctag%7B9%7D"></span></p>
+<ul>
+<li><strong>해석:</strong> 이 수식은 본질적으로 <strong>가중치(분산의 역수)가 적용된 MSE</strong>와, 모델이 불확실성(분산)을 무작정 키우는 것을 막는 <strong>Penalty(<img src="https://latex.codecogs.com/png.latex?%5Clog%20S_X">)</strong>의 합입니다.</li>
+</ul>
+</section>
+</section>
+</section>
+<section id="a-note-on-latent-dimensions" class="level3">
+<h3 class="anchored" data-anchor-id="a-note-on-latent-dimensions">A Note on Latent Dimensions</h3>
+<ul>
+<li>Linear SEM에서는 <img src="https://latex.codecogs.com/png.latex?Z">를 단순한 “Noise”로 보기에 <img src="https://latex.codecogs.com/png.latex?X">와 차원이 같아야 했습니다.</li>
+<li>하지만 VAE 프레임워크에서 <img src="https://latex.codecogs.com/png.latex?Z">는 <strong>Latent Factor</strong>로 해석됩니다.</li>
+<li>따라서 <img src="https://latex.codecogs.com/png.latex?Z">의 열(column) 차원을 <img src="https://latex.codecogs.com/png.latex?X">의 차원 <img src="https://latex.codecogs.com/png.latex?d">와 다르게 설정할 수 있습니다.</li>
+<li>만약 데이터의 내재적 차원(Intrinsic Dimension)이 작다고 판단되면, <img src="https://latex.codecogs.com/png.latex?Z">의 차원을 줄여서 모델의 파라미터 수(<img src="https://latex.codecogs.com/png.latex?W%5E2,%20W%5E3">)를 줄이고 효율적인 표현을 학습할 수 있습니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="discrete-variables" class="level2">
+<h2 class="anchored" data-anchor-id="discrete-variables">3.5. Discrete Variables</h2>
+<p>현실 세계의 인과관계 데이터는 키, 몸무게 같은 연속형(Continuous) 변수뿐만 아니라, 질병 유무, 성별, 등급과 같은 <strong>이산형(Discrete) 변수</strong>로 구성된 경우가 많습니다.</p>
+<p>DAG-GNN의 가장 큰 장점 중 하나는 VAE(Variational Autoencoder) 프레임워크를 기반으로 하기 때문에, 데이터의 타입에 따라 <strong>우도(Likelihood) 분포만 적절히 교체</strong>해주면 자연스럽게 다양한 데이터 타입을 처리할 수 있다는 점입니다.</p>
+<p>이번 포스트에서는 DAG-GNN이 이산형 변수를 어떻게 모델링하는지 그 수식적 변형 과정을 살펴보겠습니다.</p>
+</section>
+<section id="data-representation-one-hot-encoding" class="level2">
+<h2 class="anchored" data-anchor-id="data-representation-one-hot-encoding">1. Data Representation (One-Hot Encoding)</h2>
+<p>이산형 변수를 처리하기 위해 데이터 표현 방식부터 정의합니다.</p>
+<ul>
+<li><strong>가정:</strong> 각 변수는 크기(Cardinality)가 <img src="https://latex.codecogs.com/png.latex?d">인 유한한 지지 집합(Finite support)을 가집니다.</li>
+<li><strong>입력 <img src="https://latex.codecogs.com/png.latex?X">:</strong> <img src="https://latex.codecogs.com/png.latex?X">의 각 행(변수)은 <strong>One-Hot Vector</strong>로 표현됩니다.
+<ul>
+<li>즉, “On” 위치(값이 1인 인덱스)가 해당 변수의 범주(Category)를 나타냅니다.</li>
+<li>따라서 <img src="https://latex.codecogs.com/png.latex?X%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20d%7D"> 차원을 유지합니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+<section id="encoder-and-prior-unchanged" class="level2">
+<h2 class="anchored" data-anchor-id="encoder-and-prior-unchanged">2. Encoder and Prior (Unchanged)</h2>
+<p>놀랍게도, 이산형 데이터를 다룸에도 불구하고 <strong>Encoder(Inference Model)와 Prior는 연속형 모델과 동일</strong>하게 유지됩니다.</p>
+<ol type="1">
+<li><strong>Prior <img src="https://latex.codecogs.com/png.latex?p(Z)">:</strong> 여전히 Standard Matrix Normal <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BMN%7D(0,%20I,%20I)">을 따릅니다.</li>
+<li><strong>Posterior <img src="https://latex.codecogs.com/png.latex?q(Z%7CX)">:</strong> Factored Gaussian 분포를 가정합니다.</li>
+<li><strong>Encoder 함수:</strong> 식 (6)의 구조를 그대로 사용합니다.</li>
+</ol>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5BM_Z%20%7C%20%5Clog%20S_Z%5D%20=%20(I%20-%20A%5ET)%20%5Ctext%7BMLP%7D(X)%0A"></p>
+<p>이는 <strong>잠재 공간(Latent Space) <img src="https://latex.codecogs.com/png.latex?Z">는 여전히 연속적인 공간</strong>으로 남겨두고, 이 공간에서 그래프 구조 학습과 변분 추론을 수행하겠다는 의도입니다.</p>
+<hr>
+</section>
+<section id="decoder-modification-categorical-likelihood" class="level2">
+<h2 class="anchored" data-anchor-id="decoder-modification-categorical-likelihood">3. Decoder Modification (Categorical Likelihood)</h2>
+<p>변화가 필요한 부분은 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">에서 다시 데이터 <img src="https://latex.codecogs.com/png.latex?X">를 복원하는 <strong>Decoder(Generative Model)</strong> 파트입니다. <img src="https://latex.codecogs.com/png.latex?X">가 이산형이므로, 더 이상 가우시안 분포를 가정할 수 없습니다.</p>
+<section id="distribution-assumption" class="level3">
+<h3 class="anchored" data-anchor-id="distribution-assumption">3.1. Distribution Assumption</h3>
+<p>우리는 우도 <img src="https://latex.codecogs.com/png.latex?p(X%7CZ)">를 <strong>Factored Categorical Distribution</strong>으로 가정합니다.</p>
+<ul>
+<li><strong>출력:</strong> 확률 행렬 <img src="https://latex.codecogs.com/png.latex?P_X%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20d%7D"></li>
+<li>각 행(Row)은 해당 변수가 각 범주에 속할 확률을 나타내는 확률 벡터(Probability Vector)가 됩니다.</li>
+</ul>
+</section>
+<section id="architecture-change" class="level3">
+<h3 class="anchored" data-anchor-id="architecture-change">3.2. Architecture Change</h3>
+<p>이를 구현하기 위해, Decoder의 마지막 변환 함수 <img src="https://latex.codecogs.com/png.latex?f_2">를 <strong>Softmax</strong> 함수로 변경합니다.</p>
+<ul>
+<li>기존 (Continuous): <img src="https://latex.codecogs.com/png.latex?f_2%20=%20%5Ctext%7BMLP%7D"> (Identity mapping for output range)</li>
+<li><strong>변경 (Discrete):</strong> <img src="https://latex.codecogs.com/png.latex?f_2%20=%20%5Ctext%7Bsoftmax%7D(%5Ctext%7BMLP%7D)"></li>
+</ul>
+<p>수식으로 표현하면 다음과 같습니다 (식 10):</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP_X%20=%20%5Ctext%7Bsoftmax%7D%20%5Cleft(%20%5Ctext%7BMLP%7D%20%5Cbig(%20(I%20-%20A%5ET)%5E%7B-1%7D%20Z,%20W%5E3,%20W%5E4%20%5Cbig)%20%5Cright)%20%5Cquad%20%5Ccdots%20(10)%0A"></p>
+<p>여기서 <code>softmax</code>는 각 행(Row-wise)에 대해 적용되어, 각 변수의 범주별 확률 합이 1이 되도록 만듭니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/paper/DAG-GNN: DAG Structure Learning with Graph Neural Networks/images/dag_gnn_architecture_discrete.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 이산형 변수를 처리하기 위한 DAG-GNN 아키텍처의 변화. Encoder 부분은 동일하지만, Decoder의 출력이 평균/분산(<img src="https://latex.codecogs.com/png.latex?M_X,%20S_X">)에서 확률 분포(<img src="https://latex.codecogs.com/png.latex?P_X">)로 변경된다. 이는 마지막 레이어에 Softmax가 적용됨을 의미한다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+<section id="loss-function-modification-cross-entropy" class="level2">
+<h2 class="anchored" data-anchor-id="loss-function-modification-cross-entropy">4. Loss Function Modification (Cross-Entropy)</h2>
+<p>목적 함수인 ELBO(Evidence Lower Bound)의 두 항 중, KL Divergence 항은 <img src="https://latex.codecogs.com/png.latex?q(Z%7CX)">와 <img src="https://latex.codecogs.com/png.latex?p(Z)">가 변하지 않았으므로 식 (8) 그대로 유지됩니다.</p>
+<p>하지만 <strong>Reconstruction Term (Likelihood)</strong>은 가우시안 로그 우도(MSE 형태)에서 <strong>Categorical 로그 우도</strong>로 변경되어야 합니다. 이는 머신러닝에서 흔히 쓰이는 <strong>Cross-Entropy Loss</strong>와 형태가 같습니다.</p>
+<section id="derivation-1" class="level3">
+<h3 class="anchored" data-anchor-id="derivation-1">Derivation</h3>
+<p>Categorical 분포의 로그 우도는 관측된 클래스(<img src="https://latex.codecogs.com/png.latex?X_%7Bij%7D=1">)의 예측 확률(<img src="https://latex.codecogs.com/png.latex?P_%7BX_%7Bij%7D%7D">)에 로그를 취한 값입니다. 이를 몬테카를로 샘플링을 적용하여 정리하면 식 (11)을 얻습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbb%7BE%7D_%7Bq(Z%7CX)%7D%20%5CBig%5B%20%5Clog%20p(X%7CZ)%20%5CBig%5D%20%5Capprox%20%5Cfrac%7B1%7D%7BL%7D%20%5Csum_%7Bl=1%7D%5EL%20%5Csum_%7Bi=1%7D%5Em%20%5Csum_%7Bj=1%7D%5Ed%20X_%7Bij%7D%20%5Clog%20(P_X%5E%7B(l)%7D)_%7Bij%7D%20%5Cquad%20%5Ccdots%20(11)%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?L">: 몬테카를로 샘플 개수</li>
+<li><img src="https://latex.codecogs.com/png.latex?X_%7Bij%7D">: 실제 데이터의 One-hot 값 (0 또는 1)</li>
+<li><img src="https://latex.codecogs.com/png.latex?(P_X%5E%7B(l)%7D)_%7Bij%7D">: Decoder가 예측한 <img src="https://latex.codecogs.com/png.latex?l">번째 샘플의 확률 값</li>
+<li>이 식은 <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?P_X"> 사이의 Cross-Entropy를 계산하여, 모델이 실제 데이터의 범주를 정확하게 예측하도록 학습시킵니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">5. Summary</h2>
+<p>DAG-GNN은 데이터 타입에 따라 모델의 핵심 구조(Encoder, Graph Operations, Latent Space)를 변경할 필요 없이, <strong>Decoder의 출력층(Softmax)과 손실 함수(Cross-Entropy)</strong>만 유연하게 교체하여 이산형 변수를 처리합니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">구분</th>
+<th style="text-align: left;">연속형 (Continuous)</th>
+<th style="text-align: left;">이산형 (Discrete)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>Input <img src="https://latex.codecogs.com/png.latex?X"></strong></td>
+<td style="text-align: left;">Real Values (<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20d%7D">)</td>
+<td style="text-align: left;">One-hot Vectors (<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20d%7D">)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>Prior / Encoder</strong></td>
+<td style="text-align: left;">Gaussian / MLP</td>
+<td style="text-align: left;">Gaussian / MLP (동일)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>Likelihood</strong></td>
+<td style="text-align: left;">Gaussian <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BN%7D(M_X,%20S_X)"></td>
+<td style="text-align: left;">Categorical <img src="https://latex.codecogs.com/png.latex?P_X"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>Output Function (<img src="https://latex.codecogs.com/png.latex?f_2">)</strong></td>
+<td style="text-align: left;">Identity / MLP</td>
+<td style="text-align: left;">Softmax</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>Reconstruction Loss</strong></td>
+<td style="text-align: left;">Mean Squared Error (approx)</td>
+<td style="text-align: left;">Cross Entropy</td>
+</tr>
+</tbody>
+</table>
+<p>이러한 설계는 다양한 형태의 변수가 섞여 있는(Mixed type) 실제 데이터셋에도 쉽게 확장 적용할 수 있는 가능성을 보여줍니다.</p>
+<hr>
+<section id="누락-방지-검증-checklist" class="level3">
+<h3 class="anchored" data-anchor-id="누락-방지-검증-checklist">누락 방지 검증 (Checklist)</h3>
+<ul>
+<li><strong>데이터 표현:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">각 변수가 cardinality <img src="https://latex.codecogs.com/png.latex?d">를 갖는 유한 지지 집합임 명시</label></li>
+<li><label><input type="checkbox" checked="">입력 <img src="https://latex.codecogs.com/png.latex?X">가 One-hot vector로 표현됨 설명</label></li>
+</ul></li>
+<li><strong>모델 구조 (유지되는 부분):</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">Prior와 Encoder 구조는 연속형과 동일함을 설명</label></li>
+<li><label><input type="checkbox" checked=""><img src="https://latex.codecogs.com/png.latex?q(Z%7CX)">는 여전히 Factored Gaussian임 언급</label></li>
+</ul></li>
+<li><strong>모델 구조 (변경되는 부분):</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">Likelihood <img src="https://latex.codecogs.com/png.latex?p(X%7CZ)">가 Factored Categorical Distribution임 명시</label></li>
+<li><label><input type="checkbox" checked="">Decoder 출력 <img src="https://latex.codecogs.com/png.latex?P_X"> (Probability matrix) 정의</label></li>
+<li><label><input type="checkbox" checked="">식 (10) <img src="https://latex.codecogs.com/png.latex?P_X%20=%20%5Ctext%7Bsoftmax%7D(%5Ctext%7BMLP%7D((I-A%5ET)%5E%7B-1%7DZ))"> 정확히 기술</label></li>
+<li><label><input type="checkbox" checked=""><img src="https://latex.codecogs.com/png.latex?f_2">가 Identity에서 Row-wise Softmax로 변경됨 설명</label></li>
+</ul></li>
+<li><strong>손실 함수:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">KL Divergence 항(식 8)은 그대로 유지됨 언급</label></li>
+<li><label><input type="checkbox" checked="">Reconstruction Loss 식 (11) (Cross-Entropy 형태) 정확히 유도 및 기술</label></li>
+</ul></li>
+</ul>
+</section>
+</section>
+</section>
+<section id="connection-to-linear-sem" class="level1">
+<h1>3.6. Connection to Linear SEM</h1>
+<p>지금까지 우리는 Linear SEM에서 출발하여 비선형성을 더하고(Non-linearity), VAE 프레임워크를 입혀(Probabilistic) DAG-GNN을 완성했습니다.</p>
+<p>이제 저자들은 <strong>“역방향 사고(Reverse Thought Flow)”</strong>를 통해, DAG-GNN의 껍질을 하나씩 벗겨내면 결국 기존의 <strong>Linear SEM (Zheng et al., 2018, NOTEARS)</strong>과 수학적으로 완전히 일치함을 보입니다.</p>
+<p>이 과정은 DAG-GNN이 근본 없는 블랙박스 모델이 아니라, 기존의 최적화 기반 구조 학습 이론을 <strong>확장(Extension)</strong>한 것임을 증명하는 중요한 이론적 토대가 됩니다.</p>
+<hr>
+<section id="step-1-from-vae-to-plain-autoencoder" class="level2">
+<h2 class="anchored" data-anchor-id="step-1-from-vae-to-plain-autoencoder">1. Step 1: From VAE to Plain Autoencoder</h2>
+<p>가장 먼저, 확률적(Probabilistic) 모델인 VAE에서 변분(Variational) 요소를 제거하여 결정론적(Deterministic)인 <strong>Plain Autoencoder</strong>로 축소해 봅시다.</p>
+<section id="deterministic-setup" class="level3">
+<h3 class="anchored" data-anchor-id="deterministic-setup">1.1. Deterministic Setup</h3>
+<p>확률 분포 <img src="https://latex.codecogs.com/png.latex?q(Z%7CX)"> 대신, 입력 <img src="https://latex.codecogs.com/png.latex?X">가 주어졌을 때 잠재 변수 <img src="https://latex.codecogs.com/png.latex?Z">가 고정된 값으로 결정된다고 가정합니다. 또한 비선형 함수 <img src="https://latex.codecogs.com/png.latex?f_1%20%5Cdots%20f_4">는 그대로 유지합니다.</p>
+<ul>
+<li><strong>Encoder (식 5 기반):</strong> <img src="https://latex.codecogs.com/png.latex?Z%20=%20f_4((I%20-%20A%5ET)%20f_3(X))"></li>
+<li><strong>Decoder (식 3 기반):</strong> <img src="https://latex.codecogs.com/png.latex?%5Chat%7BX%7D%20=%20f_2((I%20-%20A%5ET)%5E%7B-1%7D%20f_1(Z))"> (여기서 <img src="https://latex.codecogs.com/png.latex?%5Chat%7BX%7D">는 Decoder에 의해 복원된 값을 의미합니다.)</li>
+</ul>
+</section>
+<section id="correspondence-of-loss-functions" class="level3">
+<h3 class="anchored" data-anchor-id="correspondence-of-loss-functions">1.2. Correspondence of Loss Functions</h3>
+<p>일반적인 Autoencoder가 최소화하려는 손실 함수(Sample Loss)는 <strong>복원 오차(Reconstruction Error)</strong>와 <strong>잠재 변수 규제(Regularization)</strong>의 합으로 표현됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BL%7D_%7B%5Ctext%7BAE%7D%7D%20=%20%5Cunderbrace%7B%5Cfrac%7B1%7D%7B2%7D%20%5Csum_%7Bi=1%7D%5Em%20%5Csum_%7Bj=1%7D%5Ed%20(X_%7Bij%7D%20-%20%5Chat%7BX%7D_%7Bij%7D)%5E2%7D_%7B%5Ctext%7BReconstruction%7D%7D%20+%20%5Cunderbrace%7B%5Cfrac%7B1%7D%7B2%7D%20%5Csum_%7Bi=1%7D%5Em%20%5Csum_%7Bj=1%7D%5Ed%20Z_%7Bij%7D%5E2%7D_%7B%5Ctext%7BRegularization%7D%7D%0A"></p>
+<p>이 결정론적 손실 함수는 VAE의 <strong>ELBO</strong>와 정확히 대응됩니다:</p>
+<ol type="1">
+<li><strong>Reconstruction Term:</strong>
+<ul>
+<li>ELBO의 복원 정확도 항(식 9)에서, <img src="https://latex.codecogs.com/png.latex?S_X"> (Decoder 분산)를 1로 고정하고 <img src="https://latex.codecogs.com/png.latex?M_X"> (Decoder 평균)를 <img src="https://latex.codecogs.com/png.latex?%5Chat%7BX%7D">로 두면, 로그 우도 최대화는 곧 <strong>MSE(Mean Squared Error) 최소화</strong>와 같아집니다.</li>
+</ul></li>
+<li><strong>Regularization Term:</strong>
+<ul>
+<li>ELBO의 KL Divergence 항(식 8)에서, <img src="https://latex.codecogs.com/png.latex?S_Z"> (Encoder 분산)를 1로 고정하고 <img src="https://latex.codecogs.com/png.latex?M_Z"> (Encoder 평균)를 <img src="https://latex.codecogs.com/png.latex?Z">로 두면, KL 항은 <img src="https://latex.codecogs.com/png.latex?%5Csum%20Z_%7Bij%7D%5E2">에 비례하게 됩니다. 이는 <strong>L2 Regularization</strong>과 같습니다.</li>
+</ul></li>
+</ol>
+<hr>
+</section>
+</section>
+<section id="step-2-from-nonlinear-to-linear-the-core-derivation" class="level2">
+<h2 class="anchored" data-anchor-id="step-2-from-nonlinear-to-linear-the-core-derivation">2. Step 2: From Nonlinear to Linear (The Core Derivation)</h2>
+<p>이제 두 번째 단계로, 모델의 <strong>비선형성(Non-linearity)</strong>을 제거해 봅시다. 즉, 모든 활성화 함수와 MLP를 걷어냅니다.</p>
+<section id="linear-assumptions" class="level3">
+<h3 class="anchored" data-anchor-id="linear-assumptions">2.1. Linear Assumptions</h3>
+<p>모든 매핑 함수 <img src="https://latex.codecogs.com/png.latex?f_1,%20f_2,%20f_3,%20f_4">를 <strong>항등 함수(Identity Mapping)</strong>로 가정합니다.</p>
+<p>그렇다면 Encoder와 Decoder는 다음과 같이 단순한 선형 변환이 됩니다.</p>
+<ul>
+<li><strong>Linear Encoder:</strong> <img src="https://latex.codecogs.com/png.latex?Z%20=%20(I%20-%20A%5ET)%20X"></li>
+<li><strong>Linear Decoder:</strong> <img src="https://latex.codecogs.com/png.latex?%5Chat%7BX%7D%20=%20(I%20-%20A%5ET)%5E%7B-1%7D%20Z"></li>
+</ul>
+</section>
+<section id="perfect-reconstruction" class="level3">
+<h3 class="anchored" data-anchor-id="perfect-reconstruction">2.2. Perfect Reconstruction</h3>
+<p>위 두 식을 결합해 볼까요? Decoder 식의 <img src="https://latex.codecogs.com/png.latex?Z"> 자리에 Encoder 식을 대입합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Chat%7BX%7D%20&amp;=%20(I%20-%20A%5ET)%5E%7B-1%7D%20%5Cleft(%20(I%20-%20A%5ET)%20X%20%5Cright)%20%5C%5C%0A&amp;=%20%5Cunderbrace%7B(I%20-%20A%5ET)%5E%7B-1%7D%20(I%20-%20A%5ET)%7D_%7BI%7D%20X%20%5C%5C%0A&amp;=%20X%0A%5Cend%7Baligned%7D%0A"></p>
+<p>즉, 선형 모델 하에서는 입력 <img src="https://latex.codecogs.com/png.latex?X">가 손실 없이 완벽하게 복원(<img src="https://latex.codecogs.com/png.latex?%5Chat%7BX%7D%20=%20X">)됩니다. 따라서 손실 함수의 첫 번째 항인 <strong>Reconstruction Error는 0</strong>이 되어 사라집니다.</p>
+<hr>
+</section>
+</section>
+<section id="deriving-the-notears-loss" class="level2">
+<h2 class="anchored" data-anchor-id="deriving-the-notears-loss">3. Deriving the NOTEARS Loss</h2>
+<p>이제 남은 것은 두 번째 항인 <strong>Regularization Term</strong> 뿐입니다. 여기에 Linear Encoder 식 <img src="https://latex.codecogs.com/png.latex?Z%20=%20(I%20-%20A%5ET)X">를 대입하여 정리해 봅시다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmathcal%7BL%7D_%7B%5Ctext%7BLinear%7D%7D%20&amp;=%20%5Cfrac%7B1%7D%7B2%7D%20%5Csum_%7Bi=1%7D%5Em%20%5Csum_%7Bj=1%7D%5Ed%20Z_%7Bij%7D%5E2%20%5C%5C%0A&amp;=%20%5Cfrac%7B1%7D%7B2%7D%20%5C%7C%20Z%20%5C%7C_F%5E2%20%5Cquad%20(%5Ctext%7BFrobenius%20Norm%7D)%20%5C%5C%0A&amp;=%20%5Cfrac%7B1%7D%7B2%7D%20%5C%7C%20(I%20-%20A%5ET)%20X%20%5C%7C_F%5E2%20%5Cquad%20%5Ccdots%20(12)%0A%5Cend%7Baligned%7D%0A"></p>
+<section id="result-and-interpretation" class="level3">
+<h3 class="anchored" data-anchor-id="result-and-interpretation">3.1. Result and Interpretation</h3>
+<p>유도된 최종 식 (12) <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B2%7D%20%5C%7C%20(I%20-%20A%5ET)%20X%20%5C%7C_F%5E2">는 정확히 <strong>Zheng et al.&nbsp;(2018)</strong>이 제안한 <strong>NOTEARS 알고리즘의 손실 함수(Least-squares loss)</strong>와 일치합니다.</p>
+<blockquote class="blockquote">
+<p><strong>의미 (Insight):</strong> * Linear SEM(NOTEARS)은 모델이 완벽하게 복원된다고 가정하고, 노이즈 <img src="https://latex.codecogs.com/png.latex?Z">의 크기(L2 norm)를 최소화하는 문제로 해석될 수 있습니다. * <strong>DAG-GNN</strong>은 이를 확장하여, <strong>“완벽한 복원이 불가능한(비선형/노이즈 존재) 상황”</strong>까지 고려하기 위해 Reconstruction Loss 항을 추가하고, 비선형 변환을 도입한 일반화된 모델입니다.</p>
+</blockquote>
+<hr>
+</section>
+</section>
+<section id="summary-1" class="level2">
+<h2 class="anchored" data-anchor-id="summary-1">4. Summary</h2>
+<p>이 섹션의 논증 과정을 요약하면 다음과 같습니다.</p>
+<ol type="1">
+<li><strong>DAG-GNN (VAE + Nonlinear)</strong>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cdownarrow"> (Variational 제거: <img src="https://latex.codecogs.com/png.latex?S_Z,%20S_X%20%5Cto%201">)</li>
+</ul></li>
+<li><strong>Deterministic Autoencoder (MSE + L2 Reg)</strong>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cdownarrow"> (Nonlinearity 제거: <img src="https://latex.codecogs.com/png.latex?f%20%5Cto%20Identity">)</li>
+</ul></li>
+<li><strong>Linear Model (Perfect Reconstruction, Reg only)</strong>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cdownarrow"> (<img src="https://latex.codecogs.com/png.latex?Z%20=%20(I-A%5ET)X"> 대입)</li>
+</ul></li>
+<li><strong>Linear SEM Loss (Zheng et al., 2018)</strong></li>
+</ol>
+<p>이로써 DAG-GNN은 Linear SEM의 탄탄한 이론적 기반 위에 서 있으면서도, 딥러닝의 표현력을 통해 더 복잡한 데이터 분포를 학습할 수 있는 모델임이 증명되었습니다.</p>
+<hr>
+<section id="누락-방지-검증-checklist-1" class="level3">
+<h3 class="anchored" data-anchor-id="누락-방지-검증-checklist-1">누락 방지 검증 (Checklist)</h3>
+<ul>
+<li><strong>개념적 흐름:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">“Reverse thought flow” (역방향 사고) 개념 설명</label></li>
+<li><label><input type="checkbox" checked="">VAE <img src="https://latex.codecogs.com/png.latex?%5Cto"> Plain Autoencoder <img src="https://latex.codecogs.com/png.latex?%5Cto"> Linear Model로의 축소 과정 서술</label></li>
+</ul></li>
+<li><strong>수식 유도 (Step 1):</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">VAE ELBO의 각 항(Reconstruction, KL)이 결정론적 손실(MSE, L2 Reg)과 대응됨을 설명</label></li>
+<li><label><input type="checkbox" checked=""><img src="https://latex.codecogs.com/png.latex?%5Chat%7BX%7D"> (Decoder output) 표기법 도입</label></li>
+</ul></li>
+<li><strong>수식 유도 (Step 2):</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked=""><img src="https://latex.codecogs.com/png.latex?f_1%20%5Cdots%20f_4">를 Identity로 가정</label></li>
+<li><label><input type="checkbox" checked="">Linear Encoder/Decoder 식 기술 및 Perfect Reconstruction (<img src="https://latex.codecogs.com/png.latex?%5Chat%7BX%7D=X">) 증명</label></li>
+</ul></li>
+<li><strong>결론:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">최종 식 (12) <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B2%7D%20%5C%7C(I-A%5ET)X%5C%7C_F%5E2"> 유도</label></li>
+<li><label><input type="checkbox" checked="">이것이 Zheng et al.&nbsp;(2018)의 Least-squares loss와 동일함을 명시</label></li>
+</ul></li>
+</ul>
+</section>
+</section>
+</section>
+<section id="acyclicity-constraint" class="level1">
+<h1>3.7. Acyclicity Constraint</h1>
+<p>앞선 섹션들에서 우리는 VAE 기반의 손실 함수(ELBO)와 선형/비선형 모델링을 정의했습니다. 하지만 여기에는 치명적인 허점이 하나 있습니다. ELBO를 최대화하든, Least-squares loss를 최소화하든, 학습된 인접 행렬 <img src="https://latex.codecogs.com/png.latex?A">가 <strong>DAG(비순환 그래프)</strong>라는 보장이 없다는 점입니다.</p>
+<p>그래프 <img src="https://latex.codecogs.com/png.latex?G">가 인과관계 모델이 되기 위해서는 반드시 사이클(Cycle)이 없어야 합니다. 이번 포스트에서는 이 조합적(Combinatorial) 제약 조건을 어떻게 연속적인(Continuous) 수식으로 변환하여 최적화 과정에 통합했는지 살펴봅니다.</p>
+<hr>
+<section id="motivation-trace-and-cycles" class="level2">
+<h2 class="anchored" data-anchor-id="motivation-trace-and-cycles">1. Motivation: Trace and Cycles</h2>
+<p>그래프 이론에서 인접 행렬의 거듭제곱은 경로(Path)와 깊은 연관이 있습니다.</p>
+<section id="path-counting-logic" class="level3">
+<h3 class="anchored" data-anchor-id="path-counting-logic">1.1. Path Counting Logic</h3>
+<p>가중치가 있는 인접 행렬 <img src="https://latex.codecogs.com/png.latex?A">에 대해, 요소별 제곱(Element-wise square)을 수행하여 비음수(Non-negative) 행렬 <img src="https://latex.codecogs.com/png.latex?B">를 정의해 봅시다 (<img src="https://latex.codecogs.com/png.latex?B%20=%20A%20%5Ccirc%20A">).</p>
+<ul>
+<li>행렬 <img src="https://latex.codecogs.com/png.latex?B">의 <img src="https://latex.codecogs.com/png.latex?(i,%20j)"> 요소가 양수라면, 노드 <img src="https://latex.codecogs.com/png.latex?i">에서 <img src="https://latex.codecogs.com/png.latex?j">로 가는 엣지가 존재함을 의미합니다.</li>
+<li>행렬의 곱셈 성질에 따라, <img src="https://latex.codecogs.com/png.latex?B%5Ek">의 <img src="https://latex.codecogs.com/png.latex?(i,%20j)"> 요소가 양수라는 것은 <strong>노드 <img src="https://latex.codecogs.com/png.latex?i">에서 <img src="https://latex.codecogs.com/png.latex?j">로 가는 길이가 <img src="https://latex.codecogs.com/png.latex?k">인 경로가 존재함</strong>을 의미합니다.</li>
+</ul>
+</section>
+<section id="detecting-cycles" class="level3">
+<h3 class="anchored" data-anchor-id="detecting-cycles">1.2. Detecting Cycles</h3>
+<p>사이클이란 무엇일까요? 바로 <strong>자기 자신으로 돌아오는 경로(<img src="https://latex.codecogs.com/png.latex?i%20%5Cto%20%5Cdots%20%5Cto%20i">)</strong>입니다. 따라서, 어떤 정수 <img src="https://latex.codecogs.com/png.latex?k">에 대해 <img src="https://latex.codecogs.com/png.latex?B%5Ek">의 대각 성분(Diagonal element) <img src="https://latex.codecogs.com/png.latex?(B%5Ek)_%7Bii%7D">가 양수라면, 노드 <img src="https://latex.codecogs.com/png.latex?i">를 포함하는 길이 <img src="https://latex.codecogs.com/png.latex?k">의 사이클이 존재한다는 뜻입니다.</p>
+<p>이 논리를 확장하면 다음과 같은 결론에 도달합니다.</p>
+<blockquote class="blockquote">
+<p><strong>“모든 <img src="https://latex.codecogs.com/png.latex?k%20%3E%200">에 대해 <img src="https://latex.codecogs.com/png.latex?B%5Ek">의 대각 성분이 모두 0이라면(즉, Trace가 0이라면), 그 그래프는 DAG이다.”</strong></p>
+</blockquote>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/paper/DAG-GNN: DAG Structure Learning with Graph Neural Networks/images/adjacency_power_cycles.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 인접 행렬의 거듭제곱과 사이클 검출의 원리. (A) 사이클이 있는 그래프 예시. (B) 인접 행렬 <img src="https://latex.codecogs.com/png.latex?A">와 <img src="https://latex.codecogs.com/png.latex?A%5E2,%20A%5E3"> 계산 결과. 대각 성분에 0이 아닌 값이 등장하는 순간 사이클이 존재함을 수학적으로 알 수 있다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+<section id="the-matrix-exponential-previous-work" class="level2">
+<h2 class="anchored" data-anchor-id="the-matrix-exponential-previous-work">2. The Matrix Exponential (Previous Work)</h2>
+<p><strong>Zheng et al.&nbsp;(2018)</strong>의 NOTEARS 알고리즘은 이 원리를 이용하여 <strong>행렬 지수(Matrix Exponential)</strong> 형태의 제약 조건을 제안했습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ah(A)%20=%20%5Ctext%7Btr%7D(e%5E%7BA%20%5Ccirc%20A%7D)%20-%20m%20=%200%0A"></p>
+<p>이 수식은 테일러 급수 전개를 통해 이해할 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ae%5EB%20=%20I%20+%20B%20+%20%5Cfrac%7BB%5E2%7D%7B2!%7D%20+%20%5Cfrac%7BB%5E3%7D%7B3!%7D%20+%20%5Cdots%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?B">의 모든 거듭제곱(<img src="https://latex.codecogs.com/png.latex?B%5Ek">)의 합을 포함하므로, 어떤 길이의 사이클이라도 존재한다면 <img src="https://latex.codecogs.com/png.latex?e%5EB">의 대각 성분 합(Trace)은 <img src="https://latex.codecogs.com/png.latex?m"> (항등 행렬 <img src="https://latex.codecogs.com/png.latex?I">의 Trace)보다 커지게 됩니다.</li>
+<li>수학적으로 매우 우아(Elegant)하지만, 실제 딥러닝 프레임워크에서 구현할 때 두 가지 문제가 있습니다.
+<ol type="1">
+<li><strong>자동 미분 지원 미비:</strong> 모든 플랫폼이 행렬 지수의 미분을 효율적으로 지원하지 않습니다.</li>
+<li><strong>수치적 불안정성:</strong> <img src="https://latex.codecogs.com/png.latex?e%5EB">는 값이 매우 빠르게 커지므로, 고유값(Eigenvalue)이 클 경우 오버플로우나 수치 오류가 발생하기 쉽습니다.</li>
+</ol></li>
+</ul>
+<hr>
+</section>
+<section id="proposed-solution-polynomial-constraint" class="level2">
+<h2 class="anchored" data-anchor-id="proposed-solution-polynomial-constraint">3. Proposed Solution: Polynomial Constraint</h2>
+<p>저자들은 위 문제를 해결하기 위해, 행렬 지수 대신 <strong>다항식(Polynomial)</strong> 형태의 새로운 제약 조건을 제안합니다.</p>
+<section id="theorem-1-polynomial-acyclicity" class="level3">
+<h3 class="anchored" data-anchor-id="theorem-1-polynomial-acyclicity">Theorem 1 (Polynomial Acyclicity)</h3>
+<p><img src="https://latex.codecogs.com/png.latex?A%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bm%20%5Ctimes%20m%7D">를 유향 그래프의 가중치 인접 행렬이라고 합시다. 임의의 양수 <img src="https://latex.codecogs.com/png.latex?%5Calpha%20%3E%200">에 대하여, 다음 조건이 성립하면 그래프는 Acyclic입니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7Btr%7D%5Cleft%5B%20(I%20+%20%5Calpha%20A%20%5Ccirc%20A)%5Em%20%5Cright%5D%20-%20m%20=%200%20%5Cquad%20%5Ccdots%20(13)%0A"></p>
+</section>
+<section id="derivation-proof-logic" class="level3">
+<h3 class="anchored" data-anchor-id="derivation-proof-logic">Derivation &amp; Proof Logic</h3>
+<p>이 식이 성립하는 이유는 다음과 같습니다.</p>
+<ol type="1">
+<li><strong>최장 경로의 길이:</strong> 노드가 <img src="https://latex.codecogs.com/png.latex?m">개인 그래프에서 사이클이 없다면(DAG라면), 존재할 수 있는 경로의 최대 길이는 <img src="https://latex.codecogs.com/png.latex?m-1">입니다.</li>
+<li><strong>이항 전개 (Binomial Expansion):</strong> <img src="https://latex.codecogs.com/png.latex?(I%20+%20%5Calpha%20B)%5Em">을 전개하면 다음과 같은 형태가 됩니다. <img src="https://latex.codecogs.com/png.latex?I%20+%20%5Cbinom%7Bm%7D%7B1%7D%5Calpha%20B%20+%20%5Cbinom%7Bm%7D%7B2%7D%5Calpha%5E2%20B%5E2%20+%20%5Cdots%20+%20%5Calpha%5Em%20B%5Em"></li>
+<li><strong>포괄성:</strong> 이 식은 <img src="https://latex.codecogs.com/png.latex?I">부터 <img src="https://latex.codecogs.com/png.latex?B%5Em">까지의 모든 항을 양수 계수로 포함합니다.</li>
+<li><strong>결론:</strong> 만약 그래프에 사이클이 있다면, <img src="https://latex.codecogs.com/png.latex?m"> 이하의 어떤 길이 <img src="https://latex.codecogs.com/png.latex?k">에 대해 <img src="https://latex.codecogs.com/png.latex?B%5Ek">의 Trace가 양수가 될 것입니다. 위 식은 <img src="https://latex.codecogs.com/png.latex?B%5E1">부터 <img src="https://latex.codecogs.com/png.latex?B%5Em">까지 모든 거듭제곱의 합을 검사하므로, 사이클이 하나라도 있다면 전체 Trace는 <img src="https://latex.codecogs.com/png.latex?m"> (<img src="https://latex.codecogs.com/png.latex?I">의 Trace)보다 반드시 커지게 됩니다.</li>
+</ol>
+<p>따라서 식 (13)을 0으로 만드는 제약 조건은 그래프가 DAG임을 보장합니다.</p>
+<hr>
+</section>
+</section>
+<section id="stability-analysis-why-polynomial" class="level2">
+<h2 class="anchored" data-anchor-id="stability-analysis-why-polynomial">4. Stability Analysis (Why Polynomial?)</h2>
+<p>왜 <img src="https://latex.codecogs.com/png.latex?e%5EB"> 대신 <img src="https://latex.codecogs.com/png.latex?(I%20+%20%5Calpha%20B)%5Em">을 써야 할까요? 저자들은 <strong>Theorem 2</strong>를 통해 수치적 안정성을 증명합니다.</p>
+<section id="theorem-2-comparison" class="level3">
+<h3 class="anchored" data-anchor-id="theorem-2-comparison">Theorem 2 (Comparison)</h3>
+<p><img src="https://latex.codecogs.com/png.latex?%5Calpha%20=%20c/m%20%3E%200"> (단, <img src="https://latex.codecogs.com/png.latex?c">는 상수)라고 설정하면, 임의의 복소수 <img src="https://latex.codecogs.com/png.latex?%5Clambda">에 대해 다음 부등식이 성립합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A(1%20+%20%5Calpha%20%7C%5Clambda%7C)%5Em%20%5Cle%20e%5E%7Bc%7C%5Clambda%7C%7D%0A"></p>
+</section>
+<section id="interpretation-2" class="level3">
+<h3 class="anchored" data-anchor-id="interpretation-2">Interpretation</h3>
+<ul>
+<li><strong>좌변:</strong> 제안된 다항식 제약 조건의 성장 속도와 관련됨.</li>
+<li><strong>우변:</strong> 기존 행렬 지수 제약 조건의 성장 속도와 관련됨.</li>
+<li>이 부등식은 <strong>다항식 제약 조건이 지수 함수보다 훨씬 완만하게 증가함</strong>을 보여줍니다.</li>
+<li>즉, <img src="https://latex.codecogs.com/png.latex?B">의 고유값(Eigenvalue) 크기가 클 때, 다항식 기반 제약 조건이 수치적 폭발(Numerical difficulty)을 겪을 위험이 훨씬 적습니다 (“less severe”).</li>
+</ul>
+</section>
+<section id="practical-implementation" class="level3">
+<h3 class="anchored" data-anchor-id="practical-implementation">Practical Implementation</h3>
+<p>실제 구현에서 <img src="https://latex.codecogs.com/png.latex?%5Calpha">는 하이퍼파라미터로 취급됩니다. * 이론적으로 <img src="https://latex.codecogs.com/png.latex?%5Calpha">는 <img src="https://latex.codecogs.com/png.latex?B">의 가장 큰 고유값(Spectral radius)에 의존합니다. * Perron-Frobenius 정리에 따라, 비음수 행렬 <img src="https://latex.codecogs.com/png.latex?B">의 Spectral radius는 최대 행 합(Maximum row sum)에 의해 제한(Bounded)되므로, 이를 참고하여 <img src="https://latex.codecogs.com/png.latex?%5Calpha">를 설정할 수 있습니다.</p>
+<hr>
+</section>
+</section>
+<section id="summary-2" class="level2">
+<h2 class="anchored" data-anchor-id="summary-2">5. Summary</h2>
+<p>DAG-GNN은 구조 학습의 핵심인 Acyclicity Constraint를 현대적인 딥러닝 환경에 맞게 재설계했습니다.</p>
+<ol type="1">
+<li><strong>기존:</strong> <img src="https://latex.codecogs.com/png.latex?h(A)%20=%20%5Ctext%7Btr%7D(e%5E%7BA%20%5Ccirc%20A%7D)%20-%20m%20=%200"> (NOTEARS)
+<ul>
+<li>우아하지만 구현이 어렵고 불안정할 수 있음.</li>
+</ul></li>
+<li><strong>제안:</strong> <img src="https://latex.codecogs.com/png.latex?h(A)%20=%20%5Ctext%7Btr%7D((I%20+%20%5Calpha%20A%20%5Ccirc%20A)%5Em)%20-%20m%20=%200"> (DAG-GNN)
+<ul>
+<li><strong>Finite Power:</strong> <img src="https://latex.codecogs.com/png.latex?m">차수까지만 검사해도 충분함 (DAG의 성질).</li>
+<li><strong>Stability:</strong> 지수 함수보다 완만하게 증가하여 수치적으로 안정적.</li>
+<li><strong>Convenience:</strong> 일반적인 행렬 곱셈만으로 구현 가능하여 모든 딥러닝 프레임워크와 호환됨.</li>
+</ul></li>
+</ol>
+<p>이로써 DAG-GNN은 VAE를 통한 확률적 모델링, GNN을 통한 비선형성 확보, 그리고 Polynomial Constraint를 통한 구조적 보장까지 갖춘 완전한 프레임워크가 되었습니다.</p>
+<hr>
+<section id="누락-방지-검증-checklist-2" class="level3">
+<h3 class="anchored" data-anchor-id="누락-방지-검증-checklist-2">누락 방지 검증 (Checklist)</h3>
+<ul>
+<li><strong>Motivation:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">최적화 손실 함수만으로는 Acyclicity가 보장되지 않음 언급</label></li>
+<li><label><input type="checkbox" checked=""><img src="https://latex.codecogs.com/png.latex?B%5Ek">의 <img src="https://latex.codecogs.com/png.latex?(i,%20j)"> 요소가 길이 <img src="https://latex.codecogs.com/png.latex?k">의 경로를 의미함 설명</label></li>
+<li><label><input type="checkbox" checked=""><img src="https://latex.codecogs.com/png.latex?B%5Ek">의 대각 성분이 사이클을 의미함 설명</label></li>
+</ul></li>
+<li><strong>Existing Method (NOTEARS):</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">Matrix Exponential 제약식 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Btr%7D(e%5E%7BA%20%5Ccirc%20A%7D)%20-%20m%20=%200"> 포함</label></li>
+<li><label><input type="checkbox" checked="">Taylor series expansion 설명</label></li>
+<li><label><input type="checkbox" checked="">구현상의 난점(자동미분, 수치 불안정) 지적</label></li>
+</ul></li>
+<li><strong>Proposed Method (Polynomial):</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">Theorem 1 내용 (조건 식 13) 정확히 기술</label></li>
+<li><label><input type="checkbox" checked=""><img src="https://latex.codecogs.com/png.latex?m">차 거듭제곱을 사용하는 이유 (DAG 최장 경로 <img src="https://latex.codecogs.com/png.latex?m-1">) 논리적 설명</label></li>
+</ul></li>
+<li><strong>Analysis:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">Theorem 2 부등식 <img src="https://latex.codecogs.com/png.latex?(1%20+%20%5Calpha%7C%5Clambda%7C)%5Em%20%5Cle%20e%5E%7Bc%7C%5Clambda%7C%7D"> 포함</label></li>
+<li><label><input type="checkbox" checked="">Theorem 2가 수치적 안정성을 의미함을 해석</label></li>
+<li><label><input type="checkbox" checked=""><img src="https://latex.codecogs.com/png.latex?%5Calpha"> 설정 방법(Spectral radius, Perron-Frobenius) 언급</label></li>
+</ul></li>
+</ul>
+</section>
+</section>
+</section>
+<section id="training" class="level1">
+<h1>3.8. Training</h1>
+<p>지금까지 우리는 DAG-GNN의 두 가지 핵심 기둥을 세웠습니다. 1. <strong>Objective:</strong> 데이터를 잘 설명하기 위한 VAE의 손실 함수 (Negative ELBO). 2. <strong>Constraint:</strong> 그래프가 DAG임을 보장하기 위한 다항식 제약 조건 (<img src="https://latex.codecogs.com/png.latex?h(A)%20=%200">).</p>
+<p>이제 이 두 가지를 하나로 묶어 실제 학습을 수행하는 <strong>최적화 전략(Optimization Strategy)</strong>을 다룰 차례입니다. 이 문제는 전형적인 <strong>비선형 등식 제약 최적화(Nonlinear Equality-Constrained Optimization)</strong> 문제입니다.</p>
+<hr>
+<section id="problem-formulation" class="level2">
+<h2 class="anchored" data-anchor-id="problem-formulation">1. Problem Formulation</h2>
+<p>전체 학습 문제는 다음과 같은 최적화 문제로 정식화됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmin_%7BA,%20%5Ctheta%7D%20%5Cquad%20&amp;%20f(A,%20%5Ctheta)%20%5Cequiv%20-L_%7B%5Ctext%7BELBO%7D%7D%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20h(A)%20%5Cequiv%20%5Ctext%7Btr%7D%5B(I%20+%20%5Calpha%20A%20%5Ccirc%20A)%5Em%5D%20-%20m%20=%200%0A%5Cend%7Baligned%7D%0A"></p>
+<ul>
+<li><strong>Objective <img src="https://latex.codecogs.com/png.latex?f(A,%20%5Ctheta)">:</strong> ELBO(Evidence Lower Bound)를 최대화하는 것은 Negative ELBO를 최소화하는 것과 같습니다.</li>
+<li><strong>Constraint <img src="https://latex.codecogs.com/png.latex?h(A)">:</strong> 앞서 유도한 다항식 제약 조건으로, 이 값이 0이 되어야만 <img src="https://latex.codecogs.com/png.latex?A">가 DAG임이 보장됩니다.</li>
+<li><strong>Unknowns:</strong>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?A">: 가중치 인접 행렬 (Weighted Adjacency Matrix)</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Ctheta">: VAE를 구성하는 신경망의 파라미터들 (<img src="https://latex.codecogs.com/png.latex?%5C%7BW%5E1,%20W%5E2,%20W%5E3,%20W%5E4%5C%7D">).</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+<section id="the-augmented-lagrangian-method" class="level2">
+<h2 class="anchored" data-anchor-id="the-augmented-lagrangian-method">2. The Augmented Lagrangian Method</h2>
+<p>이러한 제약 조건이 있는 최적화 문제를 풀기 위해, 저자들은 <strong>증강 라그랑주(Augmented Lagrangian)</strong> 방법을 사용합니다. 이는 표준적인 라그랑주 승수법에 페널티 항(Penalty term)을 추가하여 수치적 안정성과 수렴성을 높인 기법입니다 (Bertsekas, 1999).</p>
+<p>정의된 증강 라그랑주 함수 <img src="https://latex.codecogs.com/png.latex?L_c">는 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AL_c(A,%20%5Ctheta,%20%5Clambda)%20=%20f(A,%20%5Ctheta)%20+%20%5Clambda%20h(A)%20+%20%5Cfrac%7Bc%7D%7B2%7D%7Ch(A)%7C%5E2%0A"></p>
+<p>이 식은 세 가지 부분으로 구성됩니다:</p>
+<ol type="1">
+<li><strong><img src="https://latex.codecogs.com/png.latex?f(A,%20%5Ctheta)">:</strong> 원래의 목적 함수 (Negative ELBO).</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?%5Clambda%20h(A)">:</strong> 표준 라그랑주 항. 여기서 <img src="https://latex.codecogs.com/png.latex?%5Clambda">는 라그랑주 승수(Lagrange Multiplier)입니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bc%7D%7B2%7D%7Ch(A)%7C%5E2">:</strong> 제약 조건 위반에 대한 2차 페널티(Quadratic Penalty) 항입니다. <img src="https://latex.codecogs.com/png.latex?c">는 페널티 파라미터(Penalty Parameter)입니다.</li>
+</ol>
+<section id="motivation" class="level3">
+<h3 class="anchored" data-anchor-id="motivation">Motivation</h3>
+<p>왜 단순 라그랑주나 단순 페널티 기법을 쓰지 않고 이 둘을 섞었을까요? * 단순 페널티 기법은 <img src="https://latex.codecogs.com/png.latex?c">를 무한대로 보내야만 제약 조건을 만족하는데, 이는 해 주변에서 함수를 매우 뾰족하게(Ill-conditioned) 만들어 최적화를 어렵게 합니다. * 증강 라그랑주 방법은 <img src="https://latex.codecogs.com/png.latex?%5Clambda">의 도움을 받아, <img src="https://latex.codecogs.com/png.latex?c">가 적당히 크더라도 정확한 해로 수렴할 수 있게 해줍니다. 즉, <strong><img src="https://latex.codecogs.com/png.latex?c%20%5Cto%20%5Cinfty">일 때 <img src="https://latex.codecogs.com/png.latex?L_c">의 최소해는 제약 조건 <img src="https://latex.codecogs.com/png.latex?h(A)=0">을 만족하며 원래 목적 함수 <img src="https://latex.codecogs.com/png.latex?f">를 최소화</strong>하게 됩니다.</p>
+<hr>
+</section>
+</section>
+<section id="algorithm-iterative-update-rule" class="level2">
+<h2 class="anchored" data-anchor-id="algorithm-iterative-update-rule">3. Algorithm: Iterative Update Rule</h2>
+<p>학습은 <strong><img src="https://latex.codecogs.com/png.latex?c">를 점진적으로 증가</strong>시키면서 일련의 비제약 최적화 문제(Unconstrained optimization)를 푸는 방식으로 진행됩니다. 구체적인 알고리즘은 다음의 반복(Iteration) 과정으로 요약됩니다.</p>
+<p>각 반복 단계 <img src="https://latex.codecogs.com/png.latex?k">에서 다음을 수행합니다:</p>
+<section id="step-1-primal-update-subproblem" class="level3">
+<h3 class="anchored" data-anchor-id="step-1-primal-update-subproblem">Step 1: Primal Update (Subproblem)</h3>
+<p>현재 고정된 <img src="https://latex.codecogs.com/png.latex?%5Clambda%5Ek">와 <img src="https://latex.codecogs.com/png.latex?c%5Ek">에 대해, 증강 라그랑주 함수 <img src="https://latex.codecogs.com/png.latex?L_%7Bc%5Ek%7D">를 최소화하는 <img src="https://latex.codecogs.com/png.latex?A">와 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 찾습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A(A%5Ek,%20%5Ctheta%5Ek)%20=%20%5Cunderset%7BA,%20%5Ctheta%7D%7B%5Ctext%7Bargmin%7D%7D%20%5C%20L_%7Bc%5Ek%7D(A,%20%5Ctheta,%20%5Clambda%5Ek)%20%5Cquad%20%5Ccdots%20(14)%0A"></p>
+<p>이 단계(Subproblem)는 경사 하강법(Gradient Descent)과 같은 Blackbox Stochastic Optimization Solver(예: Adam)를 사용하여 해결합니다. ELBO가 샘플 기반으로 정의되므로 확률적(Stochastic) 최적화가 적합합니다.</p>
+</section>
+<section id="step-2-dual-update-lambda" class="level3">
+<h3 class="anchored" data-anchor-id="step-2-dual-update-lambda">Step 2: Dual Update (<img src="https://latex.codecogs.com/png.latex?%5Clambda">)</h3>
+<p>제약 조건 위반 정도(<img src="https://latex.codecogs.com/png.latex?h(A%5Ek)">)를 반영하여 라그랑주 승수를 업데이트합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Clambda%5E%7Bk+1%7D%20=%20%5Clambda%5Ek%20+%20c%5Ek%20h(A%5Ek)%20%5Cquad%20%5Ccdots%20(15)%0A"></p>
+<p>이 규칙은 쌍대 오름법(Dual Ascent)의 형태를 띠며, 제약 조건이 만족되지 않으면(즉 <img src="https://latex.codecogs.com/png.latex?h(A)%20%5Cneq%200">), <img src="https://latex.codecogs.com/png.latex?%5Clambda">를 조정하여 다음 단계에서 해당 제약 조건이 더 중요하게 다뤄지도록 합니다.</p>
+</section>
+<section id="step-3-penalty-parameter-update-c" class="level3">
+<h3 class="anchored" data-anchor-id="step-3-penalty-parameter-update-c">Step 3: Penalty Parameter Update (<img src="https://latex.codecogs.com/png.latex?c">)</h3>
+<p>제약 조건 위반 정도가 충분히 줄어들지 않았다면, 페널티 강도 <img src="https://latex.codecogs.com/png.latex?c">를 증가시킵니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ac%5E%7Bk+1%7D%20=%20%5Cbegin%7Bcases%7D%0A%5Ceta%20c%5Ek,%20&amp;%20%5Ctext%7Bif%20%7D%20%7Ch(A%5Ek)%7C%20%3E%20%5Cgamma%20%7Ch(A%5E%7Bk-1%7D)%7C%20%5C%5C%0Ac%5Ek,%20&amp;%20%5Ctext%7Botherwise%7D%0A%5Cend%7Bcases%7D%20%5Cquad%20%5Ccdots%20(16)%0A"></p>
+<ul>
+<li><strong>조건 (<img src="https://latex.codecogs.com/png.latex?%7Ch(A%5Ek)%7C%20%3E%20%5Cgamma%20%7Ch(A%5E%7Bk-1%7D)%7C">):</strong> 이번 단계의 제약 위반 값이 이전 단계의 <img src="https://latex.codecogs.com/png.latex?%5Cgamma">배보다 크다는 것은, 위반 정도가 충분히(빠르게) 감소하지 않았음을 의미합니다.</li>
+<li><strong>대응 (<img src="https://latex.codecogs.com/png.latex?c%20%5Cleftarrow%20%5Ceta%20c">):</strong> 이 경우 <img src="https://latex.codecogs.com/png.latex?c">를 <img src="https://latex.codecogs.com/png.latex?%5Ceta">배 키워서 제약 조건 위반에 대한 비용을 더 비싸게 만듭니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="hyperparameters-and-implementation" class="level2">
+<h2 class="anchored" data-anchor-id="hyperparameters-and-implementation">4. Hyperparameters and Implementation</h2>
+<p>논문에서는 이 알고리즘의 효과적인 작동을 위한 하이퍼파라미터 설정 값을 제안합니다.</p>
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?%5Ceta%20%3E%201">:</strong> 페널티 증가 비율. 논문에서는 <strong><img src="https://latex.codecogs.com/png.latex?%5Ceta%20=%2010"></strong>을 권장합니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cgamma%20%3C%201">:</strong> 허용 가능한 위반 감소율. 논문에서는 <strong><img src="https://latex.codecogs.com/png.latex?%5Cgamma%20=%201/4"></strong> (<img src="https://latex.codecogs.com/png.latex?0.25">)를 권장합니다.</li>
+</ul>
+<p>이 설정은 제약 조건 위반이 매 단계마다 최소 25%씩은 줄어들기를 기대하며, 그렇지 않을 경우 페널티를 10배로 강력하게 키우겠다는 공격적인 전략을 의미합니다.</p>
+<hr>
+</section>
+<section id="summary-3" class="level2">
+<h2 class="anchored" data-anchor-id="summary-3">5. Summary</h2>
+<p>DAG-GNN의 학습 과정은 단순히 손실 함수를 미분하여 역전파하는 것을 넘어섭니다.</p>
+<ol type="1">
+<li><strong>Augmented Lagrangian</strong>을 통해 연속적인 제약 조건(Acyclicity)을 목적 함수에 부드럽게 통합했습니다.</li>
+<li><strong>Primal-Dual Update</strong> 방식을 통해 모델 파라미터(<img src="https://latex.codecogs.com/png.latex?A,%20%5Ctheta">)와 제약 파라미터(<img src="https://latex.codecogs.com/png.latex?%5Clambda,%20c">)를 번갈아 최적화하며, 점진적으로 DAG 구조를 만족하는 해로 수렴해 나갑니다.</li>
+</ol>
+<p>이로써 우리는 복잡한 조합 최적화 문제였던 구조 학습을, 딥러닝 프레임워크 위에서 수행 가능한 연속 최적화 문제로 완벽하게 변환하였습니다.</p>
+<hr>
+<section id="누락-방지-검증-checklist-3" class="level3">
+<h3 class="anchored" data-anchor-id="누락-방지-검증-checklist-3">누락 방지 검증 (Checklist)</h3>
+<ul>
+<li><strong>문제 정의:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">목적 함수 <img src="https://latex.codecogs.com/png.latex?f(A,%20%5Ctheta)%20=%20-L_%7B%5Ctext%7BELBO%7D%7D"> 명시</label></li>
+<li><label><input type="checkbox" checked="">제약 조건 <img src="https://latex.codecogs.com/png.latex?h(A)%20=%200"> 명시</label></li>
+<li><label><input type="checkbox" checked="">최적화 변수 <img src="https://latex.codecogs.com/png.latex?A">와 <img src="https://latex.codecogs.com/png.latex?%5Ctheta"> 정의</label></li>
+</ul></li>
+<li><strong>최적화 기법:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">Augmented Lagrangian Method 사용 및 참고문헌(Bertsekas, 1999) 언급</label></li>
+<li><label><input type="checkbox" checked=""><img src="https://latex.codecogs.com/png.latex?L_c(A,%20%5Ctheta,%20%5Clambda)"> 식 구성 요소(Objective, Lagrange term, Penalty term) 설명</label></li>
+<li><label><input type="checkbox" checked=""><img src="https://latex.codecogs.com/png.latex?c%20%5Cto%20%5Cinfty">일 때의 수렴성(Optimality condition) 설명</label></li>
+</ul></li>
+<li><strong>알고리즘 단계:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">식 (14) Primal update (argmin) 기술 및 Stochastic solver 사용 언급</label></li>
+<li><label><input type="checkbox" checked="">식 (15) Dual update (<img src="https://latex.codecogs.com/png.latex?%5Clambda">) 기술</label></li>
+<li><label><input type="checkbox" checked="">식 (16) Penalty parameter update (<img src="https://latex.codecogs.com/png.latex?c">) 기술 및 조건 설명</label></li>
+</ul></li>
+<li><strong>구현 세부사항:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">하이퍼파라미터 권장 값 (<img src="https://latex.codecogs.com/png.latex?%5Ceta=10,%20%5Cgamma=1/4">) 포함</label></li>
+</ul></li>
+</ul>
+</section>
+</section>
+</section>
+<section id="experiments" class="level1">
+<h1>4. Experiments</h1>
+<p>본 섹션에서는 제안된 <strong>DAG-GNN</strong> 모델의 성능을 다양한 합성 데이터셋(Synthetic Data)과 벤치마크 데이터셋(Benchmark Data)을 통해 검증합니다. 비교 대상으로는 당시 SOTA였던 연속 최적화 기반의 <strong>DAG-NOTEARS (Zheng et al., 2018)</strong>를 주로 사용합니다.</p>
+<p>실험의 목표는 DAG-GNN이 <strong>선형성(Linearity)</strong> 가정에 국한되지 않고, <strong>비선형(Nonlinear)</strong> 관계나 <strong>이산형(Discrete)</strong> 변수, 그리고 <strong>벡터 값 노드(Vector-valued node)</strong>까지 얼마나 유연하게 처리할 수 있는지 보여주는 데 있습니다.</p>
+<hr>
+<section id="synthetic-data-sets" class="level2">
+<h2 class="anchored" data-anchor-id="synthetic-data-sets">4.1. Synthetic Data Sets</h2>
+<p>저자들은 Erdős-Rényi 모델을 사용하여 임의의 DAG 구조를 생성하고, 노드 수 <img src="https://latex.codecogs.com/png.latex?m%20%5Cin%20%5C%7B10,%2020,%2050,%20100%5C%7D">에 대해 데이터를 생성하여 실험을 진행했습니다. (샘플 수 <img src="https://latex.codecogs.com/png.latex?n=5000">)</p>
+<p>평가 지표로는 다음 두 가지를 사용합니다: 1. <strong>SHD (Structural Hamming Distance):</strong> 예측된 그래프와 정답 그래프 간의 엣지 불일치 개수 (낮을수록 좋음). 2. <strong>FDR (False Discovery Rate):</strong> 잘못 예측된 엣지의 비율 (낮을수록 좋음).</p>
+<section id="linear-case" class="level3">
+<h3 class="anchored" data-anchor-id="linear-case">4.1.1. Linear Case</h3>
+<p>먼저, DAG-GNN이 기존 Linear SEM 환경에서도 잘 작동하는지 확인합니다. 데이터 생성 과정은 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ax%20=%20A%5ET%20x%20+%20z%0A"></p>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?g">는 항등 함수(Identity mapping)입니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/paper/DAG-GNN: DAG Structure Learning with Graph Neural Networks/images/figure2_linear_case.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: Linear Case에서의 성능 비교. 그래프 크기(m)가 커짐에 따라 DAG-NOTEARS(파란색)와 DAG-GNN(빨간색)의 SHD와 FDR 변화를 보여준다. DAG-GNN이 선형 모델에서도 NOTEARS와 대등하거나 더 우수한 성능을 보임을 알 수 있다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>결과:</strong> 선형 데이터임에도 불구하고, DAG-GNN은 Linear 전용 모델인 NOTEARS보다 더 정확한 구조를 학습했습니다. 특히 그래프 크기가 커질수록(<img src="https://latex.codecogs.com/png.latex?m=100">) 격차가 벌어지는 경향을 보입니다.</li>
+</ul>
+</section>
+<section id="nonlinear-case-core-contribution" class="level3">
+<h3 class="anchored" data-anchor-id="nonlinear-case-core-contribution">4.1.2. Nonlinear Case (Core Contribution)</h3>
+<p>DAG-GNN의 진가는 비선형 데이터에서 드러납니다. 저자들은 다음과 같은 비선형 생성 모델을 사용했습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ax%20=%20A%5ET%20h(x)%20+%20z,%20%5Cquad%20%5Ctext%7Bwhere%20%7D%20h(x)%20=%20%5Ccos(x%20+%201)%0A"></p>
+<p>이 경우 <img src="https://latex.codecogs.com/png.latex?h(x)">를 1차 테일러 근사하면 <img src="https://latex.codecogs.com/png.latex?h(x)%20%5Capprox%20h(0)%5Cmathbf%7B1%7D%20+%20h'(0)x">가 되며, 이는 <img src="https://latex.codecogs.com/png.latex?h'(0)A">를 인접 행렬로 갖는 선형 모델로 근사될 수 있습니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/paper/DAG-GNN: DAG Structure Learning with Graph Neural Networks/images/figure3_nonlinear_case.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3: Nonlinear Case (<img src="https://latex.codecogs.com/png.latex?h(x)=%5Ccos(x+1)">)에서의 성능 비교. 비선형성이 도입되자 NOTEARS(파란색)의 SHD와 FDR이 급격히 증가하는 반면, DAG-GNN(빨간색)은 안정적인 성능을 유지한다.</figcaption>
+</figure>
+</div>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/paper/DAG-GNN: DAG Structure Learning with Graph Neural Networks/images/figure4_heatmap_nonlinear.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 4: 파라미터 추정 히트맵 (Heatmap). (왼쪽) True Graph, (중간) DAG-GNN 추정, (오른쪽) NOTEARS 추정. DAG-GNN은 정답의 희소(Sparse)한 구조를 잘 복원하고 “False Alarm”이 적은 반면, NOTEARS는 노이즈가 많이 낀 결과를 보여준다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>결과:</strong> SHD 측면에서 약간의 개선이 있었고, 특히 <strong>FDR(가짜 발견율)이 약 3배 가량 개선</strong>되었습니다. 이는 DAG-GNN이 비선형 관계 속에서도 진짜 인과관계만을 정확하게 발라내는 능력이 탁월함을 의미합니다.</li>
+</ul>
+</section>
+<section id="vector-valued-case" class="level3">
+<h3 class="anchored" data-anchor-id="vector-valued-case">4.1.3. Vector-Valued Case</h3>
+<p>기존 방법론들은 변수를 스칼라(Scalar)로만 취급했습니다. 하지만 DAG-GNN은 GNN 구조 덕분에 각 노드가 벡터(<img src="https://latex.codecogs.com/png.latex?d%20%3E%201">)인 경우도 자연스럽게 처리합니다.</p>
+<p>실험 설정은 다음과 같습니다: * 노드 차원 <img src="https://latex.codecogs.com/png.latex?d=5">, 잠재 차원 <img src="https://latex.codecogs.com/png.latex?d_Z=1">. * 데이터는 더욱 복잡한 비선형 식 <img src="https://latex.codecogs.com/png.latex?x%20=%202%5Csin(A%5ET(x%20+%200.5%20%5Ccdot%201))%20+%20A%5ET(x%20+%200.5%20%5Ccdot%201)%20+%20z"> 로 생성됩니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/paper/DAG-GNN: DAG Structure Learning with Graph Neural Networks/images/figure6_vector_case.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 6: Vector-valued Case의 성능 비교. 벡터 노드와 복잡한 비선형성이 결합된 환경에서 DAG-GNN(빨간색)이 NOTEARS(파란색)를 압도하는 성능 차이를 보여준다.</figcaption>
+</figure>
+</div>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/paper/DAG-GNN: DAG Structure Learning with Graph Neural Networks/images/figure7_heatmap_vector.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 7: Vector-valued 데이터에 대한 파라미터 추정 비교. DAG-GNN은 Ground Truth의 구조를 거의 완벽하게 복원한 반면, NOTEARS는 구조를 거의 학습하지 못했다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>결과:</strong> NOTEARS는 이러한 설정(벡터 입력)을 처리할 수 없어, 데이터를 강제로 스칼라로 변환하거나 가정을 단순화해야 했습니다. 반면 DAG-GNN은 구조적 정보를 잠재 공간(Latent Space)에서 효과적으로 포착하여 압도적인 성능 차이를 보여줍니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="benchmark-data-sets-discrete-variables" class="level2">
+<h2 class="anchored" data-anchor-id="benchmark-data-sets-discrete-variables">4.2. Benchmark Data Sets (Discrete Variables)</h2>
+<p>다음으로, 이산형 변수(Discrete Variables)로 구성된 유명한 베이지안 네트워크 벤치마크 데이터셋(Child, Alarm, Pigs)에 대한 실험입니다. 여기서는 <strong>GOPNILP</strong> (Integer Programming을 이용한 Exact Solver)와 비교하여, <strong>BIC Score</strong>를 평가 지표로 사용했습니다.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Dataset</th>
+<th style="text-align: left;"><img src="https://latex.codecogs.com/png.latex?m"> (Nodes)</th>
+<th style="text-align: left;">Ground Truth BIC</th>
+<th style="text-align: left;">GOPNILP BIC</th>
+<th style="text-align: left;">DAG-GNN BIC</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>Child</strong></td>
+<td style="text-align: left;">20</td>
+<td style="text-align: left;">-1.27e+4</td>
+<td style="text-align: left;">-1.27e+4</td>
+<td style="text-align: left;">-1.38e+4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>Alarm</strong></td>
+<td style="text-align: left;">37</td>
+<td style="text-align: left;">-1.07e+4</td>
+<td style="text-align: left;">-1.12e+4</td>
+<td style="text-align: left;">-1.28e+4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>Pigs</strong></td>
+<td style="text-align: left;">441</td>
+<td style="text-align: left;">-3.48e+5</td>
+<td style="text-align: left;">-3.50e+5</td>
+<td style="text-align: left;">-3.69e+5</td>
+</tr>
+</tbody>
+</table>
+<p><em>(Table 1의 내용을 재구성)</em></p>
+<ul>
+<li><strong>해석:</strong> GOPNILP는 전역 최적해(Global Optimum)를 찾는 알고리즘이므로 가장 좋은 점수를 보입니다. DAG-GNN은 근사 해법임에도 불구하고, 전역 최적해에 <strong>합리적으로 근접한(reasonably close)</strong> 결과를 보여줍니다.</li>
+<li>BIC 차이가 나는 이유는 VAE 구조가 다항 분포(Multinomial distribution)를 근사하는 과정에서 발생하는 한계로 보이지만, 통합된 프레임워크로 이산형 데이터까지 처리할 수 있다는 점은 큰 강점입니다.</li>
+</ul>
+<hr>
+</section>
+<section id="applications" class="level2">
+<h2 class="anchored" data-anchor-id="applications">4.3. Applications</h2>
+<section id="protein-signaling-network" class="level3">
+<h3 class="anchored" data-anchor-id="protein-signaling-network">Protein Signaling Network</h3>
+<p>Sachs et al.&nbsp;(2005)의 단백질 신호 전달 네트워크 데이터(<img src="https://latex.codecogs.com/png.latex?n=7466,%20m=11">)를 사용하여 실제 인과 구조 복원 능력을 테스트했습니다.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Method</th>
+<th style="text-align: left;">SHD</th>
+<th style="text-align: left;">Predicted Edges</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">FGS (Fast Greedy Search)</td>
+<td style="text-align: left;">22</td>
+<td style="text-align: left;">17</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">NOTEARS</td>
+<td style="text-align: left;">22</td>
+<td style="text-align: left;">16</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>DAG-GNN</strong></td>
+<td style="text-align: left;"><strong>19</strong></td>
+<td style="text-align: left;"><strong>18</strong></td>
+</tr>
+</tbody>
+</table>
+<p><em>(Table 2의 내용을 재구성)</em></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/paper/DAG-GNN: DAG Structure Learning with Graph Neural Networks/images/figure8_protein_network.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 8: DAG-GNN이 추정한 단백질 신호 전달 네트워크. 붉은색 화살표는 Ground Truth와 일치하는 엣지, 파란색 점선은 간접 연결, 노란색은 역방향 연결을 나타낸다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>결과:</strong> DAG-GNN은 SHD 19를 기록하여, NOTEARS(22) 및 FGS(22)보다 <strong>더 정확하게 실제 생물학적 인과관계(Ground Truth)를 복원</strong>했습니다.</li>
+</ul>
+</section>
+<section id="knowledge-base-construction" class="level3">
+<h3 class="anchored" data-anchor-id="knowledge-base-construction">Knowledge Base Construction</h3>
+<p>FB15K-237 데이터셋을 사용하여, 지식 베이스(Knowledge Base) 내의 관계(Relation)들 사이의 인과성을 추론하는 새로운 태스크를 제안했습니다. 예를 들어, <code>Person/Nationality</code>라는 관계가 있다면, 이것이 <code>Person/Language</code> 관계의 원인이 될 수 있다는 식의 메타 관계를 학습합니다.</p>
+<ul>
+<li>Table 3 결과에 따르면, <code>film/ProducedBy</code> <img src="https://latex.codecogs.com/png.latex?%5CRightarrow"> <code>film/Country</code>와 같이 직관적으로 타당한 인과 관계들을 성공적으로 추출했습니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="conclusion" class="level1">
+<h1>5. Conclusion</h1>
+<p>본 논문은 그래프 구조 학습(Structure Learning)이라는 난제를 해결하기 위해, <strong>딥러닝(Deep Generative Model)과 연속 최적화(Continuous Optimization)</strong>를 결합한 <strong>DAG-GNN</strong> 프레임워크를 제안했습니다.</p>
+<p>이 연구의 핵심 기여와 의의는 다음과 같이 요약할 수 있습니다.</p>
+<ol type="1">
+<li><strong>Generalized SEM:</strong> 기존의 선형 구조 방정식 모델(Linear SEM)을 일반화하여, 비선형 관계와 복잡한 데이터 분포를 포착할 수 있는 VAE 기반 생성 모델을 설계했습니다.</li>
+<li><strong>Novel GNN Architecture:</strong> 인코더와 디코더를 구조 학습에 특화된 새로운 Graph Neural Network로 파라미터화했습니다.</li>
+<li><strong>Polynomial Acyclicity Constraint:</strong> 기존의 Matrix Exponential 제약 조건의 수치적 불안정성을 개선하고 구현 용이성을 높인 다항식 형태의 제약 조건을 제안했습니다.</li>
+<li><strong>Versatility:</strong> 실험을 통해 선형/비선형, 연속형/이산형, 스칼라/벡터 노드 등 다양한 데이터 형태에 대해 일관되게 우수한 성능을 입증했습니다.</li>
+</ol>
+<p>DAG-GNN은 인과추론 분야에서 딥러닝의 표현력을 구조 학습에 성공적으로 이식한 중요한 이정표가 되는 연구라 할 수 있습니다.</p>
+<hr>
+<section id="누락-방지-검증-checklist-4" class="level3">
+<h3 class="anchored" data-anchor-id="누락-방지-검증-checklist-4">누락 방지 검증 (Checklist)</h3>
+<ul>
+<li><strong>Synthetic Experiments:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">데이터 생성 방식 (Erdos-Renyi, <img src="https://latex.codecogs.com/png.latex?n=5000">, <img src="https://latex.codecogs.com/png.latex?m%20%5Cin%20%5C%7B10..100%5C%7D">) 기술</label></li>
+<li><label><input type="checkbox" checked="">Linear Case (<img src="https://latex.codecogs.com/png.latex?x=A%5ETx+z">) 결과 및 NOTEARS 비교 기술</label></li>
+<li><label><input type="checkbox" checked="">Nonlinear Case (<img src="https://latex.codecogs.com/png.latex?h(x)=%5Ccos(x+1)">) 식 및 FDR 개선 효과 강조</label></li>
+<li><label><input type="checkbox" checked="">Vector-valued Case 실험 설정 및 결과(NOTEARS의 한계) 기술</label></li>
+<li><label><input type="checkbox" checked="">히트맵(Figure 4, 7) 및 그래프(Figure 2, 3, 6) Placeholder 삽입</label></li>
+</ul></li>
+<li><strong>Benchmark &amp; Applications:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">Discrete Data (Child, Alarm, Pigs) 및 GOPNILP 비교 결과 기술</label></li>
+<li><label><input type="checkbox" checked="">Protein Network (Sachs et al.) SHD 비교 (19 vs 22) 포함</label></li>
+<li><label><input type="checkbox" checked="">Knowledge Base (FB15K-237) 적용 사례 언급</label></li>
+</ul></li>
+<li><strong>Conclusion:</strong>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="">Generalized SEM, GNN Architecture, Polynomial Constraint 등 핵심 기여 요약</label></li>
+<li><label><input type="checkbox" checked="">다양한 데이터 타입에 대한 범용성(Versatility) 강조</label></li>
+</ul></li>
+</ul>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Paper Review</category>
+  <guid>https://shsha0110.github.io/posts/paper/DAG-GNN: DAG Structure Learning with Graph Neural Networks/</guid>
+  <pubDate>Fri, 30 Jan 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>[Paper Review] Conformal Meta-learners for Predictive Inference of Individual Treatment Effects</title>
   <dc:creator>유성현 </dc:creator>
@@ -6879,163 +8412,6 @@ font-style: inherit;">return</span> order</span></code></pre></div></div>
  ]]></description>
   <category>Causal Inference</category>
   <guid>https://shsha0110.github.io/posts/lecture/L06/part-02/</guid>
-  <pubDate>Thu, 22 Jan 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Causal Inference] 06. The Causal Calculus (Part 3)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/lecture/L06/part-03/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>1. Introduction</h1>
-<p>이전 포스트에서 우리는 Do-Calculus의 직관적인 배경인 ’Three Insights’를 살펴보았습니다. 이번 포스트에서는 이를 일반화하여 Judea Pearl(1995)이 정립한 <strong>Do-Calculus의 3가지 공식 규칙</strong>을 정의하고, 이를 통해 인과 효과를 식별하는 과정을 단계별로 유도해 보겠습니다. [cite_start]또한, 모든 인과 효과가 식별 가능한 것은 아니며, 특정 그래프 구조(예: Bow-arc)에서는 식별이 불가능하다는 이론적 한계에 대해서도 다룹니다[cite: 334, 340].</p>
-<p>우리의 최종적인 구문론적 목표(Syntactical Goal)는 여전히 동일합니다. <img src="https://latex.codecogs.com/png.latex?Q%20=%20P(y%7Cdo(x))"> [cite_start]위 식을 확률 공리(Probability Axioms)와 Do-Calculus 규칙을 적용하여, <img src="https://latex.codecogs.com/png.latex?do(%5Ccdot)"> 연산자가 없는(do-free) 표현식으로 변환하는 것입니다[cite: 577, 578].</p>
-</section>
-<section id="the-rules-of-do-calculus-theorem" class="level1">
-<h1>2. The Rules of Do-Calculus (Theorem)</h1>
-<p>인과 모델 <img src="https://latex.codecogs.com/png.latex?M">에 의해 유도된 모든 <img src="https://latex.codecogs.com/png.latex?do">-분포에 대해 다음 세 가지 변환 규칙이 성립합니다. [cite_start]여기서 <img src="https://latex.codecogs.com/png.latex?X,%20Y,%20Z,%20W">는 변수들의 집합을 나타냅니다[cite: 371].</p>
-<section id="rule-1-addingremoving-observations" class="level2">
-<h2 class="anchored" data-anchor-id="rule-1-addingremoving-observations">Rule 1: Adding/Removing Observations</h2>
-<p>관측 변수 <img src="https://latex.codecogs.com/png.latex?Z">가 개입된 그래프에서 <img src="https://latex.codecogs.com/png.latex?Y">와 독립이라면, 조건부 확률에서 <img src="https://latex.codecogs.com/png.latex?Z">를 제거하거나 추가할 수 있습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x),%20z,%20w)%20=%20P(y%7Cdo(x),%20w)"></p>
-<ul>
-<li>[cite_start]<strong>조건:</strong> <img src="https://latex.codecogs.com/png.latex?(Y%20%5Cperp%5C!%5C!%5C!%5Cperp%20Z%20%7C%20X,%20W)_%7B%5Cmathcal%7BG%7D_%7B%5Coverline%7BX%7D%7D%7D"> [cite: 373, 378]</li>
-<li><strong>해석:</strong> <img src="https://latex.codecogs.com/png.latex?X">에 개입하여 <img src="https://latex.codecogs.com/png.latex?X">로 들어오는 화살표가 제거된 그래프(<img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BG%7D_%7B%5Coverline%7BX%7D%7D">)에서, <img src="https://latex.codecogs.com/png.latex?W">가 주어졌을 때 <img src="https://latex.codecogs.com/png.latex?Y">와 <img src="https://latex.codecogs.com/png.latex?Z">가 d-separated 되어 있다면 <img src="https://latex.codecogs.com/png.latex?Z">는 <img src="https://latex.codecogs.com/png.latex?Y">에 대한 추가 정보를 제공하지 않습니다.</li>
-</ul>
-</section>
-<section id="rule-2-actionobservation-exchange" class="level2">
-<h2 class="anchored" data-anchor-id="rule-2-actionobservation-exchange">Rule 2: Action/Observation Exchange</h2>
-<p>특정 조건하에서 개입(Action) <img src="https://latex.codecogs.com/png.latex?do(z)">를 단순 관측(Observation) <img src="https://latex.codecogs.com/png.latex?z">로 교체하거나 그 반대로 바꿀 수 있습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x),%20do(z),%20w)%20=%20P(y%7Cdo(x),%20z,%20w)"></p>
-<ul>
-<li>[cite_start]<strong>조건:</strong> <img src="https://latex.codecogs.com/png.latex?(Y%20%5Cperp%5C!%5C!%5C!%5Cperp%20Z%20%7C%20X,%20W)_%7B%5Cmathcal%7BG%7D_%7B%5Coverline%7BX%7D%5Cunderline%7BZ%7D%7D%7D"> [cite: 375, 379]</li>
-<li><strong>해석:</strong> 그래프 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BG%7D_%7B%5Coverline%7BX%7D%5Cunderline%7BZ%7D%7D">는 <img src="https://latex.codecogs.com/png.latex?X">로 들어오는 화살표를 제거하고(<img src="https://latex.codecogs.com/png.latex?%5Coverline%7BX%7D">), <img src="https://latex.codecogs.com/png.latex?Z">에서 나가는 화살표를 제거한(<img src="https://latex.codecogs.com/png.latex?%5Cunderline%7BZ%7D">) 그래프입니다. 이 구조에서 <img src="https://latex.codecogs.com/png.latex?Y">와 <img src="https://latex.codecogs.com/png.latex?Z">가 독립이라면, <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?Y">에 미치는 영향은 오직 <img src="https://latex.codecogs.com/png.latex?Z">의 부모를 통한 Back-door path뿐이므로, Back-door criterion에 의해 <img src="https://latex.codecogs.com/png.latex?do(z)">와 <img src="https://latex.codecogs.com/png.latex?z">가 등가입니다.</li>
-</ul>
-</section>
-<section id="rule-3-addingremoving-actions" class="level2">
-<h2 class="anchored" data-anchor-id="rule-3-addingremoving-actions">Rule 3: Adding/Removing Actions</h2>
-<p>개입 <img src="https://latex.codecogs.com/png.latex?do(z)">가 <img src="https://latex.codecogs.com/png.latex?Y">의 확률 분포에 아무런 영향을 주지 않는다면, 식에서 <img src="https://latex.codecogs.com/png.latex?do(z)">를 제거할 수 있습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x),%20do(z),%20w)%20=%20P(y%7Cdo(x),%20w)"></p>
-<ul>
-<li>[cite_start]<strong>조건:</strong> <img src="https://latex.codecogs.com/png.latex?(Y%20%5Cperp%5C!%5C!%5C!%5Cperp%20Z%20%7C%20X,%20W)_%7B%5Cmathcal%7BG%7D_%7B%5Coverline%7BX%7D%5Coverline%7BZ(W)%7D%7D%7D"> [cite: 377, 380]</li>
-<li><strong>해석:</strong> 여기서 <img src="https://latex.codecogs.com/png.latex?Z(W)">는 <img src="https://latex.codecogs.com/png.latex?Z">의 노드 중 <img src="https://latex.codecogs.com/png.latex?W">의 조상(Ancestor)이 아닌 노드들의 집합입니다. 해당 그래프에서 <img src="https://latex.codecogs.com/png.latex?Y">와 <img src="https://latex.codecogs.com/png.latex?Z">가 독립이라면, <img src="https://latex.codecogs.com/png.latex?Z">에 대한 개입은 <img src="https://latex.codecogs.com/png.latex?Y">에 인과적 영향을 주지 않습니다.</li>
-</ul>
-</section>
-</section>
-<section id="deep-dive-understanding-the-logic" class="level1">
-<h1>3. Deep Dive: Understanding the Logic</h1>
-<section id="logic-of-rule-2-regime-indicator" class="level2">
-<h2 class="anchored" data-anchor-id="logic-of-rule-2-regime-indicator">3.1. Logic of Rule 2 (Regime Indicator)</h2>
-<p>Rule 2는 근본적으로 “우리가 보는 것(Seeing)”과 “우리가 하는 것(Doing)”이 언제 같은지를 묻습니다. [cite_start]이를 이해하기 위해 <img src="https://latex.codecogs.com/png.latex?Z">의 상태를 결정하는 <strong>Regime Indicator <img src="https://latex.codecogs.com/png.latex?F_Z"></strong>를 도입할 수 있습니다[cite: 404, 418].</p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?F_Z%20=%200">: 자연스러운 관측 모드 (<img src="https://latex.codecogs.com/png.latex?Z%20%5Cleftarrow%20f_Z(W,%20U_Z)">)</li>
-<li><img src="https://latex.codecogs.com/png.latex?F_Z%20=%201">: 개입 모드 (<img src="https://latex.codecogs.com/png.latex?Z%20%5Cleftarrow%20z">)</li>
-</ul>
-<p>[cite_start]Rule 2가 성립한다는 것은 <img src="https://latex.codecogs.com/png.latex?F_Z">의 값이 0이든 1이든 <img src="https://latex.codecogs.com/png.latex?Y">의 분포가 변하지 않는다는 뜻입니다[cite: 473]. <img src="https://latex.codecogs.com/png.latex?P(y%7Cz,%20w,%20F_Z=1)%20=%20P(y%7Cz,%20w,%20F_Z=0)"> 이는 그래프상에서 <img src="https://latex.codecogs.com/png.latex?F_Z">와 <img src="https://latex.codecogs.com/png.latex?Y">가 조건부 독립 <img src="https://latex.codecogs.com/png.latex?(F_Z%20%5Cperp%5C!%5C!%5C!%5Cperp%20Y%20%7C%20Z,%20W)">임을 의미합니다. <img src="https://latex.codecogs.com/png.latex?Z">가 조건부로 주어졌으므로 <img src="https://latex.codecogs.com/png.latex?Z">를 통과하는 경로는 차단되고, 남은 것은 <img src="https://latex.codecogs.com/png.latex?Z">로 들어오는 Back-door path뿐입니다. [cite_start]따라서 Rule 2는 본질적으로 <img src="https://latex.codecogs.com/png.latex?Z">에 대한 Back-door path가 차단되었는지를 확인하는 것입니다[cite: 497].</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/lecture/L06/part-03/images/rule2_regime_indicator.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: Rule 2와 Regime Indicator. <img src="https://latex.codecogs.com/png.latex?F_Z"> 노드는 <img src="https://latex.codecogs.com/png.latex?Z">가 관측(idle) 상태인지 개입(do) 상태인지를 결정합니다. <img src="https://latex.codecogs.com/png.latex?Z">와 <img src="https://latex.codecogs.com/png.latex?W">가 주어졌을 때 <img src="https://latex.codecogs.com/png.latex?F_Z">에서 <img src="https://latex.codecogs.com/png.latex?Y">로 가는 경로가 없다면(d-separated), 개입 여부는 결과 <img src="https://latex.codecogs.com/png.latex?Y">에 영향을 주지 않습니다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="logic-of-rule-3-zw-and-ancestry" class="level2">
-<h2 class="anchored" data-anchor-id="logic-of-rule-3-zw-and-ancestry">3.2. Logic of Rule 3 (<img src="https://latex.codecogs.com/png.latex?Z(W)"> and Ancestry)</h2>
-<p>Rule 3에서 <img src="https://latex.codecogs.com/png.latex?Z(W)">라는 복잡한 표기법을 사용하는 이유는 무엇일까요? 우리가 <img src="https://latex.codecogs.com/png.latex?W">를 조건부로 하고 있을 때, <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?W">의 조상(Ancestor)이라면 <img src="https://latex.codecogs.com/png.latex?Z">에 개입하는 것이 <img src="https://latex.codecogs.com/png.latex?W">의 분포를 바꾸고, 이것이 다시 <img src="https://latex.codecogs.com/png.latex?Y">에 영향을 줄 수 있기 때문입니다.</p>
-<ul>
-<li>만약 <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?W">의 조상이 아니라면(<img src="https://latex.codecogs.com/png.latex?Z%20%5Cnotin%20An(W)">), <img src="https://latex.codecogs.com/png.latex?Z">에 개입해도 <img src="https://latex.codecogs.com/png.latex?W">는 변하지 않습니다. 따라서 <img src="https://latex.codecogs.com/png.latex?Z%20%5Cto%20Y"> 경로만 없다면 개입을 제거할 수 있습니다.</li>
-<li>만약 <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?W">의 조상이라면, <img src="https://latex.codecogs.com/png.latex?Z">에 대한 개입은 <img src="https://latex.codecogs.com/png.latex?W">를 변화시키므로 함부로 제거할 수 없습니다.</li>
-</ul>
-<p>[cite_start]따라서 Rule 3은 <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?Y">에 미치는 직접적인 효과가 없을 뿐만 아니라, <img src="https://latex.codecogs.com/png.latex?W">를 통해 간접적으로 미치는 효과도 통제되었을 때만 적용 가능합니다[cite: 541, 546].</p>
-</section>
-</section>
-<section id="derivation-example-in-do-calculus" class="level1">
-<h1>4. Derivation Example in Do-Calculus</h1>
-<p>[cite_start]간단한 그래프 <img src="https://latex.codecogs.com/png.latex?S%20%5Cto%20T%20%5Cto%20C">에서 <img src="https://latex.codecogs.com/png.latex?P(c%7Cdo(s))">를 유도하는 과정을 통해 Do-Calculus가 실제로 어떻게 작동하는지 살펴봅시다 [cite: 580-615].</p>
-<p><strong>Model:</strong> <img src="https://latex.codecogs.com/png.latex?S%20%5Cto%20T%20%5Cto%20C"> (Chain structure) <strong>Goal:</strong> Compute <img src="https://latex.codecogs.com/png.latex?P(c%7Cdo(s))"></p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/lecture/L06/part-03/images/derivation_chain_graph.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: 유도 예제를 위한 그래프. <img src="https://latex.codecogs.com/png.latex?S%20%5Cto%20T%20%5Cto%20C"> 형태의 간단한 연쇄(Chain) 구조입니다. <img src="https://latex.codecogs.com/png.latex?S">는 <img src="https://latex.codecogs.com/png.latex?T">에, <img src="https://latex.codecogs.com/png.latex?T">는 <img src="https://latex.codecogs.com/png.latex?C">에 영향을 미치며, <img src="https://latex.codecogs.com/png.latex?S">에서 <img src="https://latex.codecogs.com/png.latex?C">로 가는 직접 경로는 없습니다.</figcaption>
-</figure>
-</div>
-<ol type="1">
-<li><p><strong>Probability Axioms (Expansion):</strong> <img src="https://latex.codecogs.com/png.latex?T">에 대해 주변화(marginalization)하고 조건부 확률의 정의를 사용합니다. <img src="https://latex.codecogs.com/png.latex?=%20%5Csum_%7Bt%7D%20P(c%7Cdo(s),%20t)%20P(t%7Cdo(s))"></p></li>
-<li><p><strong>Rule 2 (Action to Observation for T):</strong> 두 번째 항 <img src="https://latex.codecogs.com/png.latex?P(t%7Cdo(s))">를 봅시다. 그래프에서 <img src="https://latex.codecogs.com/png.latex?S%20%5Cto%20T"> 경로가 존재하므로 단순 제거는 불가능합니다. 하지만 Back-door path가 없으므로 Rule 2를 적용해 <img src="https://latex.codecogs.com/png.latex?do(s)">를 <img src="https://latex.codecogs.com/png.latex?s">로 바꿀 수 있을까요? 네, 가능합니다. <img src="https://latex.codecogs.com/png.latex?=%20%5Csum_%7Bt%7D%20P(c%7Cdo(s),%20t)%20P(t%7Cs)"> <em>(참고: <img src="https://latex.codecogs.com/png.latex?S%20%5Cto%20T"> 관계에서 교란 변수가 없다면 <img src="https://latex.codecogs.com/png.latex?P(t%7Cdo(s))%20=%20P(t%7Cs)">)</em></p></li>
-<li><p><strong>Rule 2 (Introduction of Action <img src="https://latex.codecogs.com/png.latex?do(t)">):</strong> 첫 번째 항 <img src="https://latex.codecogs.com/png.latex?P(c%7Cdo(s),%20t)">에서 <img src="https://latex.codecogs.com/png.latex?t">를 <img src="https://latex.codecogs.com/png.latex?do(t)">로 바꿀 수 있습니다. 왜냐하면 <img src="https://latex.codecogs.com/png.latex?S">가 차단된 상태에서 <img src="https://latex.codecogs.com/png.latex?T">로 들어오는 Back-door path가 없기 때문입니다. <img src="https://latex.codecogs.com/png.latex?=%20%5Csum_%7Bt%7D%20P(c%7Cdo(s),%20do(t))%20P(t%7Cs)"></p></li>
-<li><p><strong>Rule 3 (Removing Action <img src="https://latex.codecogs.com/png.latex?do(s)">):</strong> 이제 <img src="https://latex.codecogs.com/png.latex?P(c%7Cdo(s),%20do(t))">를 봅시다. <img src="https://latex.codecogs.com/png.latex?T">에 개입(<img src="https://latex.codecogs.com/png.latex?do(t)">)을 하면 <img src="https://latex.codecogs.com/png.latex?T">는 상수로 고정됩니다. 이 상태에서 <img src="https://latex.codecogs.com/png.latex?S">는 <img src="https://latex.codecogs.com/png.latex?C">에 영향을 줄 수 있는 경로가 없습니다 (<img src="https://latex.codecogs.com/png.latex?S%20%5Cto%20T%20%5Cto%20C">가 <img src="https://latex.codecogs.com/png.latex?T">에서 끊김). 따라서 <img src="https://latex.codecogs.com/png.latex?do(s)">를 제거할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?=%20%5Csum_%7Bt%7D%20P(c%7Cdo(t))%20P(t%7Cs)"></p></li>
-<li><p><strong>Rule 2 (Action to Observation for C):</strong> 마지막으로 <img src="https://latex.codecogs.com/png.latex?P(c%7Cdo(t))">에서 <img src="https://latex.codecogs.com/png.latex?T%20%5Cto%20C"> 사이에 교란 요인이 없다면 Rule 2에 의해 <img src="https://latex.codecogs.com/png.latex?P(c%7Ct)">가 됩니다. <img src="https://latex.codecogs.com/png.latex?=%20%5Csum_%7Bt%7D%20P(c%7Ct)%20P(t%7Cs)"></p></li>
-</ol>
-<p>결과적으로 <img src="https://latex.codecogs.com/png.latex?P(c%7Cdo(s))%20=%20%5Csum_t%20P(c%7Ct)P(t%7Cs)">라는, 우리가 잘 아는 연쇄 법칙(Chain Rule) 공식이 유도되었습니다.</p>
-</section>
-<section id="non-identifiability-when-do-calculus-fails" class="level1">
-<h1>5. Non-identifiability: When Do-Calculus Fails</h1>
-<p>모든 인과 효과를 관측 데이터로 식별할 수는 없습니다. 식별 불가능성(Non-identifiability)을 증명하는 대표적인 예시와 기준을 알아보겠습니다.</p>
-<section id="the-fair-coin-counter-example" class="level2">
-<h2 class="anchored" data-anchor-id="the-fair-coin-counter-example">5.1. The “Fair Coin” Counter-example</h2>
-<p>[cite_start]동일한 관측 분포 <img src="https://latex.codecogs.com/png.latex?P(v)">를 가지지만, 서로 다른 개입 분포 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">를 갖는 두 모델이 존재한다면, 해당 인과 효과는 식별 불가능합니다[cite: 616].</p>
-<ul>
-<li><strong>Model 1:</strong> <img src="https://latex.codecogs.com/png.latex?X%20%5Cleftarrow%20U,%20Y%20%5Cleftarrow%20f_Y(X,%20U)"></li>
-<li><strong>Model 2:</strong> <img src="https://latex.codecogs.com/png.latex?X%20%5Cleftarrow%20U">, <img src="https://latex.codecogs.com/png.latex?Y">는 <img src="https://latex.codecogs.com/png.latex?X=U">일 때만 <img src="https://latex.codecogs.com/png.latex?f_Y">를 따르고 그 외엔 상수 출력.</li>
-</ul>
-<p>관측 데이터상에서는 항상 <img src="https://latex.codecogs.com/png.latex?X=U">이므로 두 모델을 구별할 수 없습니다(<img src="https://latex.codecogs.com/png.latex?P%5E%7B(1)%7D(v)%20=%20P%5E%7B(2)%7D(v)">). [cite_start]하지만 <img src="https://latex.codecogs.com/png.latex?do(X=x)">로 개입하면 <img src="https://latex.codecogs.com/png.latex?X%20%5Cneq%20U">인 상황이 발생하고, 이때 두 모델은 서로 다른 <img src="https://latex.codecogs.com/png.latex?Y"> 값을 출력합니다(<img src="https://latex.codecogs.com/png.latex?P%5E%7B(1)%7D(y%7Cdo(x))%20%5Cneq%20P%5E%7B(2)%7D(y%7Cdo(x))">)[cite: 626, 641]. 이는 데이터만으로는 인과 구조를 완벽히 파악할 수 없음을 시사합니다.</p>
-</section>
-<section id="graphical-criterion-tian-and-pearl-2002" class="level2">
-<h2 class="anchored" data-anchor-id="graphical-criterion-tian-and-pearl-2002">5.2. Graphical Criterion (Tian and Pearl, 2002)</h2>
-<p>그래프 구조만 보고 식별 불가능성을 판단할 수 있는 기준이 있습니다.</p>
-<p><strong>Theorem (Bow-arc Criterion):</strong> [cite_start]그래프 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BG%7D">에서 <img src="https://latex.codecogs.com/png.latex?X">와 그 자식 노드(children) 중 하나 사이에 <strong>양방향 화살표(bidirected edge, 점선)</strong>가 존재한다면, 즉 <img src="https://latex.codecogs.com/png.latex?X%20%5Cleftrightarrow%20%5Cdots%20%5Cleftrightarrow%20Y"> 형태의 교란 경로가 존재하고 직접 경로 <img src="https://latex.codecogs.com/png.latex?X%20%5Cto%20Y">가 있다면, <img src="https://latex.codecogs.com/png.latex?P(v'%7Cdo(x))">는 식별 불가능합니다[cite: 650].</p>
-<p>이러한 구조를 <strong>Bow-arc Graph</strong>라고 부릅니다. 활(Bow) 모양처럼 직접 경로와 교란 경로가 동시에 존재하기 때문입니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/lecture/L06/part-03/images/non_identifiable_graphs.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: 식별 불가능한 그래프 패턴들. (a)와 같은 Bow-arc 구조(X에서 Y로 가는 화살표와 점선 양방향 화살표가 병존)가 가장 대표적인 식별 불가능 패턴입니다. 이 경우 Do-Calculus를 아무리 적용해도 do 연산자를 제거할 수 없습니다.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="summary" class="level1">
-<h1>6. Summary</h1>
-<p>Do-Calculus는 인과 추론의 “미분 적분학”과 같습니다. 3가지 규칙을 통해 우리는 복잡한 인과적 질문을 관측 가능한 통계적 질문으로 변환할 수 있습니다.</p>
-<ol type="1">
-<li><strong>Rule 1:</strong> 관측값 추가/제거 (d-separation 확인)</li>
-<li><strong>Rule 2:</strong> 개입과 관측의 교환 (Back-door path 확인)</li>
-<li><strong>Rule 3:</strong> 개입의 추가/제거 (인과적 영향력 확인)</li>
-</ol>
-<p>하지만 Bow-arc와 같은 특정 구조에서는 이러한 변환이 불가능하며, 이는 데이터만으로는 인과관계를 밝혀낼 수 없다는 근본적인 한계를 보여줍니다. 다음 단계로는 이러한 규칙들을 알고리즘화하여 자동으로 식별 가능성을 판별하는 ID 알고리즘 등이 존재합니다.</p>
-<hr>
-<section id="누락-방지-검증-체크리스트" class="level3">
-<h3 class="anchored" data-anchor-id="누락-방지-검증-체크리스트">누락 방지 검증 체크리스트</h3>
-<ul>
-<li><strong>포함된 내용:</strong>
-<ul class="task-list">
-<li><label><input type="checkbox" checked=""><strong>Do-Calculus 3대 규칙의 정형적 정의:</strong> Unconditional 및 General Conditional 버전 포함 Rule 1, 2, 3 서술.</label></li>
-<li><label><input type="checkbox" checked=""><strong>Rule 2의 심층 원리:</strong> Regime Indicator <img src="https://latex.codecogs.com/png.latex?F_Z">를 이용한 설명 및 그래프 해석 포함.</label></li>
-<li><label><input type="checkbox" checked=""><strong>Rule 3의 심층 원리:</strong> <img src="https://latex.codecogs.com/png.latex?Z(W)"> 표기법과 조상(Ancestry) 관계에 따른 개입 제거 조건 설명.</label></li>
-<li><label><input type="checkbox" checked=""><strong>유도 예제:</strong> <img src="https://latex.codecogs.com/png.latex?S%20%5Cto%20T%20%5Cto%20C"> 그래프에서의 단계별 수식 유도(<img src="https://latex.codecogs.com/png.latex?P(c%7Cdo(s))">) 및 각 단계의 근거(Rule 적용) 설명.</label></li>
-<li><label><input type="checkbox" checked=""><strong>식별 불가능성(Non-identifiability):</strong> Fair Coin 반례(Counter-example)를 통한 증명 논리 포함.</label></li>
-<li><label><input type="checkbox" checked=""><strong>그래프 기준(Graphical Criterion):</strong> Tian &amp; Pearl (2002)의 정리 및 Bow-arc 구조 설명.</label></li>
-<li><label><input type="checkbox" checked=""><strong>이미지:</strong> Rule 2, 유도 예제, Bow-arc 그래프에 대한 이미지 태그 및 설명 포함.</label></li>
-<li><label><input type="checkbox" checked=""><strong>출처:</strong> 모든 주요 진술에 `` 형식으로 출처 표기 완료.</label></li>
-</ul></li>
-<li><strong>생략된 내용:</strong>
-<ul>
-<li>없음. 제공된 PDF 페이지 13~28의 모든 이론적 내용과 예제를 포괄함.</li>
-</ul></li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Causal Inference</category>
-  <guid>https://shsha0110.github.io/posts/lecture/L06/part-03/</guid>
   <pubDate>Thu, 22 Jan 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>

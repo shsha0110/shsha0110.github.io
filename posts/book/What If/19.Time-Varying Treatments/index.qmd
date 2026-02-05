@@ -210,6 +210,52 @@ $$
 * **개념**: $g_k(\cdot)$가 0 또는 1의 값이 아니라, 처치를 받을 확률(예: 0.3)을 반환합니다.
 * **용도**: 현실적으로 "최적의 전략(Optimal Strategy)"은 거의 항상 결정론적 동적 전략(예: 독성 생기면 중단)입니다. 하지만, **무작위 배정 임상시험(RCT)** 자체가 하나의 Random Strategy입니다. 어떤 전략이 최적일지 모르는 상태에서 이를 탐색하기 위해 과학적으로 필수적인 전략입니다.
 
+### 5.3. Equivalent Definitions of Dynamic Strategies (Technical Point 19.1)
+
+* 우리는 흔히 동적 전략을 "과거의 치료 및 공변량 이력에 따라 현재 치료를 결정하는 규칙"으로 정의합니다. 하지만 수학적으로 이를 재귀적(recursive)으로 풀어내면, 결국 **"오직 과거 공변량 이력에만 의존하는 전략"**으로 다시 정의할 수 있습니다.
+
+#### 1. 두 가지 정의의 동치성
+
+* 과거 치료와 공변량 이력에 의존하는 동적 전략 $g$와, 오직 과거 공변량 이력에만 의존하는 전략 $g'$을 고려해 봅시다.
+
+$$
+g = [g_0 (\bar{a}_{-1}, \bar{l}_{0}), ..., g_K (\bar{a}_{K-1}, \bar{l}_{K})]
+$$
+
+$$
+g' = [g'_0 (\bar{l}_{0}), ..., g'_K (\bar{l}_{K})]
+$$
+
+* 일치성(Consistency) 가정에 의해, 개인이 전략 $g$를 따를 때와 $g'$를 따를 때 겪게 되는 치료, 공변량, 결과의 이력은 동일합니다. 특히 반사실적 결과와 공변량 이력은 다음과 같이 일치합니다.
+
+$$
+Y^g = Y^{g'} \quad \text{and} \quad \bar{L}^g(K) = \bar{L}^{g'}(K)
+$$
+
+#### 2. 재귀적 재정의 (Recursive Definition)
+
+* 구체적으로, $g'$는 $g$를 이용하여 다음과 같이 재귀적으로 정의될 수 있습니다.
+
+$$
+g'_0 (\bar{l}_{0}) = g_0 (\bar{a}_{-1} = 0, \bar{l}_{0})
+$$
+
+$$
+g'_k (\bar{l}_{k}) = g_k ( \bar{a}'_{k-1}, \bar{l}_{k} ) = g_k [ \bar{g}'_{k-1} (\bar{l}_{k-1}), \bar{l}_{k} ]
+$$
+
+* 여기서 $\bar{a}_{-1}=0$은 관례에 따른 초기값이며, $\bar{g}'_{k-1}$은 시점 $k-1$까지의 결정 규칙 이력을 의미합니다. 즉, 현재 시점 $k$에서의 치료 $A_k$를 결정하기 위해 필요한 과거 치료 이력 $\bar{A}_{k-1}$ 자체가, 이미 이전 시점들의 공변량 $\bar{L}_{k-1}$에 의해 결정되었음을 의미합니다.
+
+#### 3. 관찰 데이터에서의 의미
+
+* 이 정의는 데이터 분석 시 중요한 함의를 갖습니다. 관찰된 데이터에서 개인이 전략 $g$를 따랐다는 것은, 전략 $g'$를 따랐다는 것과 필요충분조건이 됩니다.
+
+$$
+A_k = g_k (\bar{A}_{k-1}, \bar{L}_{k}) \text{ for } k \le t \iff A_k = g'_k (\bar{L}_{k}) \text{ for } k \le t
+$$
+
+* 결국 동적 전략이 복잡해 보이지만, 본질적으로는 **"개인이 겪어온 공변량의 역사($\bar{L}_k$)가 주어졌을 때, 치료($A_k$)가 결정되는 결정론적 함수"**로 환원될 수 있음을 보여줍니다.
+
 ## 6. Defining Causal Effects with Strategies
 
 * 이제 인과 효과(Causal Effect)를 더 일반화하여 정의할 수 있습니다. 인과 효과는 **두 가지 처치 전략 간의 반사실적 결과(Counterfactual Outcome)의 비교**입니다.
@@ -430,79 +476,213 @@ $$
 
 ## 1. Introduction
 
-* 이전 섹션들에서 우리는 시변 처치(Time-Varying Treatment)의 인과 효과를 추정하기 위해 **순차적 교환 가능성(Sequential Exchangeability)** 가정이 필요함을 배웠습니다.
+* 인과추론(Causal Inference), 특히 시변(time-varying) 치료가 존재하는 상황에서 우리는 종종 **"모든 교란 요인(confounder)이 통제되었는가?"** 라는 질문을 던집니다. 하지만 이 질문에 대한 답은 우리가 어떤 종류의 치료 전략(Treatment Strategy)을 고려하느냐에 따라 달라질 수 있습니다.
+  
+* 19.5절에서는 매우 흥미로운, 그리고 다소 직관에 반하는 현상을 다룹니다. 바로 **정적 전략(Static Strategy)에 대한 인과 효과는 식별 가능(Identifiable)하지만, 동적 전략(Dynamic Strategy)에 대한 효과는 식별 불가능한 상황**이 존재한다는 것입니다.
 
-* 하지만 인과 구조(Causal Structure)에 따라 이 가정이 "모든 전략"에 대해 성립할 수도 있고, "일부 전략"에 대해서만 성립할 수도 있다는 점은 매우 중요합니다. 특히, **정적 전략(Static Strategy, $\bar{a}$)**에 대한 효과는 계산할 수 있지만, **동적 전략(Dynamic Strategy, $g$)**에 대한 효과는 계산할 수 없는 상황이 존재합니다.
+* 이번 포스트에서는 SWIGs(Single World Intervention Graphs)를 활용하여 이 미묘한 차이가 발생하는 구조적 원인을 파헤쳐보고, **Sequential Exchangeability(순차적 교환 가능성)**가 전략의 형태에 따라 어떻게 다르게 적용되는지 살펴보겠습니다.
 
-* 이번 포스트에서는 이러한 비대칭적인 식별 가능성(Identifiability)이 발생하는 원인을 인과 그래프(DAG)와 SWIG를 통해 분석하고, 이를 뒷받침하는 추가 가정인 **일관성(Consistency)**과 **양수성(Positivity)**을 시변 처치 맥락으로 확장해 봅니다.
+## 2. Problem Setting: Static vs. Dynamic Strategies
 
-## 2. Key Assumptions: Consistency and Positivity
+* 논의를 시작하기 전에 두 가지 치료 전략의 정의를 명확히 합시다.
 
-* 식별 가능성 논의에 앞서, 인과 추론의 기본 가정이 시변 처치 환경에서 어떻게 확장되는지 정의해야 합니다. (Technical Point 19.2)
+* 1.  **정적 전략 (Static Strategy, $\bar{a}$)**:
+    * 개인의 상태나 시간의 흐름에 상관없이 미리 정해진 값으로 치료를 할당합니다.
+    * 예: "모든 시점 $t$에서 치료를 받는다 ($a_t = 1$)."
+    * 표기: $\bar{a} = (a_0, a_1)$
 
-### 2.1. Consistency (일관성)
-* 고정 처치에서의 일관성 가정("처치 $A=a$를 받으면 관측된 결과 $Y$는 잠재적 결과 $Y^a$와 같다")은 시변 처치에서 전체 이력(History)에 대한 조건으로 확장됩니다.
+* 2.  **동적 전략 (Dynamic Strategy, $g$)**:
+    * 이전 시점의 공변량(covariates) 값에 따라 현재의 치료 여부가 결정됩니다.
+    * 예: "시점 $t=0$에는 치료를 하지 않고($g_0=0$), 시점 $t=1$에는 CD4 수치($L_1$)가 낮을 때만 치료한다($g_1(L_1)$)."
+    * 표기: $g = [g_0, g_1(L_1)]$
+
+* 우리의 목표는 관찰 데이터(Observational Data)를 이용하여 이러한 전략 하에서의 반사실적 결과(Counterfactual Outcome) $Y^{\bar{a}}$ 혹은 $Y^g$의 평균을 추정할 수 있는지(Identifiability) 확인하는 것입니다.
+
+## 3. Graphical Analysis using SWIGs
+
+* 식별 가능성을 시각적으로 판별하기 위해 **SWIGs (Single World Intervention Graphs)**를 사용합니다. SWIG는 특정 개입(Intervention)이 일어난 가상의 세계를 그래프로 표현한 것으로, 노드 분리(node splitting)를 통해 처치 변수와 처치 후 변수를 구분합니다.
+
+### 3.1. Base Scenarios: Figures 19.5 & 19.6
+
+* 우리는 두 가지 인과 구조(Causal Diagrams)를 비교할 것입니다.
+
+![Figure 19.5: Comparison of two causal structures. Figure 19.5 represents a standard confounding scenario where U1 affects L1 and Y.](./images/dag_figure_19_5.png)
+
+* **Figure 19.5**: $L_1$은 $A_1$과 $Y$의 교란 요인(confounder)이며, $U_1$은 $L_1$과 $Y$에 영향을 주는 미측정 교란 요인입니다.
+
+![Figure 19.6: Comparison of two causal structures. Figure 19.6 introduces an unmeasured common cause W0 affecting A0 and L1, adding complexity to the identification.](./images/dag_figure_19_6.png)
+
+* **Figure 19.6**: Figure 19.5 구조에 더해, **$W_0$라는 미측정 변수**가 존재합니다. $W_0$는 초기 치료 $A_0$와 후속 공변량 $L_1$ 모두에 영향을 미칩니다 ($A_0 \leftarrow W_0 \rightarrow L_1$).
+
+* 이 $W_0$의 존재가 정적 전략과 동적 전략의 식별 가능성을 가르는 핵심 열쇠가 됩니다.
+
+### 3.2. Static Strategies: Identifiability Holds
+
+* 먼저 정적 전략 $\bar{a}=(a_0, a_1)$을 적용했을 때의 SWIG를 살펴봅시다.
+
+![Figure 19.7: SWIGs for Static Strategies corresponding to Fig 19.5. In these graphs, treatment nodes A0 and A1 are split. The intervention values a0 and a1 are fixed constants.](./images/dag_figure_19_7.png)
+
+![Figure 19.8: SWIGs for Static Strategies corresponding to Fig 19.6. Notably, in Figure 19.8, even with W0, the path from A0 to outcomes is blocked because we condition on A0 (or conceptually, a0 is fixed).](./images/dag_figure_19_8.png)
+
+* Figure 19.6에 대응하는 SWIG인 **Figure 19.8**을 봅시다. 여기서 우리는 **d-separation**을 통해 다음의 조건부 독립성이 성립하는지 확인해야 합니다.
 
 $$
-\text{If } \bar{A} = \bar{a}, \text{ then } Y^{\bar{a}} = Y
+Y^{\bar{a}} \perp A_k \mid \bar{A}_{k-1} = \bar{a}_{k-1}, \bar{L}_k
 $$
 
-* 즉, 개인의 실제 처치 이력 $\bar{A}$가 특정 전략 $\bar{a}$와 일치한다면, 그 개인의 관측된 결과 $Y$는 해당 전략 하의 잠재적 결과 $Y^{\bar{a}}$와 동일해야 합니다.
-* 동적 전략 $g$에 대해서도, 실제 이력이 $g$가 지시하는 바와 일치한다면 $Y^g = Y$가 성립합니다.
+* **직관적 해석**: 정적 전략 세계(SWIG)에서는 $a_0, a_1$이 상수(constant)로 고정됩니다. 따라서 $W_0$가 $A_0$에 영향을 주더라도, 반사실적 세계의 치료 경로에는 영향을 주지 못합니다.
+* **결과**: Figure 19.6(즉, SWIG 19.8)에서도 정적 전략에 대한 **Sequential Exchangeability(순차적 교환 가능성)**은 성립합니다.
+    * 따라서, $W_0$의 존재 여부와 상관없이 정적 전략의 효과는 식별 가능합니다.
+* **Graphical Interpretation**: $Y^{a_0, a_1} \perp A_1^{a_0} \mid A_0=a_0, L_1^{a_0}$ 조건은 $A_0 \leftarrow W_0 \rightarrow L_1 \rightarrow \dots$ 경로가 있어도 성립합니다. 왜냐하면 $A_0$를 조건부로 통제(conditioning)하면 $W_0$로 가는 백도어 경로가 차단되기 때문입니다.
 
-### 2.2. Positivity (양수성)
-* 양수성 가정은 데이터 내에서 모든 가능한 처치 경로를 관측할 수 있어야 함을 의미합니다.
-* 시변 처치에서는 "과거의 어떤 이력 $(\bar{a}_{k-1}, \bar{l}_k)$이 주어지더라도, 현재 시점 $k$에서 가능한 모든 처치 $a_k$를 받을 확률이 0보다 커야 한다"로 정의됩니다.
+## 4. The Critical Divergence: Dynamic Strategies
+
+* 이제 문제가 되는 **동적 전략 $g$**를 적용해 봅시다. 동적 전략 하에서 SWIG는 구조가 달라집니다.
+
+### 4.1. Constructing SWIG for Dynamic Strategy
+
+* 동적 전략 $g = [g_0, g_1(L_1)]$에서, $t=1$ 시점의 치료는 $L_1$의 값에 따라 결정됩니다. 이를 SWIG에 반영하면, **$L_1^g$에서 $A_1^g$ (정확히는 $g_1(L_1^g)$)로 가는 화살표**가 추가됩니다.
+
+![Figure 19.10: SWIG for Dynamic Strategy based on the structure of Figure 19.6. Crucially, this graph includes an arrow from $L_1^g$ to the intervention node $g_1(L^g)$, representing that treatment depends on the covariate. This creates a new open path involving $W_0$.](./images/dag_figure_19_10.png)
+
+## 4.2. Detail: Arrows from Intervention Nodes (Fine Point 19.2)
+
+* SWIG를 그릴 때 한 가지 의문이 들 수 있습니다. "개입 노드(intervention node) $a$나 $g(L)$은 이미 상수로 고정된 값인데, 왜 여기서 미래의 변수로 향하는 화살표를 남겨두어야 하는가?"라는 점입니다.
+
+* Fine Point 19.2에서는 이에 대해 두 가지 이유를 제시하며, 특히 **원래 DAG의 인과적 구조(직접 효과 등)를 보존**하기 위함임을 강조합니다. 하지만 d-separation을 적용할 때는 주의가 필요합니다.
+
+### 1. 개입 노드의 화살표와 차단(Blocking)
+
+* SWIG에서 개입 노드($a$ 또는 $g$)에서 나가는 화살표는 원래 DAG에서 치료($A$)가 영향을 미치는 변수들을 추적하기 위해 존재합니다. 하지만 d-separation을 판별할 때, **개입 노드를 포함하는 모든 경로는 차단(blocked)된 것**으로 간주해야 합니다. 왜냐하면 그 노드는 이미 특정 값으로 설정(instantiated)되었기 때문입니다.
+
+### 2. 결정론적 전략 (Deterministic Strategies)
+
+* Figure 19.9와 같이 $g_0$가 $g_0(L_0)$로 대체된 결정론적 동적 전략을 생각해 봅시다. 이때 우리는 $g_0(L_0)$에 대해 명시적으로 조건부를 걸 필요가 없습니다. 왜냐하면 $L_0$를 조건부로 통제(conditioning)하면 $g_0(L_0)$는 상수가 되어버리기 때문입니다.
+
+* 따라서 SWIG에서 다음의 독립성을 확인할 때:
 
 $$
-\text{If } f_{\bar{A}_{k-1}, \bar{L}_k}(\bar{a}_{k-1}, \bar{l}_k) \neq 0, \text{ then } f_{A_k | \bar{A}_{k-1}, \bar{L}_k}(a_k | \bar{a}_{k-1}, \bar{l}_k) > 0
+Y^g \perp \!\!\! \perp A_1^g | A_0, L_0, L_1^g
 $$
 
-* 만약 특정 전략 $g$에만 관심이 있다면, 모든 경로가 아닌 $g$와 호환되는 경로(compatible history)에 대해서만 이 조건이 성립하면 됩니다.
+* 일관성(consistency) 가정에 의해, $A_0$를 $g(L_0)$로, $A_1^g$를 $A_1$으로 치환하면 이는 곧 우리가 확인해야 할 교환 가능성 조건이 됩니다:
 
-## 3. Scenario Analysis: When Can We Identify Effects?
+$$
+Y^g \perp \!\!\! \perp A_1 | A_0 = g(L_0), L_0, L_1
+$$
 
-* 이제 세 가지 대표적인 인과 구조(DAG)를 통해 식별 가능성의 차이를 살펴보겠습니다.
+* 즉, $L_0$를 통제하면 $g(L_0)$를 통과하는 경로는 자동으로 차단됩니다.
 
-### 3.1. Scenario 1: Full Identifiability (Figure 19.5)
+### 3. 확률적 전략 (Random Strategies)
 
-* 첫 번째 시나리오는 측정되지 않은 공변량 $W_k$가 존재하지만, 이것이 처치 $A_k$와 *미래의* 공변량 $L_{t>k}$에만 영향을 주는 경우입니다.
+* 반면, 치료 값 $A_0^{+,g}$를 특정 분포에서 확률적으로 추출하여 할당하는 **확률적 전략(Random Strategy)**의 경우는 다릅니다. 이때는 $L_0$가 주어지더라도 치료 값 $A_0^{+,g}$가 하나로 결정되지 않으므로, d-separation을 확인할 때 **$A_0^{+,g}$를 명시적으로 조건부에 포함**시켜야 합니다.
 
-![Figure 19.5: 측정되지 않은 변수 $W_0$가 $A_0$와 $L_1$에 영향을 주지만, 순차적 교환 가능성을 해치지 않는 구조.](./images/dag_figure_19_5.png)
+* Richardson and Robins (2013)는 g-formula를 통한 식별을 위해 다음 조건이 필요함을 보였습니다:
 
-* **해석**: 이 구조에서는 $W_k$가 "과거 처치와 미래 공변량의 공통 원인" 역할을 합니다. 하지만 우리가 관심을 갖는 $k$ 시점의 처치 $A_k$에 대한 교란 요인으로는 작용하지 않거나(적절히 통제됨), 순차적 교환 가능성 조건을 만족시킵니다.
-* **결론**: 이 경우, 동적 전략 $g$에 대한 순차적 교환 가능성(Sequential Exchangeability for $Y^g$)이 성립합니다.
-    $$
-    Y^g \perp \!\!\! \perp A_k \mid \bar{A}_{k-1}, \bar{L}_k
-    $$
-    따라서 **정적 전략(Static)과 동적 전략(Dynamic) 모두에 대한 인과 효과를 식별할 수 있습니다.**
+$$
+Y^g \perp \!\!\! \perp A_1^g | A_0, A_0^{+,g}, L_0, L_1^g
+$$
 
-### 3.2. Scenario 2: Partial Identifiability (Figure 19.6)
+* **요약하자면**: SWIG에서 개입 노드(화살표의 시작점)는 구조적 정보를 위해 그려두되, 결정론적 전략 하에서 d-separation을 따질 때는 해당 노드가 '이미 통제된(blocked) 상수'임을 기억해야 합니다.
 
-* 두 번째 시나리오는 매우 흥미롭고 주의가 필요한 경우입니다.
+### 4.3. Why Identifiability Fails in Figure 19.6
 
-![Figure 19.6: $W_0$가 $A_0$와 $L_1$의 공통 원인인 구조. 정적 전략은 식별 가능하나, 동적 전략은 식별 불가능하다.](./images/dag_figure_19_6.png)
+* 위의 **Figure 19.10** (Figure 19.6 기반의 동적 SWIG)을 자세히 분석해 봅시다. 우리는 다음 독립성을 확인해야 합니다.
+$$
+Y^g \perp A_0
+$$
+  * Note: $t=0$에서 $g_0$는 고정된 값이므로 $L_0$ 조건 없이 $A_0$와의 독립성을 봅니다.
 
-* **구조적 특징**: 측정되지 않은 변수 $W_0$가 $A_0$(과거 처치)와 $L_1$(미래 공변량)에 동시에 영향을 줍니다. ($A_0 \leftarrow W_0 \rightarrow L_1$)
-* **정적 전략 ($\bar{a}$)**: $Y^{\bar{a}}$에 대해서는 순차적 교환 가능성이 성립합니다. $L_1$을 조건부로 통제하면 $A_1$의 배정은 무작위라고 볼 수 있기 때문입니다.
-* **동적 전략 ($g$)**: 문제가 발생합니다. 동적 전략 $g$는 $L_1$의 값에 따라 $A_1$을 결정합니다 (예: $L_1=1$이면 치료). 따라서 $Y^g$의 분포를 알기 위해서는 $L_1^g$(전략 $g$ 하에서의 $L_1$ 분포)를 알아야 합니다.
-    * 하지만 $L_1$은 $A_0$와 $W_0$의 영향을 받습니다.
-    * $A_0$와 $L_1$ 사이에는 $A_0 \leftarrow W_0 \rightarrow L_1$이라는 뒷문 경로(Backdoor path)가 열려 있습니다.
-    * $W_0$를 측정하지 못했으므로, $A_0$가 $L_1$에 미치는 인과 효과를 분리해낼 수 없고, 결과적으로 **$L_1^g$의 분포를 식별할 수 없습니다.**
+* SWIG 19.10에서 $A_0$와 $Y^g$ 사이의 경로를 추적해 보면 다음과 같습니다.
 
-![Figure 19.10: Figure 19.6에 대응하는 SWIG. $L_1$ 노드(정확히는 $L_1^g$)로 들어오는 화살표 $W_0 \rightarrow L_1$과 $A_0 \leftarrow W_0$ 경로 때문에 $L_1^g$의 분포가 식별되지 않음을 보여준다.](./images/swig_figure_19_10.png)
+* 1.  $A_0 \leftarrow W_0 \rightarrow L_1^g$
+    * 원래 그래프(Fig 19.6)에 있던 $W_0$로 인한 교란 경로입니다.
+* 2.  $L_1^g \rightarrow g_1(L_1^g) \rightarrow Y^g$ (또는 $L_1^g$ 자체가 $Y^g$에 영향)
+    * 동적 전략이기 때문에 $L_1^g$가 $g_1$을 통해 $A_1$을 결정하고, 이것이 $Y$에 영향을 줍니다.
 
-* **결론**: Figure 19.6과 같은 관찰 연구에서는 **정적 전략의 효과만 추정 가능하며, 동적 전략의 효과는 추정할 수 없습니다.**
+* 결국, 다음과 같은 **Open Path(열린 경로)**가 형성됩니다:
 
-### 3.3. Scenario 3: Non-Identifiability (Figure 19.11)
+$$
+A_0 \leftarrow W_0 \rightarrow L_1^g \rightarrow \dots \rightarrow Y^g
+$$
 
-* 마지막은 가장 나쁜 상황입니다. Figure 19.6의 구조에서 $L_1$이 결과 $Y$에 직접적인 영향을 주는 화살표($L_1 \rightarrow Y$)가 추가된 경우입니다.
+* 이 경로는 차단되지 않았습니다(Unblocked). $W_0$는 관찰되지 않는 변수이므로 이를 통제(Conditioning)할 수 없습니다.
 
-![Figure 19.11: Figure 19.6 구조에 $L_1 \rightarrow Y$ 화살표가 추가된 상황. 모든 종류의 전략에 대해 식별 불가능하다.](./images/dag_figure_19_11.png)
+* **결론적으로:**
+  * $Y^g$와 $A_0$는 독립이 아닙니다 ($Y^g \not\perp A_0$).
+  * 즉, **Sequential Exchangeability가 성립하지 않습니다.**
+  * 따라서 Figure 19.6의 데이터 구조에서는 **정적 전략의 효과는 구할 수 있지만, 동적 전략의 효과는 구할 수 없습니다.**
 
-* **해석**: 이제 $L_1$은 단순한 중간 단계가 아니라 결과 $Y$의 직접적인 원인인 동시에 교란 요인입니다.
-* **분석 (with SWIG Fig 19.12)**: D-separation을 적용해보면, $Y^{\bar{a}}$에 대한 정적 순차적 교환 가능성조차 성립하지 않음을 알 수 있습니다.
-* **결론**: 이 구조에서는 **어떠한 전략(정적 또는 동적)에 대한 인과 효과도 데이터로부터 유효하게 추정할 수 없습니다.**
+## 5. Theoretical Implications
+
+### 5.1. Deep Dive: The Many Forms of Sequential Exchangeability (Technical Point 19.3)
+
+* 우리는 앞서 그림을 통해 직관적으로 식별 가능성을 논의했습니다. 이제 이를 엄밀한 수식으로 정의해 봅시다. **순차적 교환 가능성(Sequential Exchangeability)**은 단일한 조건이 아니라, 가정의 강도에 따라 여러 형태로 표현될 수 있습니다.
+
+#### 1. 기본 정의 (Static Strategies)
+
+* 시변 치료(time-varying treatment) $A_k$ ($k=0, 1, \dots, K$)가 있는 순차적 무작위 실험을 고려해 봅시다. SWIG로부터 우리는 다음의 조건부 독립성을 읽어낼 수 있습니다.
+
+$$
+(Y^{\bar{a}}, \bar{L}_{k+1}^{\bar{a}}) \perp \!\!\! \perp A_k^{\bar{a}_{k-1}} | \bar{A}_{k-1}^{\bar{a}_{k-2}} = \bar{a}_{k-1}, \bar{L}_k^{\bar{a}_{k-1}}
+$$
+
+* 여기서 $\bar{L}_{k+1}^{\bar{a}}$는 시점 $k+1$부터 추적 관찰이 끝날 때까지의 반사실적 공변량 이력(counterfactual covariate history)을 의미합니다. 일치성(Consistency) 가정에 의해, 위 식은 관찰 가능한 변수들을 사용하여 다음과 같이 간소화될 수 있습니다.
+
+$$
+(Y^{\bar{a}}, \bar{L}_{k+1}^{\bar{a}}) \perp \!\!\! \perp A_k | \bar{A}_{k-1} = \bar{a}_{k-1}, \bar{L}_k
+$$
+
+* 만약 이 조건이 **모든 정적 전략(all static strategies) $\bar{a}$** 에 대해 성립한다면, 우리는 **"순차적 교환 가능성(Sequential Exchangeability)이 성립한다"**고 말합니다.
+
+#### 2. 정적 전략과 동적 전략의 등가성 (Equivalence)
+
+* 흥미로운 점은, 위의 순차적 교환 가능성 조건이 오직 정적 전략($g=\bar{a}$)만을 언급하고 있음에도 불구하고, 이는 겉보기에 더 강력해 보이는 **모든 동적 전략(all $g$)에 대한 조건과 등가(equivalent)**라는 사실입니다.
+
+$$
+(Y^{g}, \bar{L}_{k+1}^{g}) \perp \!\!\! \perp A_k | \bar{A}_{k-1} = g(\bar{A}_{k-1}, \bar{L}_k), \bar{L}_k \quad \text{for all } g
+$$
+
+* 즉, 양수성(Positivity)이 유지된다면, 정적 전략에 대한 교환 가능성만으로도 **모든 정적 및 동적 전략 $g$ 하에서의 결과 및 공변량 분포를 식별(Identify)하기에 충분**합니다 (Robins 1986).
+
+#### 주의: 결합 독립성의 필요성
+* 동적 전략의 경우, $Y$와 $L$에 대한 별도의 독립성($Y^{\bar{a}} \perp \!\!\! \perp A_k | \dots$ 그리고 $L_{k+1}^{\bar{a}} \perp \!\!\! \perp A_k | \dots$)만으로는 충분하지 않으며, 위 식과 같이 **결합 조건부 독립성(Joint Conditional Independence)**인 $(Y^{\bar{a}}, \bar{L}_{k+1}^{\bar{a}}) \perp \!\!\! \perp A_k | \dots$ 가 성립해야 합니다.
+
+#### 3. 더 강력한 조건들 (Full Sequential Exchangeability)
+
+* 순차적 무작위 실험(Sequentially Randomized Experiment)에서는 더 강력한 조건들이 성립할 것으로 기대됩니다. 예를 들어, **완전 순차적 교환 가능성(Full Sequential Exchangeability)**이라 불리는 조건은 다음과 같습니다.
+
+$$
+(Y^{\bar{\mathcal{A}}}, \bar{L}^{\bar{\mathcal{A}}}) \perp \!\!\! \perp A_k | \bar{A}_{k-1}, \bar{L}_k
+$$
+
+* 여기서 이분형(dichotomous) 치료 $A_k$에 대해, $\bar{\mathcal{A}}$는 모든 $2^K$개의 정적 전략 $\bar{a}$의 집합을 의미하며, $Y^{\bar{\mathcal{A}}}$는 모든 반사실적 결과의 집합, $\bar{L}^{\bar{\mathcal{A}}}$는 모든 반사실적 공변량 이력의 집합을 의미합니다.
+
+* 하지만 인구집단(population) 수준에서 치료 전략의 인과 효과를 식별하기 위해서 이처럼 강력한 조건이 반드시 필요한 것은 아니며, 앞서 언급한 기본 순차적 교환 가능성만으로도 식별은 가능합니다.
+
+### 5.2. Weak vs. Strong Sequential Exchangeability
+
+* 우리는 흔히 "교환 가능성(Exchangeability)"을 하나의 절대적인 조건으로 생각하기 쉽습니다. 하지만 본문은 이를 세밀하게 구분합니다.
+
+* 1.  **Static Sequential Exchangeability (Weak)**:
+    $$Y^{\bar{a}} \perp A_k \mid \bar{A}_{k-1} = \bar{a}_{k-1}, \bar{L}_k \quad \text{for all static } \bar{a}$$
+    * Figure 19.6에서 성립함.
+
+* 2.  **Sequential Exchangeability for $Y^g$**:
+    $$Y^g \perp A_k \mid \bar{A}_{k-1} = g(\bar{L}_{k-1}), \bar{L}_k$$
+    * Figure 19.6에서 성립하지 않음.
+
+* 흥미로운 점은 **모든 정적 전략에 대해 교환 가능성이 성립한다고 해서, 동적 전략에 대한 교환 가능성이 자동적으로 보장되는 것은 아니라는 점**입니다 (Technical Point 19.3). 동적 전략을 식별하기 위해서는 $L_1$의 분포 자체가 식별 가능하거나, $L_1$을 통하는 백도어 경로가 없어야 하는데, $W_0$가 이를 방해하기 때문입니다.
+
+### 5.3. A Case where Nothing Works (Figure 19.11)
+
+* 마지막으로, 논문은 더 나쁜 상황(Figure 19.11)을 소개합니다.
+
+![Figure 19.11: A scenario where neither static nor dynamic strategies are identifiable. This structure includes an arrow L1 $\rightarrow$ Y and confounding via W0, creating unblocked backdoor paths for both strategy types.](./images/dag_figure_19_11.png)
+
+![Figure 19.12: A scenario where neither static nor dynamic strategies are identifiable. This structure includes an arrow L1 $\rightarrow$ Y and confounding via W0, creating unblocked backdoor paths for both strategy types.](./images/dag_figure_19_12.png)
+
+* Figure 19.11은 Figure 19.6과 유사하지만 **$L_1$에서 $Y$로 가는 직접 화살표($L_1 \rightarrow Y$)**가 존재하고 $W_0$가 있는 경우입니다. 이 경우 SWIG(Figure 19.12)를 그려보면 정적 전략 $Y^{\bar{a}}$조차도 $A_0$와 독립이 아니게 되어, **어떤 전략도 식별 불가능**하게 됩니다.
 
 ---
 
@@ -547,6 +727,47 @@ $$
 
 * 하지만 관찰 연구에서는 대부분 $L_k$가 처치 $A_k$에 영향을 주기 때문에 시변 교란이 발생합니다.
 
+### 2.3. Detail: Defining Time-Varying Confounding (Fine Point 19.3)
+
+* 우리는 흔히 "시변 교란이 있다"고 말하지만, 이를 수식으로 어떻게 정의할까요? Fine Point 19.3에서는 기초선 공변량(baseline covariates) $L_0$를 기준으로 '시간 고정적(time-fixed)'인 교란과 '시변(time-varying)'인 교란을 명확히 구분합니다.
+
+#### 1. 교란(Confounding)의 일반적 정의
+* 선택 편향(selection bias)이 없다고 가정할 때, 우리는 다음 부등식이 성립하면 인과 효과에 대한 **교란(confounding)**이 존재한다고 말합니다.
+
+$$
+E[Y^{\bar{a}}] \neq E[Y|A=\bar{a}]
+$$
+
+* 즉, 모든 개인이 전략 $\bar{a}$를 따랐을 때의 반사실적 평균 결과가, 실제 연구에서 전략 $\bar{a}$를 따랐던 사람들의 평균 결과와 다르다면 교란이 있는 것입니다.
+
+#### 2. 순수한 시간 고정 교란 (Solely Time-Fixed Confounding)
+* 만약 기초선 공변량 $L_0$를 통제하는 것만으로 이 차이가 사라진다면, 우리는 이 교란이 **"순수하게 시간 고정적(solely time-fixed)"**이라고 말합니다.
+
+$$
+E[Y^{\bar{a}}|L_0] = E[Y|A=\bar{a}, L_0]
+$$
+
+* 이는 Figure 19.2에서 $A_1$으로 들어오는 화살표가 오직 $A_0$와 $L_0$에서만 유래하는 경우에 해당합니다. 즉, $A_0$의 결과이면서 $A_1$의 원인이 되는 중간 변수($L_1$)가 없는 상황입니다.
+
+#### 3. 시변 교란 (Time-Varying Confounding)
+* 반면, 식별 가능성 조건(identifiability conditions)은 성립하지만, $L_0$를 통제한 후에도 여전히 차이가 존재한다면:
+
+$$
+E[Y^{\bar{a}}|L_0] \neq E[Y|A=\bar{a}, L_0]
+$$
+
+* 우리는 **"시변 교란(time-varying confounding)이 존재한다"**고 말합니다. 이는 $L_0$ 외에, $A_0$에 영향을 받으면서 동시에 $A_1$과 $Y$에 영향을 주는 $L_1$과 같은 요인이 존재함을 시사합니다.
+  * Note: 만약 식별 가능성 조건조차 성립하지 않는다면(예: Figure 19.3), 우리는 **미측정 교란(unmeasured confounding)**이 있다고 말합니다.
+
+#### 4. 시변 교란이 없는 충분 조건
+* 시변 교란이 없음을 보장하는 충분 조건은 **비조건부 순차적 교환 가능성(unconditional sequential exchangeability)**입니다.
+
+$$
+Y^{\bar{a}} \perp \!\!\! \perp A_k | \bar{A}_{k-1} = \bar{a}_{k-1}
+$$
+
+* 이 조건은 Figure 19.1과 같은 **순차적 무작위 실험(sequentially randomized experiments)**에서 성립합니다. 이 경우, 각 시점 $k$에서의 치료 $A_k$는 오직 과거 치료 이력 $\bar{A}_{k-1}$에만 의존하는 확률로 무작위 배정되므로, $L_1$과 같은 복잡한 공변량 구조를 고려할 필요 없이 인과 효과를 식별할 수 있습니다.
+
 ## 3. The Problem: Treatment-Confounder Feedback
 
 * 시변 교란이 발생했을 때 가장 심각한 문제는 **처치-교란 피드백(Treatment-Confounder Feedback)** 구조가 형성될 때입니다.
@@ -566,7 +787,7 @@ $$
 
 * Figure 19.2는 전형적인 시변 교란과 피드백이 있는 상황을 묘사합니다.
 
-![Figure 19.2: 시변 처치 $A_0, A_1$과 시변 공변량 $L_1$이 존재하는 관찰 연구. $L_1$은 $A_1$의 교란 요인이면서 동시에 $A_0$의 결과이다. 또한 $U$는 $L_1$과 $Y$의 공통 원인이다.](./images/dag_figure_19_2_feedback.png)
+![Figure 19.2: 시변 처치 $A_0, A_1$과 시변 공변량 $L_1$이 존재하는 관찰 연구. $L_1$은 $A_1$의 교란 요인이면서 동시에 $A_0$의 결과이다. 또한 $U$는 $L_1$과 $Y$의 공통 원인이다.](./images/dag_figure_19_2.png)
 
 * 우리가 $A_0$와 $A_1$의 합동 효과(Joint Effect), 즉 $Y^{\bar{a}}$를 추정하려 한다고 가정해 봅시다.
 

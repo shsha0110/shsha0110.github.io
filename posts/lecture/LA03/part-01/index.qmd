@@ -1,0 +1,137 @@
+---
+title: "[Causal Inference] Appendix 03. Soft-Intervention and σ-calculus (Part 1)"
+description: "Motivation for Soft-Interventions & Canonical Types of Regimes"
+author: "유성현"
+date: "2026-02-07"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# Introduction: Why Soft Interventions?
+
+* 인과추론(Causal Inference)의 가장 강력한 도구 중 하나는 Pearl의 **do-calculus**입니다. 우리는 데이터로부터 $P(y|do(x))$를 식별(Identify)함으로써, 특정 처치(Treatment) $X$가 결과 $Y$에 미치는 인과적 효과를 추정합니다.
+
+* 하지만 현실 세계의 의사결정 문제에서, $do(X=x)$와 같은 **Hard Intervention(강성 개입)**은 종종 비현실적이거나 불가능합니다. 예를 들어 "모든 학생에게 과외를 받게 한다"는 정책은 예산 부족이나 학생의 거부로 인해 실현 불가능할 수 있습니다.
+
+* 본 포스트에서는 이러한 한계를 극복하기 위해 등장한 개념인 **Soft-Intervention(연성 개입)**과 이를 수학적으로 모델링하기 위한 **Regime(체제)**의 종류에 대해 다룹니다.
+
+---
+
+# 1. Motivating Example: Tutoring Program
+
+* Soft-Intervention의 필요성을 이해하기 위해 학교에서 진행하는 '방과 후 과외 프로그램(Tutoring Program)' 예시를 살펴보겠습니다.
+
+## 1.1. Variables and DAG
+* 우리는 학생들에 대한 다음과 같은 데이터를 관측합니다:
+  * $W$: **Previous GPA** (학기 초 성적)
+  * $Z$: **Motivation** (학업 동기, Low/High)
+  * $X$: **Tutoring** (과외 수강 여부)
+  * $Y$: **Final GPA** (학기 말 성적)
+
+* 이 변수들 사이의 인과 관계는 다음과 같은 비순환 방향 그래프(DAG)로 표현됩니다.
+
+![Figure: Causal DAG for the Tutoring Example. $W$(이전 성적)는 $Z$(동기)와 $Y$(최종 성적)에 영향을 줍니다. $Z$(동기)는 $X$(과외 수강 여부)와 $Y$에 영향을 줍니다. $X$는 $Y$에 직접적인 영향을 줍니다.](./images/tutoring_dag_structure.png)
+
+* 이 구조에서 각 변수의 메커니즘은 다음과 같이 설명할 수 있습니다:
+  * 1.  학생의 **동기($Z$)**는 **이전 성적($W$)**과 관측되지 않은 다른 요인들에 의해 결정됩니다.
+  * 2.  학생들은 자신의 **동기($Z$)**에 따라 **과외($X$)**를 받을지 결정합니다.
+  * 3.  **최종 성적($Y$)**은 이전 성적, 동기, 그리고 과외 수강 여부의 함수로 결정됩니다.
+
+## 1.2. Standard Causal Effect (Hard Intervention)
+
+* 우리의 목표는 학생들의 성적($Y$)을 향상시키는 것입니다. 현재의 자연적인 상태(Natural Regime)에서 수집된 데이터 $P(W, Z, X, Y)$를 바탕으로, 만약 우리가 강제로 개입한다면 어떤 결과가 나올지 예측하고 싶어 합니다.
+
+* 기존의 $do$-calculus를 사용하면, $X$가 $Y$에 미치는 인과적 효과는 다음과 같이 계산됩니다.
+
+$$
+P(y|do(x)) = \sum_{z} P(y|x, z)P(z)
+$$
+
+* **Derivation (Backdoor Criterion):**
+* 위 식은 Backdoor Criterion을 통해 유도됩니다.
+* 1.  우리는 $P(y|do(x))$를 구하고자 합니다.
+* 2.  DAG에서 $X$로 들어오는 Backdoor path는 $X \leftarrow Z \rightarrow Y$와 $X \leftarrow Z \leftarrow W \rightarrow Y$ 등이 존재합니다.
+* 3.  변수 집합 $\{Z\}$를 통제(Conditioning)하면, $X$와 $Y$ 사이의 모든 Backdoor path가 차단됩니다.
+* 4.  따라서, $P(y|do(x)) = \sum_z P(y|do(x), z)P(z|do(x))$가 되고, $Z$는 $X$의 후손이 아니므로 $P(z|do(x)) = P(z)$가 됩니다. 또한 $Z$를 조건부로 했을 때 $do(x)$는 $x$와 같으므로 최종적으로 $\sum_z P(y|x, z)P(z)$가 됩니다.
+
+---
+
+# 2. The Problem with Hard Interventions
+
+* 데이터 분석 결과, $P(Y=1|do(X=1)) > P(Y=1)$라고 가정해 봅시다. 이는 "모든 학생에게 과외를 시키면($do(X=1)$) 성적이 오를 것이다"라는 것을 의미합니다.
+
+* 하지만 **$do(X=1)$은 현실 세계에서 무엇을 의미할까요?**
+* 이는 "모든 학생이 예외 없이 의무적으로 과외를 받게 만드는 것"을 의미합니다.
+
+## 2.1. Implementation Challenges
+* 이러한 **Hard Intervention**은 의사결정 상황에서 다음과 같은 이유로 실현 불가능할 수 있습니다:
+  * 1.  **Resource Constraints:** 학교에 모든 학생을 가르칠 만큼 충분한 교사나 시간이 없을 수 있습니다.
+  * 2.  **Non-compliance:** 처치를 받도록 배정된 학생(또는 환자)이 이를 따르지 않을 수 있습니다.
+
+## 2.2. Realistic vs. Do-like Interventions
+* 따라서 우리는 이상적인 $do()$ 개입이 아니라, **실현 가능한(Realizable) 개입**의 효과에 관심을 가져야 합니다.
+
+| Do-like Intervention (Hard) | Realistic Intervention (Soft) |
+| :--- | :--- |
+| 금연을 강제한다. (Make sure no one smokes) | 담배 소비량을 현재의 20%로 줄인다. |
+| 모든 환자에게 치료제를 투여한다. | 환자가 위독한 상태일 때만(Condition) 치료제를 투여한다. |
+| 로봇 팔을 정확히 $(x, y, z)$ 좌표로 이동시킨다. | 로봇 팔을 $(x, y, z)$로 이동시키되, 약간의 오차를 허용한다. |
+| 모든 지원자를 남성으로 표시한다. (불가능) | 서류상으로만 모든 지원자를 남성으로 표시한다. |
+
+* 이처럼 변수의 값을 상수로 고정하는 것이 아니라, 변수가 값을 취하는 **확률 분포나 메커니즘을 변화시키는 것**이 바로 **Soft-Intervention**의 핵심입니다.
+
+---
+
+# 3. Canonical Types of Regimes
+
+* Soft-Intervention을 체계적으로 다루기 위해, 우리는 **체제(Regime)**라는 개념을 도입합니다. 체제란 시스템이 작동하는 방식(Mode)을 의미하며, 개입의 성격에 따라 크게 4가지 유형으로 분류할 수 있습니다.
+
+## 3.1. Idle / Natural Regime
+* 개입이 전혀 없는 자연 그대로의 상태입니다. 변수 $X$는 자신의 부모 변수($pa_X$)와 에러 항($u_X$)에 의해 결정됩니다.
+$$
+\sigma_X = f_X(pa_X, u_X)
+$$
+* 예: 학생들이 자유 의지로 과외 여부를 결정하는 현재 상태.
+
+## 3.2. Hard / Atomic Regime
+* 기존 $do$-calculus에서 다루던 개입입니다. 변수 $X$를 특정 상수값 $x$로 고정합니다.
+$$
+\sigma_X = do(X=x)
+$$
+* 예: **모든** 학생이 과외를 받게 함.
+
+## 3.3. Conditional Regime
+* 변수 $X$를 관측 가능한 변수 집합 $W$에 의존하는 함수 $g$의 결과로 설정합니다.
+$$
+\sigma_X = g(W)
+$$
+* 예: 성적이 낮은($W$가 낮은) 학생들에게만 과외를 받게 함.
+* 이는 정책(Policy) 결정에서 매우 흔한 형태입니다.
+
+## 3.4. Stochastic Regime
+* 변수 $X$가 변수 집합 $W$를 조건으로 하는 특정 확률 분포 $P^*$를 따르도록 설정합니다.
+$$
+\sigma_X = P^*(x | W)
+$$
+* 예: 성적이 낮은 학생들은 80%의 확률로 과외 추첨에 당첨되고, 나머지 학생들은 20%의 확률로 당첨되게 함.
+* $X$의 값이 결정론적이지 않고 확률적으로 결정된다는 점이 특징입니다.
+
+---
+
+# 4. Modeling Regime Changes
+
+* 개입(Intervention)은 본질적으로 **체제의 변화(Changes in Regime)**를 의미합니다.
+
+* **Natural Regime ($G$):** 개입 전, 데이터가 생성되는 원래의 세계입니다.
+* **Intervened Regime ($G_{\sigma_X}$):** 개입 $\sigma_X$가 수행된 후의 새로운 세계입니다. 이 세계에서는 개입된 변수($X$)의 생성 메커니즘이 이전과 달라집니다.
+
+* 이를 그래프로 표현할 때, 우리는 개입을 나타내는 별도의 노드(Regime Node)를 추가하여 $X$를 가리키게 합니다.
+
+![Figure: Graphical Representation of Regime Change. 개입된 그래프 $G_{\sigma_X}$에서는 Regime 노드($F_X$ 또는 $\sigma_X$로 표기)가 개입 대상 변수 $X$를 향하는 화살표를 가집니다. 이는 $X$의 결정 메커니즘이 외부의 개입에 의해 변경되었음을 시각적으로 나타냅니다.](./images/regime_change_graph.png)
+
+* 이러한 프레임워크를 통해 우리는 단순한 $do(x)$를 넘어, 조건부 정책이나 확률적 개입이 결과 변수 $Y$에 미치는 영향을 수식화하고 추정할 수 있게 됩니다. 이것이 바로 **$\sigma$-calculus**의 기초가 됩니다.

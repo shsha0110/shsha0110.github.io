@@ -1,0 +1,614 @@
+---
+title: "[Paper Review] Forecasting Treatment Responses Over Time Using Recurrent Marginal Structural Networks"
+description: "NeurIPS 2018: Time-dependent confounding 해결을 위한 Deep Learning 기반의 RMSN 모델 소개"
+author: "유성현"
+date: "2026-02-06"
+categories: [Paper Review]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction
+
+## 연구의 배경과 필요성
+
+* 최근 전자의무기록(Electronic Health Records, EHR)의 보급이 확대되면서, 관측 데이터(Observational Data)를 활용해 환자의 상태 변화에 따른 **동적 치료 반응(Dynamic Treatment Responses)**을 학습하려는 시도가 늘어나고 있습니다. 이러한 데이터는 실제 임상 현장에서 수집된 것으로, 과거 치료 요법(Regimen)의 효과를 비용 효율적으로 분석할 수 있는 중요한 자원입니다.
+
+* 그러나 기존 연구들은 대부분 단일 시점(Single point in time)의 개입 효과를 추정하는 데 그쳤습니다. 실제 의료 현장은 훨씬 복잡합니다. 예를 들어:
+  * 1.  **약물 저항성(Drug Resistance):** 암 환자의 경우 시간이 지남에 따라 치료 효율이 변할 수 있습니다.
+  * 2.  **복합 치료(Joint Prescriptions):** 항암화학요법(Chemotherapy)과 방사선 치료(Radiotherapy)가 서로 다른 시점에 병행되기도 합니다.
+
+* 따라서 의사가 최적의 처방 내용뿐만 아니라 **'언제(Optimal Time)'** 처방할지를 결정하기 위해서는, 시간에 따른 치료 효과를 정확히 추정하는 방법론이 필수적입니다.
+
+## 1.1 핵심 문제: 시간 의존적 교란 (Time-dependent Confounding)
+
+관측 데이터에서 인과 효과를 추정할 때 가장 큰 걸림돌은 **시간 의존적 교란(Time-dependent Confounding)**의 존재입니다[cite: 11, 18]. 이는 개입(Treatment)이 환자의 과거 상태(Biomarker)에 따라 결정되고, 그 환자의 상태는 다시 과거의 개입에 의해 영향을 받는 상황을 의미합니다.
+
+> **예시: 천식(Asthma) 치료** [cite: 19, 20]
+>
+> * 천식 응급 약물은 단기적으로 폐 기능을 빠르게 개선합니다.
+> * 하지만, 이 약물은 주로 **이미 폐 기능이 저하된 환자**에게 처방됩니다.
+> * 단순한(Naive) 비교 방법을 사용하면, 마치 **"약물을 투여하면 폐 기능이 나빠진다"**는 잘못된 결론(Reverse Causality)에 도달할 수 있습니다.
+
+### 기존 방법론의 한계
+일반적인 인과추론 조정 방법(예: 층화(Stratification), 매칭(Matching), 성향 점수(Propensity Scoring))을 시계열 데이터에 그대로 적용할 경우, 오히려 **편향(Bias)을 유발**할 수 있습니다[cite: 23]. 이는 과거의 치료가 미래의 치료 결정에 영향을 미치는 공변량(Covariate)을 변화시키는 경로(Mediator)를 통제해버리기 때문입니다.
+
+---
+
+# 2. 기존 해결책과 한계: Marginal Structural Models (MSMs)
+
+역학(Epidemiology) 분야에서는 이러한 문제를 해결하기 위해 **Marginal Structural Models (MSMs)**을 사용해 왔습니다[cite: 12, 24].
+
+## 2.1 역확률 가중치 (IPTW)
+MSM의 핵심 아이디어는 **역확률 치료 가중치(Inverse Probability of Treatment Weighting, IPTW)**를 사용하는 것입니다.
+$$
+SW_t = \frac{P(A_t \mid H_{t-1})}{P(A_t \mid H_{t-1}, L_{t-1})}
+$$
+(위 식은 논문의 텍스트 설명을 바탕으로 개념적으로 재구성한 식입니다.)
+
+이 방법은 각 시점 $t$에서의 치료 확률을 추정하여 가중치를 부여함으로써, 관측 데이터를 마치 무작위 임상 시험(Randomized Clinical Trial)과 유사한 **'유사 모집단(Pseudo-population)'**으로 재구성합니다[cite: 24]. 이를 통해 시간 의존적 교란 요인을 제거하고 편향을 보정합니다.
+
+## 2.2 한계점 (Limitations)
+하지만 기존 MSM 방식에는 분명한 한계가 존재합니다.
+
+1.  **가중치 추정의 정확성 의존:** 편향 보정의 효과는 치료 할당 확률(Propensity score)을 얼마나 정확하게 추정하느냐에 달려 있습니다[cite: 25].
+2.  **모델의 단순성:** 표준 MSM은 **통합 로지스틱 회귀(Pooled Logistic Regression)**를 사용하는데, 이는 치료 결정 확률 분포에 대해 매우 강력하고 단순한 가정(Strong assumptions)을 전제합니다[cite: 26].
+3.  **장기 예측의 어려움:** 긴 시계열 데이터의 경우, 매 시점마다 별도의 계수를 추정해야 하거나 모델이 지나치게 복잡해지는 문제가 있습니다[cite: 27].
+
+---
+
+# 3. 제안 모델: Recurrent Marginal Structural Networks (R-MSN)
+
+본 논문에서는 MSM의 프레임워크를 딥러닝에 접목한 **Recurrent Marginal Structural Network (R-MSN)**을 제안합니다[cite: 12, 28].
+
+![Figure 1: 여러 치료 시나리오에 따른 종양 성장 예측. X축은 진단 후 경과 시간, Y축은 종양의 크기를 나타낸다. 그래프는 과거 측정치(History)를 바탕으로 미래(Forecast)를 예측하는 구조를 보여준다. 'Scenario 1(회색)'은 치료받지 않았을 때 종양이 계속 성장함을, 'Scenario 2(붉은 점선)'는 화학요법(Chemotherapy) 후 종양이 일시 감소했다가 다시 증가함을, 'Scenario 3(파란 점선)'은 방사선 치료(Radiotherapy) 후 종양이 급격히 감소하여 소멸됨을 보여준다. 이는 R-MSN이 다양한 치료 계획(언제, 무엇을 투여할지)에 따른 결과를 시뮬레이션할 수 있음을 시각화한 것이다.](./images/figure1_tumor_forecast.png)
+
+## 3.1 주요 기여점 (Key Contributions)
+
+### A. Sequence-to-Sequence 구조를 통한 다중 시점 예측
+자연어 처리(NLP) 분야의 Seq2Seq 아키텍처에서 영감을 받아, 환자의 상태를 두 단계로 처리합니다[cite: 30, 31].
+* **Encoder RNN:** 환자의 현재 임상 상태(Clinical State)에 대한 표현(Representation)을 학습합니다.
+* **Decoder RNN:** Encoder의 마지막 메모리 상태를 초기값으로 받아, 계획된 치료(Planned Treatments)에 따른 미래 반응을 예측합니다.
+* **유연성:** Decoder의 길이를 조절함으로써 예측 구간(Prediction Horizon)을 자유롭게 변경할 수 있습니다[cite: 32].
+
+### B. 복잡한 치료 시나리오 분석 (Scenario Analysis)
+실제 임상적 의사결정은 1) 원하는 결과(생존율 등), 2) 치료 종류(이진형/연속형), 3) 치료 기간 등 다양한 변수의 상호작용으로 이루어집니다[cite: 33].
+* R-MSN은 다중 입출력(Multi-input/output) RNN을 사용하여 이러한 복잡성을 자연스럽게 모델링합니다[cite: 34].
+* 특히, 기존 MSM의 로지스틱 회귀 대신 **LSTM(Long Short-Term Memory)**을 사용하여 성향 점수(Propensity Weighting)를 계산함으로써, 모델 오설정(Misspecification) 위험을 줄이고 시간적 의존성을 더 잘 포착합니다[cite: 36].
+
+결과적으로 R-MSN은 의료진이 특정 환자에게 맞춤화된 치료 계획(Regimen)을 수립하고, 다양한 시나리오(예: 위 Figure 1의 화학요법 vs 방사선치료)에 따른 결과를 미리 시뮬레이션해볼 수 있도록 지원합니다[cite: 37, 38].
+
+---
+
+# 4. Summary
+
+이번 포스트에서는 **Lim et al. (2018)**의 서론을 통해 시계열 의료 데이터 분석의 난제와 R-MSN의 제안 배경을 살펴보았습니다.
+
+* **문제:** 시계열 데이터에는 **시간 의존적 교란(Time-dependent confounding)**이 존재하여, 단순한 회귀분석이나 고정된 인과추론 기법으로는 편향된 결과를 얻기 쉽습니다.
+* **기존 대안:** 역학의 **MSM(IPTW)** 방식이 존재하지만, 로지스틱 회귀 기반이라 복잡한 비선형 관계나 장기 의존성을 포착하는 데 한계가 있습니다.
+* **해결책:** **R-MSN**은 MSM의 가중치 보정 아이디어를 계승하되, **Seq2Seq 딥러닝 아키텍처**를 도입하여 유연한 다중 시점 예측과 정확한 성향 점수 추정을 가능하게 했습니다.
+
+다음 포스트에서는 R-MSN의 구체적인 수식적 정의와 네트워크 구조에 대해 다루겠습니다.
+
+---
+
+# 2. Related Works
+
+## 0. Prologue: 왜 이 논문을 읽는가?
+
+인과추론(Causal Inference)을 연구하다 보면, 특히 의료 데이터나 사회과학 패널 데이터처럼 **시간의 흐름에 따라 치료(Treatment)와 상태(Covariates)가 서로 영향을 주고받는 상황**에서 난관에 부딪히게 됩니다. 이를 **Time-dependent Confounding**이라고 합니다.
+
+이번 포스트에서는 *Lim et al. (2018)*의 **Recurrent Marginal Structural Networks (R-MSN)** 논문 중 **"Related Works"** 섹션을 심층 분석합니다. 이 섹션은 단순히 관련 연구를 나열하는 것을 넘어, 왜 전통적인 역학(Epidemiology) 방법론과 베이지안(Bayesian) 접근법이 복잡한 시계열 인과추론에서 한계를 가지는지, 그리고 왜 딥러닝(RNN)이 그 대안이 될 수밖에 없는지를 명확히 설명하고 있습니다. [cite: 6, 33, 34]
+
+## 1. 전통적 접근: G-computation과 구조적 모델 (Epidemiology)
+
+시간에 따라 변화하는 교란 요인을 통제하기 위한 연구는 역학(Epidemiology) 분야에서 오랫동안 진행되어 왔습니다. 가장 대표적인 연구는 Robins의 선구적인 연구들입니다. [cite: 36]
+
+### 1.1 주요 방법론의 분류
+이 분야의 방법론은 크게 세 가지 그룹으로 나눌 수 있습니다: [cite: 37]
+
+1.  **G-computation Formula:** 교란 요인들의 분포를 모델링하여 인과 효과를 추정하는 방식.
+2.  **Structural Nested Mean Models (SNMMs):** 계층적 구조를 가진 평균 모델.
+3.  **Marginal Structural Models (MSMs):** 역확률 가중치(IPTW) 등을 사용하여 가상의 무작위 대조군(Pseudo-population)을 생성하는 방식.
+
+### 1.2 한계점: "선형성(Linearity)"의 덫
+이러한 모델들은 Time-dependent confounding을 보정하기 위한 강력한 이론적 토대를 제공합니다. 하지만 실제 예측 모델을 구축할 때 치명적인 약점이 존재합니다.
+
+> **"Their prediction models are typically based on linear or logistic regression."** [cite: 38]
+
+대부분의 전통적 모델은 예측을 위해 **선형 회귀(Linear Regression)**나 **로지스틱 회귀(Logistic Regression)**를 기본으로 사용합니다. 만약 환자의 예후(Outcomes)나 치료 정책(Treatment Policy)이 환자의 과거 이력(Covariate History)과 **비선형적이고 복잡한 의존성**을 가진다면, 이러한 선형 모델은 현실을 제대로 반영하지 못하고 **Model Misspecification(모델 설정 오류)** 문제를 일으키게 됩니다. [cite: 39]
+
+## 2. 베이지안 비모수 모델 (Bayesian Nonparametric Models)
+
+선형 모델의 경직성을 극복하기 위해 제안된 것이 **베이지안 비모수 모델(Bayesian Nonparametric Models)**, 특히 **가우시안 프로세스(Gaussian Processes, GPs)**를 활용한 접근입니다. [cite: 40, 41]
+
+### 2.1 접근 방식
+이 방법론은 종단 데이터(Longitudinal Data)에서 잠재적인 결과(Potential Outcomes)를 추정하기 위해 사용됩니다.
+* **Gaussian Processes (GPs):** 시간에 따른 기저 진행(Baseline Progression)을 모델링합니다.
+* 미래의 여러 시점에서 치료 효과를 추정할 수 있는 유연성을 제공합니다.
+
+### 2.2 한계점: 가정의 제약과 계산 복잡도
+하지만 베이지안 접근법 역시 두 가지 큰 장벽이 존재합니다. [cite: 42]
+
+**1) 강력한 모델 가정 (Strong Assumptions)**
+모델의 보정(Calibration)을 돕기 위해 현실적으로 받아들이기 힘든 가정들을 도입하곤 합니다.
+* **독립성 가정:** 질병의 자연적 진행(Baseline progression)과 치료에 대한 반응(Treatment response)이 서로 독립적이라고 가정합니다. [cite: 42]
+* **이질성(Heterogeneity) 무시:** 유전적 정보나 인구통계학적 정보와 같은 Baseline Covariates를 무시하거나, 단순히 선형 결합(Linear components)으로만 처리하여 환자 개개인의 이질적인 치료 효과(Heterogeneous Effects)를 충분히 반영하지 못합니다. [cite: 42]
+
+**2) 계산 복잡도 (Computational Complexity)**
+베이지안 추론은 데이터가 커질수록 계산량이 기하급수적으로 증가합니다. [cite: 44, 45]
+* G-computation을 위해 **MCMC (Markov Chain Monte Carlo)** 샘플링을 사용해야 합니다.
+* Sparse GP를 사용하더라도 최소 $O(NM^2)$의 복잡도를 가집니다.
+    $$
+    \text{Complexity} \approx O(NM^2)
+    $$
+    여기서 $N$은 관측치의 수, $M$은 Inducing points의 수입니다. 이는 대규모 헬스케어 데이터셋에 적용하기에는 확장성(Scalability)이 매우 떨어짐을 의미합니다. [cite: 45]
+
+## 3. 딥러닝 기반 인과추론 (Deep Learning for Causal Inference)
+
+최근 딥러닝은 인과추론 분야에서도 주목받고 있습니다. 기존 연구들은 주로 다음과 같은 방법들을 사용했습니다: [cite: 49]
+
+* **Instrumental Variable Approaches (도구 변수)** [cite: 49]
+* **Generative Adversarial Networks (GANs)** [cite: 49]
+* **Multi-task Architectures** [cite: 49]
+
+### 3.1 기존 딥러닝 연구의 한계
+하지만 이 논문이 발표될 당시(2018년)까지의 딥러닝 인과추론 연구는 대부분 **"고정된 시점(Fixed time)에서의 단일 개입(Single Intervention)"**에 국한되어 있었습니다. 즉, 시간이 흐름에 따라 변화하는 동적인 치료 효과를 추정하는 데에는 적용되지 못했습니다. [cite: 49, 50]
+
+### 3.2 RNN의 등장 필요성
+이 지점에서 저자들은 **Recurrent Neural Networks (RNNs)**의 도입 필요성을 역설합니다. RNN은 위에서 언급한 한계점들을 다음과 같이 해결할 수 있습니다.
+
+1.  **Model Specification 불필요:** 데이터로부터 직접 복잡한 비선형 관계를 학습하므로, 선형 모델처럼 명시적인 모델 구조를 미리 정의할 필요가 없습니다. [cite: 43]
+2.  **확장성(Scalability):** 새로운 관측치가 들어올 때마다 내부 상태(Internal States)를 업데이트하는 방식이므로, 베이지안 모델보다 계산 효율성이 뛰어나고 대용량 데이터 처리에 유리합니다. [cite: 46]
+3.  **복합 개입 및 다중 목표(Multi-input/Multi-output):** 기존 모델들과 달리, RNN 구조는 여러 종류의 치료(Combined Interventions)와 여러 개의 결과 변수(Multiple Targets)를 동시에 처리하는 데 매우 자연스러운 구조를 가집니다. [cite: 47, 48]
+
+## 4. 요약: 시나리오 분석을 위한 새로운 프레임워크
+
+이 논문은 결론적으로 기존 방법론의 한계를 극복하고, **Time-dependent confounding**이 존재하는 상황에서 복잡한 치료 계획(Treatment Planning)을 시뮬레이션할 수 있는 딥러닝 모델(R-MSN)을 제안합니다.
+
+아래 그림은 이 논문이 풀고자 하는 문제 상황을 시각적으로 보여줍니다. 과거의 데이터(History)를 바탕으로, 미래에 '화학요법(Chemotherapy)'을 할지, '방사선 치료(Radiotherapy)'를 할지, 혹은 '치료하지 않을지(Untreated)'에 따라 종양 크기가 어떻게 변할지 예측하는 것입니다.
+
+![Figure 1: 다양한 치료 시나리오에 따른 종양 성장 예측. 과거 측정값(Past Measurements)을 바탕으로, 미래 시점(Forecast)에서 화학요법(Scenario 2)이나 방사선 치료(Scenario 3)를 선택했을 때 종양의 크기($Y_t$)가 어떻게 변화할지 예측한다. R-MSN은 이러한 동적인 시나리오 분석을 가능하게 한다.](./images/figure1_tumor_growth_scenarios.png) [cite: 16, 32]
+
+### 방법론 비교 요약
+
+| 구분 | 전통적 방법 (G-formula, MSM) | 베이지안 비모수 (GPs) | 제안 모델 (R-MSN) |
+| :--- | :--- | :--- | :--- |
+| **기반 모델** | Linear / Logistic Regression [cite: 38] | Gaussian Processes [cite: 41] | **RNN (Seq2Seq)** [cite: 6, 8] |
+| **비선형성** | 낮음 (Misspecification 위험) [cite: 39] | 높음 | **높음 (데이터에서 학습)** [cite: 43] |
+| **확장성** | 높음 | 낮음 ($O(NM^2)$) [cite: 45] | **높음 (Online Update)** [cite: 46] |
+| **주요 한계** | 복잡한 의존성 포착 불가 | 계산 비용, 독립성 가정 | (학습 데이터 필요량 등) |
+| **Time-dependent** | 가능 (이론적 토대) | 가능 | **가능 (Deep Learning 최초)** [cite: 50] |
+
+---
+
+# 3. Problem Definition
+
+## 0. Prologue
+
+인과추론(Causal Inference), 특히 시계열 데이터(Longitudinal Data)에서의 인과 효과 추정은 매우 까다로운 문제입니다. 환자의 상태($L$)에 따라 치료($A$)가 결정되고, 그 치료가 다시 미래의 상태($L$)에 영향을 미치는 **시간 의존적 교란(Time-dependent confounding)** 구조가 존재하기 때문입니다.
+
+오늘 다룰 논문인 **"Recurrent Marginal Structural Networks (RMSN)"**은 이러한 환경에서 Deep Learning(RNN)을 활용하여 치료 효과를 추정하는 프레임워크를 제안합니다. 이번 포스트에서는 모델의 구체적인 아키텍처로 들어가기 전, 이 논문이 풀고자 하는 **문제의 수학적 정의(Problem Definition)**와 핵심 방법론인 **역확률 가중치(IPTW)**의 수식적 배경을 꼼꼼하게 정리해 봅니다.
+
+## 1. Notation & Data Structure
+
+시계열 인과추론 문제를 정의하기 위해 먼저 데이터의 구조를 명확히 해야 합니다. 이 논문에서는 다변량(Multivariate) 결과와 치료를 다루기 위해 벡터 표기법을 사용합니다[cite: 17].
+
+각 환자 $i$와 시간 $t$에 대하여 다음과 같이 정의합니다.
+
+* **Outcomes ($Y_{t,i}$)**: 관측된 결과 변수 벡터입니다. 크기는 $\Omega_y$로, 여러 개의 결과를 동시에 추적할 수 있습니다.
+    $$Y_{t,i} = [Y_{t,i}(1), ..., Y_{t,i}(\Omega_y)]$$
+* **Treatments ($A_{t,i}$)**: 실제로 수행된 치료(Action) 벡터입니다. 크기는 $\Omega_a$입니다.
+    $$A_{t,i} = [A_{t,i}(1), ..., A_{t,i}(\Omega_a)]$$
+* **Time-dependent Covariates ($L_{t,i}$)**: 시간에 따라 변하는 공변량(예: 혈압, 맥박 등) 벡터입니다.
+    $$L_{t,i} = [L_{t,i}(1), ..., L_{t,i}(\Omega_l)]$$
+* **Static Features ($X_i$)**: 환자의 고유한, 변하지 않는 특성(예: 유전 정보, 성별)입니다.
+    $$X_{i} = [X_{i}(1), ..., X_{i}(\Omega_v)]$$
+
+**History ($H_t$)의 정의**
+특정 시점 $t$에서의 환자의 전체 이력(History)은 과거의 모든 치료 내역과 공변량을 포함합니다[cite: 22].
+$$H_t = (L_t, A_{t-1}, X)$$
+여기서 $\bar{L}_t = (L_1, ..., L_t)$, $\bar{A}_{t-1} = (A_1, ..., A_{t-1})$는 과거부터 현재까지의 궤적(trajectory)을 나타냅니다.
+
+## 2. Treatment Responses Over Time (목표 함수)
+
+우리의 목표는 단순히 다음 시점의 값을 예측하는 것이 아니라, **"만약 특정 치료 계획을 따랐다면 결과가 어떠했을까?"**라는 반사실적(Counterfactual) 질문에 답하는 것입니다.
+
+논문에서는 이를 예측 구간(prediction horizon) $\tau$ 동안의 기대 결과(expected outcome)를 추정하는 함수 $g(\cdot)$를 학습하는 문제로 정의합니다[cite: 19].
+
+### The Estimation Target
+시점 $t$에서, 미래 $\tau$ 시점의 결과 $Y_{t+\tau}$에 대한 기대값은 다음과 같이 모델링됩니다.
+
+$$
+\mathbb{E}[Y_{t+\tau} \mid a(t, \tau-1), \bar{H}_t] = g(\tau, a(t, \tau-1), \bar{H}_t) \quad \text{--- (1)}
+$$
+
+이 식의 구성 요소를 분해해보면 다음과 같습니다[cite: 20, 22].
+
+* **$a(t, \tau-1) = (a_t, ..., a_{t+\tau-1})$**: 현재 시점 $t$부터 결과 관측 직전까지 수행할 **의도된 치료 시퀀스(intended sequence of treatments)**입니다. 이는 실제로 관측된 $A$와 다를 수 있는 가상의 개입(Intervention)입니다.
+* **$\bar{H}_t$**: 현재 시점까지 관측된 환자의 이력입니다.
+* **$g(\cdot)$**: 우리가 학습하고자 하는 비선형 함수입니다.
+
+즉, **"과거 기록 $\bar{H}_t$가 주어졌을 때, 앞으로 계획된 치료 $a$를 수행한다면 $\tau$ 시점 뒤의 결과는 무엇인가?"**를 추정하는 문제입니다.
+
+## 3. Inverse Probability of Treatment Weighting (IPTW)
+
+하지만 관측 데이터(Observational Data)로 위 식 (1)을 바로 학습하면 문제가 발생합니다. 의사는 환자의 상태($H_t$)를 보고 치료($A_t$)를 결정하기 때문에, 치료군과 대조군의 특성이 달라지는 **Selection Bias(선택 편향)**가 존재하기 때문입니다.
+
+이를 보정하기 위해 RMSN은 **Marginal Structural Models (MSM)**의 핵심 아이디어인 **IPTW(역확률 가중치)**를 사용합니다[cite: 23].
+
+### 3.1. Stabilized Weights (안정화 가중치)
+
+기본적인 IPTW는 분모(Propensity Score)가 매우 작아질 경우 가중치가 폭발하는(high variance) 문제가 있습니다. 이를 완화하기 위해 **Stabilized Weights (SW)**를 사용합니다.
+
+결합 치료 할당(Joint Treatment Assignments)을 고려한 Stabilized Weight $SW(t, \tau)$는 다음과 같이 정의됩니다[cite: 26].
+
+$$
+SW(t, \tau) = \prod_{n=t}^{t+\tau} \frac{f(A_n \mid \bar{A}_{n-1})}{f(A_n \mid \bar{H}_n)} \quad \text{--- (2)}
+$$
+
+#### 수식의 상세 해석 및 유도 논리
+이 식은 단순히 주어진 것이 아니라, **Confounding을 제거하면서도 치료의 주변 확률 분포는 유지**하기 위해 설계되었습니다.
+
+1.  **분모 (Denominator): $f(A_n \mid \bar{H}_n)$**
+    * 현재 환자의 모든 상세 이력(Confounder 포함)을 조건으로 한 치료 확률입니다.
+    * 이 값으로 나누어 줌으로써, 데이터에서 $H_n \to A_n$ (공변량이 치료에 미치는 영향)의 연결 고리를 끊어냅니다. 즉, Pseudo-population에서는 치료가 공변량과 무관하게 할당되도록 만듭니다.
+
+2.  **분자 (Numerator): $f(A_n \mid \bar{A}_{n-1})$**
+    * 환자의 상태 $L$은 보지 않고, 오직 과거 치료 이력 $\bar{A}_{n-1}$에만 의존하는 치료 확률입니다.
+    * 분자가 1인 기본 IPTW와 달리, 분자에 이 항을 추가함으로써 가중치의 변동성을 줄이고(Stabilization), 치료 자체의 시간적 상관성(예: 어제 약을 먹었으면 오늘도 먹을 확률이 높음)은 보존합니다.
+
+3.  **누적 곱 ($\prod_{n=t}^{t+\tau}$)**
+    * 우리는 단일 시점이 아니라 $t$부터 $t+\tau$까지의 **Trajectory**를 예측합니다. 따라서 각 시점의 확률을 모두 곱하여 시퀀스 전체의 가중치를 계산합니다.
+
+4.  **다중 치료 (Multi-treatment) 확장**
+    * 만약 치료가 여러 종류($k=1, ..., \Omega_a$)라면, 각 시점의 확률은 개별 치료 확률의 결합으로 표현됩니다[cite: 26].
+    $$\frac{\prod_{k=1}^{\Omega_a} f(A_n(k) \mid \bar{A}_{n-1})}{\prod_{k=1}^{\Omega_a} f(A_n(k) \mid \bar{H}_n)}$$
+
+### 3.2. Adjusting for Censoring (중도 절단 보정)
+
+시계열 데이터에서는 환자가 추적 관찰에서 이탈하는 **중도 절단(Censoring)** 문제가 빈번합니다. 이를 보정하기 위해 추가적인 가중치 $SW^*$를 도입합니다[cite: 31].
+
+$$
+SW^*(t, \tau) = \prod_{n=t}^{t+\tau} \frac{f(C_n=0 \mid \mathcal{T} > n, \bar{A}_{n-1})}{f(C_n=0 \mid \mathcal{T} > n, \bar{L}_{n-1}, \bar{A}_{n-1}, X)} \quad \text{--- (3)}
+$$
+
+* $C_n=0$: 중도 절단이 발생하지 않음(데이터가 관측됨).
+* $\mathcal{T} > n$: 아직 생존(또는 관찰) 중임.
+* **해석**: 치료 가중치와 마찬가지로, "환자의 상태($L$)가 나빠서 병원을 그만두는(Censoring)" 편향을 제거하기 위해, 상태를 고려한 관측 확률(분모)과 상태를 고려하지 않은 관측 확률(분자)의 비율을 사용합니다.
+
+## 4. Implementation & Loss Function
+
+### 4.1. Weight Truncation & Normalization
+이론적으로는 위 가중치를 그대로 사용하면 되지만, 딥러닝 모델 학습 시 수치적 불안정성을 방지하기 위해 추가적인 테크닉을 적용합니다.
+
+1.  **Truncation**: 가중치 값의 1% (하위)와 99% (상위) 지점에서 값을 잘라냅니다(Clip). 극단적인 가중치로 인해 그래디언트가 튀는 것을 막기 위함입니다.
+2.  **Normalization**: 고정된 예측 구간(Horizon)에 대해 가중치의 평균이 1이 되도록 정규화합니다.
+    $$\tilde{SW}_{i}(t, \tau) = \frac{SW_{i}(t, \tau)}{\frac{1}{N} \sum_{i=1}^{I} \sum_{t=1}^{T_i} SW_{i}(t, \tau)}$$
+
+### 4.2. Weighted Loss Function
+최종적으로, RMSN의 Prediction Network를 학습시키기 위한 손실 함수(Loss Function)는 정규화된 가중치가 적용된 **Weighted Squared Error**입니다[cite: 36].
+
+$$
+\mathcal{L}(i, t, \tau) = \underbrace{\tilde{SW}_{i}(t, \tau-1)}_{\text{Treatment Weight}} \times \underbrace{\tilde{SW}^*_{i}(t, \tau-1)}_{\text{Censoring Weight}} \times \left\| Y_{t+\tau, i} - g(\tau, a(t, \tau-1), \bar{H}_t) \right\|^2 \quad \text{--- (4)}
+$$
+
+* **의미**: 편향이 발생하기 쉬운 샘플(관측 확률이 낮은 케이스)에 더 큰 가중치를 부여하여 오차(Error)를 계산합니다. 이를 통해 모델 $g(\cdot)$는 교란 요인이 제거된 가상 모집단(Pseudo-population)에서의 인과 효과를 학습하게 됩니다.
+
+---
+
+# 4. Recurrent Marginal Structural Networks
+
+## 4.1. Propensity Networks
+
+# 1. Introduction: R-MSN Framework
+
+시계열 데이터에서 인과 효과(Causal Effect)를 추정할 때, 가장 큰 난관 중 하나는 시간의 흐름에 따라 변하는 교란 요인(Time-dependent Confounding)을 제어하는 것입니다. 이를 해결하기 위해 전통적인 역확률 가중치(IPTW) 방식이 사용되지만, 고차원의 복잡한 데이터에서는 추정의 정확도가 떨어질 수 있습니다.
+
+이번 포스트에서는 **Recurrent Marginal Structural Networks (R-MSN)** 논문의 핵심인 **Propensity Networks**에 대해 다룹니다. R-MSN은 크게 두 가지 하위 모델(Submodels)로 구성됩니다.
+
+1.  **Propensity Networks:** IPTW(Inverse Probability of Treatment Weighting)를 계산하기 위한 치료 확률(Propensity Score)을 추정하는 네트워크
+2.  **Prediction Network:** 계산된 가중치를 바탕으로 실제 치료 반응(Treatment Response)을 예측하는 네트워크
+
+이 글에서는 첫 번째 파트인 **Propensity Networks**가 어떻게 시계열 데이터의 이력(History)을 학습하고, 안정화된 가중치(Stabilized Weights)를 산출하는지 상세히 분석합니다.
+
+# 2. Propensity Networks의 필요성과 구조
+
+## 2.1. 왜 RNN(LSTM)인가?
+
+시계열 인과추론에서 안정화된 가중치(Stabilized Weights)를 계산하기 위해서는 **과거의 모든 관측 이력(History)**을 조건부로 하는 확률을 구해야 합니다.
+
+수식으로 표현하자면, 시점 $n$에서의 가중치를 구하기 위해 우리는 다음과 같은 확률 함수들이 필요합니다.
+
+$$
+P(A_n \mid \bar{A}_{n-1}, \bar{H}_n)
+$$
+
+여기서:
+* $\bar{A}_{n-1}$: 과거 치료 이력 (History of past treatments)
+* $\bar{H}_n$: 과거 공변량 이력 (History of past covariates)
+
+시간이 지날수록 $n$이 커지면서 조건부 변수들의 차원(Dimension)이 계속 증가합니다. 일반적인 Feed-forward Neural Network로는 가변 길이의 이력을 처리하기 어렵습니다.
+
+논문에서는 이러한 문제의 자연스러운 해결책으로 **RNN(Recurrent Neural Networks)**, 특히 **LSTM(Long Short-Term Memory)**을 제안합니다. RNN은 은닉 상태(Hidden State)를 통해 과거의 정보를 압축하여 유지할 수 있으므로, $\bar{A}_{n-1}$과 $\bar{H}_n$과 같은 이력 데이터를 모델링하는 데 최적화되어 있습니다.
+
+## 2.2. 4가지 핵심 확률 함수 (4 Key Probability Functions)
+
+안정화 가중치(Stabilized Weights) $SW$를 계산하기 위해서는 일반적으로 분자(Numerator)와 분모(Denominator)에 각각 해당하는 확률이 필요하며, 데이터에 중도 절단(Censoring)이 존재하는 경우 이를 보정하기 위한 확률까지 고려해야 합니다.
+
+따라서 R-MSN은 총 **4가지 핵심 확률 함수**를 학습해야 합니다.
+
+1.  **치료 확률 (Treatment Assignment Probabilities):** $f(\bar{A}_n \mid \cdot)$
+    * 분모 모델: $P(A_n \mid \bar{A}_{n-1}, \bar{H}_n)$ (교란 요인 통제)
+    * 분자 모델: $P(A_n \mid \bar{A}_{n-1})$ (주변 확률 근사)
+2.  **중도 절단 확률 (Censoring Probabilities):** $f(C_n=0 \mid \cdot)$
+    * 분모 모델: $P(C_n=0 \mid \bar{A}_{n-1}, \bar{H}_n, A_n)$
+    * 분자 모델: $P(C_n=0 \mid \bar{A}_{n-1}, A_n)$
+
+이 4가지 함수는 모두 과거의 이력에 의존하므로, R-MSN에서는 이들을 통칭하여 **Propensity Networks**라고 부르며 각각을 LSTM으로 파라미터화합니다.
+
+![Figure 1: Propensity Networks의 개념적 구조. 상단은 치료(Action) 확률을 추정하는 Multi-target LSTM, 하단은 중도 절단(Censoring) 여부를 추정하는 Single-output LSTM을 나타낸다. 입력으로 과거의 이력(History)이 들어가고, 출력으로 각 시점의 확률값이 산출되어 IPTW 계산에 활용된다.](./images/propensity_networks_architecture.png)
+
+# 3. 모델링 상세 (Modeling Details)
+
+## 3.1. Multi-target LSTM과 상관관계 반영
+
+Propensity Networks의 독창적인 점 중 하나는 치료 확률을 모델링할 때 **Multi-target LSTM**을 사용한다는 점입니다.
+
+의료 데이터나 현실 세계의 시계열 데이터에서는 여러 가지 치료(Treatment)가 동시에 행해지는 경우가 많습니다. 예를 들어, 동일한 질병을 치료하기 위해 **보완적인 약물(Complementary drugs)**이 함께 처방될 수 있습니다.
+
+* **기존 접근:** 각 치료 $A^{(1)}, A^{(2)}$를 독립적인 모델로 추정 $\rightarrow$ 치료 간의 상관관계(Correlation)를 무시함.
+* **R-MSN 접근:** 하나의 LSTM에서 여러 치료 확률을 **결합적(Jointly)**으로 생성하는 Multi-target 구조 채택.
+
+이를 통해 $A_n$ 내부의 여러 차원 간에 존재하는 상관성을 모델이 학습할 수 있게 되어, 더 정확한 경향성 점수(Propensity Score) 추정이 가능해집니다. 반면, 중도 절단(Censoring) 확률 $f(C_n=0 \mid \cdot)$은 단일 출력이므로 **Single-output LSTM**을 사용합니다.
+
+## 3.2. 출력층 설계와 유연성 (Flexibility)
+
+RNN 아키텍처의 유연성 덕분에, 치료 변수($A_n$)의 형태에 따라 다양한 출력층을 설계할 수 있습니다.
+
+### Discrete Treatment (이산형 치료 변수)
+가장 일반적인 경우로, 치료 여부가 O/X 이거나 카테고리인 경우입니다.
+
+* **이진 변수 (Binary):**
+    * **Activation:** Standard LSTM + **Sigmoid** output layer
+    * 본 논문의 실험(Section 5)에서는 이 구성을 사용하여 이진 확률을 계산했습니다.
+    * Hidden State 활성화 함수로는 `tanh`를 사용했습니다.
+* **범주형 변수 (Categorical):**
+    * **Activation:** Standard LSTM + **Softmax** layer
+
+### Continuous Treatment (연속형 치료 변수)
+치료가 약물의 투여량(Dosage)처럼 연속적인 값으로 매핑되는 경우, 단순한 LSTM으로는 확률 밀도 함수를 추정하기 어렵습니다.
+
+* 이 경우 논문에서는 **Variational RNNs (VRNNs)** [Reference 6]과 같은 더 복잡한 아키텍처를 도입하여 연속적인 확률 분포를 모델링할 수 있음을 언급합니다.
+* 이는 R-MSN 프레임워크가 단순히 이진 치료에만 국한되지 않고, 다양한 형태의 개입(Intervention)으로 확장될 수 있음을 시사합니다.
+
+---
+
+## 4.2. Prediction Network
+
+# 1. Introduction
+
+의료 데이터나 사회과학 데이터와 같이 시간의 흐름에 따라 치료(Treatment)와 환자의 상태(Covariates)가 지속적으로 변하는 환경에서는 **Time-dependent Confounding** 문제가 발생합니다. 이번 포스트에서는 이러한 환경에서 환자의 치료 반응(Treatment Response)을 정확하게 예측하기 위해 제안된 **R-MSN (Recurrent Marker Selection Networks)**의 핵심 아키텍처인 **Prediction Network**에 대해 심층적으로 다뤄보겠습니다.
+
+기존의 표준 RNN(Recurrent Neural Networks)은 한 시점 앞(One-step-ahead)을 예측하는 데에는 유용하지만, 실제 임상 현장이나 정책 결정 과정에서는 훨씬 복잡한 시나리오가 요구됩니다.
+예를 들어, "앞으로 3일간 약물 A를 투여하고, 그 후 2일간 약물 B를 투여했을 때 환자의 상태 변화"와 같이 **다양한 기간과 개입(Intervention) 계획**에 따른 장기적인 예후를 예측해야 합니다.
+
+이 논문의 섹션 4.2에서는 이러한 Multi-step Prediction 문제를 해결하기 위해 **Sequence-to-Sequence (Seq2Seq)** 아키텍처를 변형하여 제안합니다. 왜 표준 Seq2Seq가 아닌 변형된 구조가 필요한지, 그리고 수학적으로 어떻게 모델링되는지 상세히 살펴보겠습니다.
+
+# 2. Core Concepts & Motivation
+
+### 2.1 The Challenge of Multi-step Prediction
+일반적인 시계열 예측에서 미래 시점 $t+k$의 결과 $\hat{Y}_{t+k}$를 예측하려면, 재귀적(Recursive) 방식이 주로 사용됩니다. 즉, $t+1$ 시점의 예측값을 다시 입력으로 사용하여 $t+2$를 예측하는 방식입니다.
+
+하지만 인과추론(Causal Inference) 관점, 특히 의료 데이터에서는 심각한 문제가 발생합니다.
+미래의 결과(Outcome)를 예측하기 위해서는 미래의 공변량(Covariates, 예: 혈압, 체온 등)의 정보가 필요합니다. 하지만 **모든 공변량($L$)을 예측하면서 미래로 나아가는 것은 오차 전파(Error Propagation) 문제를 야기**하며, 모델이 불필요하게 복잡해집니다.
+
+### 2.2 Proposed Solution: Action-Only Decoder
+연구진은 이 문제를 해결하기 위해 **Encoder-Decoder** 구조를 채택하되, 디코더(Decoder)의 입력을 제한하는 영리한 전략을 취합니다.
+
+* **Encoder**: 현재 시점까지의 모든 정보(과거 기록, 현재 상태, 이전 치료)를 압축하여 환자의 현재 임상 상태(Clinical State)를 학습합니다.
+* **Decoder**: 미래의 공변량을 예측하여 입력으로 쓰는 대신, **계획된 치료 행동(Planned Future Actions)**만을 입력으로 받아 미래를 예측합니다.
+
+이는 우리가 관심 있는 것이 "모든 생체 신호의 변화"가 아니라, "특정 치료 계획에 따른 결과(Response)"이기 때문입니다.
+
+# 3. Model Architecture
+
+아래 그림은 R-MSN의 Prediction Network 전체 구조를 보여줍니다.
+
+![Figure 2: R-MSN Architecture for Multi-step Treatment Response Prediction. 좌측의 Encoder는 과거의 시계열 데이터(History)를 처리하여 현재 상태(Representation)를 생성하고, 우측의 Decoder는 계획된 미래의 치료(Actions)만을 입력받아 순차적으로 미래의 결과(Outcome)를 예측한다. 두 네트워크 사이에는 차원 변환을 위한 Memory Adapter가 존재한다.](./images/rmsn_architecture_fig2.png)
+
+이 구조는 크게 세 부분으로 나뉩니다:
+1.  **Encoder**: 과거 정보 요약 및 $t+1$ 시점 예측
+2.  **Memory Adapter**: Encoder와 Decoder 사이의 State 전달
+3.  **Decoder**: $t+2$ 시점 이후의 장기 예측
+
+# 4. Mathematical Formulation & Derivations
+
+각 컴포넌트의 수학적 작동 원리를 단계별로 유도해 보겠습니다.
+
+### 4.1 Encoder: Learning Representations
+Encoder의 목표는 환자의 현재 상태를 잘 나타내는 **Representation ($h_t$)**을 학습하는 것입니다. 이를 위해 표준 LSTM(Long Short-Term Memory)을 사용합니다.
+
+현재 시점 $t$에서 사용 가능한 정보는 다음과 같습니다:
+* $L_t$: 현재 시점의 공변량 (Covariates)
+* $A_{t-1}$: 이전 시점의 치료 (Previous Treatments)
+* $X$: 정적 변수 (Static features) - *문맥상 $X$가 표기된 경우*
+
+Encoder LSTM은 다음과 같이 상태를 업데이트합니다:
+
+$$
+h_t = \text{LSTM}_{enc}(h_{t-1}, [L_t, A_{t-1}, X])
+$$
+
+여기서 $h_t$는 과거의 모든 정보를 함축한 은닉 상태(Hidden State)입니다.
+
+**Key Difference:**
+일반적인 Seq2Seq 모델과 달리, R-MSN의 Encoder 마지막 유닛은 단순히 Context Vector만 넘겨주는 것이 아니라, **첫 번째 미래 시점($t+1$)의 예측**에도 직접 관여합니다.
+
+$$
+\hat{Y}_{t+1} = \phi_{out}(h_t)
+$$
+
+이때 $\phi_{out}$은 선형 출력 층(Linear Output Layer)입니다. 이는 가장 최신의 공변량 정보($L_t$)를 손실 없이 사용하여 바로 다음 단계를 예측하기 위함입니다.
+
+### 4.2 Memory Adapter
+Encoder와 Decoder는 서로 다른 역할을 수행하므로, 필요한 State Size(차원)가 다를 수 있습니다. 또한 Encoder의 복잡한 feature space를 Decoder가 처리할 수 있는 형태로 변환해주어야 합니다.
+
+이를 위해 **Memory Adapter**라는 단일 신경망 층을 도입합니다. 활성화 함수로는 **ELU (Exponential Linear Unit)**를 사용합니다.
+
+$$
+z_t = \text{ELU}(W_{adapt} h_t + b_{adapt})
+$$
+
+* $h_t$: Encoder의 마지막 은닉 상태 (Cell state 포함 가능)
+* $z_t$: Decoder의 초기 상태로 주입될 변환된 벡터
+* 참고: 여기서 $h_t$와 $z_t$는 LSTM의 Cell State와 Hidden State가 연결(Concatenation)된 형태를 의미합니다.
+
+### 4.3 Decoder: Action-Driven Forecasting
+Decoder의 핵심 목적은 **미래의 입력 공변량을 예측하지 않고(Avoiding forecast input covariates)**, 오직 제안된 치료 계획(Planned Treatment Assignments)에 기반하여 미래를 시뮬레이션하는 것입니다.
+
+미래 시점 $t+k$ ($k \ge 1$)에 대해, Decoder는 다음과 같이 작동합니다:
+
+1.  **Input:** 오직 계획된 행동 $a_{t+k}$ 만을 입력으로 받습니다.
+2.  **State Update:** 이전 상태 $z_{t+k-1}$와 현재 행동 $a_{t+k}$를 결합합니다.
+
+$$
+z_{t+k} = \text{LSTM}_{dec}(z_{t+k-1}, a_{t+k})
+$$
+
+3.  **Prediction:** 업데이트된 상태 $z_{t+k}$를 통해 결과 변수를 예측합니다.
+
+$$
+\hat{Y}_{t+k+1} = \phi_{out}(z_{t+k})
+$$
+
+이 과정을 통해 모델은 $L_{t+1}, L_{t+2}, \dots$ 와 같은 중간 공변량을 예측할 필요 없이, $z_t$에 압축된 '환자의 현재 상태'와 $a_{t+1}, a_{t+2}, \dots$라는 '개입 계획'만을 가지고 미래 반응을 전파(Propagate)시킬 수 있습니다.
+
+### 4.4 Activation Functions
+논문에서는 연속적인(Continuous) 예측을 위해 다음과 같은 활성화 함수 구성을 명시하고 있습니다:
+
+* **State Activations (LSTM 내부 및 Adapter):** ELU (Exponential Linear Unit)
+    $$
+    \text{ELU}(x) = \begin{cases} x & \text{if } x > 0 \\ \alpha(e^x - 1) & \text{if } x \le 0 \end{cases}
+    $$
+    ELU는 ReLU의 장점을 가지면서도 음수 영역에서 0이 아닌 값을 가져, 정보 소실을 줄이고 학습 안정성을 높이는 데 기여합니다.
+* **Output Layer:** Linear Layer (Regression 문제)
+
+---
+
+## 4.3. Training Procedure
+
+# 1. Introduction
+
+시계열 데이터에서 인과 효과(Causal Effect)를 추정할 때 가장 큰 난관은 **시간에 따라 변하는 교란 요인(Time-dependent confounding)**입니다. 과거의 치료(Treatment)가 현재의 환자 상태(Covariates)에 영향을 주고, 다시 이 상태가 미래의 치료 결정에 영향을 주는 복잡한 피드백 루프가 존재하기 때문입니다.
+
+본 포스트에서는 이러한 문제를 해결하기 위해 제안된 **Recurrent Marginal Structural Networks (R-MSNs)**의 핵심인 **학습 과정(Training Procedure)**을 상세히 분석합니다. R-MSN의 학습은 단일 단계로 이루어지지 않으며, 인과성을 보존하기 위해 **(1) 성향 점수 네트워크, (2) 인코더, (3) 디코더**의 3단계 파이프라인으로 구성됩니다.
+
+# 2. Step-by-Step Training Procedure
+
+R-MSN의 학습은 인과적 편향(Bias)을 제거하기 위한 가중치 계산부터 시작하여, 과거 상태의 표현(Representation) 학습, 그리고 미래 결과 예측(Prediction)으로 이어지는 논리적 흐름을 따릅니다.
+
+![Figure 1: R-MSN의 전체 학습 파이프라인 개요. (a)는 성향 점수 네트워크를 통해 안정화 가중치(SW)를 계산하는 과정, (b)는 계산된 가중치를 적용하여 과거 데이터를 인코딩하는 과정, (c)는 미래 시점의 치료 계획에 따른 결과를 예측하는 디코더 학습 과정을 나타낸다.](./images/rmsn_training_pipeline.png)
+
+## Step 1: Propensity Network Training (Bias Removal)
+
+첫 번째 단계는 관측 데이터에 존재하는 선택 편향(Selection Bias)을 제거하기 위한 **성향 점수(Propensity Score)** 학습입니다.
+
+### Motivation
+관찰 데이터(Observational Data)에서는 치료 $A_t$가 무작위로 할당되지 않습니다. 의사는 환자의 이전 상태 $H_{t-1}$를 보고 치료를 결정합니다. 이를 보정하지 않고 학습하면 모델은 치료 효과가 아닌, 치료를 받게 된 환자의 상태적 특성을 학습하게 됩니다. 이를 해결하기 위해 **역확률 가중치(Inverse Probability Weighting, IPW)** 기법을 사용합니다.
+
+### Mechanism
+각 시점 $t$에서 성향 점수 네트워크는 이전 처리 $A_{t-1}$와 히스토리 $H_{t-1}$를 입력으로 받아, 현재 시점 $t$에서 특정 치료를 받을 확률을 추정합니다.
+
+1.  **확률 추정:** 이진 교차 엔트로피(Binary Cross Entropy) 손실 함수를 사용하여 치료 할당 확률을 학습합니다.
+2.  **안정화 가중치(Stabilized Weights, SW) 계산:**
+    시계열 데이터에서 가중치의 분산이 지나치게 커지는 것을 막기 위해 안정화 가중치를 사용합니다.
+    
+    $$\mathbf{SW}(t, 0) = \frac{f(A_t | A_{t-1})}{f(A_t | H_t)}$$
+    
+    여기서 분자는 이전 치료 이력만 고려한 확률, 분모는 모든 히스토리를 고려한 확률입니다.
+
+3.  **누적 가중치 계산:**
+    장기적인 미래 시점 $\tau$까지의 효과를 추정하기 위해, 현재 시점부터 미래 시점까지의 가중치를 누적 곱(Cumulative Product)으로 계산합니다.
+    
+    $$\mathbf{SW}(t, \tau) = \prod_{j=0}^{\tau} \mathbf{SW}(t+j, 0)$$
+
+> **Note:** 본 연구에서는 표준적인 이진 교차 엔트로피(Standard Binary Cross Entropy) 손실함수를 사용하였으며, 치료 할당(Treatment Assignment)과 중도 절단(Censoring) 여부를 모두 이진 관측값으로 취급하여 학습했습니다.
+
+## Step 2: Encoder Training (Representation Learning)
+
+두 번째 단계는 환자의 임상적 상태(Clinical State)를 요약하는 **인코더(Encoder)**를 학습하는 과정입니다.
+
+![Figure 2: 인코더 학습 과정 상세. 과거의 공변량(X), 치료(A), 결과(L)를 입력받아 은닉 상태(h)를 갱신하며, 다음 시점의 결과($\hat{Y}_{t+1}$)를 예측한다. 이때 Step 1에서 구한 가중치를 손실 함수에 적용하여 편향을 보정한다.](./images/encoder_training.png)
+
+### Motivation
+시계열 데이터는 차원이 높고 노이즈가 많습니다. 인코더는 과거의 모든 정보(치료, 공변량 등)를 고정된 크기의 벡터인 **은닉 상태(Hidden State, $h_t$)**로 압축합니다. 중요한 점은, 이 과정에서 **Step 1에서 구한 가중치(SW)**를 사용하여 편향된 데이터 분포를 보정한다는 것입니다.
+
+### Mechanism
+인코더는 표준적인 RNN 구조(LSTM 또는 GRU)를 따르며, **One-step-ahead prediction**을 수행합니다. 즉, $t$ 시점까지의 정보를 바탕으로 $t+1$ 시점의 결과를 예측하도록 훈련됩니다.
+
+* **Input:** $\{L_{t-1}, A_{t-1}, X\}$ (이전 결과, 이전 치료, 정적 공변량)
+* **Target:** $\hat{Y}_{t+1}$ (다음 시점의 실제 결과)
+* **Bias Correction:** 손실 함수 계산 시 각 샘플에 $\mathbf{SW}$를 곱해줌으로써, 마치 무작위 할당된 데이터(Pseudo-population)에서 학습하는 것과 같은 효과를 냅니다.
+
+## Step 3: Decoder Training (Counterfactual Prediction)
+
+마지막 단계는 학습된 표현($h_t$)을 바탕으로, 가상의 미래 치료 계획에 따른 결과를 예측하는 **디코더(Decoder)**를 학습하는 것입니다.
+
+![Figure 3: 디코더 학습 과정 상세. 인코더에서 넘어온 초기 상태 $h_t$를 시작점으로 하여, 미래의 가상 치료 시퀀스 $A_{t+1}, \dots$ 가 주어졌을 때 미래 결과 $Y$를 순차적으로 예측한다.](./images/decoder_training.png)
+
+### Motivation
+우리의 최종 목표는 "만약 환자가 미래에 A라는 치료 계획을 따른다면 결과는 어떨까?"라는 반사실적(Counterfactual) 질문에 답하는 것입니다. 인코더는 과거를 요약할 뿐 미래를 시뮬레이션하지 못하므로, 별도의 디코더가 필요합니다.
+
+### Mechanism
+1.  **초기화:** 인코더가 생성한 마지막 시점의 은닉 상태 $h_t$를 디코더의 초기 상태로 사용합니다.
+2.  **Sequence Prediction:** 디코더는 미래의 치료 시퀀스 $A_{t+1}, A_{t+2}, \dots$를 입력받아 미래의 결과 $\hat{Y}_{t+2}, \hat{Y}_{t+3}, \dots$를 예측합니다.
+3.  **Mini-batching Strategy:**
+    * 모든 환자의 모든 시점 $t$를 시작점으로 간주합니다.
+    * 최대 예측 범위 $\tau_{max}$까지의 시퀀스를 생성합니다.
+    * 데이터 형식: $[\mathbf{h}_t, \{\mathbf{A}_{t+1}, \dots, \mathbf{A}_{t+\tau_{max}-1}\}, \{\mathbf{Y}_{t+2}, \dots, \mathbf{Y}_{t+\tau_{max}}\}]$
+
+# 3. Mathematical Formulation of Loss Functions
+
+논문의 식 (5)에 제시된 손실 함수를 구체적으로 분석해보겠습니다. 이 손실 함수는 인코더와 디코더가 각각의 목표를 달성하도록 설계되었습니다.
+
+$$
+\mathcal{L}_{encoder} = \sum_{i=1}^{I} \sum_{t=1}^{T_i} e(i, t, 1)
+$$
+
+$$
+\mathcal{L}_{decoder} = \sum_{i=1}^{I} \sum_{t=1}^{T_i} \sum_{\tau=2}^{\min(T_i - t, \tau_{max})} e(i, t, \tau)
+$$
+
+### Notation Definition
+* $i$: 환자 인덱스 ($1, \dots, I$)
+* $t$: 현재 시점 ($1, \dots, T_i$)
+* $\tau$: 예측 Horizon (미래 몇 스텝 뒤인지)
+* $e(i, t, \tau)$: 개별 오차 함수 (Error Function)
+
+### Detailed Derivation of Error Function $e(i, t, \tau)$
+
+논문에서는 "weighted mean-squared error loss"를 사용한다고 명시되어 있습니다. 이를 수식으로 구체화하면 다음과 같습니다.
+
+$$e(i, t, \tau) = \mathbf{SW}_i(t, \tau-1) \cdot \| Y_{i, t+\tau} - \hat{Y}_{i, t+\tau} \|^2$$
+
+1.  **Squared Error:** $\| Y - \hat{Y} \|^2$ 항은 연속형 변수(Continuous Outcomes)에 대한 예측 오차를 측정합니다. (이산형 변수의 경우 Cross Entropy 사용 가능)
+2.  **Weighting:** $\mathbf{SW}_i(t, \tau-1)$ 항은 Step 1에서 계산한 안정화 가중치입니다.
+    * 인코더의 경우 $\tau=1$이므로 $\mathbf{SW}(t, 0)$ 즉, 현재 시점의 가중치만 사용합니다.
+    * 디코더의 경우 $\tau \ge 2$이므로 누적 가중치(Cumulative Product)를 사용하여 시간이 지날수록 커질 수 있는 편향을 보정합니다.
+
+### Interpretation
+* **Encoder Loss ($\mathcal{L}_{encoder}$):** 모든 환자와 모든 시점에 대해, **바로 다음 스텝($\tau=1$)**을 얼마나 잘 예측하는지 측정합니다. 이는 Representation Learning의 핵심입니다.
+* **Decoder Loss ($\mathcal{L}_{decoder}$):** 모든 환자와 시점에 대해, **$\tau=2$부터 최대 $\tau_{max}$까지의 미래**를 얼마나 잘 예측하는지 측정합니다. 이는 Counterfactual Inference의 핵심입니다.
+
+---
+
+# 5. Experiments With Cancer Growth Simulation Model
+
+---
+
+# 6. Conclusion

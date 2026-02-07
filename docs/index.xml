@@ -798,6 +798,351 @@
   <pubDate>Fri, 06 Feb 2026 15:00:00 GMT</pubDate>
 </item>
 <item>
+  <title>[Causal Inference] Appendix 04. Proximal Causal Inference (Part 01)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/lecture/LA04/part-01/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-the-challenge-of-unmeasured-confounding" class="level1">
+<h1>1. Introduction: The Challenge of Unmeasured Confounding</h1>
+<p>인과추론(Causal Inference)의 가장 표준적인 가정은 <strong>“측정되지 않은 교란요인이 없다(No Unmeasured Confounding)”</strong>는 것입니다. 이를 <strong>Exchangeability</strong>라고도 합니다. 하지만 현실 데이터 분석, 특히 사회과학이나 의료 데이터에서는 이 가정이 성립하기 매우 어렵습니다.</p>
+<blockquote class="blockquote">
+<p><strong>Problem:</strong> In practice, this assumption is often unrealistic. We rarely measure all true confounders.</p>
+</blockquote>
+<p>우리가 수집하는 공변량(Covariates)들은 종종 진짜 원인(True Confounder) 그 자체가 아니라, 그 원인을 반영하는 <strong>대리 변수(Proxy)</strong>에 불과한 경우가 많습니다.</p>
+<p>예를 들어, ‘사회경제적 지위(SES)’라는 진짜 교란요인 <img src="https://latex.codecogs.com/png.latex?U">는 완벽하게 측정할 수 없습니다. 대신 우리는 ’소득(Income)’이나 ’교육 수준(Education)’ 같은 대리 변수 <img src="https://latex.codecogs.com/png.latex?W,%20Z">를 관측하게 됩니다.</p>
+<p>이번 포스트에서는 교란요인 <img src="https://latex.codecogs.com/png.latex?U">가 관측되지 않는 상황(Unobserved Confounding)에서, <strong>대리 변수(Proxies)</strong>를 활용하여 인과 효과를 식별해내는 <strong>Proximal Causal Inference</strong>의 핵심 아이디어와, 특히 범주형 변수일 때 <strong>행렬 연산(Matrix Multiplication)</strong>을 통한 식별 전략을 정리합니다.</p>
+</section>
+<section id="causal-graphs-and-proxies" class="level1">
+<h1>2. Causal Graphs and Proxies</h1>
+<section id="standard-vs.-proximal-setting" class="level2">
+<h2 class="anchored" data-anchor-id="standard-vs.-proximal-setting">2.1. Standard vs.&nbsp;Proximal Setting</h2>
+<p>가장 기본적인 교란 모형과 Proximal 모형의 차이를 DAG(Directed Acyclic Graph)로 비교해보겠습니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/lecture/LA04/part-01/images/dag_comparison_standard_vs_proximal.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: Comparison of Causal Graphs. (Left) The standard confounding model where U directly affects X and Y. (Center) A model where U is unobserved, but a single proxy W is available. (Right) The Proximal Causal Inference model involving two proxies, Z and W, which allow for identification even when U is latent.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?X"></strong>: 처치(Treatment)</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?Y"></strong>: 결과(Outcome)</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?U"></strong>: 관측되지 않은 교란요인(Unobserved Confounder)</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?W,%20Z"></strong>: <img src="https://latex.codecogs.com/png.latex?U">의 대리 변수(Proxies)</li>
+</ul>
+</section>
+<section id="independence-assumptions" class="level2">
+<h2 class="anchored" data-anchor-id="independence-assumptions">2.2. Independence Assumptions</h2>
+<p>Proximal Causal Inference가 성립하기 위해서는 대리 변수들과 다른 변수들 간의 조건부 독립성이 가정되어야 합니다. 강의 자료에 제시된 주요 구조는 다음과 같습니다.</p>
+<ol type="1">
+<li><strong><img src="https://latex.codecogs.com/png.latex?W%20%5Cperp%20(Z,%20X)%20%7C%20U"></strong>:
+<ul>
+<li>교란요인 <img src="https://latex.codecogs.com/png.latex?U">가 주어졌을 때, 대리 변수 <img src="https://latex.codecogs.com/png.latex?W">는 처치 <img src="https://latex.codecogs.com/png.latex?X">나 다른 대리 변수 <img src="https://latex.codecogs.com/png.latex?Z">와 독립입니다.</li>
+<li>즉, <img src="https://latex.codecogs.com/png.latex?W">는 오직 <img src="https://latex.codecogs.com/png.latex?U">에 의해서만 영향을 받으며(혹은 <img src="https://latex.codecogs.com/png.latex?U">를 반영하며), 측정 오차가 무작위임을 의미합니다.</li>
+</ul></li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?Z%20%5Cperp%20Y%20%7C%20(U,%20X)"></strong>:
+<ul>
+<li>교란요인 <img src="https://latex.codecogs.com/png.latex?U">와 처치 <img src="https://latex.codecogs.com/png.latex?X">가 주어졌을 때, 대리 변수 <img src="https://latex.codecogs.com/png.latex?Z">는 결과 <img src="https://latex.codecogs.com/png.latex?Y">와 독립입니다.</li>
+<li>이는 <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?Y">에 직접적인 영향을 주지 않음을 의미합니다.</li>
+</ul></li>
+</ol>
+<p>이러한 구조적 가정을 통해 우리는 관측되지 않은 <img src="https://latex.codecogs.com/png.latex?U">의 정보를 <img src="https://latex.codecogs.com/png.latex?W">와 <img src="https://latex.codecogs.com/png.latex?Z">로부터 “복원”해낼 수 있는 수학적 토대를 마련하게 됩니다.</p>
+</section>
+</section>
+<section id="identification-with-categorical-variables" class="level1">
+<h1>3. Identification with Categorical Variables</h1>
+<p>변수들이 <strong>범주형(Categorical)</strong>이라고 가정할 때, 인과 효과의 식별 문제는 <strong>선형대수학의 행렬 연산</strong> 문제로 치환될 수 있습니다.</p>
+<section id="the-matrix-formulation" class="level2">
+<h2 class="anchored" data-anchor-id="the-matrix-formulation">3.1. The Matrix Formulation</h2>
+<p>확률의 합 법칙(Law of Total Probability)에 의해, 대리 변수 <img src="https://latex.codecogs.com/png.latex?W">의 주변 확률 분포 <img src="https://latex.codecogs.com/png.latex?P(W)">는 잠재 변수 <img src="https://latex.codecogs.com/png.latex?U">에 대해 다음과 같이 표현됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP(W)%20=%20%5Csum_%7Bu%7D%20P(W%7Cu)P(u)%0A"></p>
+<p>이 수식은 <strong>행렬 곱(Matrix Multiplication)</strong> 형태로 아주 깔끔하게 표현될 수 있습니다. <img src="https://latex.codecogs.com/png.latex?W">와 <img src="https://latex.codecogs.com/png.latex?U">가 각각 2개의 범주(<img src="https://latex.codecogs.com/png.latex?w_1,%20w_2"> / <img src="https://latex.codecogs.com/png.latex?u_1,%20u_2">)를 갖는다고 가정해봅시다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbf%7BP%7D(W%7CU)%20=%20%5Cbegin%7Bbmatrix%7D%20P(w_1%7Cu_1)%20&amp;%20P(w_1%7Cu_2)%20%5C%5C%20P(w_2%7Cu_1)%20&amp;%20P(w_2%7Cu_2)%20%5Cend%7Bbmatrix%7D,%20%5Cquad%0A%5Cmathbf%7BP%7D(U)%20=%20%5Cbegin%7Bbmatrix%7D%20P(u_1)%20%5C%5C%20P(u_2)%20%5Cend%7Bbmatrix%7D%0A"></p>
+<p>이제 위의 합 공식은 다음과 같은 선형 시스템이 됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cunderbrace%7B%5Cbegin%7Bbmatrix%7D%20P(w_1%7Cu_1)%20&amp;%20P(w_1%7Cu_2)%20%5C%5C%20P(w_2%7Cu_1)%20&amp;%20P(w_2%7Cu_2)%20%5Cend%7Bbmatrix%7D%7D_%7B%5Cmathbf%7BP%7D(W%7CU)%7D%20%5Cunderbrace%7B%5Cbegin%7Bbmatrix%7D%20P(u_1)%20%5C%5C%20P(u_2)%20%5Cend%7Bbmatrix%7D%7D_%7B%5Cmathbf%7BP%7D(U)%7D%20=%20%5Cunderbrace%7B%5Cbegin%7Bbmatrix%7D%20P(w_1)%20%5C%5C%20P(w_2)%20%5Cend%7Bbmatrix%7D%7D_%7B%5Cmathbf%7BP%7D(W)%7D%0A"></p>
+<p>즉, 간결하게 쓰면:</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbf%7BP%7D(W%7CU)%20%5Ccdot%20%5Cmathbf%7BP%7D(U)%20=%20%5Cmathbf%7BP%7D(W)%0A"></p>
+</section>
+<section id="the-invertibility-assumption-identification" class="level2">
+<h2 class="anchored" data-anchor-id="the-invertibility-assumption-identification">3.2. The Invertibility Assumption &amp; Identification</h2>
+<p>여기서 우리의 목표는 관측되지 않은 <strong><img src="https://latex.codecogs.com/png.latex?P(U)">를 알아내는 것</strong>입니다. 만약 <strong>외부 연구(External Study)</strong>나 파일럿 스터디를 통해 <img src="https://latex.codecogs.com/png.latex?W">와 <img src="https://latex.codecogs.com/png.latex?U"> 사이의 관계인 조건부 확률 행렬 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7BP%7D(W%7CU)">를 알고 있다고 가정해봅시다.</p>
+<p>이때, 행렬 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7BP%7D(W%7CU)">가 <strong>역행렬이 존재(Invertible)</strong>한다면, 우리는 <img src="https://latex.codecogs.com/png.latex?P(U)">를 다음과 같이 복원할 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbf%7BP%7D(U)%20=%20%5Cmathbf%7BP%7D(W%7CU)%5E%7B-1%7D%20%5Ccdot%20%5Cmathbf%7BP%7D(W)%0A"></p>
+<p>이것이 Proximal Causal Inference에서 식별(Identification)이 가능한 핵심 논리입니다. 즉, <strong>“대리 변수와 잠재 변수 간의 관계 행렬이 Full Rank일 때, 관측 데이터(<img src="https://latex.codecogs.com/png.latex?P(W)">)와 외부 지식(<img src="https://latex.codecogs.com/png.latex?P(W%7CU)">)을 결합하여 잠재 변수의 분포를 역산할 수 있다”</strong>는 것입니다.</p>
+</section>
+</section>
+<section id="strategy-with-external-data-single-proxy" class="level1">
+<h1>4. Strategy with External Data (Single Proxy)</h1>
+<p>강의 자료의 후반부(Slide 7-8)에서는 <strong>외부 데이터(External Study)에서 <img src="https://latex.codecogs.com/png.latex?P(W%7CU)">를 가져올 수 있는 경우</strong>의 구체적인 식별 알고리즘을 도식화하고 있습니다. 이를 단계별로 수식화하여 정리합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/lecture/LA04/part-01/images/proximal_identification_flow.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: Workflow for Identification using External Data. The diagram illustrates how information from an external study (P(W|U)) is combined with available observational data (P(W, X, Y)) to recover unobserved distributions (P(U|x), P(y|U,x)) and finally compute the causal query P(y|do(x)).</figcaption>
+</figure>
+</div>
+<section id="step-1-recovering-pux" class="level2">
+<h2 class="anchored" data-anchor-id="step-1-recovering-pux">Step 1: Recovering <img src="https://latex.codecogs.com/png.latex?P(U%7Cx)"></h2>
+<p>관측 데이터에서 <img src="https://latex.codecogs.com/png.latex?P(W%7Cx)">를 구할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?W%20%5Cperp%20X%20%7C%20U"> 가정 하에, 다음과 같은 관계가 성립합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP(W%7Cx)%20=%20%5Csum_%7Bu%7D%20P(W%7Cu)P(u%7Cx)%0A"></p>
+<p>이를 행렬식으로 표현하면 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7BP%7D(W%7Cx)%20=%20%5Cmathbf%7BP%7D(W%7CU)%20%5Ccdot%20%5Cmathbf%7BP%7D(U%7Cx)">가 됩니다. 따라서, <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7BP%7D(W%7CU)">의 역행렬을 이용해 <img src="https://latex.codecogs.com/png.latex?P(U%7Cx)">를 식별할 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbf%7BP%7D(U%7Cx)%20=%20%5Cmathbf%7BP%7D(W%7CU)%5E%7B-1%7D%20%5Ccdot%20%5Cmathbf%7BP%7D(W%7Cx)%0A"></p>
+</section>
+<section id="step-2-recovering-pyu-x" class="level2">
+<h2 class="anchored" data-anchor-id="step-2-recovering-pyu-x">Step 2: Recovering <img src="https://latex.codecogs.com/png.latex?P(y%7CU,%20x)"></h2>
+<p>다음으로 결과 변수 <img src="https://latex.codecogs.com/png.latex?Y">를 포함한 결합 확률 <img src="https://latex.codecogs.com/png.latex?P(y,%20W%7Cx)">를 고려합니다. <img src="https://latex.codecogs.com/png.latex?Y%20%5Cperp%20W%20%7C%20(U,%20X)"> 가정이 성립한다면(즉, <img src="https://latex.codecogs.com/png.latex?W">가 <img src="https://latex.codecogs.com/png.latex?U">의 완벽한 대리자로서 <img src="https://latex.codecogs.com/png.latex?Y">에 직접 영향을 주지 않음), 다음과 같이 분해됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP(y,%20W%7Cx)%20=%20%5Csum_%7Bu%7D%20P(y%7Cu,%20x)%20P(W%7Cu)%20P(u%7Cx)%0A"></p>
+<p>이 식은 ’Element-wise multiplication’을 포함하는 복잡한 형태입니다. 고정된 <img src="https://latex.codecogs.com/png.latex?y,%20x">에 대해 벡터 연산으로 생각하면, 우리는 좌변(<img src="https://latex.codecogs.com/png.latex?P(y,%20W%7Cx)">)과 <img src="https://latex.codecogs.com/png.latex?P(W%7Cu)">, 그리고 Step 1에서 구한 <img src="https://latex.codecogs.com/png.latex?P(u%7Cx)">를 알고 있습니다. 이를 통해 미지수 <img src="https://latex.codecogs.com/png.latex?P(y%7Cu,%20x)">를 역산해낼 수 있습니다.</p>
+</section>
+<section id="step-3-causal-query-estimation-p_xy" class="level2">
+<h2 class="anchored" data-anchor-id="step-3-causal-query-estimation-p_xy">Step 3: Causal Query Estimation (<img src="https://latex.codecogs.com/png.latex?P_x(y)">)</h2>
+<p>최종적으로 우리가 알고 싶은 인과 효과 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">, 즉 <img src="https://latex.codecogs.com/png.latex?P_x(y)">는 Back-door criterion에 의해 다음과 같이 정의됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP_x(y)%20=%20%5Csum_%7Bu%7D%20P(y%7Cu,%20x)P(u)%0A"></p>
+<p>여기서: 1. <img src="https://latex.codecogs.com/png.latex?P(u)">는 전체 데이터에서 Step 1과 같은 방식을 사용해 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7BP%7D(U)%20=%20%5Cmathbf%7BP%7D(W%7CU)%5E%7B-1%7D%5Cmathbf%7BP%7D(W)">로 구합니다. 2. <img src="https://latex.codecogs.com/png.latex?P(y%7Cu,%20x)">는 Step 2에서 구했습니다.</p>
+<p>이 두 요소를 결합하여 최종적인 인과 효과를 추정하게 됩니다.</p>
+</section>
+</section>
+<section id="summary" class="level1">
+<h1>5. Summary</h1>
+<p>이번 강의 노트에서는 측정되지 않은 교란요인(Unmeasured Confounding) 문제를 해결하기 위한 <strong>Proximal Causal Inference</strong>의 기초 개념을 다루었습니다.</p>
+<ol type="1">
+<li><strong>Motivation</strong>: 모든 교란요인을 측정하는 것은 불가능하며, 우리는 종종 대리 변수(Proxy)만을 관측합니다.</li>
+<li><strong>Assumption</strong>: 대리 변수 <img src="https://latex.codecogs.com/png.latex?W,%20Z">가 잠재 변수 <img src="https://latex.codecogs.com/png.latex?U">와 맺는 조건부 독립성 구조(DAG)가 중요합니다.</li>
+<li><strong>Identification</strong>: 범주형 변수의 경우, <img src="https://latex.codecogs.com/png.latex?P(W%7CU)">를 “Matrix”로 보고, 이 행렬이 <strong>역행렬을 가질 수 있다(Invertible)</strong>는 성질을 이용해 잠재 변수의 분포 <img src="https://latex.codecogs.com/png.latex?P(U)">를 수학적으로 복원할 수 있습니다.</li>
+<li><strong>Application</strong>: 외부 연구(External Study)에서 <img src="https://latex.codecogs.com/png.latex?P(W%7CU)"> 정보를 가져올 수 있다면, 관측 데이터만으로도 <img src="https://latex.codecogs.com/png.latex?U">를 보정한 인과 효과 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">를 계산할 수 있습니다.</li>
+</ol>
+<p>이 방법론은 사회과학이나 역학 연구와 같이 정확한 교란요인 측정이 어려운 분야에서 매우 강력한 도구가 될 수 있습니다.</p>
+<hr>
+<section id="appendix-compliance-checklist" class="level3">
+<h3 class="anchored" data-anchor-id="appendix-compliance-checklist">Appendix: Compliance Checklist</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 30%">
+<col style="width: 38%">
+<col style="width: 30%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">기준 항목</th>
+<th style="text-align: center;">반영 여부</th>
+<th style="text-align: left;">비고</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>1. 내용 처리 원칙</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: left;">표준 가정의 문제, DAG 구조, 행렬을 이용한 식별 전략 등 핵심 개념 누락 없이 포함</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>2. 수식 처리 원칙</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: left;"><img src="https://latex.codecogs.com/png.latex?P(W%7CU)%5E%7B-1%7D">를 이용한 유도 과정 및 행렬 연산 식을 LaTeX로 상세 구현</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>3. 이미지/도표</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: left;"><code>dag_comparison</code> 및 <code>identification_flow</code> 이미지 플레이스홀더와 상세 캡션 추가</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>4. 출력 형식</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: left;">Quarto (<code>.qmd</code>) 형식 준수, YAML 헤더 포함</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>5. 톤 &amp; 독자</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: left;">한국인 대학원생 대상의 전문적이고 설명적인 톤 유지</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>6. 누락 내용</strong></td>
+<td style="text-align: center;">없음</td>
+<td style="text-align: left;">PDF 내의 모든 핵심 슬라이드(1~8) 내용을 포괄함</td>
+</tr>
+</tbody>
+</table>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Causal Inference</category>
+  <category>Introduction to Causal Inference</category>
+  <guid>https://shsha0110.github.io/posts/lecture/LA04/part-01/</guid>
+  <pubDate>Fri, 06 Feb 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Causal Inference] Appendix 04. Proximal Causal Inference (Part 02)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/lecture/LA04/part-02/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-숨겨진-교란-요인을-어떻게-다룰-것인가" class="level1">
+<h1>1. Introduction: 숨겨진 교란 요인을 어떻게 다룰 것인가?</h1>
+<p>인과추론의 가장 큰 적은 <strong>관측되지 않은 교란 요인(Unobserved Confounder, <img src="https://latex.codecogs.com/png.latex?U">)</strong>입니다. <img src="https://latex.codecogs.com/png.latex?U">가 처치(<img src="https://latex.codecogs.com/png.latex?X">)와 결과(<img src="https://latex.codecogs.com/png.latex?Y">)에 모두 영향을 미칠 때, 단순한 회귀분석이나 성향점수 매칭(Propensity Score Matching)은 편향된 결과를 낳습니다.</p>
+<p>전통적인 해결책은 <strong>도구변수(Instrumental Variable, IV)</strong>를 사용하는 것입니다. 하지만 완벽한 도구변수(Exclusion Restriction을 만족하는 변수)를 찾는 것은 현실적으로 매우 어렵습니다.</p>
+<p>여기서 등장하는 것이 <strong>Proximal Causal Inference</strong>입니다. 완벽한 도구변수 대신, <img src="https://latex.codecogs.com/png.latex?U">에 대한 불완전한 정보(Proxy)를 담고 있는 두 가지 종류의 대리 변수(Proxy Variables)를 활용하여 인과 효과를 식별하는 방법론입니다.</p>
+<p>이 포스트에서는 첨부된 강의 자료(Appendix)를 바탕으로, <strong>Double Proxy</strong> 설정에서의 인과 효과 식별 공식을 수학적으로 엄밀하게 유도해 보겠습니다.</p>
+<hr>
+</section>
+<section id="problem-setting-dag" class="level1">
+<h1>2. Problem Setting &amp; DAG</h1>
+<p>우리는 다음과 같은 인과 구조(DAG)를 가정합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/lecture/LA04/part-02/images/proximal_dag.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: Double Proxy 구조의 DAG. <img src="https://latex.codecogs.com/png.latex?U">는 관측되지 않은 교란 요인이며, <img src="https://latex.codecogs.com/png.latex?X">는 처치, <img src="https://latex.codecogs.com/png.latex?Y">는 결과이다. <img src="https://latex.codecogs.com/png.latex?Z">와 <img src="https://latex.codecogs.com/png.latex?W">는 각각 <img src="https://latex.codecogs.com/png.latex?U">의 대리 변수(Proxy) 역할을 한다.</figcaption>
+</figure>
+</div>
+<section id="변수-정의" class="level3">
+<h3 class="anchored" data-anchor-id="변수-정의">2.1 변수 정의</h3>
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?X"> (Treatment):</strong> 원인 변수 (예: 교육 수준)</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?Y"> (Outcome):</strong> 결과 변수 (예: 소득)</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?U"> (Unobserved Confounder):</strong> 관측되지 않은 교란 요인 (예: 선천적 능력). <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?Y">에 모두 영향을 줍니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?Z"> (Treatment-Inducing Proxy):</strong> <img src="https://latex.codecogs.com/png.latex?X">에 영향을 주지만 <img src="https://latex.codecogs.com/png.latex?Y">에는 직접적인 영향을 주지 않는 Proxy입니다. (IV와 유사한 역할)</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?W"> (Outcome-Inducing Proxy):</strong> <img src="https://latex.codecogs.com/png.latex?Y">에 영향을 주거나 <img src="https://latex.codecogs.com/png.latex?Y">와 관련이 있지만, <img src="https://latex.codecogs.com/png.latex?X">에는 직접적인 영향을 주지 않는 Proxy입니다.</li>
+</ul>
+</section>
+<section id="구조적-가정-independence-assumptions" class="level3">
+<h3 class="anchored" data-anchor-id="구조적-가정-independence-assumptions">2.2 구조적 가정 (Independence Assumptions)</h3>
+<p>DAG에 따르면 다음과 같은 조건부 독립성이 성립합니다.</p>
+<ol type="1">
+<li><strong><img src="https://latex.codecogs.com/png.latex?W%20%5Cperp%20(Z,%20X)%20%5Cmid%20U"></strong>: <img src="https://latex.codecogs.com/png.latex?U">를 통제했을 때, <img src="https://latex.codecogs.com/png.latex?W">는 <img src="https://latex.codecogs.com/png.latex?Z">나 <img src="https://latex.codecogs.com/png.latex?X">와 독립입니다. 즉, <img src="https://latex.codecogs.com/png.latex?W">는 오직 <img src="https://latex.codecogs.com/png.latex?U">에 대한 정보만 담고 있으며, <img src="https://latex.codecogs.com/png.latex?X">나 <img src="https://latex.codecogs.com/png.latex?Z">로부터 직접적인 영향을 받지 않습니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?Z%20%5Cperp%20Y%20%5Cmid%20(U,%20X)"></strong>: <img src="https://latex.codecogs.com/png.latex?U">와 <img src="https://latex.codecogs.com/png.latex?X">를 통제했을 때, <img src="https://latex.codecogs.com/png.latex?Z">는 <img src="https://latex.codecogs.com/png.latex?Y">와 독립입니다. 즉, <img src="https://latex.codecogs.com/png.latex?Z">는 <img src="https://latex.codecogs.com/png.latex?Y">에 직접적인 경로가 없습니다 (Exclusion Restriction).</li>
+</ol>
+<hr>
+</section>
+</section>
+<section id="identification-strategy-the-bridge-function-approach" class="level1">
+<h1>3. Identification Strategy: The Bridge Function Approach</h1>
+<p>우리의 목표는 <strong><img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))"></strong>, 즉 <img src="https://latex.codecogs.com/png.latex?P_x(y)">를 식별하는 것입니다. Back-door criterion에 따르면 이상적인 공식은 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP_x(y)%20=%20%5Cint%20P(y%7Cx,%20u)%20P(u)%20du%0A"></p>
+<p>하지만 <strong><img src="https://latex.codecogs.com/png.latex?U">는 관측되지 않으므로</strong> 이 식을 직접 계산할 수 없습니다. Proximal Causal Inference는 <strong>Outcome Bridge Function (<img src="https://latex.codecogs.com/png.latex?h">)</strong> 이라는 개념을 도입하여 이 문제를 해결합니다.</p>
+<section id="핵심-아이디어-intuition" class="level2">
+<h2 class="anchored" data-anchor-id="핵심-아이디어-intuition">3.1 핵심 아이디어 (Intuition)</h2>
+<p>강의 자료의 시각적 흐름(Slide 3~6)은 행렬 연산 또는 선형 연산자(Linear Operator)의 관점에서 이를 설명합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/lecture/LA04/part-02/images/derivation_flow_matrix.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: 확률 분포 간의 매핑 관계. <img src="https://latex.codecogs.com/png.latex?P(W%7CZ,%20x)">는 관측 가능한 데이터로 구성된 행렬이다. 이를 분해하고 역행렬을 취함으로써 <img src="https://latex.codecogs.com/png.latex?U">와 관련된 정보를 복원하는 과정을 도식화했다.</figcaption>
+</figure>
+</div>
+<p>핵심은 관측 가능한 데이터 분포 <img src="https://latex.codecogs.com/png.latex?P(W%7CZ,%20x)">와 <img src="https://latex.codecogs.com/png.latex?P(y%7CZ,%20x)">를 연결하여, 관측 불가능한 <img src="https://latex.codecogs.com/png.latex?U">를 우회하는 <strong>다리(Bridge)</strong>를 놓는 것입니다.</p>
+<hr>
+</section>
+</section>
+<section id="mathematical-derivation-continuous-case" class="level1">
+<h1>4. Mathematical Derivation (Continuous Case)</h1>
+<p>이제 강의 자료 10페이지에 제시된 <strong>연속형 변수(Continuous Case)</strong>에 대한 적분 방정식 유도 과정을 상세히 풀어보겠습니다.</p>
+<section id="step-1-관측-가능한-분포의-분해" class="level3">
+<h3 class="anchored" data-anchor-id="step-1-관측-가능한-분포의-분해">Step 1: 관측 가능한 분포의 분해</h3>
+<p>먼저, 데이터에서 관측 가능한 조건부 확률 <img src="https://latex.codecogs.com/png.latex?P(W%20%7C%20Z,%20x)">를 <img src="https://latex.codecogs.com/png.latex?U">를 매개로 분해해 봅시다. 전체 확률의 법칙과 <img src="https://latex.codecogs.com/png.latex?W%20%5Cperp%20(Z,%20X)%20%5Cmid%20U"> 가정을 사용합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP(w%20%7C%20z,%20x)%20=%20%5Cint%20P(w%20%7C%20u,%20z,%20x)%20P(u%20%7C%20z,%20x)%20du%20=%20%5Cint%20P(w%20%7C%20u)%20P(u%20%7C%20z,%20x)%20du%0A"></p>
+<p>이 식은 <strong>Fredholm Integral Equation of the First Kind</strong> 형태입니다. 좌변은 관측 가능하고, 우변의 커널들은 관측 불가능합니다.</p>
+</section>
+<section id="step-2-bridge-function-hw-x-y의-정의" class="level3">
+<h3 class="anchored" data-anchor-id="step-2-bridge-function-hw-x-y의-정의">Step 2: Bridge Function <img src="https://latex.codecogs.com/png.latex?h(w,%20x,%20y)">의 정의</h3>
+<p>우리는 다음 등식을 만족하는 어떤 함수 <img src="https://latex.codecogs.com/png.latex?h(w,%20x,%20y)">가 존재한다고 가정합니다. (이를 <strong>Outcome Bridge Function</strong>이라 부릅니다.)</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AE%5Bh(W,%20X,%20Y)%20%5Cmid%20Z,%20X%5D%20=%20E%5BY%20%5Cmid%20Z,%20X%5D%20%5Cquad%20%5Ctext%7B(%EA%B0%9C%EB%85%90%EC%A0%81%20%EC%A0%95%EC%9D%98)%7D%0A"></p>
+<p>더 엄밀하게는, <img src="https://latex.codecogs.com/png.latex?P(y%7Cu,%20x)">를 <img src="https://latex.codecogs.com/png.latex?P(w%7Cu)">들의 선형 결합(적분)으로 표현할 수 있게 해주는 함수 <img src="https://latex.codecogs.com/png.latex?h">를 찾습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP(y%20%7C%20u,%20x)%20=%20%5Cint%20h(w,%20x,%20y)%20P(w%20%7C%20u)%20dw%20%5Cquad%20%5Ccdots%20%5Cquad%20(1)%0A"></p>
+<p>이 식 (1)이 성립한다면, <img src="https://latex.codecogs.com/png.latex?Y">의 분포를 <img src="https://latex.codecogs.com/png.latex?U"> 대신 <img src="https://latex.codecogs.com/png.latex?W">를 이용해 표현할 수 있게 됩니다.</p>
+</section>
+<section id="step-3-관측-데이터로-h-구하기-the-inverse-step" class="level3">
+<h3 class="anchored" data-anchor-id="step-3-관측-데이터로-h-구하기-the-inverse-step">Step 3: 관측 데이터로 <img src="https://latex.codecogs.com/png.latex?h"> 구하기 (The “Inverse” Step)</h3>
+<p>이제 <img src="https://latex.codecogs.com/png.latex?h">를 관측 가능한 데이터만으로 구할 수 있는지 확인해 봅시다. <img src="https://latex.codecogs.com/png.latex?P(y%20%7C%20z,%20x)">를 전개합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP(y%20%7C%20z,%20x)%20=%20%5Cint%20P(y%20%7C%20u,%20z,%20x)%20P(u%20%7C%20z,%20x)%20du%0A"></p>
+<p>조건부 독립성(<img src="https://latex.codecogs.com/png.latex?Y%20%5Cperp%20Z%20%5Cmid%20U,%20X">)에 의해 <img src="https://latex.codecogs.com/png.latex?P(y%20%7C%20u,%20z,%20x)%20=%20P(y%20%7C%20u,%20x)">이므로:</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP(y%20%7C%20z,%20x)%20=%20%5Cint%20P(y%20%7C%20u,%20x)%20P(u%20%7C%20z,%20x)%20du%0A"></p>
+<p>여기에 식 (1)의 <img src="https://latex.codecogs.com/png.latex?P(y%7Cu,%20x)">를 대입합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP(y%20%7C%20z,%20x)%20=%20%5Cint%20%5Cleft%5B%20%5Cint%20h(w,%20x,%20y)%20P(w%20%7C%20u)%20dw%20%5Cright%5D%20P(u%20%7C%20z,%20x)%20du%0A"></p>
+<p>적분 순서를 변경(Fubini’s Theorem)합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP(y%20%7C%20z,%20x)%20=%20%5Cint%20h(w,%20x,%20y)%20%5Cunderbrace%7B%5Cleft%5B%20%5Cint%20P(w%20%7C%20u)%20P(u%20%7C%20z,%20x)%20du%20%5Cright%5D%7D_%7B=%20P(w%20%7C%20z,%20x)%7D%20dw%0A"></p>
+<p>따라서 다음의 중요한 관계식을 얻습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP(y%20%7C%20z,%20x)%20=%20%5Cint%20h(w,%20x,%20y)%20P(w%20%7C%20z,%20x)%20dw%20%5Cquad%20%5Ccdots%20%5Cquad%20(2)%0A"></p>
+<p><strong>의미:</strong> 식 (2)의 모든 항(<img src="https://latex.codecogs.com/png.latex?P(y%7Cz,%20x)">, <img src="https://latex.codecogs.com/png.latex?P(w%7Cz,%20x)">)은 <strong>데이터에서 추정 가능</strong>합니다. 따라서 이 적분 방정식을 풀면 미지수 함수 <img src="https://latex.codecogs.com/png.latex?h(w,%20x,%20y)">를 구해낼 수 있습니다.</p>
+</section>
+<section id="step-4-causal-effect-p_xy-도출" class="level3">
+<h3 class="anchored" data-anchor-id="step-4-causal-effect-p_xy-도출">Step 4: Causal Effect (<img src="https://latex.codecogs.com/png.latex?P_x(y)">) 도출</h3>
+<p>이제 최종 목표인 <img src="https://latex.codecogs.com/png.latex?P(y%20%7C%20do(x))">를 구해봅시다. 정의에 따라:</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP_x(y)%20=%20%5Cint%20P(y%20%7C%20u,%20x)%20P(u)%20du%0A"></p>
+<p>다시 식 (1)을 대입합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP_x(y)%20=%20%5Cint%20%5Cleft%5B%20%5Cint%20h(w,%20x,%20y)%20P(w%20%7C%20u)%20dw%20%5Cright%5D%20P(u)%20du%0A"></p>
+<p>적분 순서를 변경합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP_x(y)%20=%20%5Cint%20h(w,%20x,%20y)%20%5Cunderbrace%7B%5Cleft%5B%20%5Cint%20P(w%20%7C%20u)%20P(u)%20du%20%5Cright%5D%7D_%7B=%20P(w)%7D%20dw%0A"></p>
+<p>최종적으로 우리는 다음의 <strong>식별 공식(Identification Formula)</strong>을 얻습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cboxed%7B%20P_x(y)%20=%20%5Cint%20h(w,%20x,%20y)%20P(w)%20dw%20%7D%0A"></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/lecture/LA04/part-02/images/continuous_case_derivation.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3: 연속형 변수(Continuous Case)에 대한 최종 식별 공식 유도 과정 요약. <img src="https://latex.codecogs.com/png.latex?h(w,%20x,%20y)">는 Bridge Function으로서 <img src="https://latex.codecogs.com/png.latex?P(y%7Cz,x)">와 <img src="https://latex.codecogs.com/png.latex?P(w%7Cz,x)">의 관계를 통해 식별되며, 이를 <img src="https://latex.codecogs.com/png.latex?P(W)">와 결합하여 인과 효과를 계산한다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+<section id="completeness-condition-수학적-가정" class="level1">
+<h1>5. Completeness Condition (수학적 가정)</h1>
+<p>위의 유도 과정에서 “적분 방정식을 풀어 <img src="https://latex.codecogs.com/png.latex?h">를 구할 수 있다”고 가정했습니다. 이것이 가능하려면 <strong>Completeness Condition</strong>이 충족되어야 합니다.</p>
+<p>강의 자료 8-9 페이지에서는 이를 다음과 같이 정의합니다.</p>
+<blockquote class="blockquote">
+<p><strong>Completeness Condition:</strong> 모든 제곱 적분 가능한 함수(square-integrable function) <img src="https://latex.codecogs.com/png.latex?g">와 임의의 <img src="https://latex.codecogs.com/png.latex?x">에 대하여, <img src="https://latex.codecogs.com/png.latex?E%5Bg(U)%20%5Cmid%20Z,%20x%5D%20=%200%20%5Ciff%20g(U)%20=%200%20%5Ctext%7B%20almost%20surely%7D"></p>
+</blockquote>
+<p><strong>직관적 해석:</strong> 이 조건은 <strong>“행렬의 역행렬이 존재한다(Invertibility)”</strong>는 개념을 무한 차원의 함수 공간으로 확장한 것입니다. 즉, <img src="https://latex.codecogs.com/png.latex?Z">의 변화가 <img src="https://latex.codecogs.com/png.latex?U">의 변화를 충분히 잘 설명할 수 있어야 합니다(Informationally rich). 만약 <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?U">와 너무 약하게 연결되어 있다면, 우리는 <img src="https://latex.codecogs.com/png.latex?U">의 정보를 복원할 수 없고 <img src="https://latex.codecogs.com/png.latex?h">를 유일하게 결정할 수 없습니다.</p>
+<hr>
+</section>
+<section id="summary" class="level1">
+<h1>6. Summary</h1>
+<p>Proximal Causal Inference의 Double Proxy 접근법은 <img src="https://latex.codecogs.com/png.latex?U">를 관측할 수 없는 상황에서 강력한 도구입니다.</p>
+<ol type="1">
+<li><strong>Setting:</strong> 두 개의 Proxy (<img src="https://latex.codecogs.com/png.latex?Z">: Treatment-inducing, <img src="https://latex.codecogs.com/png.latex?W">: Outcome-inducing)가 필요합니다.</li>
+<li><strong>Process:</strong>
+<ul>
+<li>관측 데이터(<img src="https://latex.codecogs.com/png.latex?X,%20Y,%20Z,%20W">)를 이용해 적분 방정식 <img src="https://latex.codecogs.com/png.latex?P(y%7Cz,%20x)%20=%20%5Cint%20h(w,%20x,%20y)%20P(w%7Cz,%20x)%20dw">를 풉니다.</li>
+<li>구해진 Bridge Function <img src="https://latex.codecogs.com/png.latex?h">와 <img src="https://latex.codecogs.com/png.latex?W">의 주변 분포 <img src="https://latex.codecogs.com/png.latex?P(W)">를 결합합니다.</li>
+</ul></li>
+<li><strong>Result:</strong> <img src="https://latex.codecogs.com/png.latex?P_x(y)%20=%20%5Cint%20h(w,%20x,%20y)%20P(w)%20dw">를 통해 인과 효과를 식별합니다.</li>
+</ol>
+<p>이 방법론은 도구변수(IV)의 강력한 대안이 될 수 있으며, 머신러닝 모델(예: Kernel Method, Neural Networks)을 사용하여 <img src="https://latex.codecogs.com/png.latex?h"> 함수를 추정하는 방향으로 연구가 확장되고 있습니다.</p>
+<hr>
+<section id="누락-방지-검증-체크리스트" class="level3">
+<h3 class="anchored" data-anchor-id="누락-방지-검증-체크리스트">누락 방지 검증 체크리스트</h3>
+<ul class="task-list">
+<li><label><input type="checkbox" checked=""><strong>DAG 구조 설명</strong>: Figure 1과 변수 정의(<img src="https://latex.codecogs.com/png.latex?Z,%20W,%20U,%20X,%20Y">) 포함 완료.</label></li>
+<li><label><input type="checkbox" checked=""><strong>독립성 가정</strong>: <img src="https://latex.codecogs.com/png.latex?W%20%5Cperp%20(Z,%20X)%7CU"> 및 <img src="https://latex.codecogs.com/png.latex?Z%20%5Cperp%20Y%7C(U,%20X)"> 명시 완료.</label></li>
+<li><label><input type="checkbox" checked=""><strong>Bridge Function 개념</strong>: Slide 10의 적분 방정식 형태(<img src="https://latex.codecogs.com/png.latex?h(w,%20x,%20y)">) 도입 완료.</label></li>
+<li><label><input type="checkbox" checked=""><strong>단계별 수식 유도</strong>:</label>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?P(y%7Cu,x)">를 <img src="https://latex.codecogs.com/png.latex?h">로 대체하는 가정 (Step 2)</li>
+<li>Fubini 정리를 이용한 적분 순서 변경 및 <img src="https://latex.codecogs.com/png.latex?P(w%7Cz,x)"> 도출 (Step 3)</li>
+<li>최종 <img src="https://latex.codecogs.com/png.latex?P_x(y)"> 식별 공식 유도 (Step 4)</li>
+</ul></li>
+<li><label><input type="checkbox" checked=""><strong>Completeness Condition</strong>: Slide 8/9의 수학적 정의(<img src="https://latex.codecogs.com/png.latex?E%5Bg(u)%7Cz,x%5D=0%20%5Ciff%20g=0">) 및 직관적 의미 설명 완료.</label></li>
+<li><label><input type="checkbox" checked=""><strong>시각 자료 활용</strong>: 강의 자료의 핵심 다이어그램(DAG, Derivation Flow, Formula)에 대한 Markdown 이미지 태그 및 상세 캡션 포함 완료.</label></li>
+</ul>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Causal Inference</category>
+  <category>Introduction to Causal Inference</category>
+  <guid>https://shsha0110.github.io/posts/lecture/LA04/part-02/</guid>
+  <pubDate>Fri, 06 Feb 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
   <title>[Paper Review] Doubly Robust Estimation of Policy-Relevant Causal Effects Under Interference</title>
   <dc:creator>유성현 </dc:creator>
   <link>https://shsha0110.github.io/posts/paper/Doubly robust estimation of policy-relevant causal effects under interference/</link>
@@ -10519,548 +10864,6 @@ SDID       | 2.6393     | 2.7111</code></pre>
  ]]></description>
   <category>Causal Inference</category>
   <guid>https://shsha0110.github.io/posts/lecture/L15A/Staggered-DiD/</guid>
-  <pubDate>Sat, 24 Jan 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Causal Inference] 17. Causal Data Science (Part 1)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/lecture/L17/part-01/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-all-data-is-not-created-equal" class="level1">
-<h1>1. Introduction: All Data is Not Created Equal</h1>
-<ul>
-<li><p>현대의 데이터 과학(Data Science)은 수많은 데이터를 다루지만, 이 데이터들이 모두 동일한 가치를 지니거나 같은 방식으로 생성된 것은 아닙니다.</p></li>
-<li><p><strong>“All data is not created equal”</strong>이라는 명제는 Causal Data Science의 가장 핵심적인 출발점입니다.</p></li>
-<li><p>우리가 현실에서 마주하는 데이터는 거의 예외 없이 다음과 같은 문제점들을 안고 있습니다:</p>
-<ul>
-<li><ol type="1">
-<li><strong>상이한 실험 조건 (Different Experimental Conditions):</strong> 관찰 데이터(Observational)인가, 실험 데이터(Experimental)인가?</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>상이한 모집단 (Different Underlying Populations):</strong> 데이터가 수집된 집단이 우리가 알고자 하는 대상과 같은가?</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><strong>비무작위 표본 추출 (Non-random Sampling):</strong> 샘플링 과정에서 편향(Bias)이 발생했는가?</li>
-</ol></li>
-<li><ol start="4" type="1">
-<li><strong>비무작위 처치 할당 (Non-random Treatment Assignment):</strong> 처치(Treatment)가 무작위로 배정되었는가, 아니면 선택 편향이 있는가?</li>
-</ol></li>
-<li><ol start="5" type="1">
-<li><strong>측정되지 않은 변수 (Unmeasured Variables):</strong> 인과 관계를 파악하는 데 필요한 변수가 누락되었는가?</li>
-</ol></li>
-</ul></li>
-<li><p>이러한 문제들로 인해 수집된 데이터는 “지저분(messy)”하며, 우리가 추론하고자 하는 <strong>Target</strong>과 완벽하게 일치하는 경우는 매우 드뭅니다.</p></li>
-<li><p><strong>Causal Data Science</strong>의 목표는 이러한 이질적인(Heterogeneous) 데이터셋들을 결합하여 과학적이고 원칙적인(principled) 방법으로 인과 추론을 수행하는 것입니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="motivation-why-causal-data-science" class="level1">
-<h1>2. Motivation: Why Causal Data Science?</h1>
-<ul>
-<li>왜 우리는 단순히 “빅데이터”를 모으는 것을 넘어, 데이터의 생성 과정을 고민해야 할까요? 아래 세 가지 주요 사례가 그 동기를 보여줍니다.</li>
-</ul>
-<section id="genetics-transportability" class="level2">
-<h2 class="anchored" data-anchor-id="genetics-transportability">2.1. Genetics (Transportability)</h2>
-<ul>
-<li>쥐(Rats)를 대상으로 한 실험 연구에서 특정 물질이 발암성(Carcinogenic)이라는 결과가 나왔다고 가정해 봅시다.</li>
-<li>우리의 질문은 다음과 같습니다.
-<ul>
-<li><strong>“이 결과가 인간에게도 그대로 적용될 것인가?”</strong></li>
-</ul></li>
-<li>이는 동물 모델에서 얻은 지식을 인간이라는 다른 모집단으로 옮길 수 있는지(Transportability)의 문제입니다.</li>
-</ul>
-</section>
-<section id="advertisement-transfer-learning" class="level2">
-<h2 class="anchored" data-anchor-id="advertisement-transfer-learning">2.2. Advertisement (Transfer Learning)</h2>
-<ul>
-<li>어떤 회사에서 ’제품 A’의 판매량을 높이기 위해 다양한 광고 전략의 효과를 분석했습니다. 이제 새로운 ’제품 B’를 출시하려고 합니다.
-<ul>
-<li><strong>“제품 A에서 얻은 데이터를 제품 B의 광고 전략 수립에 활용할 수 있는가?”</strong></li>
-</ul></li>
-<li>이는 기존 도메인의 지식을 새로운 도메인으로 전이(Transfer)하는 문제입니다.</li>
-</ul>
-</section>
-<section id="robotics-domain-adaptation" class="level2">
-<h2 class="anchored" data-anchor-id="robotics-domain-adaptation">2.3. Robotics (Domain Adaptation)</h2>
-<ul>
-<li>캘리포니아 사막에서 암석을 채굴하도록 훈련된 화성 탐사 로봇(Rover)이 있습니다.
-<ul>
-<li><strong>“지구에서 학습한 내용을 바탕으로, 화성에서의 비용 소모적인 탐색을 최소화할 수 있는가?”</strong></li>
-</ul></li>
-<li>환경이 급격히 변화했을 때, 에이전트가 어떻게 적응해야 하는지에 대한 문제입니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="heterogeneous-datasets-formalizing-the-messiness" class="level1">
-<h1>3. Heterogeneous Datasets: Formalizing the Messiness</h1>
-<ul>
-<li>데이터가 지저분하다는 것은 직관적이지만, 이를 수학적으로 다루기 위해서는 형식이 필요합니다.</li>
-<li>우리는 데이터를 다음과 같은 속성들의 집합으로 분류할 수 있습니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/lecture/L17/part-01/images/heterogeneous_datasets_table.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: 이질적인 데이터셋들의 구조화. Target은 우리가 알고자 하는 인과 효과 <img src="https://latex.codecogs.com/png.latex?Q=P%5E*(y%7Cdo(x))">이다. 반면 우리가 가진 데이터들(<img src="https://latex.codecogs.com/png.latex?d_1,%20d_2,%20%5Cdots">)은 서로 다른 지역(Population), 수집 방식(Obs/Exp), 표본 추출 방식(Sampling), 측정 변수(Measured)를 가진다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>위 그림(Figure 1)은 다양한 데이터셋(<img src="https://latex.codecogs.com/png.latex?d_1,%20d_2,%20%5Cdots">)이 어떻게 다른지를 보여줍니다.</li>
-<li><strong>Target (<img src="https://latex.codecogs.com/png.latex?Q">):</strong> 우리의 목표는 <img src="https://latex.codecogs.com/png.latex?P%5E*(y%7Cdo(x))">를 알아내는 것입니다.</li>
-<li><strong>Source Data:</strong>
-<ul>
-<li><strong>Population:</strong> LA, NY, Seoul, Boston 등 모집단이 다를 수 있습니다.</li>
-<li><strong>Regime:</strong> 관찰(Observational) 데이터일 수도, 무작위 대조군 실험(RCT) 데이터일 수도 있습니다.</li>
-<li><strong>Sampling:</strong> 나이(Age)나 사회경제적 지위(SES)에 따라 선택적으로 추출되었을 수 있습니다.</li>
-<li><strong>Measurement:</strong> 어떤 데이터셋은 변수 <img src="https://latex.codecogs.com/png.latex?W">를 포함하지만, 다른 데이터셋은 포함하지 않을 수 있습니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="the-big-picture-in-causal-inference" class="level1">
-<h1>4. The “Big Picture” in Causal Inference</h1>
-<ul>
-<li>전통적인 인과 추론(Classic Causal Inference)과 Causal Data Science가 바라보는 관점의 차이를 이해해야 합니다.</li>
-</ul>
-<section id="classic-causal-inference-engine" class="level2">
-<h2 class="anchored" data-anchor-id="classic-causal-inference-engine">4.1. Classic Causal Inference Engine</h2>
-<ul>
-<li>전통적인 접근법(예: Pearl의 프레임워크)은 단일 모집단 내에서의 식별(Identifiability) 문제에 집중했습니다.
-<ul>
-<li><ol type="1">
-<li><strong>Query:</strong> <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))"></li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>Causal Diagram (Knowledge):</strong> 변수들 간의 인과 구조 (DAG).</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><strong>Data:</strong> 관찰된 데이터 분포 <img src="https://latex.codecogs.com/png.latex?P(V)">.</li>
-</ol></li>
-<li><ol start="4" type="1">
-<li><strong>Engine:</strong> 주어진 다이어그램에서 데이터만으로 쿼리를 계산할 수 있는지 판별(Yes/No)하고, 가능하다면 추정식(Estimand)을 도출.</li>
-</ol></li>
-</ul></li>
-</ul>
-</section>
-<section id="causal-data-science-framework" class="level2">
-<h2 class="anchored" data-anchor-id="causal-data-science-framework">4.2. Causal Data Science Framework</h2>
-<ul>
-<li>하지만 현실은 더 복잡합니다.</li>
-<li>우리가 목표로 하는 <strong>Target Population (<img src="https://latex.codecogs.com/png.latex?%5CPi%5E*">)</strong>과 데이터가 수집되는 <strong>Source Populations (a, b, c, …)</strong>이 다르기 때문입니다 [cite: 104-135].</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/lecture/L17/part-01/images/big_picture_graphs.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: Causal Data Science의 전체 그림. 중앙의 Target Population(US)에 대한 인과 효과를 추정하고 싶지만, 가용 데이터는 구조적으로 상이한 여러 지역(NY, LA, Boston, Texas 등)에서 수집되었다. 각 지역은 Causal Graph 상에서 화살표가 추가되거나(Selection Bias), 노드가 회색으로 처리되는(Missingness) 등의 구조적 차이를 보인다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>위 그림(Figure 2)에서 볼 수 있듯이, 각 소스 데이터는 구조적 차이를 가집니다.
-<ul>
-<li><strong>Target (US):</strong> <img src="https://latex.codecogs.com/png.latex?X%20%5Crightarrow%20W%20%5Crightarrow%20Y">와 같은 기본 구조.</li>
-<li><strong>NY:</strong> <img src="https://latex.codecogs.com/png.latex?W">가 측정되지 않음 (Grey Node).</li>
-<li><strong>LA:</strong> <img src="https://latex.codecogs.com/png.latex?Z">가 선택 편향의 원인이 됨 (Selection Node <img src="https://latex.codecogs.com/png.latex?S">의 개입).</li>
-<li><strong>Utah:</strong> <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?X">에 영향을 주지 않는 실험적 환경(Randomized).</li>
-</ul></li>
-<li>Causal Data Science의 목표는 이러한 <strong>Multiple, Heterogeneous Datasets</strong>를 융합(Fusion)하여 <strong>Automated Scientist</strong>처럼 타겟 질의에 답하는 것입니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="dimensions-and-tasks-of-causal-data-science" class="level1">
-<h1>5. Dimensions and Tasks of Causal Data Science</h1>
-<ul>
-<li>이질적인 데이터셋을 통합적으로 다루기 위해, 데이터 수집 조건을 4가지 차원(Dimensions)의 튜플(Tuple)로 정의합니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7BData%20Collection%20Tuple:%20%7D%20(d_1,%20d_2,%20d_3,%20d_4)%0A">
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?d_1">: Population (모집단)</li>
-<li><img src="https://latex.codecogs.com/png.latex?d_2">: Regime (관찰 vs 실험)</li>
-<li><img src="https://latex.codecogs.com/png.latex?d_3">: Sampling (표본 추출 기전)</li>
-<li><img src="https://latex.codecogs.com/png.latex?d_4">: Measurement (측정된 변수 집합)</li>
-</ul></li>
-<li>이 튜플의 변화는 우리가 해결해야 할 <strong>데이터 과학의 핵심 과제</strong>들과 1:1로 대응됩니다.</li>
-</ul>
-<section id="task-1-causal-inference-from-observational-studies" class="level2">
-<h2 class="anchored" data-anchor-id="task-1-causal-inference-from-observational-studies">Task 1: Causal Inference (from Observational Studies)</h2>
-<ul>
-<li><strong>Transition:</strong> <img src="https://latex.codecogs.com/png.latex?(d_1,%20%5Ctext%7BObs%7D,%20d_3,%20d_4)%20%5Clongrightarrow%20(d_1,%20do(x),%20d_3,%20d_4)"></li>
-<li><strong>Description:</strong> 가장 고전적인 인과 추론의 영역입니다. 관찰 데이터(<img src="https://latex.codecogs.com/png.latex?P(y%7Cx)">)로부터 실험적 결론(<img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">)을 도출합니다. 교란 요인(Confounding Bias)을 통제하는 것이 핵심입니다.</li>
-</ul>
-</section>
-<section id="task-2-experimental-inference-generalized-ivs" class="level2">
-<h2 class="anchored" data-anchor-id="task-2-experimental-inference-generalized-ivs">Task 2: Experimental Inference (Generalized IVs)</h2>
-<ul>
-<li><strong>Transition:</strong> <img src="https://latex.codecogs.com/png.latex?(d_1,%20do(z),%20d_3,%20d_4)%20%5Clongrightarrow%20(d_1,%20do(x),%20d_3,%20d_4)"></li>
-<li><strong>Description:</strong> 우리가 원하는 것은 <img src="https://latex.codecogs.com/png.latex?X">에 대한 개입(<img src="https://latex.codecogs.com/png.latex?do(x)">)의 효과인데, 실제 데이터는 도구 변수(Instrumental Variable, <img src="https://latex.codecogs.com/png.latex?Z">)에 대한 개입(<img src="https://latex.codecogs.com/png.latex?do(z)">)만 있는 경우입니다. 불완전한 순응(Imperfect Compliance) 문제를 다룹니다.</li>
-</ul>
-</section>
-<section id="task-3-sampling-selection-bias" class="level2">
-<h2 class="anchored" data-anchor-id="task-3-sampling-selection-bias">Task 3: Sampling Selection Bias</h2>
-<ul>
-<li><strong>Transition:</strong> <img src="https://latex.codecogs.com/png.latex?(d_1,%20d_2,%20%5Ctext%7BSelect%7D(Age),%20d_4)%20%5Clongrightarrow%20(d_1,%20d_2,%20%5C%7B%5C%7D,%20d_4)"></li>
-<li><strong>Description:</strong> 데이터가 특정 조건(예: 나이, 소득)에 따라 편향되게 수집되었을 때, 이를 전체 모집단(Random Sample)의 분포로 복원하는 문제입니다.</li>
-</ul>
-</section>
-<section id="task-4-transportability-external-validity" class="level2">
-<h2 class="anchored" data-anchor-id="task-4-transportability-external-validity">Task 4: Transportability (External Validity)</h2>
-<ul>
-<li><strong>Transition:</strong> <img src="https://latex.codecogs.com/png.latex?(%5Ctext%7BBonobos%7D,%20d_2,%20d_3,%20d_4)%20%5Clongrightarrow%20(%5Ctext%7BHumans%7D,%20d_2,%20d_3,%20d_4)"></li>
-<li><strong>Description:</strong> 소스 모집단(예: 보노보 원숭이, LA)에서 얻은 지식을 타겟 모집단(예: 인간, US 전체)으로 이송(Transport)하는 문제입니다. 환경적 조건의 차이를 극복해야 합니다.</li>
-</ul>
-</section>
-<section id="summary-of-dimensions" class="level2">
-<h2 class="anchored" data-anchor-id="summary-of-dimensions">Summary of Dimensions</h2>
-<table class="caption-top table">
-<thead>
-<tr class="header">
-<th style="text-align: left;">Dimension</th>
-<th style="text-align: left;">Problem Domain</th>
-<th style="text-align: left;">Key Challenge</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;"><strong>1. Experimental Cond.</strong></td>
-<td style="text-align: left;">Causal Identification</td>
-<td style="text-align: left;">Confounding Bias</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"><strong>2. Environmental Cond.</strong></td>
-<td style="text-align: left;">Transportability</td>
-<td style="text-align: left;">External Validity</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;"><strong>3. Sampling Cond.</strong></td>
-<td style="text-align: left;">Selection Bias</td>
-<td style="text-align: left;">Sample Selection</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"><strong>4. Responding Cond.</strong></td>
-<td style="text-align: left;">Missing Data</td>
-<td style="text-align: left;">Recovering from Missingness</td>
-</tr>
-</tbody>
-</table>
-<ul>
-<li>과거의 문헌들은 이 문제들을 각각 고립된 상태에서 특수한 모수적(parametric) 가정하에 다루었습니다.</li>
-<li>하지만 <strong>Causal Data Science</strong>는 이 4가지 차원이 현실에서 복합적으로 나타난다는 점을 인식하고, 이를 통합적으로 해결하기 위한 일반화된 알고리즘과 조건을 연구합니다.</li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Causal Inference</category>
-  <guid>https://shsha0110.github.io/posts/lecture/L17/part-01/</guid>
-  <pubDate>Sat, 24 Jan 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Causal Inference] 17. Causal Data Science (Part 2)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/lecture/L17/part-02/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="overview-the-challenge-of-experimental-conditions" class="level1">
-<h1>Overview: The Challenge of Experimental Conditions</h1>
-<ul>
-<li><p>이전 포스트에서는 Causal Data Science가 다루는 4가지 차원(Dimensions)에 대해 개괄적으로 살펴보았습니다.</p></li>
-<li><p>이번 포스트에서는 그 첫 번째이자 가장 기초가 되는 문제인 <strong>Experimental Conditions</strong>와 <strong>General Identifiability (g-ID)</strong>에 대해 깊이 있게 다룹니다.</p></li>
-<li><p>우리가 <img src="https://latex.codecogs.com/png.latex?do(x)">에 대한 인과 효과 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">를 알고 싶을 때, 이상적인 상황은 <img src="https://latex.codecogs.com/png.latex?X">에 대한 무작위 대조군 실험(RCT) 데이터가 있는 것입니다.</p></li>
-<li><p>하지만 현실에서는 다음과 같은 제약이 따릅니다:</p>
-<ul>
-<li><ol type="1">
-<li><strong>윤리적/비용적 문제:</strong> <img src="https://latex.codecogs.com/png.latex?X">(예: 흡연, 유해 물질 노출)를 직접 실험할 수 없음.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>대리 실험(Surrogate Experiments):</strong> <img src="https://latex.codecogs.com/png.latex?X"> 대신 <img src="https://latex.codecogs.com/png.latex?Z">(예: 식이요법, 보조 약물)에 대한 실험 데이터만 존재함.</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><strong>이질적 데이터의 결합:</strong> 여러 개의 서로 다른 실험 결과(<img src="https://latex.codecogs.com/png.latex?do(x_1),%20do(x_2)">)를 결합하여 새로운 개입(<img src="https://latex.codecogs.com/png.latex?do(x_1,%20x_2)">)의 효과를 추정해야 함.</li>
-</ol></li>
-</ul></li>
-<li><p>이 문제는 <strong>“우리가 가진 다양한 실험 및 관찰 데이터(<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BP%7D">)를 활용하여, 타겟 질의(<img src="https://latex.codecogs.com/png.latex?Q">)를 식별할 수 있는가?”</strong>라는 <strong>General Identifiability</strong> 문제로 귀결됩니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="z-id-experimental-identifiability" class="level1">
-<h1>2. z-ID: Experimental Identifiability</h1>
-<section id="motivation-diet-cholesterol-and-heart-attack" class="level2">
-<h2 class="anchored" data-anchor-id="motivation-diet-cholesterol-and-heart-attack">2.1. Motivation: Diet, Cholesterol, and Heart Attack</h2>
-<ul>
-<li>가장 단순한 형태의 대리 실험 문제를 살펴보겠습니다.</li>
-<li>우리의 목표는 콜레스테롤 수치(<img src="https://latex.codecogs.com/png.latex?X">)가 심장마비(<img src="https://latex.codecogs.com/png.latex?Y">)에 미치는 인과 효과 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">를 알아내는 것입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/lecture/L17/part-02/images/zid_motivation_graph.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: z-ID의 기본 모티베이션 그래프. Z(식이요법)는 X(콜레스테롤)에 영향을 주고, X는 Y(심장마비)에 영향을 준다. 점선 화살표는 측정되지 않은 교란 변수(Confounder)를 의미한다. Z와 Y 사이의 직접적인 화살표가 없다는 점(Exclusion Restriction)이 중요하다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><strong>Query:</strong> <img src="https://latex.codecogs.com/png.latex?Q%20=%20P(y%7Cdo(x))"></li>
-<li><strong>Problem:</strong> <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?Y"> 사이에 관측되지 않은 교란 요인(Confounder)이 존재하여(위 그림의 <img src="https://latex.codecogs.com/png.latex?X%20%5Cleftrightarrow%20Y"> 점선), 관찰 데이터 <img src="https://latex.codecogs.com/png.latex?P(x,y,z)">만으로는 <img src="https://latex.codecogs.com/png.latex?Q">를 식별할 수 없습니다.</li>
-<li><strong>Available Data:</strong>
-<ul>
-<li>Observational: <img src="https://latex.codecogs.com/png.latex?P(x,y,z)"></li>
-<li>Experimental (Surrogate): <img src="https://latex.codecogs.com/png.latex?P(x,y%7Cdo(z))"> — 식이요법(<img src="https://latex.codecogs.com/png.latex?Z">)은 실험 가능함.</li>
-</ul></li>
-<li>이 경우, <img src="https://latex.codecogs.com/png.latex?Z">에 대한 실험 데이터를 사용하여 <img src="https://latex.codecogs.com/png.latex?X">의 효과를 식별할 수 있을까요? 이를 <strong>z-ID</strong> 문제라고 합니다.</li>
-</ul>
-</section>
-<section id="instrumental-variable-formula-derived-from-experiments" class="level2">
-<h2 class="anchored" data-anchor-id="instrumental-variable-formula-derived-from-experiments">2.2. Instrumental Variable Formula derived from Experiments</h2>
-<p>만약 <img src="https://latex.codecogs.com/png.latex?Z">가 <img src="https://latex.codecogs.com/png.latex?X">를 통해서만 <img src="https://latex.codecogs.com/png.latex?Y">에 영향을 미친다면(즉, <img src="https://latex.codecogs.com/png.latex?Z%20%5Cto%20Y"> 직접 경로가 없고, <img src="https://latex.codecogs.com/png.latex?Z">와 <img src="https://latex.codecogs.com/png.latex?Y"> 사이의 교란이 없다면), 우리는 다음 식을 유도할 수 있습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AP(y%7Cdo(x))%20=%20%5Cfrac%7BP(x,y%7Cdo(z))%7D%7BP(x%7Cdo(z))%7D%20=%20P(y%7Cx,%20do(z))%0A"></p>
-<section id="derivation" class="level3">
-<h3 class="anchored" data-anchor-id="derivation">Derivation</h3>
-<ul>
-<li>이 식은 Do-Calculus 규칙을 적용하여 단계적으로 유도할 수 있습니다.</li>
-<li>핵심은 <img src="https://latex.codecogs.com/png.latex?do(x)">라는 가상의 개입을 <img src="https://latex.codecogs.com/png.latex?do(z)">라는 실제 가능한 실험으로 변환하는 것입니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0AP(y%7Cdo(x))%20%5Cxrightarrow%7B%5Ctext%7BStep%201%7D%7D%20P(y%7Cdo(x),%20do(z))%20%5Cxrightarrow%7B%5Ctext%7BStep%202%7D%7D%20P(y%7Cx,%20do(z))%0A"></p>
-<section id="step-1-배제-제약-exclusion-restriction-적용" class="level4">
-<h4 class="anchored" data-anchor-id="step-1-배제-제약-exclusion-restriction-적용">Step 1: 배제 제약 (Exclusion Restriction) 적용</h4>
-<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))%20=%20P(y%7Cdo(x),%20do(z))"></p>
-<ul>
-<li><strong>논리:</strong> 도구변수의 핵심 가정에 따르면 <img src="https://latex.codecogs.com/png.latex?Z">는 오직 <img src="https://latex.codecogs.com/png.latex?X">를 통해서만 <img src="https://latex.codecogs.com/png.latex?Y">에 영향을 줍니다.</li>
-<li><strong>해석:</strong> 이미 <img src="https://latex.codecogs.com/png.latex?X">를 <img src="https://latex.codecogs.com/png.latex?do(x)">로 고정하여 <img src="https://latex.codecogs.com/png.latex?Y">에 대한 <img src="https://latex.codecogs.com/png.latex?X">의 영향력을 통제하고 있다면, <img src="https://latex.codecogs.com/png.latex?Z">를 추가로 <img src="https://latex.codecogs.com/png.latex?do(z)">로 고정하더라도 <img src="https://latex.codecogs.com/png.latex?Y">의 분포에는 아무런 변화가 없습니다. (<img src="https://latex.codecogs.com/png.latex?Z%20%5Cto%20Y"> 직접 경로 부재)</li>
-</ul>
-</section>
-<section id="step-2-관측과-개입의-교환-rule-2" class="level4">
-<h4 class="anchored" data-anchor-id="step-2-관측과-개입의-교환-rule-2">Step 2: 관측과 개입의 교환 (Rule 2)</h4>
-<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x),%20do(z))%20=%20P(y%7Cx,%20do(z))"></p>
-<ul>
-<li><strong>논리:</strong> <img src="https://latex.codecogs.com/png.latex?do(z)">가 수행된 실험적 환경에서는 <img src="https://latex.codecogs.com/png.latex?Z">가 무작위로 할당되므로, <img src="https://latex.codecogs.com/png.latex?Z">로 인해 <img src="https://latex.codecogs.com/png.latex?X">와 <img src="https://latex.codecogs.com/png.latex?Y"> 사이의 교란(confounding) 경로가 차단됩니다.</li>
-<li><strong>해석:</strong> 교란 요인이 없는 환경(<img src="https://latex.codecogs.com/png.latex?do(z)">) 하에서는, <img src="https://latex.codecogs.com/png.latex?X">를 강제로 고정(<img src="https://latex.codecogs.com/png.latex?do(x)">)했을 때의 결과나, 자연스럽게 <img src="https://latex.codecogs.com/png.latex?X=x">가 된 것을 관측했을 때의 결과가 동일합니다. 즉, <img src="https://latex.codecogs.com/png.latex?do(x)">를 조건부 확률 <img src="https://latex.codecogs.com/png.latex?x">로 바꿀 수 있습니다.</li>
-</ul>
-</section>
-<section id="step-3-조건부-확률-정의-bayes-rule" class="level4">
-<h4 class="anchored" data-anchor-id="step-3-조건부-확률-정의-bayes-rule">Step 3: 조건부 확률 정의 (Bayes’ Rule)</h4>
-<ul>
-<li>최종적으로 조건부 확률의 정의에 따라 우변을 다시 씁니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?P(y%7Cx,%20do(z))%20=%20%5Cfrac%7BP(x,y%7Cdo(z))%7D%7BP(x%7Cdo(z))%7D"></p>
-<ul>
-<li>이로써 우리가 실험 데이터(<img src="https://latex.codecogs.com/png.latex?do(z)">)를 통해 <img src="https://latex.codecogs.com/png.latex?X">가 <img src="https://latex.codecogs.com/png.latex?Y">에 미치는 인과적 효과(<img src="https://latex.codecogs.com/png.latex?do(x)">)를 식별(Identify)할 수 있음이 증명됩니다.</li>
-</ul>
-</section>
-</section>
-</section>
-<section id="subtleties-of-z-id" class="level2">
-<h2 class="anchored" data-anchor-id="subtleties-of-z-id">2.3. Subtleties of z-ID</h2>
-<ul>
-<li>모든 경우에 대리 실험이 유효한 것은 아닙니다. 그래프 구조에 따라 식별 가능 여부가 달라집니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/lecture/L17/part-02/images/zid_vs_nonzid.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: z-ID 가능 그래프와 불가능 그래프의 비교. 상단 그래프들은 Z에 대한 실험으로 X의 효과를 식별할 수 있는 경우(z-ID)이고, 하단 그래프들은 식별 불가능한 경우(non-z-ID)이다. 핵심은 Z의 개입이 X와 Y 사이의 교란 요인을 통제하거나 우회할 수 있는지 여부이다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>위 그림에서 <strong>z-ID</strong>가 가능한 경우와 그렇지 않은 경우(non-z-ID)를 구분하는 것은, <img src="https://latex.codecogs.com/png.latex?Z">에 대한 개입이 <img src="https://latex.codecogs.com/png.latex?X%20%5Cto%20Y"> 관계를 교란하는 뒷문 경로(Back-door path)를 차단하거나, <img src="https://latex.codecogs.com/png.latex?X">의 변동을 충분히 설명할 수 있는지와 관련이 있습니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="advanced-derivation-combining-causal-mechanisms-z-id" class="level1">
-<h1>3. Advanced Derivation: Combining Causal Mechanisms (z-ID)</h1>
-<ul>
-<li>복잡한 인과 그래프에서 <img src="https://latex.codecogs.com/png.latex?P(%5Cmathbf%7BV%7D)">(관측 데이터)만으로는 식별 불가능한 효과를, <img src="https://latex.codecogs.com/png.latex?P(%5Cmathbf%7BV%7D%7Cdo(z))">(실험 데이터)를 통해 어떻게 계산해 낼 수 있는지 단계별로 유도합니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/lecture/L17/part-02/images/complex_zid_graph.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: z-ID 문제 상황. <img src="https://latex.codecogs.com/png.latex?Z%20%5Cto%20X%20%5Cto%20W%20%5Cto%20Y"> 경로 외에 점선으로 표시된 다양한 교란 요인(Confounder)들이 존재하여, 일반적인 Back-door criterion으로는 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">를 구할 수 없다.</figcaption>
-</figure>
-</div>
-<section id="problem-definition-goal" class="level2">
-<h2 class="anchored" data-anchor-id="problem-definition-goal">1. Problem Definition &amp; Goal</h2>
-<ul>
-<li><strong>Target:</strong> <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))"></li>
-<li><strong>Challenge:</strong> 그래프에 존재하는 많은 교란 경로(Bi-directed arcs) 때문에, 관측 데이터 <img src="https://latex.codecogs.com/png.latex?P(%5Cmathbf%7BV%7D)">만으로는 이 효과를 식별할 수 없습니다 (<strong>Non-identifiable from <img src="https://latex.codecogs.com/png.latex?P(%5Cmathbf%7BV%7D)"></strong>).</li>
-<li><strong>Solution:</strong> <img src="https://latex.codecogs.com/png.latex?Z">에 대한 실험 데이터, 즉 <img src="https://latex.codecogs.com/png.latex?P(%5Cmathbf%7BV%7D%7Cdo(z))">가 가용하다면(Available), 이를 활용해 타겟 효과를 계산할 수 있습니다.</li>
-</ul>
-</section>
-<section id="derivation-step-1-decomposition-c-component" class="level2">
-<h2 class="anchored" data-anchor-id="derivation-step-1-decomposition-c-component">2. Derivation Step 1: Decomposition (C-Component)</h2>
-<ul>
-<li>우선 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">를 중간 매개변수 <img src="https://latex.codecogs.com/png.latex?W">를 이용하여 두 개의 부분 문제(<img src="https://latex.codecogs.com/png.latex?Q%5BY%5D">와 <img src="https://latex.codecogs.com/png.latex?Q%5BW%5D">)로 분해합니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0AP(y%7Cdo(x))%20&amp;=%20%5Csum_%7Bw%7D%20P(y%7Cdo(x),%20w)%20P(w%7Cdo(x))%20%5Cquad%20%5Ctext%7B(Law%20of%20Total%20Probability)%7D%20%5C%5C%0A&amp;=%20%5Csum_%7Bw%7D%20P(y%7Cdo(x),%20do(w))%20P(w%7Cdo(x))%20%5Cquad%20%5Ctext%7B(Rule%202:%20Action/Observation%20Exchange%20of%20W)%7D%20%5C%5C%0A&amp;=%20%5Csum_%7Bw%7D%20%5Cunderbrace%7BP(y%7Cdo(w))%7D_%7BQ%5BY%5D%7D%20%5Cunderbrace%7BP(w%7Cdo(x))%7D_%7BQ%5BW%5D%7D%20%5Cquad%20%5Ctext%7B(Rule%203:%20Removing%20Action%20of%20%7D%20X%20%5Ctext%7B)%7D%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li><strong>해석:</strong> <img src="https://latex.codecogs.com/png.latex?X">가 <img src="https://latex.codecogs.com/png.latex?Y">에 미치는 영향은 <img src="https://latex.codecogs.com/png.latex?W">를 통하는 경로밖에 없으므로(<img src="https://latex.codecogs.com/png.latex?X%20%5Cto%20W%20%5Cto%20Y">), <img src="https://latex.codecogs.com/png.latex?Y">에 대해 <img src="https://latex.codecogs.com/png.latex?W">를 직접 조작(<img src="https://latex.codecogs.com/png.latex?do(w)">)한다면 <img src="https://latex.codecogs.com/png.latex?X">의 조작(<img src="https://latex.codecogs.com/png.latex?do(x)">) 여부는 <img src="https://latex.codecogs.com/png.latex?Y">에 영향을 주지 않습니다.</li>
-<li>이제 우리는 두 가지 항 <img src="https://latex.codecogs.com/png.latex?Q%5BY%5D">와 <img src="https://latex.codecogs.com/png.latex?Q%5BW%5D">를 각각 <img src="https://latex.codecogs.com/png.latex?P(%5Cmathbf%7BV%7D%7Cdo(z))">로 표현하면 됩니다.</li>
-</ul>
-</section>
-<section id="derivation-step-2-identification-from-pmathbfvdoz" class="level2">
-<h2 class="anchored" data-anchor-id="derivation-step-2-identification-from-pmathbfvdoz">3. Derivation Step 2: Identification from <img src="https://latex.codecogs.com/png.latex?P(%5Cmathbf%7BV%7D%7Cdo(z))"></h2>
-<ul>
-<li>이미지의 유도 과정을 따라 각 항을 실험 분포 <img src="https://latex.codecogs.com/png.latex?P(%5Ccdot%7Cdo(z))">로 변환합니다.</li>
-</ul>
-<section id="a.-identifying-qy-pydow" class="level3">
-<h3 class="anchored" data-anchor-id="a.-identifying-qy-pydow">A. Identifying <img src="https://latex.codecogs.com/png.latex?Q%5BY%5D%20=%20P(y%7Cdo(w))"></h3>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?Y">에 대한 <img src="https://latex.codecogs.com/png.latex?W">의 효과를 구하는 과정입니다. <img src="https://latex.codecogs.com/png.latex?W">와 <img src="https://latex.codecogs.com/png.latex?Y"> 사이에도 교란이 있으므로 <img src="https://latex.codecogs.com/png.latex?Z">를 도구로 사용합니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0AQ%5BY%5D%20&amp;=%20P(y%7Cdo(w))%20%5C%5C%0A&amp;=%20P(y%7Cdo(w,%20z))%20%5Cquad%20%5Ctext%7B(Rule%203:%20Adding%20Action%20of%20%7D%20Z%20%5Ctext%7B)%7D%20%5C%5C%0A&amp;=%20%5Csum_%7Bx%7D%20P(y%7Cdo(w,%20z),%20x)%20P(x%7Cdo(w,%20z))%20%5Cquad%20%5Ctext%7B(Law%20of%20Total%20Probability%20on%20%7D%20X%20%5Ctext%7B)%7D%20%5C%5C%0A&amp;=%20%5Csum_%7Bx%7D%20P(y%7Cdo(w,%20z),%20x)%20P(x%7Cdo(z))%20%5Cquad%20%5Ctext%7B(Rule%203:%20Removing%20Action%20of%20%7D%20W%20%5Ctext%7B)%7D%20%5C%5C%0A&amp;=%20%5Csum_%7Bx%7D%20%5Cunderbrace%7BP(y%7Cdo(z),%20w,%20x)%7D_%7B%5Ctext%7BAvailable%20in%20Data%7D%7D%20%5Cunderbrace%7BP(x%7Cdo(z))%7D_%7B%5Ctext%7BAvailable%20in%20Data%7D%7D%20%5Cquad%20%5Ctext%7B(Rule%202:%20Action/Observation%20Exchange%20of%20%7D%20W%20%5Ctext%7B)%7D%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li><strong>핵심:</strong> <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(z),%20w,%20x)">는 <img src="https://latex.codecogs.com/png.latex?do(z)"> 실험 데이터에서 관측 가능한 조건부 확률입니다. 즉, <img src="https://latex.codecogs.com/png.latex?do(w)">라는 가상의 개입을 관측값 <img src="https://latex.codecogs.com/png.latex?w">로 치환하는 데 성공했습니다.</li>
-</ul>
-</section>
-<section id="b.-identifying-qw-pwdox" class="level3">
-<h3 class="anchored" data-anchor-id="b.-identifying-qw-pwdox">B. Identifying <img src="https://latex.codecogs.com/png.latex?Q%5BW%5D%20=%20P(w%7Cdo(x))"></h3>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?X">가 <img src="https://latex.codecogs.com/png.latex?W">에 미치는 효과를 구하는 과정입니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0AQ%5BW%5D%20&amp;=%20P(w%7Cdo(x))%20%5C%5C%0A&amp;=%20P(w%7Cdo(x,%20z))%20%5Cquad%20%5Ctext%7B(Rule%203:%20Adding%20Action%20of%20%7D%20Z%20%5Ctext%7B)%7D%20%5C%5C%0A&amp;=%20%5Cunderbrace%7BP(w%7Cdo(z),%20x)%7D_%7B%5Ctext%7BAvailable%20in%20Data%7D%7D%20%5Cquad%20%5Ctext%7B(Rule%202:%20Action/Observation%20Exchange%20of%20%7D%20X%20%5Ctext%7B)%7D%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li><strong>핵심:</strong> <img src="https://latex.codecogs.com/png.latex?do(z)"> 환경에서는 <img src="https://latex.codecogs.com/png.latex?X">에서 <img src="https://latex.codecogs.com/png.latex?W">로 가는 경로의 교란이 해결되므로, <img src="https://latex.codecogs.com/png.latex?do(x)">를 관측값 <img src="https://latex.codecogs.com/png.latex?x">로 바꿀 수 있습니다.</li>
-</ul>
-</section>
-</section>
-<section id="final-formula" class="level2">
-<h2 class="anchored" data-anchor-id="final-formula">4. Final Formula</h2>
-<ul>
-<li>위의 두 결과를 결합하면 최종적으로 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x))">를 실험 데이터 <img src="https://latex.codecogs.com/png.latex?do(z)">만으로 계산하는 식(calculus)이 완성됩니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0AP(y%7Cdo(x))%20=%20%5Csum_%7Bw%7D%20%5Cleft%5B%20%5Cleft(%20%5Csum_%7Bx'%7D%20P(y%7Cdo(z),%20w,%20x')P(x'%7Cdo(z))%20%5Cright)%20%5Ctimes%20P(w%7Cdo(z),%20x)%20%5Cright%5D%0A"></p>
-<ul>
-<li><strong>결론:</strong> 이처럼 복잡한 인과 그래프에서도 문제를 더 작은 단위(C-component)로 쪼개고, 각 단위를 가용한 실험 데이터(<img src="https://latex.codecogs.com/png.latex?do(z)">)로 환원(Reduce)시킴으로써 인과 효과를 식별해 낼 수 있습니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="example-drug-drug-interactions-combining-experiments" class="level1">
-<h1>4. Example: Drug-Drug Interactions (Combining Experiments)</h1>
-<ul>
-<li>이 이론의 가장 강력한 응용 사례는 <strong>약물 상호작용(Drug-Drug Interaction)</strong> 분석입니다.</li>
-<li>개별 약물 실험 데이터만 있을 때, 두 약물을 동시에 처방했을 때의 효과를 예측할 수 있을까요?</li>
-</ul>
-<section id="problem-setup" class="level2">
-<h2 class="anchored" data-anchor-id="problem-setup">4.1. Problem Setup</h2>
-<ul>
-<li><strong>Variables:</strong>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?X_1">: 고혈압 치료제 (Anti-hypertensive drug)</li>
-<li><img src="https://latex.codecogs.com/png.latex?X_2">: 당뇨 치료제 (Anti-diabetic drug)</li>
-<li><img src="https://latex.codecogs.com/png.latex?B">: 혈압 (Blood pressure)</li>
-<li><img src="https://latex.codecogs.com/png.latex?Y">: 심혈관 질환 (CVD)</li>
-</ul></li>
-<li><strong>Data Sources:</strong>
-<ul>
-<li>Study 1: <img src="https://latex.codecogs.com/png.latex?X_1">에 대한 RCT <img src="https://latex.codecogs.com/png.latex?%5Crightarrow%20P(v%7Cdo(x_1))"></li>
-<li>Study 2: <img src="https://latex.codecogs.com/png.latex?X_2">에 대한 RCT <img src="https://latex.codecogs.com/png.latex?%5Crightarrow%20P(v%7Cdo(x_2))"></li>
-</ul></li>
-<li><strong>Target Query:</strong>
-<ul>
-<li>Joint Intervention: <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x_1,%20x_2))"></li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/lecture/L17/part-02/images/drug_interaction_graph.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 4: 약물 상호작용 인과 그래프. X1은 B에 영향을 주고, B는 Y에 영향을 준다. X2는 Y에 직접 영향을 준다. X1과 B, X2와 Y, X1와 X2 사이에는 교란 요인(점선)이 존재한다. 목표는 X1과 X2를 동시에 개입했을 때 Y의 분포를 구하는 것이다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="derivation-1" class="level2">
-<h2 class="anchored" data-anchor-id="derivation-1">4.2. Derivation</h2>
-<ul>
-<li>우리는 <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x_1,%20x_2))">를 구해야 합니다. 혈압 <img src="https://latex.codecogs.com/png.latex?B">가 <img src="https://latex.codecogs.com/png.latex?X_1">과 <img src="https://latex.codecogs.com/png.latex?Y"> 사이의 매개체 역할을 한다는 점에 착안하여 식을 전개합니다.</li>
-</ul>
-<ol type="1">
-<li><p><strong>Total Probability Theorem over B:</strong> <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x_1,%20x_2))%20=%20%5Csum_%7Bb%7D%20P(y%7Cdo(x_1,%20x_2),%20b)%20P(b%7Cdo(x_1,%20x_2))"></p></li>
-<li><p><strong>Factor 1: <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x_1,%20x_2),%20b)"></strong></p>
-<ul>
-<li>그래프에서 <img src="https://latex.codecogs.com/png.latex?X_1">은 <img src="https://latex.codecogs.com/png.latex?B">로 가는 화살표를 제외하면 <img src="https://latex.codecogs.com/png.latex?Y">에 직접 영향을 주지 않습니다(Block).</li>
-<li>따라서 <img src="https://latex.codecogs.com/png.latex?X_1">을 조건부에서 제거할 수 있습니다(Rule 3). <img src="https://latex.codecogs.com/png.latex?P(y%7Cdo(x_1,%20x_2),%20b)%20=%20P(y%7Cdo(x_2),%20b)"></li>
-<li>이 항은 <strong>Study 2 (<img src="https://latex.codecogs.com/png.latex?do(x_2)">)</strong> 데이터에서 <img src="https://latex.codecogs.com/png.latex?B">를 관측함으로써 얻을 수 있습니다 (<img src="https://latex.codecogs.com/png.latex?P_%7Bx_2%7D(y%7Cb)">).</li>
-</ul></li>
-<li><p><strong>Factor 2: <img src="https://latex.codecogs.com/png.latex?P(b%7Cdo(x_1,%20x_2))"></strong></p>
-<ul>
-<li>그래프에서 <img src="https://latex.codecogs.com/png.latex?X_2">는 <img src="https://latex.codecogs.com/png.latex?B">에 영향을 주지 않습니다 (<img src="https://latex.codecogs.com/png.latex?Y">에만 영향).</li>
-<li>따라서 <img src="https://latex.codecogs.com/png.latex?X_2">를 제거할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?P(b%7Cdo(x_1,%20x_2))%20=%20P(b%7Cdo(x_1))"></li>
-<li>이 항은 <strong>Study 1 (<img src="https://latex.codecogs.com/png.latex?do(x_1)">)</strong> 데이터에서 바로 얻을 수 있습니다 (<img src="https://latex.codecogs.com/png.latex?P_%7Bx_1%7D(b)">).</li>
-</ul></li>
-</ol>
-<section id="final-formula-1" class="level3">
-<h3 class="anchored" data-anchor-id="final-formula-1">4.3. Final Formula</h3>
-<p><img src="https://latex.codecogs.com/png.latex?%0AP(y%7Cdo(x_1,%20x_2))%20=%20%5Csum_%7Bb%7D%20P_%7Bx_1%7D(b)%20P_%7Bx_2%7D(y%7Cb)%0A"></p>
-<ul>
-<li>이 결과는 매우 강력합니다.</li>
-<li><strong>두 약물을 동시에 사용하는 실험을 한 번도 수행하지 않았음에도</strong>, 개별 약물 실험 데이터를 수학적으로 결합하여 그 효과를 정확히 예측할 수 있기 때문입니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-</section>
-<section id="algorithm-for-general-identifiability-g-id" class="level1">
-<h1>5. Algorithm for General Identifiability (g-ID)</h1>
-<ul>
-<li>위의 사례들을 일반화하면 <strong>General Identifiability (g-ID)</strong> 알고리즘을 만들 수 있습니다.</li>
-</ul>
-<section id="the-g-id-algorithm-flow" class="level2">
-<h2 class="anchored" data-anchor-id="the-g-id-algorithm-flow">The g-ID Algorithm Flow</h2>
-<ol type="1">
-<li><strong>Decomposition (분해):</strong>
-<ul>
-<li>주어진 쿼리 <img src="https://latex.codecogs.com/png.latex?Q%20=%20P_x(y)">를 Causal Graph의 구조(C-components)를 이용하여 더 작은 <strong>Factors (요인들)</strong>의 곱과 합(<img src="https://latex.codecogs.com/png.latex?%5Csum%20%5Cprod">)으로 분해합니다. <img src="https://latex.codecogs.com/png.latex?Q%20=%20%5Csum%20%5Cprod%20P_%7B%5Cbullet%7D(%5Cbullet)"></li>
-</ul></li>
-<li><strong>Identification (식별):</strong>
-<ul>
-<li>분해된 각 Factor가 가용한 데이터 소스 집합 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BP%7D%20=%20%5C%7B%20P(obs),%20P(do(z_1)),%20P(do(z_2)),%20%5Cdots%20%5C%7D"> 중 하나로부터 식별 가능한지 확인합니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/lecture/L17/part-02/images/gid_algorithm_flow.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 5: g-ID 알고리즘의 도식화. 쿼리(좌측)가 여러 Factor로 분해되고, 각 Factor가 우측의 가용 데이터 소스(P_z1, P_zm…) 중 하나와 매칭되어 식별되는 과정을 보여준다.</figcaption>
-</figure>
-</div></li>
-<li><strong>Conclusion:</strong>
-<ul>
-<li>만약 모든 Factor가 데이터 소스로부터 식별 가능하다면 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Identifiable</strong>.</li>
-<li>하나라도 식별 불가능한 Factor가 남는다면 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Fail</strong>.</li>
-</ul></li>
-</ol>
-</section>
-<section id="significance" class="level2">
-<h2 class="anchored" data-anchor-id="significance">Significance</h2>
-<ul>
-<li>이 알고리즘과 Do-calculus는 Experimental Identifiability 문제에 대해 <strong>Completeness(완전성)</strong>를 가집니다.</li>
-<li>즉, 이 알고리즘으로 식별할 수 없다면, 그 인과 효과는 주어진 데이터와 그래프 가정하에서는 이론적으로 식별이 불가능한 것입니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="conclusion" class="level1">
-<h1>6. Conclusion</h1>
-<ul>
-<li>이번 포스트에서는 Causal Data Science의 첫 번째 차원인 <strong>Experimental Conditions</strong>를 다루었습니다.
-<ul>
-<li><strong>z-ID:</strong> 직접 실험할 수 없는 변수의 효과를 대리 실험(<img src="https://latex.codecogs.com/png.latex?Z">)을 통해 식별하는 방법.</li>
-<li><strong>Data Fusion:</strong> 서로 다른 실험 데이터(<img src="https://latex.codecogs.com/png.latex?do(x_1),%20do(x_2)">)를 결합하여 새로운 인과 효과를 추론하는 메커니즘.</li>
-<li><strong>g-ID Algorithm:</strong> 이를 일반화하여 복잡한 쿼리를 분해하고 가용 데이터와 매핑하는 체계적인 방법론.</li>
-</ul></li>
-</ul>
-
-
-
-</section>
-
- ]]></description>
-  <category>Causal Inference</category>
-  <guid>https://shsha0110.github.io/posts/lecture/L17/part-02/</guid>
   <pubDate>Sat, 24 Jan 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>

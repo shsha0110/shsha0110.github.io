@@ -1,0 +1,203 @@
+---
+title: "[Causal Inference] Appendix 04. Proximal Causal Inference (Part 02)"
+description: "Double Proxy"
+author: "유성현"
+date: "2026-02-07"
+categories: [Causal Inference, Introduction to Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: 숨겨진 교란 요인을 어떻게 다룰 것인가?
+
+인과추론의 가장 큰 적은 **관측되지 않은 교란 요인(Unobserved Confounder, $U$)**입니다. $U$가 처치($X$)와 결과($Y$)에 모두 영향을 미칠 때, 단순한 회귀분석이나 성향점수 매칭(Propensity Score Matching)은 편향된 결과를 낳습니다.
+
+전통적인 해결책은 **도구변수(Instrumental Variable, IV)**를 사용하는 것입니다. 하지만 완벽한 도구변수(Exclusion Restriction을 만족하는 변수)를 찾는 것은 현실적으로 매우 어렵습니다.
+
+여기서 등장하는 것이 **Proximal Causal Inference**입니다. 완벽한 도구변수 대신, $U$에 대한 불완전한 정보(Proxy)를 담고 있는 두 가지 종류의 대리 변수(Proxy Variables)를 활용하여 인과 효과를 식별하는 방법론입니다.
+
+이 포스트에서는 첨부된 강의 자료(Appendix)를 바탕으로, **Double Proxy** 설정에서의 인과 효과 식별 공식을 수학적으로 엄밀하게 유도해 보겠습니다.
+
+---
+
+# 2. Problem Setting & DAG
+
+우리는 다음과 같은 인과 구조(DAG)를 가정합니다.
+
+![Figure 1: Double Proxy 구조의 DAG. $U$는 관측되지 않은 교란 요인이며, $X$는 처치, $Y$는 결과이다. $Z$와 $W$는 각각 $U$의 대리 변수(Proxy) 역할을 한다.](./images/proximal_dag.png)
+
+### 2.1 변수 정의
+* **$X$ (Treatment):** 원인 변수 (예: 교육 수준)
+* **$Y$ (Outcome):** 결과 변수 (예: 소득)
+* **$U$ (Unobserved Confounder):** 관측되지 않은 교란 요인 (예: 선천적 능력). $X$와 $Y$에 모두 영향을 줍니다.
+* **$Z$ (Treatment-Inducing Proxy):** $X$에 영향을 주지만 $Y$에는 직접적인 영향을 주지 않는 Proxy입니다. (IV와 유사한 역할)
+* **$W$ (Outcome-Inducing Proxy):** $Y$에 영향을 주거나 $Y$와 관련이 있지만, $X$에는 직접적인 영향을 주지 않는 Proxy입니다.
+
+### 2.2 구조적 가정 (Independence Assumptions)
+DAG에 따르면 다음과 같은 조건부 독립성이 성립합니다.
+
+1.  **$W \perp (Z, X) \mid U$**: $U$를 통제했을 때, $W$는 $Z$나 $X$와 독립입니다. 즉, $W$는 오직 $U$에 대한 정보만 담고 있으며, $X$나 $Z$로부터 직접적인 영향을 받지 않습니다.
+2.  **$Z \perp Y \mid (U, X)$**: $U$와 $X$를 통제했을 때, $Z$는 $Y$와 독립입니다. 즉, $Z$는 $Y$에 직접적인 경로가 없습니다 (Exclusion Restriction).
+
+---
+
+# 3. Identification Strategy: The Bridge Function Approach
+
+우리의 목표는 **$P(y|do(x))$**, 즉 $P_x(y)$를 식별하는 것입니다.
+Back-door criterion에 따르면 이상적인 공식은 다음과 같습니다.
+
+$$
+P_x(y) = \int P(y|x, u) P(u) du
+$$
+
+하지만 **$U$는 관측되지 않으므로** 이 식을 직접 계산할 수 없습니다. Proximal Causal Inference는 **Outcome Bridge Function ($h$)** 이라는 개념을 도입하여 이 문제를 해결합니다.
+
+## 3.1 핵심 아이디어 (Intuition)
+
+강의 자료의 시각적 흐름(Slide 3~6)은 행렬 연산 또는 선형 연산자(Linear Operator)의 관점에서 이를 설명합니다.
+
+![Figure 2: 확률 분포 간의 매핑 관계. $P(W|Z, x)$는 관측 가능한 데이터로 구성된 행렬이다. 이를 분해하고 역행렬을 취함으로써 $U$와 관련된 정보를 복원하는 과정을 도식화했다.](./images/derivation_flow_matrix.png)
+
+핵심은 관측 가능한 데이터 분포 $P(W|Z, x)$와 $P(y|Z, x)$를 연결하여, 관측 불가능한 $U$를 우회하는 **다리(Bridge)**를 놓는 것입니다.
+
+---
+
+# 4. Mathematical Derivation (Continuous Case)
+
+이제 강의 자료 10페이지에 제시된 **연속형 변수(Continuous Case)**에 대한 적분 방정식 유도 과정을 상세히 풀어보겠습니다.
+
+### Step 1: 관측 가능한 분포의 분해
+
+먼저, 데이터에서 관측 가능한 조건부 확률 $P(W | Z, x)$를 $U$를 매개로 분해해 봅시다. 전체 확률의 법칙과 $W \perp (Z, X) \mid U$ 가정을 사용합니다.
+
+$$
+P(w | z, x) = \int P(w | u, z, x) P(u | z, x) du = \int P(w | u) P(u | z, x) du
+$$
+
+이 식은 **Fredholm Integral Equation of the First Kind** 형태입니다. 좌변은 관측 가능하고, 우변의 커널들은 관측 불가능합니다.
+
+### Step 2: Bridge Function $h(w, x, y)$의 정의
+
+우리는 다음 등식을 만족하는 어떤 함수 $h(w, x, y)$가 존재한다고 가정합니다. (이를 **Outcome Bridge Function**이라 부릅니다.)
+
+$$
+E[h(W, X, Y) \mid Z, X] = E[Y \mid Z, X] \quad \text{(개념적 정의)}
+$$
+
+더 엄밀하게는, $P(y|u, x)$를 $P(w|u)$들의 선형 결합(적분)으로 표현할 수 있게 해주는 함수 $h$를 찾습니다.
+
+$$
+P(y | u, x) = \int h(w, x, y) P(w | u) dw \quad \cdots \quad (1)
+$$
+
+이 식 (1)이 성립한다면, $Y$의 분포를 $U$ 대신 $W$를 이용해 표현할 수 있게 됩니다.
+
+### Step 3: 관측 데이터로 $h$ 구하기 (The "Inverse" Step)
+
+이제 $h$를 관측 가능한 데이터만으로 구할 수 있는지 확인해 봅시다.
+$P(y | z, x)$를 전개합니다.
+
+$$
+P(y | z, x) = \int P(y | u, z, x) P(u | z, x) du
+$$
+
+조건부 독립성($Y \perp Z \mid U, X$)에 의해 $P(y | u, z, x) = P(y | u, x)$이므로:
+
+$$
+P(y | z, x) = \int P(y | u, x) P(u | z, x) du
+$$
+
+여기에 식 (1)의 $P(y|u, x)$를 대입합니다.
+
+$$
+P(y | z, x) = \int \left[ \int h(w, x, y) P(w | u) dw \right] P(u | z, x) du
+$$
+
+적분 순서를 변경(Fubini's Theorem)합니다.
+
+$$
+P(y | z, x) = \int h(w, x, y) \underbrace{\left[ \int P(w | u) P(u | z, x) du \right]}_{= P(w | z, x)} dw
+$$
+
+따라서 다음의 중요한 관계식을 얻습니다.
+
+$$
+P(y | z, x) = \int h(w, x, y) P(w | z, x) dw \quad \cdots \quad (2)
+$$
+
+**의미:** 식 (2)의 모든 항($P(y|z, x)$, $P(w|z, x)$)은 **데이터에서 추정 가능**합니다. 따라서 이 적분 방정식을 풀면 미지수 함수 $h(w, x, y)$를 구해낼 수 있습니다.
+
+### Step 4: Causal Effect ($P_x(y)$) 도출
+
+이제 최종 목표인 $P(y | do(x))$를 구해봅시다. 정의에 따라:
+
+$$
+P_x(y) = \int P(y | u, x) P(u) du
+$$
+
+다시 식 (1)을 대입합니다.
+
+$$
+P_x(y) = \int \left[ \int h(w, x, y) P(w | u) dw \right] P(u) du
+$$
+
+적분 순서를 변경합니다.
+
+$$
+P_x(y) = \int h(w, x, y) \underbrace{\left[ \int P(w | u) P(u) du \right]}_{= P(w)} dw
+$$
+
+최종적으로 우리는 다음의 **식별 공식(Identification Formula)**을 얻습니다.
+
+$$
+\boxed{ P_x(y) = \int h(w, x, y) P(w) dw }
+$$
+
+![Figure 3: 연속형 변수(Continuous Case)에 대한 최종 식별 공식 유도 과정 요약. $h(w, x, y)$는 Bridge Function으로서 $P(y|z,x)$와 $P(w|z,x)$의 관계를 통해 식별되며, 이를 $P(W)$와 결합하여 인과 효과를 계산한다.](./images/continuous_case_derivation.png)
+
+---
+
+# 5. Completeness Condition (수학적 가정)
+
+위의 유도 과정에서 "적분 방정식을 풀어 $h$를 구할 수 있다"고 가정했습니다. 이것이 가능하려면 **Completeness Condition**이 충족되어야 합니다.
+
+강의 자료 8-9 페이지에서는 이를 다음과 같이 정의합니다.
+
+> **Completeness Condition:**
+> 모든 제곱 적분 가능한 함수(square-integrable function) $g$와 임의의 $x$에 대하여,
+> $$E[g(U) \mid Z, x] = 0 \iff g(U) = 0 \text{ almost surely}$$
+
+**직관적 해석:**
+이 조건은 **"행렬의 역행렬이 존재한다(Invertibility)"**는 개념을 무한 차원의 함수 공간으로 확장한 것입니다. 즉, $Z$의 변화가 $U$의 변화를 충분히 잘 설명할 수 있어야 합니다(Informationally rich). 만약 $Z$가 $U$와 너무 약하게 연결되어 있다면, 우리는 $U$의 정보를 복원할 수 없고 $h$를 유일하게 결정할 수 없습니다.
+
+---
+
+# 6. Summary
+
+Proximal Causal Inference의 Double Proxy 접근법은 $U$를 관측할 수 없는 상황에서 강력한 도구입니다.
+
+1.  **Setting:** 두 개의 Proxy ($Z$: Treatment-inducing, $W$: Outcome-inducing)가 필요합니다.
+2.  **Process:**
+    * 관측 데이터($X, Y, Z, W$)를 이용해 적분 방정식 $P(y|z, x) = \int h(w, x, y) P(w|z, x) dw$를 풉니다.
+    * 구해진 Bridge Function $h$와 $W$의 주변 분포 $P(W)$를 결합합니다.
+3.  **Result:** $P_x(y) = \int h(w, x, y) P(w) dw$를 통해 인과 효과를 식별합니다.
+
+이 방법론은 도구변수(IV)의 강력한 대안이 될 수 있으며, 머신러닝 모델(예: Kernel Method, Neural Networks)을 사용하여 $h$ 함수를 추정하는 방향으로 연구가 확장되고 있습니다.
+
+---
+
+### 누락 방지 검증 체크리스트
+
+* [x] **DAG 구조 설명**: Figure 1과 변수 정의($Z, W, U, X, Y$) 포함 완료.
+* [x] **독립성 가정**: $W \perp (Z, X)|U$ 및 $Z \perp Y|(U, X)$ 명시 완료.
+* [x] **Bridge Function 개념**: Slide 10의 적분 방정식 형태($h(w, x, y)$) 도입 완료.
+* [x] **단계별 수식 유도**:
+    * $P(y|u,x)$를 $h$로 대체하는 가정 (Step 2)
+    * Fubini 정리를 이용한 적분 순서 변경 및 $P(w|z,x)$ 도출 (Step 3)
+    * 최종 $P_x(y)$ 식별 공식 유도 (Step 4)
+* [x] **Completeness Condition**: Slide 8/9의 수학적 정의($E[g(u)|z,x]=0 \iff g=0$) 및 직관적 의미 설명 완료.
+* [x] **시각 자료 활용**: 강의 자료의 핵심 다이어그램(DAG, Derivation Flow, Formula)에 대한 Markdown 이미지 태그 및 상세 캡션 포함 완료.

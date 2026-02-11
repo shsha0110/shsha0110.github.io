@@ -66,15 +66,35 @@ $$E[Y^{a_1}] = \sum_{l_1} E[Y|A_1=a_1, L_1=l_1] f(l_1)$$
 
 ### 3.2 Mathematical Formulation
 
-* 2시점($k=0, 1$) 데이터에 대한 G-formula는 다음과 같습니다:
+#### **1. The G-Formula for 2 Time Points ($k=0, 1$)**
+
+* 시변 치료(Time-varying treatment) 상황에서 2시점 데이터에 대한 G-formula는 다음과 같습니다.
 
 $$E[Y^{a_0, a_1}] = \sum_{l_1} E[Y | A_0=a_0, A_1=a_1, L_1=l_1] \times f(l_1 | A_0=a_0)$$
 
-* 이 식을 고정된 치료(Time-fixed)의 경우와 비교해 봅시다.
-  * **Time-fixed:** $f(l_1)$ (모집단 전체의 주변 분포 사용)
-  * **Time-varying:** $f(l_1 | a_0)$ ($A_0$라는 과거 치료를 받은 하위 집단에서의 분포 사용)
+#### **2. Time-fixed vs. Time-varying Comparison**
 
-* 이 조건부 확률 $f(l_1 | a_0)$을 사용하는 이유는, 우리가 개입(Intervention)을 통해 $A_0$를 $a_0$로 설정했을 때, 그에 따라 변화하는 $L_1$의 분포를 반영해야 하기 때문입니다.
+* 이 식의 확률 부분($f$)은 고정된 치료(Time-fixed) 연구와 결정적인 차이가 있습니다.
+  * **Time-fixed ($f(l)$):** 교란요인 $L$이 치료 $A$보다 **먼저** 발생하므로, 치료가 $L$의 분포에 영향을 주지 않습니다. 따라서 모집단 전체의 주변 분포(marginal distribution)를 사용합니다.
+  * **Time-varying ($f(l_1 | a_0)$):** 교란요인 $L_1$이 초기 치료 $A_0$ **이후**에 발생합니다. $A_0$가 $L_1$에 인과적 영향을 주기 때문에, 개입($A_0=a_0$)이 있었을 때의 조건부 확률 분포를 사용해야 합니다.
+
+#### **3. Derivation: Why $f(l_1 | a_0)$?**
+
+* 이 식은 관찰된 데이터의 결합 분포(Joint Distribution)에서 치료 할당 확률을 제거하는 **절단된 분해(Truncated Factorization)** 과정을 통해 유도됩니다.
+
+* **Step 1: Chain Rule (관찰 데이터의 분해)**
+    * 관찰된 변수들의 결합 확률은 다음과 같이 분해됩니다.
+    $$P(Y, A_1, L_1, A_0) = P(Y | A_1, L_1, A_0) \times P(A_1 | L_1, A_0) \times P(L_1 | A_0) \times P(A_0)$$
+
+* **Step 2: Intervention (개입 및 확률 제거)**
+    * 우리가 강제로 $A_0=a_0, A_1=a_1$로 고정(Intervention)하면, 자연적인 치료 할당 확률인 $P(A_0)$와 $P(A_1 | L_1, A_0)$는 더 이상 유효하지 않으므로 식에서 **제거**됩니다. 남은 부분은 자연 법칙(교란요인 생성 및 결과 생성)을 따릅니다.
+    $$P(Y^{a_0, a_1}=y, L_1^{a_0}=l_1) = P(Y=y | a_1, l_1, a_0) \times P(L_1=l_1 | a_0)$$
+
+* **Step 3: Marginalization (평균 계산)**
+    * 위 식을 모든 가능한 $l_1$에 대해 합산(또는 적분)하여 $Y$의 기대값을 구하면 G-formula가 도출됩니다.
+    $$E[Y^{a_0, a_1}] = \sum_{l_1} \underbrace{E[Y | A_1=a_1, L_1=l_1, A_0=a_0]}_{\text{Outcome Model}} \times \underbrace{f(l_1 | A_0=a_0)}_{\text{Confounder Model}}$$
+
+* 결론적으로 $f(l_1)$이 아닌 $f(l_1 | a_0)$를 사용하는 것은, **초기 치료 $A_0$가 중간 교란요인 $L_1$의 분포를 변화시키는 인과적 흐름을 반영**하기 위함입니다.
 
 ### 3.3 Application to the Example
 
@@ -279,15 +299,39 @@ $$
 * 2.  **Weight Calculation:** 추정된 확률 $\hat{f}$를 사용하여 $W^{\bar{A}}$ 또는 $SW^{\bar{A}}$를 계산합니다.
 * 3.  **WLS:** 계산된 가중치를 적용하여 MSM을 적합합니다.
 
-## 6. Effect Modification
+## 6. Effect Modification (효과 변경)
 
-* IP Weighting은 기저(Baseline) 변수 $V$에 의한 효과 변경(Effect Modification)을 탐색하는 데에도 유연하게 적용될 수 있습니다.
+* 기본적인 MSM은 전체 인구의 평균적인 인과 효과를 추정하지만, 때로는 **"치료의 효과가 특정 집단에서 더 강력하게 나타나는가?"**를 확인해야 할 때가 있습니다. 이를 **효과 변경(Effect Modification)**이라고 합니다.
+
+### 6.1 Definition of Variable $V$
+
+* **정의:** $V$는 기저 교란요인(Baseline Covariates, $L_0$) 중 연구자가 특별히 관심을 갖는 **일부 변수의 집합**입니다 (예: 성별, 연령대, 유전자 변이 여부 등).
+* **조건:** $V$는 반드시 치료가 시작되기 전인 **기저 시점(Time 0)**에 측정된 변수여야 합니다. $k>0$ 시점의 시변 변수를 $V$로 사용할 경우, 치료의 결과일 수 있어 해석이 매우 복잡해지거나 불가능해집니다.
+
+### 6.2 The Model with Interaction
+
+* $V$에 따른 효과 차이를 확인하기 위해, MSM에 교차항(Interaction term)을 추가하여 다음과 같이 모델링합니다.
 
 $$
 E[Y^{\bar{a}} | V] = \beta_0 + \beta_1 \text{cum}(\bar{a}) + \beta_2 V + \beta_3 \text{cum}(\bar{a})V
 $$
 
-* 이 모델 역시 $SW^{\bar{A}}(V)$ 가중치를 사용한 WLS로 추정 가능합니다. 단, $V$는 반드시 Baseline 변수여야 하며, $k>0$ 시점의 변수를 포함하면 해석이 복잡해질 수 있음을 유의해야 합니다.
+* **파라미터 해석:**
+    * $\beta_1$: $V=0$인 집단에서의 치료 효과.
+    * $\beta_3$: **효과 변경의 크기**. 즉, $V=1$ 집단과 $V=0$ 집단 간의 치료 효과 차이입니다. ($\beta_3 \neq 0$이면 효과 변경이 존재함)
+    * $\beta_1 + \beta_3$: $V=1$인 집단에서의 치료 효과.
+
+### 6.3 Estimation with Modified Weights
+
+* 이 모델을 추정할 때는 $V$를 고려하여 수정된 **안정화 가중치 $SW^{\bar{A}}(V)$**를 사용해야 합니다.
+
+* **가중치의 변화:**
+    * 기존 분자: $P(A)$ (전체 평균 확률)
+    * **수정된 분자:** $P(A|V)$ (변수 $V$에 따라 조건부로 계산된 확률)
+    
+$$SW^{\bar{A}}(V) = \prod_{k=0}^{K} \frac{f(A_k | \bar{A}_{k-1}, V)}{f(A_k | \bar{A}_{k-1}, \bar{L}_k)}$$
+
+* **이점:** 모델 식 자체에 이미 $V$가 포함되어 있으므로($\beta_2 V$), 가중치를 통해 $V$의 교란 효과를 제거할 필요가 없습니다. 따라서 분자에서 $V$를 조건부로 잡아줌으로써 가중치의 변동성을 줄이고, 결과적으로 **추정의 효율성(Efficiency)을 높여 신뢰구간을 좁힐 수 있습니다**.
 
 ---
 
@@ -327,7 +371,7 @@ $$
 $$
 b(a, L; \theta) = \text{expit}(\theta_{a,0} + \theta_{a,1}L + \theta_{a,2}\hat{W}^a)
 $$
-  * Note: $\text{expit}(x) = \frac{e^x}{1+e^x}$)
+  * Note: $\text{expit}(x) = \frac{e^x}{1+e^x}$
 
 * 이 회귀식은 $A=a$인 집단(실제 처리를 받은 집단)에 대해서만 적합(Fit)합니다.
 
@@ -345,8 +389,6 @@ $$
 * 이제 시간이 $k=0, 1, \dots, K$로 흐르는 동적 상황으로 확장해 봅시다. 우리는 특정 치료 전략 $\overline{a}$ (예: "항상 치료받음") 하에서의 반사실적 평균 $E[Y^{\overline{a}}]$를 추정하고 싶습니다.
 
 * 설명의 편의를 위해 **"모든 시점에서 치료받음 ($\overline{a} = \overline{1}$)"** 전략을 기준으로 설명합니다.
-
-![Figure: 시변 처리에서의 이중 강건 추정 흐름도. Step 1의 전향적 가중치 계산과 Step 2의 후향적 결과 회귀가 결합되는 구조를 보여줍니다.](./images/dr_time_varying_process.png)
 
 ### Step 1: 순차적 처리 모형 (Sequential Treatment Models)
 
@@ -441,10 +483,6 @@ $$
 
 * G-formula가 결합 밀도(joint density)를 모델링하고 IP Weighting이 치료 확률(treatment assignment)을 모델링한다면, G-estimation은 **조건부 인과 효과(conditional causal effect)** 자체를 직접 모델링하는 접근 방식입니다.
 
-![Figure: Causal Diagram representing time-varying treatments and confounders. The diagram should show nodes for L0, A0, Y, L1, A1 with arrows indicating causal paths and confounding relationships. specifically highlighting the feedback loop where past treatment affects future confounders.](./images/dag_time_varying.png)
-
-> **Figure 1.** 시간 가변적 치료($A_k$)와 교란요인($L_k$)이 존재하는 인과 그래프(DAG). $L_1$이 이전 치료 $A_0$의 영향을 받으면서 동시에 이후 치료 $A_1$과 결과 $Y$에 영향을 미치는 구조적 특성을 보여줍니다.
-
 ## 2. Structural Nested Mean Models (SNMMs)
 
 * G-estimation을 수행하기 위해서는 먼저 인과 효과를 구조화하는 모델이 필요합니다. 이를 **Structural Nested Mean Model (SNMM)**이라고 합니다.
@@ -473,86 +511,163 @@ $$
 
 ## 3. G-estimation Methodology
 
-* G-estimation의 핵심 아이디어는 **"만약 우리가 참(True) 인과 효과 파라미터 $\psi$를 안다면, 관측된 데이터에서 치료의 효과를 제거하여 '치료를 받지 않았을 때의 잠재적 결과'를 복원할 수 있다"**는 것입니다.
+* G-estimation은 복잡한 수식 이전에 **"치료의 효과를 데이터에서 덜어낸다(Subtractive)"**는 매우 직관적인 아이디어에서 출발합니다. 이 섹션에서는 단일 파라미터에 대한 Grid Search 방법부터 다차원 파라미터 추정을 위한 일반화된 방정식까지 살펴봅니다.
 
-### 3.1. Rank-Preserving vs. Mean Models
+### 3.1. Preliminary: The Intuition behind G-estimation
 
-* 이론적 전개를 위해 먼저 더 강력한 가정인 **Rank-Preserving Model**을 살펴봅시다.
+* G-estimation을 이해하기 위해 가장 먼저 필요한 개념은 **"반사실적 결과의 복원"**입니다.
+* **기본 아이디어:**
+    만약 우리가 어떤 치료제($A$)의 정확한 인과적 효과($\psi$)를 이미 알고 있다면, 관측된 결과($Y$)에서 그 치료 효과만큼을 **빼버림(Subtract)**으로써, 그 환자가 치료를 받지 않았을 때의 잠재적 상태($Y^{a=0}$)를 역으로 계산해낼 수 있습니다.
+* **인과적 추론의 연결:**
+    * 무작위 배정이나 교환성(Exchangeability) 가정 하에서, **치료 여부($A$)**는 **치료를 받지 않았을 때의 잠재적 결과($Y^{a=0}$)**와 독립이어야 합니다.
+    * G-estimation은 이 논리를 역이용합니다. 다양한 효과 크기 후보($\psi^\dagger$)를 대입해 보면서, 계산된 "치료 제거 후 결과($H$)"가 치료 변수($A$)와 **통계적으로 독립이 되게 만드는** $\psi$를 찾아내는 과정입니다.
+
+### 3.2. Candidate Counterfactuals ($H_k$) and Grid Search
+
+* **Step 1: 후보 반사실(Candidate Counterfactual) 계산**
+    * 특정 파라미터 후보값 $\psi^\dagger$가 주어졌을 때, 우리는 관측 데이터로부터 시점 $k$ 이후의 치료 효과가 제거된 잠재적 결과 $H_k(\psi^\dagger)$를 계산할 수 있습니다.
+    $$
+    H_{k}(\psi^{\dagger}) = Y - \sum_{j=k}^{K} A_{j} \gamma_{j}(\bar{A}_{j-1}, \bar{L}_{j}, \psi^{\dagger})
+    $$
+    * 여기서 $\gamma_{j}$는 치료의 효과(Blip function)입니다. 만약 $\psi^\dagger$가 참값이라면, $H_k$는 시점 $k$ 이전에 치료를 받고 그 이후로는 치료를 받지 않은 잠재적 결과($Y^{\bar{a}_{k-1}, \underline{0}_k}$)와 동일합니다.
+
+* **Step 2: 로지스틱 회귀 모델 적합 (Pooling over time)**
+    * 계산된 $H_k(\psi^\dagger)$가 현재의 치료 $A_k$와 독립인지 확인하기 위해, 다음의 로지스틱 회귀 모형을 적합합니다.
+    $$
+    \text{logit } \Pr[A_k = 1 | H_k(\psi^\dagger), \bar{L}_k, \bar{A}_{k-1}] = \alpha_0 + \alpha_1 H_k(\psi^\dagger) + \alpha_2 W_k
+    $$
+    * 여기서 $W_k$는 교란 요인을 통제하기 위한 공변량 벡터입니다.
+
+* **Step 3: 스코어 검정(Score Test)을 통한 추정**
+    * 만약 $\psi^\dagger$가 참값이라면, $H_k$는 치료 $A_k$에 영향을 주지 않아야 하므로 회귀계수 $\alpha_1$은 **0**이어야 합니다.
+    * 따라서, 우리는 $\alpha_1 = 0$이라는 귀무가설에 대한 **P-value가 1에 가까운(또는 Z-score가 0인)** $\psi^\dagger$ 값을 찾습니다. 이를 수식으로 표현하면 다음의 **스코어 방정식(Score Equation)**을 만족하는 해를 찾는 것입니다.
+    $$
+    \sum_{i=1}^{N} \sum_{k=0}^{K} \{ A_{i,k} - \text{expit}(\hat{\alpha}_0 + \hat{\alpha}_2 W_{i,k}) \} H_{i,k}(\psi^\dagger) = 0
+    $$
+    * **Derivation Note (유도 과정):**
+        1.  **로그-우도 함수 ($LL$):** 로지스틱 회귀의 $LL$은 $\sum [ A \ln(p) + (1-A) \ln(1-p) ]$ 입니다.
+        2.  **스코어 함수 ($U$):** 스코어는 $LL$을 파라미터 $\alpha_1$으로 미분한 기울기입니다. 연쇄 법칙(Chain Rule)에 의해 미분 결과는 다음과 같이 간단해집니다.
+            $$U(\alpha_1) = \frac{\partial LL}{\partial \alpha_1} = \sum (A - p) H$$
+        3.  **귀무가설 적용:** $\alpha_1=0$이라는 가설 하에서, 확률 $p$는 $H$항이 사라진 $\text{expit}(\alpha_0 + \alpha_2 W)$가 됩니다.
+        4.  **결론:** 따라서 최적점(기울기=0)을 찾는 식은 위와 같이 "잔차($A-p$)와 공변량($H$)의 곱의 합 = 0"이 됩니다.
+
+## 4. Efficient Estimation: Multidimensional Parameters
+
+* 앞서 설명한 Grid Search 방식은 파라미터가 하나일 때는 유용하지만, 모델이 복잡해지면 계산상 불가능해집니다.
+
+### 4.1. The Curse of Dimensionality (차원의 저주)
+
+* **Simple vs. Complex:** 단순한 모델($\beta_1$ 하나)에서는 1차원 그리드만 탐색하면 되지만, 현실적인 모델은 훨씬 복잡합니다.
+
+* **Introducing Notation $R$:** 예를 들어, 치료 효과가 시간($k$)이 지남에 따라 변하고, 과거 치료 이력($a_{k-1}$)이나 현재 환자 상태($l_k$)에 따라 달라지는 정교한 모형을 고려해 봅시다. 파라미터가 5개인 경우, 효과 함수 $\gamma_k$는 다음과 같이 표현됩니다.
+
+    $$
+    \begin{aligned}
+    \gamma_k(\bar{\alpha}_{k-1}, \bar{l}_{k}, \beta) &= \beta_0 \cdot 1 + \beta_1 \cdot k + \beta_2 \cdot a_{k-1} + \beta_3 \cdot l_k + \beta_4 \cdot (l_k a_{k-1}) \\
+    &= \beta^T R_k
+    \end{aligned}
+    $$
+
+* **Definition of $R_k$:** 위 식에서 보듯이, 복잡한 수식은 **파라미터 벡터 $\beta$**와 **공변량 벡터 $R_k$**의 내적(Inner Product)으로 깔끔하게 정리됩니다.
+    * $\beta = [\beta_0, \beta_1, \beta_2, \beta_3, \beta_4]^T$: 우리가 추정해야 할 **계수(가중치)**들입니다.
+    * $R_k = [1, k, a_{k-1}, l_k, l_k a_{k-1}]^T$: 치료 효과를 결정하거나 조절하는(Modify) **데이터상의 변수 조합**들입니다.
+
+* **The Computational Cost:** 이 벡터 표기는 간결하지만, 실제 추정 과정에서는 큰 문제를 야기합니다. 5개의 파라미터($\beta_0 \sim \beta_4$)를 찾기 위해 5차원 공간을 탐색해야 하기 때문입니다. 각 차원마다 20개의 후보값만 테스트한다고 해도, $20^5 = 3,200,000$번의 검정이 필요합니다. 이것이 바로 그리드 탐색의 한계인 **차원의 저주**입니다.
+
+### 4.2. Estimating Equations and Closed-form Derivation
+
+* 닫힌 해를 유도하기 위해, 먼저 우리가 풀고자 하는 **원래의 추정 방정식(Original Estimating Equation)**을 명확히 정의하고 시작합시다. 우리의 목표는 다음 등식을 만족하는 $\beta$를 찾는 것입니다.
+
 $$
-Y_{i}^{a_0, a_1} = Y_{i}^{a_0, 0} + \psi_{11}a_1 + \psi_{12}a_1 L_{1,i} + \dots
-$$
-* 이 모델은 개별(individual) 수준에서 효과가 결정론적이라고 가정합니다. 하지만 생물학적/사회학적으로 개인 간 이질성(heterogeneity)이 존재하므로 이는 비현실적일 수 있습니다.
-
-* 따라서 우리는 평균적인 효과에 초점을 맞추는 **Mean Model**을 주로 사용하지만, G-estimation의 알고리즘적 절차는 Rank-Preserving Model의 논리를 차용하여 수행됩니다. 놀랍게도 Rank-Preserving Model 하에서 도출된 G-estimator는 Mean Model의 파라미터에 대해서도 일치 추정량(Consistent Estimator)이 됩니다.
-
-### 3.2. Candidate Counterfactuals ($H_k$)
-
-* G-estimation의 핵심 단계는 **Candidate Counterfactual** $H_k(\psi^\dagger)$를 계산하는 것입니다. 이는 임의의 파라미터 값 $\psi^\dagger$를 가정했을 때, 시점 $k$부터의 치료 효과를 제거한 결과값입니다.
-
-$$
-H_{k}(\psi^{\dagger}) = Y - \sum_{j=k}^{K} A_{j} \gamma_{j}(\bar{A}_{j-1}, \bar{L}_{j}, \psi^{\dagger})
+\sum_{i=1}^{N} \sum_{k=0}^{K} \underbrace{\{ A_{i,k} - \text{expit}(\hat{\alpha}^T W_{i,k}) \}}_{X_{i,k} (\text{치료 잔차})} H_{i,k}(\beta) \underbrace{Q_{i,k}}_{\text{가중치/검정 벡터}} = 0
 $$
 
-* 만약 $\psi^\dagger$가 참값($\psi$)과 같다면, $H_k(\psi)$는 시점 $k$ 이후로 치료를 받지 않았을 때의 잠재적 결과 $Y^{\bar{a}_{k-1}, \underline{0}_k}$와 같아야 합니다.
+* **주요 항 설명:**
+  * **$X_{i,k}$ (치료 잔차):** 치료 여부($A$)에서 예측된 확률을 뺀 값입니다. 이 잔차는 설명되지 않은(Random) 변동을 의미합니다.
+  * **$H_{i,k}(\beta)$ (후보 반사실):** 파라미터 $\beta$를 가정했을 때 복원된 "치료받지 않았을 때의 잠재적 결과"입니다. 이 안에 미지수 $\beta$가 숨어 있습니다.
+  * **$Q_{i,k}$ (가중치/검정 벡터):** 이 벡터는 **연립방정식을 생성하는 핵심 역할**을 합니다.
+      * **필요성:** 우리가 구해야 할 $\beta$가 5개의 파라미터를 가진 벡터라면, 미지수가 5개이므로 식도 5개가 필요합니다.
+      * **구조:** $Q_{i,k}$는 보통 $\beta$에 대응하는 공변량들로 구성됩니다 (예: $Q_{i,k} = [1, k, L_k, \dots]^T$).
+      * **의미:** 이 벡터를 곱함으로써, 단순히 전체 평균에서뿐만 아니라 **"$Q$에 포함된 각 변수의 관점(예: 시간 $k$, 특정 집단 $L$)에서도 잔차와 반사실의 독립성이 성립하는지"**를 깐깐하게 검증하게 됩니다.
 
-### 3.3. The Estimation Procedure
+* 이제 이 식을 전개하여 숨어 있는 $\beta$를 끄집어내고 해를 구해보겠습니다.
 
-* 알고리즘의 핵심은 **순차적 교환성(Sequential Exchangeability)** 가정입니다.
-즉, 과거의 이력($\bar{L}_k, \bar{A}_{k-1}$)이 주어졌을 때, 시점 $k$의 치료($A_k$)는 잠재적 결과와 독립적이어야 합니다.
+#### **Step 1: $H(\beta)$의 선형 분해 (Unpacking H)**
+
+* 선형 SNMM에서, 시점 $k$에서의 후보 반사실 $H_{i,k}(\beta)$는 관측된 결과 $Y_i$에서 **"추정된 치료 효과의 합"**을 뺀 것입니다.
+$$
+H_{i,k}(\beta) = Y_i - \underbrace{\sum_{j=k}^{K} (\beta^T R_{i,j}) A_{i,j}}_{\text{Removed Effect}} = Y_i - \beta^T \underbrace{\left( \sum_{j=k}^{K} A_{i,j} R_{i,j} \right)}_{S_{i,k}}
+$$
+  * 여기서 $S_{i,k}$는 치료($A$)와 공변량($R$)이 결합된 누적 이력 벡터입니다.
+  * 이제 $H_{i,k}(\beta)$를 **$Y_i - \beta^T S_{i,k}$** 로 바꿔 쓸 수 있습니다.
+
+#### **Step 2: 방정식에 대입 (Substitution)**
+
+* 이제 Step 1에서 정리한 $H(\beta)$를 맨 처음 제시한 **원래의 추정 방정식**에 대입합니다.
 
 $$
-Y^{\bar{a}} \perp A_k \mid \bar{L}_k, \bar{A}_{k-1}
+\sum_{i,k} \underbrace{X_{i,k}}_{\text{Residual}} \times \underbrace{(Y_i - \beta^T S_{i,k})}_{H(\beta)} \times Q_{i,k} = 0
 $$
 
-* 따라서, 우리가 올바른 $\psi$를 찾았다면, 계산된 $H_k(\psi)$는 $A_k$와 독립이어야 합니다(조건부 독립). 이를 이용해 다음과 같은 절차로 $\beta$(SNMM의 파라미터)를 추정합니다.
-  * 1.  **Grid Search / Optimization**: 파라미터 공간 $\psi^\dagger$를 탐색합니다.
-  * 2.  **Logistic Regression**: 각 $\psi^\dagger$에 대해 $H_k(\psi^\dagger)$를 공변량으로 포함하여 $A_k$에 대한 로지스틱 회귀를 수행합니다.
-      $$
-      \text{logit } Pr[A_k=1 \mid H_k(\psi^\dagger), \dots] = \alpha_0 + \alpha_1 H_k(\psi^\dagger) + \alpha_2 W_k
-      $$
-  * 3.  **Score Test**: 만약 $\psi^\dagger$가 참값이라면, $H_k$는 $A_k$를 예측하는 데 도움이 되지 않아야 하므로 $\alpha_1 = 0$이어야 합니다. 따라서 $\alpha_1=0$이라는 귀무가설에 대한 Score Test를 수행하여 P-value가 1이 되는(혹은 Score statistic이 0이 되는) $\psi^\dagger$를 찾습니다.
+#### **Step 3: 전개 및 이항 (Expansion & Rearrangement)**
 
-![Figure: Flowchart describing the G-estimation algorithm. Steps: 1. Define SNMM structure. 2. Select candidate parameter psi. 3. Compute H(psi) by subtracting effect. 4. Fit treatment model regressing A on H(psi). 5. Check if coefficient of H(psi) is zero. 6. Iterate to find optimal psi.](./images/gestimation_flowchart.png)
-
-> **Figure 2.** G-estimation 알고리즘 순서도. 후보 파라미터를 통해 반사실적 결과를 생성하고, 이를 치료 할당 모델에 투입하여 독립성을 검정하는 반복 과정을 보여줍니다.
-
-## 4. Mathematical Formulation (Closed Form)
-
-* 일반적으로 탐색(search) 방식이 사용되지만, SNMM이 **선형(Linear)** 형태일 경우 닫힌 해(Closed-form solution)가 존재합니다. 이는 계산 비용을 획기적으로 줄여줍니다.
-
-* Technical Point 21.8에 따르면, 선형 모델 $\gamma_k(\cdot) = \beta^T R_k$에 대한 G-estimator $\hat{\beta}$는 다음과 같습니다:
+* 덧셈을 기준으로 식을 두 덩어리로 쪼갭니다.
 
 $$
-\hat{\beta} = \left\{ \sum_{i, k} A_{i,k} X_{i,k}(\hat{\alpha}) Q_{i,k} S_{i,k}^T \right\}^{-1} \left\{ \sum_{i, k} Y_i X_{i,k}(\hat{\alpha}) Q_{i,k} \right\}
+\sum_{i,k} X_{i,k} Y_i Q_{i,k} - \sum_{i,k} X_{i,k} (\beta^T S_{i,k}) Q_{i,k} = 0
 $$
 
-* 여기서:
-  * $X_{i,k}(\hat{\alpha}) = A_{i,k} - \text{expit}(\hat{\alpha}^T W_{i,k})$: 치료의 잔차(Residual)
-  * $S_{i,k} = \sum_{j=k}^{K} R_{i,j}$: 누적된 공변량 함수
-  * $Q_{i,k}$: 효율성을 조절하는 가중치 함수 (Consistency에는 영향 없음)
+* $\beta$가 포함된 항을 우변으로 넘깁니다. ($\beta$는 상수 벡터이므로 시그마 밖으로 나올 수 있습니다.)
 
-* 이 수식은 G-estimation이 본질적으로 **"치료의 예측되지 않은 변동(Residual)"과 "결과의 변동" 간의 공분산을 0으로 만드는 작업**임을 수학적으로 보여줍니다.
+$$
+\sum_{i,k} X_{i,k} Y_i Q_{i,k} = \beta^T \left( \sum_{i,k} X_{i,k} S_{i,k} Q_{i,k}^T \right)
+$$
 
+#### **Step 4: 닫힌 해 도출 (Closed-form Solution)**
+
+* 이제 $\beta$를 구하기 위해 양변에 역행렬을 곱하면(나눗셈), 반복 탐색(Grid Search) 없이 한 번에 답을 구할 수 있습니다.
+
+$$
+\hat{\beta} = \left[ \sum_{i=1}^{N} \sum_{k=0}^{K} X_{i,k} Q_{i,k} S_{i,k}^T \right]^{-1} \times \left[ \sum_{i=1}^{N} \sum_{k=0}^{K} X_{i,k} Y_i Q_{i,k} \right]
+$$
+
+* **직관적 해석:** 이 식은 본질적으로 통계학의 **$\hat{\beta} = (X^T X)^{-1} X^T Y$** (최소자승법 공식)와 동일한 형태입니다.
+    * **분모(역행렬 부분):** 치료 변동($X$)과 공변량 이력($S$)의 공분산 행렬.
+    * **분자:** 치료 변동($X$)과 결과($Y$)의 공분산.
+    * 즉, **"설명되지 않은 치료 변동($X$)이 결과($Y$)를 얼마나 변화시키는가?"**를 계산하는 과정입니다.
+  
 ## 5. From Parameters to Counterfactual Means
 
-* G-estimation을 통해 $\beta$를 구했다면, 이제 특정 치료 전략 $g$ 하에서의 평균 결과값 $E[Y^g]$를 추정할 수 있습니다. 하지만 G-formula와 달리 SNMM은 $E[Y^g]$를 직접 주지 않으므로, **Monte Carlo Simulation**이 필요합니다.
+* G-estimation을 통해 인과 파라미터 $\hat{\beta}$를 구했다면, 이제 우리의 최종 목표인 **"특정 치료 전략 하에서의 평균 결과값"**을 복원해야 합니다.
 
-* **Technical Point 21.9 Algorithm:**
-* 1.  **Baseline Estimation:** 모든 치료를 받지 않았을 때의 평균 $E[Y^{\bar{0}}]$을 $H_0(\hat{\beta})$의 표본 평균으로 추정합니다.
-* 2.  **Covariate Modeling:** 공변량의 분포 $f(l_k \mid \bar{a}_{k-1}, \bar{l}_{k-1})$를 모델링합니다.
-* 3.  **Simulation:** 가상의 환자들을 생성하여, 우리가 관심 있는 전략 $g$에 따라 치료를 할당하고 공변량을 생성하면서 시간을 진행시킵니다.
-* 4.  **Reconstruction:** 추정된 $\beta$와 시뮬레이션된 이력을 사용하여 각 가상 환자의 잠재적 결과 $Y^g$를 계산하고 평균을 냅니다.
+### 5.1. Reconstruction Formula for Static Strategies
+* 우리가 관심 있는 것이 정적 치료 전략(Static Strategy, 예: 항상 치료받음 $\bar{a}$)인 경우, 평균 잠재적 결과 $E[Y^{\bar{a}}]$는 다음과 같이 추정됩니다.
 
 $$
-\hat{E}[Y^g] = \hat{E}[Y^{\bar{0}}] + \frac{1}{V} \sum_{v=1}^{V} \sum_{j=0}^{K} a_{v,j} \gamma_j(\bar{a}_{v, j-1}, \bar{l}_{v,j}, \hat{\beta})
+\hat{E}[Y^{\bar{a}}] = \hat{E}[Y^{\bar{0}}] + \sum_{k=0}^{K} a_k \gamma_k(\bar{a}_{k-1}, \bar{l}_k, \hat{\beta})
 $$
+
+* **1단계 ($H_0$ 추정):** 먼저 모든 치료 효과를 제거한 상태, 즉 '치료를 전혀 받지 않았을 때의 잠재적 결과'($Y^{\bar{0}}$)를 추정합니다. 이는 앞서 구한 $\hat{\beta}$를 이용해 계산한 $H_0(\hat{\beta})$들의 표본 평균입니다. ($\hat{E}[Y^{\bar{0}}] = \frac{1}{n}\sum H_{0,i}(\hat{\beta})$)
+* **2단계 (효과 더하기):** 1단계에서 구한 베이스라인 평균에, 우리가 관심 있는 전략 $\bar{a}$에 해당하는 치료 효과들의 합을 더해줍니다.
+
+### 5.2. Dynamic Strategies and Simulation
+* 만약 관심 있는 전략 $g$가 동적(Dynamic, 예: "혈압이 오르면 약을 먹는다")이거나, 모델이 공변량 $L_k$에 의존한다면 계산은 더 복잡해집니다.
+* 이 경우 **몬테카를로 시뮬레이션(Monte Carlo Simulation)**이 필요합니다.
+    1.  관측된 데이터로부터 공변량의 분포 $f(L_k | \bar{L}_{k-1}, \bar{A}_{k-1})$를 모델링합니다.
+    2.  가상의 환자들을 생성하여 시뮬레이션을 진행하며, 각 시점마다 전략 $g$에 따라 치료를 할당하고 모델링된 분포에서 공변량을 생성합니다.
+    3.  생성된 이력과 $\hat{\beta}$를 이용해 각 가상 환자의 잠재적 결과를 계산하고 평균을 냅니다.
 
 ## 6. SNMM vs. Marginal Structural Models (MSM)
 
-* Technical Point 21.7은 SNMM과 MSM의 중요한 차이를 설명합니다.
-  * **MSM**은 $E[Y^{\bar{a}}]$를 직접 모델링하며, 과거 공변량에 의한 효과 수정(effect modification) 여부에 대해 불가지론적(agnostic)입니다.
-  * **SNMM**은 효과 수정 여부를 명시적으로 모델링해야 합니다. 만약 $\gamma_k$가 $L_k$에 의존하지 않는다고 잘못 가정하면 편향(Bias)이 발생할 수 있습니다.
-  * **Trade-off:** 하지만 모델이 정확하게 명시된다면, SNMM(G-estimation)은 "과거 공변량에 의한 효과 수정이 없다"는 추가적인 가정을 활용할 수 있어 MSM(IP Weighting)보다 **통계적 효율성(Efficiency)**이 더 높습니다.
+* 시변 치료 분석을 위해 **MSM(IP Weighting)**과 **SNMM(G-estimation)** 중 무엇을 선택해야 할까요?
+
+### 6.1. Effect Modification (효과 변경)
+* **MSM:** 과거 공변량($L$)에 의한 효과 변경(Effect Modification) 여부에 대해 **불가지론적(Agnostic)**입니다. 즉, 효과 변경 구조를 몰라도 전체 평균 효과($E[Y^{\bar{a}}]$)를 정확히 추정할 수 있습니다.
+* **SNMM:** 효과 변경 여부를 모델 식($\gamma_k$)에 **명시적으로** 포함해야 합니다. 만약 중요한 효과 변경 변수를 누락하면 추정치에 편향(Bias)이 발생합니다.
+
+### 6.2. The Trade-off: Robustness vs. Efficiency
+* **MSM (Robustness):** 모델 설정 오류(Misspecification)에 상대적으로 안전합니다.
+* **SNMM (Efficiency):** 모델을 정확하게 설정한다면, MSM보다 더 좁은 신뢰구간을 제공하여 **통계적 효율성(Efficiency)**이 높습니다. 또한, $P(A|L)$이 0이나 1에 가까워 IPW 가중치가 불안정해지는 상황(Positivity 위반)에서도 SNMM은 상대적으로 안정적인 결과를 제공합니다.
 
 ---
 

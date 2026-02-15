@@ -150,7 +150,7 @@ $$
 
 ### 4. PBT 연구를 위한 구체적 Exposure Mapping
 
-본*  연구의 핵심은 정책 우회(Policy Bypass) 효과를 포착하기 위해 $b_{it}(\cdot)$ 함수를 어떻게 설계했느냐에 있습니다. 저자들은 상점의 매출이 **(1) 본인의 과세 여부**와 **(2) 인접 지역의 과세 여부 불일치**에만 의존한다고 가정합니다.
+* 본 연구의 핵심은 정책 우회(Policy Bypass) 효과를 포착하기 위해 $b_{it}(\cdot)$ 함수를 어떻게 설계했느냐에 있습니다. 저자들은 상점의 매출이 **(1) 본인의 과세 여부**와 **(2) 인접 지역의 과세 여부 불일치**에만 의존한다고 가정합니다.
 
 #### 4.1. 노출 함수 $b_{ik}$의 정의
 
@@ -496,7 +496,7 @@ $$ {#eq-(4)}
 
 ## 3.5 DiD estimators for the ATT(m) and ATN(m)
 
-### 3.5.1 Two-way gxed effects
+### 3.5.1 Two-way fixed effects
 
 #### 1. Introduction
 
@@ -610,6 +610,49 @@ $$
 
 * **의미:** 공변량 $\mathbf{X}_{im}$의 효과가 시간 $t$에 따라 변할 수 있음($t \boldsymbol{\beta}_{1m}^{'}$)을 허용합니다.
 * **효과:** 이를 통해 **Conditional Parallel Trends** 가정 하에서 추정량을 구할 수 있게 되며, 이는 시간 가변적 교란(Time-varying confounding)이 존재하는 상황에서 편향을 줄이는 데 도움을 줍니다. 이를 논문에서는 $TWFE^{(adj)}$라고 지칭합니다.
+
+##### 4.3. Identification under Relaxed Parallel Trends
+
+* **Relaxed Parallel Trends (완화된 평행 추세)** 가정은 공변량 $\mathbf{X}_{im}$이 결과 변수의 수준(Level)뿐만 아니라, 시간적 추세(Trend)에도 영향을 미칠 수 있음을 허용합니다.
+* 이를 반영하기 위해 기존 식 $(6)$에 **공변량과 시간의 상호작용항 ($t \times \mathbf{X}_{im}$)**을 추가하여 모델을 확장합니다.
+
+$$
+Y_{itm} = \alpha_{0m} + \alpha_{1m}t + \alpha_{2m}R_{im} + \tau^{fe}_m Z'_{itm} + \boldsymbol{\beta}_{0m}^{'} \mathbf{X}_{im} + \boldsymbol{\beta}_{1m}^{'} (t \cdot \mathbf{X}_{im}) + \epsilon_{itm}
+$$
+
+* **새로 추가된 항의 의미:**
+    * $\boldsymbol{\beta}_{0m}^{'} \mathbf{X}_{im}$: 기저 시점($t=0$)에서의 공변량에 따른 결과 변수의 차이 (Intercept shift).
+    * $\boldsymbol{\beta}_{1m}^{'} (t \cdot \mathbf{X}_{im})$: **공변량에 따라 달라지는 시간 추세 (Trend shift).** 즉, $\mathbf{X}_{im}$의 특성을 가진 집단은 시간이 지남에 따라 $\boldsymbol{\beta}_{1m}$만큼의 추가적인 기울기를 가집니다.
+
+* 이 모델 하에서 $\tau^{fe}_m$가 어떻게 식별(Identification)되는지 유도해 보겠습니다. (편의상 $Z'_{itm} = t \times R_{im}$으로 표기)
+
+* **1. 처치 그룹 ($R_{im}=1$)의 조건부 기대값 변화**
+    * **사후 시점 ($t=1$):**
+        $$\mathbb{E}[Y_{1m} | R_m=1, \mathbf{X}] = \alpha_{0m} + \alpha_{1m} + \alpha_{2m} + \tau^{fe}_m + \boldsymbol{\beta}_{0m}\mathbf{X} + \boldsymbol{\beta}_{1m}\mathbf{X}$$
+    * **사전 시점 ($t=0$):**
+        $$\mathbb{E}[Y_{0m} | R_m=1, \mathbf{X}] = \alpha_{0m} + \alpha_{2m} + \boldsymbol{\beta}_{0m}\mathbf{X}$$
+        * (Note: $t=0$ 이므로 시간 관련 항 $\alpha_{1m}, \tau^{fe}_m, \boldsymbol{\beta}_{1m}$ 소거됨)
+    * **처치 그룹의 전후 차이:**
+        $$\Delta_{Trt} = \alpha_{1m} + \tau^{fe}_m + \boldsymbol{\beta}_{1m}\mathbf{X}$$
+
+* **2. 통제 그룹 ($R_{im}=0$)의 조건부 기대값 변화**
+    * **사후 시점 ($t=1$):**
+        $$\mathbb{E}[Y_{1m} | R_m=0, \mathbf{X}] = \alpha_{0m} + \alpha_{1m} + \boldsymbol{\beta}_{0m}\mathbf{X} + \boldsymbol{\beta}_{1m}\mathbf{X}$$
+    * **사전 시점 ($t=0$):**
+        $$\mathbb{E}[Y_{0m} | R_m=0, \mathbf{X}] = \alpha_{0m} + \boldsymbol{\beta}_{0m}\mathbf{X}$$
+    * **통제 그룹의 전후 차이:**
+        $$\Delta_{Ctrl} = \alpha_{1m} + \boldsymbol{\beta}_{1m}\mathbf{X}$$
+
+* **3. Identification (식별 결과)**
+    * 처치 그룹의 전후 변화에서 통제 그룹의 전후 변화를 뺍니다.
+    $$
+    \Delta_{Trt} - \Delta_{Ctrl} = (\alpha_{1m} + \tau^{fe}_m + \boldsymbol{\beta}_{1m}\mathbf{X}) - (\alpha_{1m} + \boldsymbol{\beta}_{1m}\mathbf{X}) = \tau^{fe}_m
+    $$
+
+* **결론:**
+    * 위 유도 과정에서 볼 수 있듯이, 공변량에 의해 유발된 추세의 차이($\boldsymbol{\beta}_{1m}\mathbf{X}$)가 통제 그룹과 처치 그룹 모두에서 동일하게 발생한다고 가정하면(Conditional Parallel Trends), 이중차분 과정을 통해 해당 항이 소거됩니다.
+    * 따라서 $\tau^{fe}_m$은 **공변량에 의한 이질적인 추세를 통제한 후의 순수한 처치 효과**로 식별됩니다.
+    * 이것이 논문에서 언급하는 **TWFE(adj)** 추정량의 이론적 배경입니다.
 
 ---
 
@@ -858,8 +901,6 @@ $$
 
 * 결과적으로 이 추정량은 **"Outcome Regression으로 설명되지 않는 잔차(Residual)에 대해, IPW 가중치를 적용하여 보정하는 형태"**를 띱니다.
 
-![Figure 1: DR 추정량의 개념적 구조. Outcome Model과 Propensity Model이 상호 보완적으로 작동하여, 한 쪽 모델이 잘못 설정(Misspecification)되더라도 일치 추정량을 제공하는 원리를 나타냄.](./images/dr_estimator_concept.png)
-
 ##### 2.3. Double Robustness Property
 * 이 추정량이 'Doubly Robust'라고 불리는 이유는 다음과 같습니다.
   * **Case 1**: 성향 점수 모델 $\hat{w}_m$이 정확하게 추정됨.
@@ -959,10 +1000,6 @@ $$
 ##### Step 3: 추정 (Estimation)
 * 블록별로 부여된 가중치 $w_i$를 사용하여 관심 있는 추정량(Estimator, $\hat{\theta}^*$)을 다시 계산한다. 이 과정을 $B$번 반복하여 추정량의 분포를 얻고, 이를 통해 신뢰구간을 구성한다.
 
-![Figure: 블록 부트스트랩의 개념도 (예시). 데이터를 시공간적 덩어리(Block)로 나누고, 각 블록에 가중치를 부여하여 리샘플링을 수행함으로써 내부 상관성을 보존한다.](./images/block_bootstrap_concept_placeholder.png)
-
-*(위 이미지는 개념 이해를 돕기 위한 예시 공간입니다. 실제 논문에는 포함되지 않았으나, 블록 단위 리샘플링이 시공간 구조를 보존함을 보여주는 다이어그램이 적합합니다.)*
-
 ### 4. Theoretical Justification
 
 * 이 방법론이 유효한(Valid) 이유는 무엇인가?
@@ -981,7 +1018,7 @@ $$
 
 ## 4.1 Descriptive analyses
 
-* 본 포스트에서는 Hettinger et al. (2025)의 논문 *"Doubly Robust Estimation of Policy-Relevant Causal Effects Under Interference"* 중 실제 적용 사례인 **Philadelphia Beverage Tax (PBT)** 연구의 기초 분석(Section 4.1) 내용을 다룹니다.
+* 본 포스트에서는 Hettinger et al. (2025)의 논문 **"Doubly Robust Estimation of Policy-Relevant Causal Effects Under Interference"** 중 실제 적용 사례인 **Philadelphia Beverage Tax (PBT)** 연구의 기초 분석(Section 4.1) 내용을 다룹니다.
 
 * 연구진은 공간적 간섭(Spatial Interference)이 존재하는 상황에서 정책 효과를 추정하기 위해, 본격적인 추정(Estimation)에 앞서 데이터의 구조와 가정이 성립하는지를 면밀히 검토했습니다.
 
@@ -1073,7 +1110,7 @@ $$
   * **Pharmacies:** 21.57% 감소 ($\downarrow$)
   * **SGMs:** 54.90% 감소 ($\downarrow$)
 
-### ##Neighboring Group (Border) - Spillover Effect
+##### Neighboring Group (Border) - Spillover Effect
 * 필라델피아와 인접한 Border 지역에서는 판매량이 오히려 급증했습니다. 이는 소비자들이 세금을 피하기 위해 인접 지역으로 이동하는 **대체 효과(Substitution Effect)**를 시사합니다.
   * **Pharmacies:** 21.60% 증가 ($\uparrow$)
   * **SGMs:** 44.75% 증가 ($\uparrow$)

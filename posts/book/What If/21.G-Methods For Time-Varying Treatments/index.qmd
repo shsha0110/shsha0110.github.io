@@ -584,12 +584,56 @@ $$
     $$
     \sum_{i=1}^{N} \sum_{k=0}^{K} \{ A_{i,k} - \text{expit}(\hat{\alpha}_0 + \hat{\alpha}_2 W_{i,k}) \} H_{i,k}(\psi^\dagger) = 0
     $$
-    * **Derivation Note (유도 과정):**
-        1.  **로그-우도 함수 ($LL$):** 로지스틱 회귀의 $LL$은 $\sum [ A \ln(p) + (1-A) \ln(1-p) ]$ 입니다.
-        2.  **스코어 함수 ($U$):** 스코어는 $LL$을 파라미터 $\alpha_1$으로 미분한 기울기입니다. 연쇄 법칙(Chain Rule)에 의해 미분 결과는 다음과 같이 간단해집니다.
-            $$U(\alpha_1) = \frac{\partial LL}{\partial \alpha_1} = \sum (A - p) H$$
-        3.  **귀무가설 적용:** $\alpha_1=0$이라는 가설 하에서, 확률 $p$는 $H$항이 사라진 $\text{expit}(\alpha_0 + \alpha_2 W)$가 됩니다.
-        4.  **결론:** 따라서 최적점(기울기=0)을 찾는 식은 위와 같이 "잔차($A-p$)와 공변량($H$)의 곱의 합 = 0"이 됩니다.
+
+    * 유도 과정
+      * 우리는 인과 파라미터 $\psi^\dagger$가 참값이라면, 블립 함수(Blip function) $H_{i,k}(\psi^\dagger)$가 처치 $A_{i,k}$를 예측하는 데 기여하지 않아야 한다는 가정에 기반합니다. 이를 검증하기 위해 로지스틱 회귀 모형을 설정하고, $H_{i,k}$의 계수 $\alpha_1$에 대한 스코어 함수를 유도합니다.
+      * 1. 로지스틱 회귀 모형 설정
+        * 처치 확률 $p_{i,k} = P(A_{i,k}=1 | \cdot)$에 대하여 다음과 같은 로지스틱 회귀 모형을 가정합니다.
+        $$
+        \text{logit}(p_{i,k}) = \eta_{i,k} = \alpha_0 + \alpha_1 H_{i,k}(\psi^\dagger) + \alpha_2 W_{i,k}
+        $$
+        * 여기서 귀무가설은 $H_0: \alpha_1 = 0$ 입니다.
+      * 2. 로그-우도 함수 (Log-Likelihood Function)
+        * 전체 관측치에 대한 로그-우도 함수 $LL(\boldsymbol{\alpha})$는 베르누이 분포의 확률질량함수로부터 다음과 같이 정의됩니다.
+        $$
+        LL(\boldsymbol{\alpha}) = \sum_{i=1}^{N} \sum_{k=0}^{K} \ell_{i,k} = \sum_{i=1}^{N} \sum_{k=0}^{K} \left[ A_{i,k} \ln(p_{i,k}) + (1 - A_{i,k}) \ln(1 - p_{i,k}) \right]
+        $$
+      * 3. 스코어 함수 유도 (Derivation of Score Function)
+        * 스코어 함수 $U(\alpha_1)$은 로그-우도 함수를 파라미터 $\alpha_1$에 대해 편미분하여 얻습니다. 연쇄 법칙(Chain Rule)을 적용하면 다음과 같습니다.
+        $$
+        U(\alpha_1) = \frac{\partial LL}{\partial \alpha_1} = \sum_{i=1}^{N} \sum_{k=0}^{K} \frac{\partial \ell_{i,k}}{\partial p_{i,k}} \cdot \frac{\partial p_{i,k}}{\partial \eta_{i,k}} \cdot \frac{\partial \eta_{i,k}}{\partial \alpha_1}
+        $$
+        * 각 항에 대한 미분 결과는 다음과 같습니다.
+          * 1.  **로그-우도의 $p$에 대한 미분**:
+          $$
+          \frac{\partial \ell_{i,k}}{\partial p_{i,k}} = \frac{A_{i,k}}{p_{i,k}} - \frac{1 - A_{i,k}}{1 - p_{i,k}} = \frac{A_{i,k} - p_{i,k}}{p_{i,k}(1 - p_{i,k})}
+          $$
+          * 2.  **로지스틱 함수(Sigmoid)의 미분** (Canonical Link의 특성):
+          $$
+          \frac{\partial p_{i,k}}{\partial \eta_{i,k}} = p_{i,k}(1 - p_{i,k})
+          $$
+          * 3.  **선형 예측자($\eta$)의 $\alpha_1$에 대한 미분**:
+          $$
+          \frac{\partial \eta_{i,k}}{\partial \alpha_1} = \frac{\partial}{\partial \alpha_1}(\alpha_0 + \alpha_1 H_{i,k} + \alpha_2 W_{i,k}) = H_{i,k}(\psi^\dagger)
+          $$
+          * 4. 종합 및 정리
+            * 위의 세 결과를 곱하면 분모와 분자의 $p_{i,k}(1 - p_{i,k})$ 항이 소거(cancellation)되어 식이 간단해집니다.
+          $$
+          \begin{aligned}
+          \frac{\partial \ell_{i,k}}{\partial \alpha_1} &= \left( \frac{A_{i,k} - p_{i,k}}{p_{i,k}(1 - p_{i,k})} \right) \cdot \left( p_{i,k}(1 - p_{i,k}) \right) \cdot H_{i,k}(\psi^\dagger) \\
+          &= (A_{i,k} - p_{i,k}) H_{i,k}(\psi^\dagger)
+          \end{aligned}
+          $$
+            * 따라서 전체 스코어 함수는 다음과 같습니다.
+          $$
+          U(\alpha_1) = \sum_{i=1}^{N} \sum_{k=0}^{K} (A_{i,k} - p_{i,k}) H_{i,k}(\psi^\dagger)
+          $$
+          * 5. 귀무가설 하의 스코어 방정식 (Final Equation)
+            * 귀무가설 $H_0: \alpha_1 = 0$ 하에서, 예측 확률 $p_{i,k}$는 $\text{expit}(\hat{\alpha}_0 + \hat{\alpha}_2 W_{i,k})$로 추정됩니다. 최적의 $\psi^\dagger$를 찾기 위해 스코어($U$)를 0으로 두면 최종 방정식이 도출됩니다.
+          $$
+          \sum_{i=1}^{N} \sum_{k=0}^{K} \left\{ A_{i,k} - \text{expit}(\hat{\alpha}_0 + \hat{\alpha}_2 W_{i,k}) \right\} H_{i,k}(\psi^\dagger) = 0
+          $$
+            * 이 식은 **"잔차(Observed - Expected)와 공변량(H)의 내적이 0이 되어야 한다"**는 직교 조건(Orthogonality Condition)을 의미합니다.
 
 ## 4. Efficient Estimation: Multidimensional Parameters
 

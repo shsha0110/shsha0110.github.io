@@ -2486,16 +2486,55 @@
 <section id="g-estimation-for-time-varying-treatments" class="level1">
 <h1>21.4 G-estimation for time-varying treatments</h1>
 <section id="introduction-1" class="level2">
-<h2 class="anchored" data-anchor-id="introduction-1">1. Introduction</h2>
+<h2 class="anchored" data-anchor-id="introduction-1">0. Introduction</h2>
 <ul>
 <li><p>이전 포스트들에서 우리는 시간 가변적 교란요인(Time-varying confounders)이 존재하는 상황에서 인과 효과를 추정하기 위해 <strong>IP Weighting</strong>과 <strong>G-formula</strong>를 다루었습니다. 이번 포스트에서는 이 두 방법론의 대안이자, 특히 효과의 이질성(effect heterogeneity)을 모델링하는 데 강력한 <strong>G-estimation</strong>과 그 기초가 되는 <strong>Structural Nested Mean Models (SNMMs)</strong>에 대해 깊이 있게 다룹니다.</p></li>
-<li><p>G-formula가 결합 밀도(joint density)를 모델링하고 IP Weighting이 처치 확률(treatment assignment)을 모델링한다면, G-estimation은 <strong>조건부 인과 효과(conditional causal effect)</strong> 자체를 직접 모델링하는 접근 방식입니다.</p></li>
+<li><p><strong>세 가지 방법론의 비교:</strong></p>
+<ul>
+<li><strong>G-formula:</strong> 전체 결합 분포(Joint density)를 모델링하여 표준화(Standardization)를 수행합니다.</li>
+<li><strong>IP Weighting:</strong> 치료 할당 확률(Propensity score)을 모델링하여 가상 모집단을 생성합니다.</li>
+<li><strong>G-estimation:</strong> <strong>조건부 인과 효과(Conditional causal effect)</strong> 자체를 직접 모델링하여 관측된 결과에서 효과를 제거(Subtract)합니다.</li>
+</ul></li>
 </ul>
+</section>
+<section id="the-intuition-of-g-estimation" class="level2">
+<h2 class="anchored" data-anchor-id="the-intuition-of-g-estimation">1. The Intuition of G-estimation</h2>
+<ul>
+<li>SNMM의 수식으로 들어가기 전에, G-estimation이 작동하는 근본적인 원리를 이해하는 것이 중요합니다.</li>
+</ul>
+<section id="the-subtraction-logic-빼기-논리" class="level3">
+<h3 class="anchored" data-anchor-id="the-subtraction-logic-빼기-논리">1.1. The “Subtraction” Logic (빼기 논리)</h3>
+<ul>
+<li>G-estimation의 핵심 아이디어는 매우 직관적입니다. <strong>“만약 우리가 치료의 효과를 정확히 알고 있다면, 관측된 결과(<img src="https://latex.codecogs.com/png.latex?Y">)에서 그 효과를 뺄셈하여 ’치료를 받지 않았을 때의 잠재적 결과(<img src="https://latex.codecogs.com/png.latex?Y%5E%7B%5Cbar%7B0%7D%7D">)’를 복원할 수 있다”</strong>는 것입니다.
+<ul>
+<li><ol type="1">
+<li><strong>가정(Guess):</strong> 치료 효과가 <img src="https://latex.codecogs.com/png.latex?%5Cpsi">라고 가정해 봅시다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>복원(Restore):</strong> 치료군(<img src="https://latex.codecogs.com/png.latex?A=1">)의 결과에서 <img src="https://latex.codecogs.com/png.latex?%5Cpsi">를 뺍니다. (대조군(<img src="https://latex.codecogs.com/png.latex?A=0">)은 그대로 둡니다.) 이렇게 계산된 값을 <strong>후보 반사실(Candidate Counterfactual, <img src="https://latex.codecogs.com/png.latex?H(%5Cpsi)">)</strong>이라고 합니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><strong>검증(Check):</strong> 만약 <img src="https://latex.codecogs.com/png.latex?%5Cpsi">가 진짜 정답이라면, 복원된 <img src="https://latex.codecogs.com/png.latex?H(%5Cpsi)">는 더 이상 치료 여부(<img src="https://latex.codecogs.com/png.latex?A">)와 관련이 없어야 합니다. (교환성 가정: <img src="https://latex.codecogs.com/png.latex?Y%5E%7B%5Cbar%7B0%7D%7D%20%5Cperp%20A%20%7C%20L">)</li>
+</ol></li>
+<li><ol start="4" type="1">
+<li><strong>최적화(Estimate):</strong> <img src="https://latex.codecogs.com/png.latex?H(%5Cpsi)">와 <img src="https://latex.codecogs.com/png.latex?A">가 독립이 되도록 만드는 <img src="https://latex.codecogs.com/png.latex?%5Cpsi">를 찾는 과정이 바로 G-estimation입니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+</section>
+<section id="why-do-we-need-a-model" class="level3">
+<h3 class="anchored" data-anchor-id="why-do-we-need-a-model">1.2. Why do we need a Model?</h3>
+<ul>
+<li><p>문제는 시변(Time-varying) 상황에서는 치료가 여러 번 반복되고, 그 효과가 과거의 이력(<img src="https://latex.codecogs.com/png.latex?%5Cbar%7BL%7D,%20%5Cbar%7BA%7D">)에 따라 달라질 수 있다는 점입니다. 단순히 상수 하나(<img src="https://latex.codecogs.com/png.latex?%5Cpsi">)를 빼는 것으로는 불충분합니다.</p></li>
+<li><p>따라서 우리는 <strong>“각 시점(<img src="https://latex.codecogs.com/png.latex?k">)에서, 과거 이력에 따라 치료 효과가 어떻게 달라지는지”</strong>를 나타내는 정교한 함수가 필요합니다. 이 함수를 정의하는 모형이 바로 <strong>Structural Nested Mean Model (SNMM)</strong>입니다.</p></li>
+</ul>
+</section>
 </section>
 <section id="structural-nested-mean-models-snmms" class="level2">
 <h2 class="anchored" data-anchor-id="structural-nested-mean-models-snmms">2. Structural Nested Mean Models (SNMMs)</h2>
 <ul>
-<li>G-estimation을 수행하기 위해서는 먼저 인과 효과를 구조화하는 모델이 필요합니다. 이를 <strong>Structural Nested Mean Model (SNMM)</strong>이라고 합니다.</li>
+<li><p>위에서 설명한 ’치료 효과를 제거하는 과정’을 수학적으로 수행하기 위해, 우리는 조건부 인과 효과를 구조화해야 합니다.</p></li>
+<li><p>G-estimation을 수행하기 위해서는 먼저 인과 효과를 구조화하는 모델이 필요합니다. 이를 <strong>Structural Nested Mean Model (SNMM)</strong>이라고 합니다.</p></li>
 </ul>
 <section id="the-blip-function-효과의-정의" class="level3">
 <h3 class="anchored" data-anchor-id="the-blip-function-효과의-정의">2.1. The “Blip” Function: 효과의 정의</h3>

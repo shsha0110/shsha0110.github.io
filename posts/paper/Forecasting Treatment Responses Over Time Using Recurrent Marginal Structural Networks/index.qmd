@@ -554,6 +554,77 @@ $$e(i, t, \tau) = \mathbf{SW}_i(t, \tau-1) \cdot \| Y_{i, t+\tau} - \hat{Y}_{i, 
 
 # 5. Experiments With Cancer Growth Simulation Model
 
----
+## 1. Introduction: 왜 시뮬레이션 모델이 필요한가?
 
-# 6. Conclusion
+* 현실 세계의 관측 데이터(Observational Data)를 활용하여 치료 효과(Treatment Response)를 추정할 때 가장 큰 난관은 **교란 요인(Confounding effects)이 사전적으로 알려져 있지 않다는 점**입니다. 환자에게 특정 치료가 처방된 이유가 환자의 기저 건강 상태 때문인지, 아니면 다른 외부 요인 때문인지 관측 데이터만으로는 완벽히 분리해내기 어렵습니다. 
+
+* 이러한 한계를 극복하고 제안된 인과추론 방법론들의 성능을 객관적으로 평가하기 위해, 연구진은 치료 할당 정책(Treatment application policies)이 명시적으로 모델링된 데이터 시뮬레이션을 활용합니다. 본 실험에서는 의학적 관점에서 완벽히 재현 가능하고 현실적인 테스트를 수행하기 위해 비소세포폐암(Non-small cell lung cancer) 환자를 위한 최첨단 치료 반응 모델인 **약동학-약력학(PK-PD, Pharmacokinetic-Pharmacodynamic) 모델**을 채택했습니다.
+
+* 이 모델은 실제 폐암 치료에서 나타나는 핵심적인 특징들을 모두 포함하고 있습니다. 여기에는 항암 화학요법(Chemotherapy)과 방사선 치료(Radiotherapy)의 복합적인 효과, 치료 후 세포의 재증식(Cell repopulation), 환자의 사망 및 회복, 그리고 진단 시점의 암 병기에 따른 초기 종양 크기 분포 등이 반영되어 있습니다. 결과적으로 이 PK-PD 모델을 통해 임상의들은 약물 투여량과 반응 간의 관계에 대한 가설을 탐구하고 최적의 치료 일정을 제안할 수 있는 환경을 갖추게 됩니다.
+
+## 2. Mathematical Formulation: PK-PD 종양 동역학 모델
+
+* 이제 종양의 부피가 시간에 따라 어떻게 변화하는지, 그리고 치료가 이에 어떤 영향을 미치는지 수학적으로 정의해 보겠습니다. 진단 후 경과한 일수(days)를 $t$라고 할 때, 종양의 부피 $V(t)$를 이산 시간(Discrete-time) 모델로 다음과 같이 나타냅니다.
+
+$$V(t) = \left( 1 + \rho \log\left(\frac{K}{V(t-1)}\right) - \beta_c C(t) - (\alpha d(t) + \beta d(t)^2) + e_t \right) V(t-1) \quad (6)$$
+
+* 이 수식은 모델의 핵심으로, 각 항이 의미하는 바는 다음과 같습니다:
+  * **기본 성장 항 (Gompertzian Growth):** $1 + \rho \log(K/V(t-1))$ 부분은 종양의 자연적인 성장을 의미합니다. 수용력 $K$에 도달할 때까지 비선형적으로 성장하는 특성을 반영합니다.
+  * **화학요법 효과 (Chemotherapy):** $\beta_c C(t)$는 체내 약물 농도 $C(t)$에 비례하여 종양 부피가 감소하는 효과를 나타냅니다.
+  * **방사선 치료 효과 (Radiotherapy):** $\alpha d(t) + \beta d(t)^2$는 방사선 조사량 $d(t)$에 대한 선형-이차(Linear-Quadratic) 반응 모델입니다.
+  * **노이즈 (Noise):** $e_t$는 종양 성장의 무작위성을 설명하기 위해 추가된 가우시안 노이즈 항으로, $e_t \sim N(0, 0.01^2)$를 따릅니다.
+  * 여기서 $\rho, K, \beta_c, \alpha, \beta$는 이전 연구의 사전 분포(Prior distributions)에 따라 각 환자별로 샘플링되는 고유 파라미터입니다.
+
+* 방사선량 $d(t)$는 특정 시점 $t$에 적용된 선량이며, 화학요법의 약물 농도 $C(t)$는 반감기가 1일인 지수 감소(Exponential decay) 모델을 따릅니다. 즉, 어제 투여된 약물이 체내에 절반 남게 됩니다:
+
+$$C(t) = \tilde{C}(t) + C(t-1)/2 \quad (7)$$
+* 여기서 $\tilde{C}(t)$는 시간 $t$에 새롭게 투여된 화학요법 약물의 연속적인 용량입니다.
+
+* **이질적 효과 (Heterogeneous Effects) 모델링**
+  * 환자마다 유전적 요인 등에 의해 치료 반응이 다르게 나타나는 특성을 반영하기 위해, 환자들을 3개의 그룹($S_i \in \{1, 2, 3\}$)으로 무작위 분류하는 정적 피처(Static features)를 추가했습니다. 이 그룹 라벨은 기저 파라미터의 평균값($\mu_*$)을 증강(Augment)시킵니다.
+
+$$\mu_{\beta_c}'(i) = \begin{cases} 1.1\mu_{\beta_c}, & \text{if } S_i=1 \\ \mu_{\beta_c}, & \text{otherwise} \end{cases}$$
+$$\mu_{\alpha}'(i) = \begin{cases} 1.1\mu_{\alpha}, & \text{if } S_i=2 \\ \mu_{\alpha}, & \text{otherwise} \end{cases} \quad (8)$$
+
+* 참고로 $\beta$ 값은 $\alpha$와 연동되어 설정되며($\alpha/\beta = 10$), 그룹 $S_i$에 따라 동일한 비율로 조정됩니다.
+
+## 3. 데이터 중단(Censoring) 및 시간에 따른 교란 요인 주입
+
+* 실제 임상 데이터와 유사한 환경을 만들기 위해 다음과 같은 세 가지 **중단 메커니즘(Censoring Mechanisms)**을 도입했습니다:
+  * 1. **사망 (Death):** 종양의 지름이 $D_{max} = 13\text{ cm}$ (완벽한 구형으로 가정 시 부피 $V_{max} = 1150\text{ cm}^3$)에 도달하면 환자가 사망한 것으로 간주하여 관측을 중단합니다.
+  * 2. **회복 (Recovery):** 매 시점 회복 확률 $p_t = \exp(-V_t)$를 갖는 베르누이 프로세스(Bernoulli process)에 의해 회복 여부가 결정됩니다.
+  * 3. **행정적 중단 (Administrative censoring):** 최대 60일이 경과하면 모든 관측을 종료합니다.
+
+### 시간 의존적 교란(Time-Dependent Confounding) 메커니즘
+* 이 실험의 핵심은 '환자의 과거 상태가 현재의 치료 확률에 영향을 미치는 구조'를 인위적으로 생성하는 것입니다. 화학요법 처방 $A_c(t) \in \{0, 1\}$과 방사선 치료 처방 $A_d(t) \in \{0, 1\}$을 종양 지름의 함수를 확률로 갖는 베르누이 확률 변수로 가정합니다.
+$$p_c(t) = \sigma\left(\frac{\gamma_c}{D_{max}}(\bar{D}(t) - \theta_c)\right)$$
+$$p_d(t) = \sigma\left(\frac{\gamma_d}{D_{max}}(\bar{D}(t) - \theta_d)\right) \quad (9)$$
+  * $\bar{D}(t)$: 최근 15일간의 평균 종양 지름
+  * $\sigma(\cdot)$: 시그모이드 활성화 함수 (0~1 사이의 확률값 도출)
+  * $\theta_c = \theta_d = D_{max}/2$: 종양이 최대 크기의 절반에 도달했을 때 치료가 할당될 확률이 정확히 0.5(50%)가 되도록 고정된 임계값 파라미터
+  * 치료가 결정되면($A_c(t)=1$ 또는 $A_d(t)=1$), 화학요법은 $5.0\text{ mg/m}^3$의 빈블라스틴(Vinblastine), 방사선은 $2.0\text{ Gy}$의 분할 선량으로 투여됩니다.
+
+* **$\gamma$ 파라미터의 역할:** $\gamma$는 시간 의존적 교란의 강도를 제어합니다. 만약 $\gamma=0$이라면 치료 할당은 종양 크기(반응 변수)와 무관하게 완전히 무작위로 이루어지며(교란 없음), $\gamma$ 값이 커질수록 종양 크기에 따른 치료 할당의 편향(Bias)이 매우 강해집니다.
+
+## 4. 비교 모델 (Benchmarks)
+
+* 제안된 R-MSN 방법론의 우수성을 입증하기 위해, 역학 및 통계학의 전통적 방법론과 최신 베이지안 비모수 모델(Bayesian nonparametric models)을 비교군으로 설정했습니다.
+
+* 1. **Standard Marginal Structural Models (MSM):** 기존 연구에서 널리 쓰이는 근사법을 채택했습니다. 과거의 행동(치료) 이력은 누적합인 $cum(\bar{a}_c(t-1)) = \sum_{k=1}^{t-1} a_c(k)$로, 공변량 이력은 직전 관측값 $V(t-1)$로 인코딩하여 IPTW(Inverse Probability of Treatment Weighting)를 계산합니다.
+* 2. **Bayesian Treatment Response Curves (BTRC):** 복합 치료 환경에서 다중 스텝 치료 반응 예측의 최첨단(State-of-the-art) 모델입니다. 본 시뮬레이션에서는 목표 결과가 하나이므로, 공유 구성 요소(Shared components)를 제거하여 훈련 수렴성을 높인 축소판 **R-BTRC (Reduced BTRC)**도 함께 비교했습니다.
+* 3. **Seq2Seq + Logistic:** R-MSN 내부의 성향 점수 네트워크(Propensity networks)의 효용성을 확인하기 위한 모델입니다. 시퀀스 예측은 신경망을 쓰되, 가중치(IPTWs)는 전통적인 MSM의 로지스틱 회귀를 사용하여 계산한 결과를 비교합니다.
+
+## 5. 성능 평가 결과 (Performance Evaluations)
+
+* 1만 개의 훈련 데이터 경로, 1천 개의 검증 데이터, 1천 개의 테스트 데이터를 시뮬레이션하여 모델을 평가했습니다. 모델은 교란이 매우 강한 $\gamma_c = \gamma_d = 10$의 환경에서 훈련되었으며, $\gamma$ 값이 점점 줄어들어 완전히 편향이 사라지는($\gamma=0$) 환경으로 이동할 때의 예측 성능 변화를 관찰했습니다. 성능 지표로는 $V_{max}$로 정규화(Normalized)된 1-Step-Ahead 예측의 평균 제곱근 오차(RMSE) 백분율(%)을 사용했습니다.
+
+![Figure 4: Normalized RMSEs for One-Step-Ahead Predictions. 가로축은 시간 의존적 교란의 정도($\gamma$)를 나타내며, 세로축은 정규화된 RMSE(%)를 나타냅니다. 편향된 정책($\gamma=10$)에서 훈련된 모델들이 완전히 편향 없는 정책($\gamma=0$)에서 평가될 때, 제안 모델인 R-MSN이 가장 완만한 기울기를 보이며 가장 낮은 예측 오차를 유지함으로써 시간 의존적 교란 환경에 대한 탁월한 강건성을 입증함을 명확히 보여주는 그래프입니다. 점선과 마커 모양으로 각 Benchmark 모델들(Linear, MSM, BTRC, R-BTRC, Seq2Seq+Logistic)의 성능 궤적을 비교하고 있습니다.](./images/figure_4.png)
+
+### 5.1 One-Step-Ahead 예측 결과 분석
+* 그래프에서 가장 두드러지는 점은 **R-MSN이 모든 $\gamma$ 구간에서 가장 낮은 RMSE를 기록했다는 사실**입니다. 교란이 가장 심한 $\gamma=10$에서 정규화 RMSE 1.02%로 시작해 교란이 없는 $\gamma=0$에서는 0.92%로 근소하게 감소하는 매우 안정적인 모습을 보여줍니다.
+* 완전히 편향이 없는 환경($\gamma=0$)을 기준으로, R-MSN은 기존 MSM 대비 **80.9%**, 최신 모델인 R-BTRC 대비 **66.1%** 향상된 성능을 기록했습니다. 이는 인과적 혼란 속에서 편향되지 않은 치료 반응을 학습하는 데 R-MSN이 탁월함을 의미합니다.
+* Seq2Seq 모델 구조에 기존 로지스틱 IPTW를 적용한 결과와 비교해 보아도 R-MSN이 오차를 78.7%나 줄였습니다. 이는 단순 신경망 구조의 승리가 아니라, IPTW를 추정하기 위해 도입한 유연한 성향 점수 네트워크(Propensity networks)의 기여도가 큼을 시사합니다.
+* R-BTRC 등 베이지안 모델의 경우 훈련 데이터 자체에서도 선형 모델(Linear)보다 미세하게 낮은 성능을 보였는데, 이는 BTRC 모델이 치료 반응이 선형적이고 시간에 불변(Linear time-invariant)하며 기저 진행 상태와 독립적이라고 가정하는 '모델 오지정(Model misspecification)' 문제 때문인 것으로 파악됩니다. 실제 수식 (6)을 보면 화학요법과 방사선 치료의 기여도는 직전 종양 크기인 $V(t-1)$과 곱해지는(Multiplicative) 형태이므로, 데이터 주도적(Data-driven)으로 다양한 형태의 치료 반응을 유연하게 학습할 수 있는 R-MSN의 강점이 돋보입니다.
+
+### 5.2 Multi-step 예측 성능
+* 단기 예측뿐만 아니라 장기적인 시퀀스 예측 구조(Sequence-to-sequence architecture)의 이점을 평가하기 위해 다단계 예측 성능도 측정했습니다. R-MSN은 훈련 정책(편향 환경) 하에서 MSM을 **61%** 상회했으며, 편향이 없는 정책 하에서는 무려 **95%**의 성능 향상을 보이며 모든 타임스텝 예측에서 벤치마크들을 압도했습니다.

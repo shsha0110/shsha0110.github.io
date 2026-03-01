@@ -1,0 +1,210 @@
+---
+title: "[Causal Inference] 09. Linear Structural Causal Models (Part 3)"
+description: "Algorithmic Identification Methods"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: The Algebra of Identification
+
+이전 포스트에서는 선형 회귀분석이 인과적 편향(Bias)을 가질 수 있음을 확인하고, Single-Door 및 Back-Door Criterion과 같은 그래픽 기반의 식별 전략을 다루었습니다. 이번 포스트에서는 조금 더 근본적인 질문을 던져봅니다.
+
+> **"우리가 관측한 데이터(공분산 행렬)만으로, 미지의 인과 파라미터($\lambda$)를 수학적으로 유일하게 풀어낼 수 있는가?"**
+
+이것이 바로 **선형 식별(Linear Identification)** 문제의 핵심입니다. 그래프 구조가 주어졌을 때, 우리는 연립방정식을 세우고 이를 풀어냄으로써 인과 효과를 계산할 수 있습니다. 하지만 항상 유일한 해가 존재하는 것은 아닙니다. 때로는 해가 무수히 많을 수도(식별 불가), 유한한 개수로 존재할 수도(유한 식별) 있습니다.
+
+이 과정을 대수적으로 살펴보고, 식별이 불가능한 상황을 타개하기 위한 강력한 무기인 **도구 변수(Instrumental Variables, IV)**에 대해 알아봅니다.
+
+---
+
+# 2. The Equations of Linear Identification
+
+선형 구조적 인과 모형(SCM)에서 식별 문제는 본질적으로 **연립방정식 풀이**와 같습니다.
+
+## 2.1 The Setup
+
+우리가 가진 정보(Knowns)와 알고 싶은 정보(Unknowns)는 다음과 같습니다.
+
+* **Knowns (Data):** 관측 변수들의 공분산 행렬 $\Sigma$ (예: $\sigma_{xx}, \sigma_{xy}, \sigma_{zx} \dots$)
+* **Unknowns (Parameters):** 구조적 계수 $\lambda$ (인과 효과) 및 오차항의 공분산 $\epsilon$ (confounding strength)
+
+이들의 관계는 다음과 같은 행렬 방정식으로 표현됩니다.
+
+$$
+\Sigma = (I - \Lambda)^{-T} \Omega (I - \Lambda)^{-1}
+$$
+
+여기서 $\Lambda$는 인과 계수 행렬, $\Omega$는 오차항의 공분산 행렬입니다. 우리의 목표는 $\Sigma$가 주어졌을 때 $\Lambda$를 역산해내는 것입니다.
+
+## 2.2 Solving for $\lambda$: A Simple Example
+
+다음과 같은 그래프를 생각해봅시다.
+
+![Figure 1: Z가 X의 원인이고, X가 Y의 원인인 간단한 체인 구조. Z와 Y 사이에는 점선(Confounding)이 존재한다.](./images/identification_example_graph.png)
+
+* **Model:**
+    * $X = \lambda_{zx} Z + e_x$
+    * $Y = \lambda_{xy} X + e_y$
+    * (단, $Z$와 $Y$ 사이에는 교란 요인 $\epsilon_{zy}$가 존재)
+
+이 구조에서 관측 가능한 공분산($\sigma$)을 구조적 파라미터($\lambda, \epsilon$)로 표현하면 다음과 같은 방정식들을 얻을 수 있습니다.
+
+1.  $\sigma_{xz} = \lambda_{zx}$ (Z는 외생 변수이므로)
+2.  $\sigma_{xy} = \lambda_{xy} + \lambda_{zx}\epsilon_{zy}$ (Path rule 적용)
+3.  $\sigma_{zy} = \lambda_{zx}\lambda_{xy} + \epsilon_{zy}$
+
+이제 우리는 3개의 식과 3개의 미지수($\lambda_{zx}, \lambda_{xy}, \epsilon_{zy}$)를 가집니다. 이를 가우스 소거법(Gaussian Elimination) 등을 통해 풀어보면:
+
+1.  첫 번째 식에서 $\lambda_{zx}$는 바로 구해집니다: $\lambda_{zx} = \sigma_{xz}$.
+2.  남은 두 식은 $\lambda_{xy}$와 $\epsilon_{zy}$에 대한 선형 연립방정식이 됩니다.
+    $$
+    \begin{cases}
+    \lambda_{xy} + \sigma_{xz}\epsilon_{zy} = \sigma_{xy} \\
+    \sigma_{xz}\lambda_{xy} + \epsilon_{zy} = \sigma_{zy}
+    \end{cases}
+    $$
+
+이 시스템은 선형 독립이므로(Full-rank), 유일한 해를 구할 수 있습니다. 즉, $\lambda_{xy}$는 **식별 가능(Identifiable)**합니다.
+
+---
+
+# 3. Identifiability Status: The 3 Cases
+
+선형 식별 문제의 해는 크게 세 가지 경우로 나뉩니다.
+
+## 3.1 Not Identifiable (식별 불가능)
+
+미지수의 개수가 방정식의 개수보다 많거나, 방정식들이 서로 의존적일 때 발생합니다.
+
+![Figure 2: X와 Y 사이의 직접적인 인과 관계와 교란 관계(점선)가 동시에 존재하는 그래프. 식별 불가능의 대표적 사례이다.](./images/non_identifiable_graph.png)
+
+* **구조:** $X \to Y$ ($\lambda_{xy}$) 그리고 $X \leftrightarrow Y$ ($\epsilon_{xy}$)
+* **방정식:** $\sigma_{xy} = \lambda_{xy} + \epsilon_{xy}$
+* **분석:** 식은 1개인데 미지수는 2개($\lambda_{xy}, \epsilon_{xy}$)입니다.
+* **결과:** $\lambda_{xy}$와 $\epsilon_{xy}$의 조합은 무수히 많으므로, 데이터를 아무리 많이 모아도 진짜 인과 효과를 하나로 특정할 수 없습니다.
+
+## 3.2 Finite Identifiability (유한 식별 가능)
+
+해가 유일하지는 않지만, 유한한 개수의 후보군으로 좁혀지는 흥미로운 경우입니다. 비선형 연립방정식이 등장할 때 주로 발생합니다.
+
+![Figure 3: Bow-tie 형태의 복잡한 그래프 구조. X, Y, Z, W가 서로 복잡하게 얽혀 있어 유한 식별성을 가진다.](./images/finite_identifiability_graph.png)
+
+강의 자료에 소개된 'Bow-tie' 그래프 예시에서는 방정식들을 정리하면 $\lambda_{xy}$에 대한 **2차 방정식(Quadratic Equation)**이 유도됩니다.
+
+$$
+A \lambda_{xy}^2 + B \lambda_{xy} + C = 0
+$$
+
+여기서 계수 $A, B, C$는 관측된 공분산들($\sigma$)로 이루어진 복잡한 식입니다. 근의 공식에 의해 $\lambda_{xy}$는 최대 2개의 가능한 값을 가집니다. 즉, 데이터만으로는 두 값 중 어느 것이 진실인지 알 수 없지만, 후보를 2개로 좁힐 수는 있습니다. 이를 **Finite Identifiability**라고 합니다.
+
+## 3.3 Unique Identifiability (유일 식별 가능)
+
+가장 이상적인 경우로, 해가 오직 하나만 존재합니다. 앞서 살펴본 2.2절의 예시나, 아래에서 다룰 도구 변수(IV)를 이용한 경우가 이에 해당합니다.
+
+---
+
+# 4. Instrumental Variables (IV)
+
+교란 요인(Confounding) 때문에 $X \to Y$의 인과 효과를 식별할 수 없는 상황(3.1절)에서, 구세주처럼 등장하는 것이 바로 **도구 변수(Instrumental Variable, Z)**입니다.
+
+## 4.1 Concept & Definition
+
+의사의 처방($Z$)이 환자의 약물 복용량($X$)에 영향을 주고, 약물 복용량이 치료 결과($Y$)에 영향을 주는 상황을 가정해봅시다. 이때 약물 복용과 결과 사이에는 관측되지 않은 교란 요인(환자의 건강 상태 등)이 존재합니다.
+
+![Figure 4: 도구 변수의 기본 구조. Z는 X에 영향을 주지만, Y에는 오직 X를 통해서만 영향을 미친다(Z -> X -> Y). X와 Y 사이에는 교란(점선)이 있지만, Z와 Y 사이에는 없다.](./images/iv_graph_basic.png)
+
+변수 $Z$가 $X \to Y$의 인과 효과 $\lambda_{xy}$를 식별하기 위한 **도구 변수(IV)**가 되기 위한 조건은 다음과 같습니다:
+
+1.  **Relevance:** $Z$는 $X$와 관련이 있어야 한다. (Graph 상에서 $Z$와 $X$가 d-separated 되지 않음)
+2.  **Exclusion Restriction:** $Z$는 $Y$에 직접적인 영향을 주지 않아야 하며, 오직 $X$를 통해서만 영향을 주어야 한다.
+3.  **Unconfoundedness:** $Z$는 $Y$와 공유하는 교란 요인이 없어야 한다. (Graph 상에서 $Z$와 $Y$가 $G_{\lambda_{xy}}$에서 d-separated 됨)
+
+## 4.2 Mathematical Derivation
+
+위 그래프 구조에서 방정식을 세워봅시다.
+
+1.  $\sigma_{zx} = \lambda_{zx}$ (Z는 외생변수)
+2.  $\sigma_{zy} = \lambda_{zx} \lambda_{xy}$ ($Z \to X \to Y$ 경로만 존재. $X \leftrightarrow Y$ 경로는 collider $X$에 의해 차단됨)
+
+이 두 식을 연립하면 놀랍도록 간단한 결과를 얻습니다.
+
+$$
+\lambda_{xy} = \frac{\sigma_{zy}}{\lambda_{zx}} = \frac{\sigma_{zy}}{\sigma_{zx}}
+$$
+
+이것이 바로 유명한 **IV Estimator**입니다. 회귀 계수의 관점에서 보면 다음과 같이 표현됩니다.
+
+$$
+\lambda_{xy} = \frac{r_{zy}}{r_{zx}}
+$$
+
+즉, ($Y$와 $Z$의 상관관계)를 ($X$와 $Z$의 상관관계)로 나누어 줌으로써, $X$와 $Y$ 사이의 교란 편향을 제거하고 순수한 인과 효과를 추출해냅니다.
+
+## 4.3 2-Stage Least Squares (2SLS) Interpretation
+
+이 수식은 통계적으로 **2단계 최소자승법(2SLS)**으로 해석할 수 있습니다.
+
+1.  **Stage 1:** $X$를 $Z$로 회귀분석하여 예측값 $\hat{X}$를 구합니다.
+    $$X = \alpha Z + e \implies \hat{X} = \sigma_{zx} Z$$
+    이 과정은 $X$의 변동 중 교란 요인과 무관한, 순수하게 $Z$에 의해 설명되는 부분만을 발라내는 것입니다.
+
+2.  **Stage 2:** $Y$를 $\hat{X}$에 대해 회귀분석합니다.
+    $$Y = \beta \hat{X} + u$$
+    이때 구해지는 계수 $\beta$가 바로 인과 효과 $\lambda_{xy}$가 됩니다.
+
+---
+
+# 5. Conditional Instrumental Variables
+
+현실에서는 완벽한 도구 변수 $Z$를 찾기 어려울 수 있습니다. 예를 들어 $Z$가 $Y$와 교란 요인을 공유할 수도 있습니다. 이때 특정 변수 집합 $W$를 통제(Conditioning)함으로써 $Z$를 도구 변수로 만들 수 있다면, 이를 **Conditional IV**라고 합니다.
+
+## 5.1 Definition
+
+변수 집합 $W$가 주어졌을 때, $Z$가 $\lambda_{xy}$에 대한 **Conditional IV**가 되기 위한 조건:
+
+1.  $W$는 $Y$의 자손(Descendant)을 포함하지 않는다.
+2.  $W$를 조건부로 했을 때, $Z$와 $Y$는 $X \to Y$ 엣지를 제거한 그래프에서 d-separated 된다. (교란 경로 차단)
+3.  $W$를 조건부로 했을 때, $Z$와 $X$는 d-separated 되지 않는다. (연관성 유지)
+
+## 5.2 Example Graph
+
+![Figure 5: Conditional IV 예시 그래프. Z는 W를 통해 Y와 연결되는 뒷문 경로(Back-door path)를 가진다. W를 통제하면 이 경로가 차단되어 Z가 유효한 도구 변수가 된다.](./images/conditional_iv_graph.png)
+
+* 원래 $Z$는 $Z \leftarrow W \leftrightarrow Y$ 등의 경로 때문에 $Y$와 상관성을 가져 IV가 될 수 없습니다.
+* 하지만 $W$를 회귀식에 포함하여 통제하면, $Z$와 $Y$ 사이의 비인과적 경로가 차단됩니다.
+* 따라서 $W$를 포함한 상태에서 IV 분석을 수행하면 $\lambda_{xy}$를 식별할 수 있습니다.
+
+---
+
+# 6. Summary
+
+이번 포스트에서는 선형 모형에서의 인과 식별 문제를 깊이 있게 다루었습니다.
+
+1.  **대수적 식별:** 인과 추론은 공분산($\Sigma$)으로부터 구조적 파라미터($\Lambda$)를 복원하는 역문제(Inverse Problem)입니다.
+2.  **식별의 종류:** 해의 개수에 따라 **Unique** (1개), **Finite** (유한개), **Non-identifiable** (무한개)로 나뉩니다.
+3.  **도구 변수(IV):** 교란 요인이 있어도 $X$의 변동 중 외생적인 부분($Z$에 의한 변동)만을 이용하여 인과 효과를 식별하는 강력한 방법입니다. $\lambda_{xy} = \sigma_{zy} / \sigma_{zx}$.
+4.  **Conditional IV:** $Z$가 완벽하지 않을 때, 다른 변수 $W$를 통제함으로써 $Z$를 도구 변수로 활용할 수 있습니다.
+
+다음 포스트에서는 이러한 선형 식별 이론을 넘어서, 더욱 일반적인 식별 알고리즘과 최신 인과 추론 방법론에 대해 알아보겠습니다.
+
+---
+
+### Lecture Coverage Checklist
+
+* [x] **The Equations of Linear Identification**: $\Sigma$와 $\Lambda$의 관계식 설명 (Slides 449-462)
+* [x] **General Idea of Identification**: 공분산 행렬을 이용한 연립방정식 풀이 접근 (Slides 475-499)
+* [x] **Non-Identifiability**: $X \leftrightarrow Y$ 예시와 무한 해의 존재 설명 (Slides 555-576)
+* [x] **Finite Identifiability**: Bow-tie 그래프 예시와 2차 방정식(Quadratic equation) 도출 (Slides 577-623)
+* [x] **Algorithmic Complexity**: Doubly exponential complexity 언급 (Slides 645, 662)
+* [x] **Instrumental Variables (IV)**:
+    * IV의 정의 (d-separation 조건) (Slide 681-684)
+    * 수식 유도 $\lambda_{xy} = \sigma_{zy}/\sigma_{zx}$ (Slide 700-701)
+    * 2SLS 해석 및 Regression 관점 (Slide 710-726)
+* [x] **Conditional IV**: 정의 및 $W$를 이용한 d-separation 조건 설명 (Slide 728-733)

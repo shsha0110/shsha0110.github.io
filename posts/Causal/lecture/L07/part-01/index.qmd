@@ -1,0 +1,191 @@
+---
+title: "[Causal Inference] 07. An Algorithmic Approach to Identification (Part 1)"
+description: "Factorizing Observational Distributions"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction
+
+인과 추론(Causal Inference)의 핵심 목표 중 하나는 관측 가능한 데이터($P(v)$)로부터 우리가 관심을 가지는 인과 효과($P(y|do(x))$)를 식별(Identification)해내는 것입니다. 
+간단한 구조에서는 *Back-door criterion*이나 *Front-door criterion*을 사용할 수 있지만, 변수 간의 관계가 복잡하고 관측되지 않은 교란 요인(Unobserved Confounder)이 존재하는 일반적인 SCM(Structural Causal Model) 환경에서는 보다 체계적이고 알고리즘적인 접근이 필요합니다.
+
+[cite_start]이번 포스트에서는 관측 분포를 인과 다이어그램(Causal Diagram)의 위상(Topology)에 따라 분해(Decomposition)하고, 이를 **C-Factor(Confounded Factor)** 라는 개념으로 일반화하여 인과 효과를 식별하는 과정을 다룹니다[cite: 209, 210].
+
+[cite_start]주요 로드맵은 다음과 같습니다[cite: 292, 293, 294, 295]:
+1.  SCM과 인과 다이어그램에 기반하여 확률 분포를 분해(Factorization)하는 방법을 정의합니다.
+2.  분포의 특정 구성 요소(Factor)를 식별할 수 있는 연산(Operation)을 확립합니다.
+3.  타겟 인과 효과를 이러한 Factor들의 조합으로 표현하여 식별 가능성을 판단합니다.
+
+---
+
+# 2. Decomposition of Probability Distributions
+
+## 2.1 Markovian Case (No Unobserved Confounders)
+
+모든 변수가 관측 가능하고, 오차항(Error terms)들이 서로 독립인 **Markovian 모델**을 먼저 살펴봅시다. [cite_start]이 경우, 관측 변수 집합 $V$에 대한 결합 확률 분포 $P(v)$는 베이지안 네트워크의 분해 성질에 따라 각 변수의 부모 변수($pa_i$)에 대한 조건부 확률의 곱으로 표현됩니다[cite: 303, 304, 305].
+
+$$
+P(v) = \sum_{u} P(u) \prod_{V_i \in V} P(v_i | pa_i, u_i) = \prod_{V_i \in V} P(v_i | pa_i)
+$$
+
+[cite_start]여기서 $P(v_i|pa_i)$는 $P(v)$로부터 직접 계산 가능하므로, 이를 **Canonical Factor**라고 부를 수 있습니다[cite: 316].
+
+![Figure: Markovian 모델에서의 변수 간 관계와 조건부 독립성](./images/markovian_dag_example.png)
+*이 그림은 $X, Y, Z$ 변수로 구성된 단순한 Markovian 모델을 보여줍니다. $U$ 변수들이 서로 독립이므로, 전체 분포는 $P(z)P(x|z)P(y|x,z)$와 같이 각 노드의 조건부 확률곱으로 깔끔하게 분해됩니다.*
+
+## 2.2 Semi-Markovian Case (With Unobserved Confounders)
+
+현실에서는 관측되지 않은 교란 변수 $U$가 존재하여 변수들 간의 Markovian 성질을 깰 수 있습니다. 이를 **Semi-Markovian 모델**이라 합니다.
+[cite_start]예를 들어, $V_1 \rightarrow V_2 \rightarrow V_3 \dots$ 와 같은 구조에 관측되지 않은 $U_1$이 $V_1$과 $V_3$에 동시에 영향을 준다면, 분포의 분해는 더 복잡해집니다[cite: 336, 341].
+
+$$
+P(v) = \sum_{u} P(u) \prod_{V_i \in V} P(v_i | pa_i, u_i)
+$$
+
+강의 자료의 예제($V_1 \dots V_5$와 $U_1, U_2, U_3$가 섞인 모델)를 보면, $U$에 대해 합(Summation)을 취하는 과정에서 서로 얽혀있는 항들이 생겨납니다. [cite_start]이로 인해 단순한 조건부 확률의 곱($\prod P(v_i|pa_i)$) 형태로 표현되지 않고, **$U$를 공유하는 변수들의 묶음(Term)** 들이 나타나게 됩니다[cite: 384].
+
+$$
+P(v) = \underbrace{\left( \sum_{u_3} P(v_2|v_1, u_3)P(v_4|v_3, u_3)P(u_3) \right)}_{\text{Factor 1}} \cdot \underbrace{\left( \sum_{u_1, u_2} P(u_1, u_2) \dots \right)}_{\text{Factor 2}}
+$$
+
+이러한 복잡한 묶음들을 체계적으로 다루기 위해 새로운 함수 $Q$를 도입합니다.
+
+---
+
+# 3. C-Factors (Confounded Factors)
+
+## 3.1 Definition of Q-function
+
+복잡한 합(Summation) 형태의 항들을 추상화하여 **Q-Factor** 또는 **C-Factor**라고 정의합니다. [cite_start]변수 집합 $C \subseteq V$에 대하여 $Q[C]$는 다음과 같이 정의됩니다[cite: 220, 221, 396]:
+
+$$
+Q[C](c, pa_c) = \sum_{u(C)} P(u(C)) \prod_{V_i \in C} P(v_i | pa_i, u_i)
+$$
+
+여기서 $U(C)$는 $C$에 속한 변수들의 부모인 오차항들의 집합($\bigcup_{V_i \in C} U_i$)을 의미합니다.
+[cite_start]이 정의를 사용하면, 앞서 복잡했던 $P(v)$ 식을 C-Factor들의 곱으로 간결하게 다시 쓸 수 있습니다[cite: 397, 400].
+
+$$
+P(v) = Q[\{V_2, V_4\}] \cdot Q[\{V_1, V_3, V_5\}]
+$$
+
+## 3.2 Interpretation: C-Factors as Causal Effects
+
+C-Factor $Q[C]$는 단순한 수식적 정의를 넘어 중요한 인과적 의미를 가집니다.
+[cite_start]$Q[C]$는 **"$C$를 제외한 모든 변수($V \setminus C$)에 개입(Intervention)했을 때, $C$가 가질 확률 분포"** 로 해석될 수 있습니다[cite: 404, 407].
+
+$$
+Q[C] = P(c \mid do(v \setminus c))
+$$
+
+**유도 과정:**
+Truncated Product Formula에 의해 $P(c \mid do(v \setminus c))$는 $C$에 속하지 않는 변수들의 구조적 방정식(또는 조건부 확률)을 제거한 분포입니다.
+$C$의 부모가 아닌 $U$들은 모두 합쳐져서 사라지므로(Summed out), 결국 $C$에 영향을 주는 $U(C)$와 구조적 식들만 남아 $Q[C]$의 정의와 일치하게 됩니다.
+
+---
+
+# 4. Operations on C-Factors
+
+C-Factor를 자유자재로 다루기 위해 두 가지 핵심 연산(Operation)이 필요합니다.
+
+## 4.1 Ancestral Reduction (Marginalization)
+
+특정 조건 하에서 C-Factor $Q[C]$로부터 일부 변수를 제거(Marginalization)하여 더 작은 집합의 $Q$를 얻을 수 있습니다.
+
+[cite_start]**Lemma (Ancestral-Reduction)**[cite: 422, 423]:
+집합 $W \subseteq C$가 $C$ 내에서 유도된 서브그래프 $G[C]$ 상에서 **조상(Ancestral) 집합**이라면(즉, $W$의 모든 조상이 $W$에 포함된다면), 다음이 성립합니다.
+
+$$
+Q[W] = \sum_{c \setminus w} Q[C]
+$$
+
+이 정리는 우리가 구하고자 하는 $Q$ 팩터가 너무 클 때, 불필요한 변수를 합(Summation)으로 제거할 수 있는 조건을 제시합니다. [cite_start]예를 들어, $V_1 \rightarrow V_2$ 관계에서 $\{V_1\}$은 조상 집합이므로 $Q[\{V_1\}] = \sum_{v_2} Q[\{V_1, V_2\}]$가 가능하지만, $\{V_2\}$만 남기는 것은 불가능할 수 있습니다[cite: 424].
+
+## 4.2 C-Component Factorization (Tian's Lemma)
+
+가장 강력한 도구는 그래프의 **C-Component(Confounded Component)** 구조를 이용해 $Q[C]$를 더 작은 단위로 쪼개는 것입니다.
+
+[cite_start]**Definition (C-Component)**[cite: 426, 427]:
+두 변수 $V_i, V_j$가 관측되지 않은 공통 부모 $U$를 공유한다면(즉, $V_i \leftrightarrow \dots \leftrightarrow V_j$ 경로가 있다면), 두 변수는 같은 C-Component에 속합니다. [cite_start]이 관계는 반사, 대칭, 추이적(Reflexive, Symmetric, Transitive)이므로 변수 집합 $V$를 분할(Partition)합니다[cite: 431].
+
+[cite_start]**Lemma (Tian [2002])**[cite: 438, 439]:
+어떤 변수 집합 $H \subseteq V$에 대해, $G[H]$의 C-Component들이 $H_1, \dots, H_k$라면, $Q[H]$는 다음과 같이 분해됩니다.
+
+$$
+Q[H] = \prod_{j=1}^{k} Q[H_j]
+$$
+
+이 정리는 전체 분포 $P(v) = Q[V]$를 그래프상의 연결 요소(Connected Component via bidirected edges)별로 쪼갤 수 있음을 의미합니다.
+
+### Computing Factors via Topological Order
+[cite_start]각 C-Component $Q[H_j]$를 실제로 계산하기 위해, $H$에 대한 위상 정렬(Topological Order) $V_{(1)} < \dots < V_{(|H|)}$을 이용합니다[cite: 442, 443].
+$H_{\le i}$를 위상 정렬상 $V_{(i)}$까지의 변수 집합이라고 할 때,
+
+$$
+Q[H_j] = \prod_{V_{(i)} \in H_j} \frac{Q[H_{\le i}]}{Q[H_{\le i-1}]} = \prod_{V_{(i)} \in H_j} P(v_{(i)} \mid v^{(i-1)})
+$$
+(여기서 $v^{(i-1)}$는 위상 정렬 상 앞선 변수들)
+
+[cite_start]이 공식을 통해 복잡한 $Q$ 팩터들을 관측 데이터 $P(v)$의 조건부 확률들의 곱 형태로 구체적으로 계산할 수 있습니다[cite: 268].
+
+![Figure: C-Component Factorization Visualization](./images/c_factor_lattice.png)
+*C-Factorization의 개념도. 전체 집합 $V$에 대한 $Q[V]$에서 시작하여, 그래프의 C-Component 구조에 따라 더 작은 $Q$ 팩터들($Q[V_{123}], Q[V_{24}]$ 등)로 쪼개지는 과정을 나타냅니다. 분해된 팩터들은 더 이상 분해되지 않을 때까지(Atomic) 계속됩니다.*
+
+---
+
+# 5. Detailed Example: Derivation
+
+[cite_start]강의 자료의 예시($V_1, \dots, V_5$)를 통해 $Q[\{V_1, V_3, V_5\}]$를 실제로 계산해봅시다[cite: 267, 268].
+
+1.  **목표**: $Q[\{V_1, V_3, V_5\}]$ 계산.
+2.  **Topological Order**: $V_1 < V_2 < V_3 < V_4 < V_5$라고 가정.
+3.  **Ancestral Reduction & Ratio**:
+    $Q[H]$ 분해 공식을 적용하면 각 단계별로 $P(v)$의 조건부 확률 형태가 나타납니다.
+    $$
+    Q[\{V_1, V_3, V_5\}] = \frac{Q[\{V_1\}]}{1} \times \frac{Q[\{V_1, V_2, V_3\}]}{Q[\{V_1, V_2\}]} \times \frac{Q[\{V_1 \dots V_5\}]}{Q[\{V_1 \dots V_4\}]}
+    $$
+    각 항은 Ancestral Reduction에 의해 다음과 같이 $P$의 마지널/조건부 확률로 변환됩니다.
+    * $\frac{Q[\{V_1\}]}{1} = P(v_1)$
+    * $\frac{Q[\{V_1, V_2, V_3\}]}{Q[\{V_1, V_2\}]} = \frac{P(v_1, v_2, v_3)}{P(v_1, v_2)} = P(v_3 | v_1, v_2)$
+    * $\frac{Q[V]}{Q[V \setminus \{V_5\}]} = P(v_5 | v_1, v_2, v_3, v_4)$
+
+4.  **최종 결과**:
+    $$
+    Q[\{V_1, V_3, V_5\}] = P(v_1) P(v_3 | v_1, v_2) P(v_5 | v_1, v_2, v_3, v_4)
+    $$
+
+이처럼 추상적인 $Q$ 팩터는 위상 정렬과 Ancestral Reduction을 통해 관측 가능한 조건부 확률들의 곱으로 명확히 식별(Identified)됩니다.
+
+---
+
+# 6. Summary
+
+이번 포스트에서는 복잡한 인과 모델에서 인과 효과를 식별하기 위한 알고리즘적 기초를 다루었습니다. [cite_start]핵심 내용을 정리하면 다음과 같습니다[cite: 286].
+
+* **C-Factor ($Q[C]$)**: 변수 집합 $C$에 대한 인과적 기여분(Causal Contribution)을 나타내며, $P(c|do(v \setminus c))$와 같습니다.
+* **Ancestral Reduction**: $Q[C]$에서 조상 집합에 해당하는 변수들만 남기고 나머지를 합(Summation)으로 제거할 수 있습니다 ($Q[W] = \sum_{c \setminus w} Q[C]$).
+* **C-Component Factorization**: 그래프의 양방향 엣지(Bidirected edges)로 연결된 컴포넌트(C-Component)별로 $Q$ 팩터를 곱의 형태로 분해할 수 있습니다 ($Q[H] = \prod Q[H_j]$).
+* **Identifiability**: 이러한 분해와 연산 과정을 통해 타겟 인과 효과를 $P(v)$의 함수로 표현할 수 있다면, 해당 인과 효과는 식별 가능(Identifiable)합니다.
+
+이러한 **C-Factor Algebra**는 단순한 공식을 넘어, 인과 추론의 가장 일반적인 식별 알고리즘인 **ID 알고리즘(Identification Algorithm)** 의 근간이 됩니다.
+
+---
+
+### 누락 방지 검증 (Checklist)
+
+* **[포함]** 확률 분포의 분해 (Markovian vs Semi-Markovian)
+* **[포함]** C-Factor ($Q[C]$)의 정의 및 인과적 의미 ($do$-calculus와의 연결)
+* **[포함]** Ancestral Reduction (Marginalization) Lemma
+* **[포함]** C-Component의 정의 및 성질 (Reflexive, Symmetric, Transitive)
+* **[포함]** Tian's Factorization Lemma (C-Component Factorization)
+* **[포함]** 위상 정렬(Topological Order)을 이용한 구체적 계산 공식 및 예제 ($Q[\{V_1, V_3, V_5\}]$ 유도)
+* **[포함]** 핵심 시각화 자료 (Markovian DAG, C-Factor Lattice) 설명 포함
+* **[생략]** 없음 (강의 자료의 핵심 이론적 흐름을 모두 포함함)

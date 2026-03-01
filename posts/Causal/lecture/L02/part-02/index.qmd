@@ -1,0 +1,212 @@
+---
+title: "[Causal Inference] 02. Causal Models and Graphs  (Part 2)"
+description: "Structural Causal Model (SCM), Markovian Factorization, and d-separation"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: Why Causal Models?
+
+기존의 통계학이나 머신러닝의 추론(Inference)은 주로 **결합 확률 분포(Joint Distribution)** $P(v)$를 파악하는 데 집중합니다. [cite_start]"고객이 A를 샀을 때 B도 살 확률은?"($P(B|A)$)과 같은 질문은 데이터의 상관관계(Association)만으로도 충분히 답할 수 있습니다. [cite: 2412-2419]
+
+하지만 "가격을 두 배로 올리면 판매량은 어떻게 변할까?"와 같은 **개입(Intervention)**이나 반사실적(Counterfactual) 질문에 답하기 위해서는 데이터 그 자체($P$)를 넘어, 데이터가 생성되는 **현실의 메커니즘(Reality)**을 이해해야 합니다. [cite_start]이를 위해 우리는 **구조적 인과 모델(Structural Causal Model, SCM)**이라는 새로운 언어를 배웁니다. [cite: 2421-2449]
+
+## 1.1 Motivation: Simpson's Paradox Example
+
+[cite_start]강의에서는 의사결정의 어려움을 보여주기 위해 가상의 전염병과 치료제 시나리오를 제시합니다. [cite: 2236-2246]
+
+* **상황**: 특정 도시에 전염병이 돌고 있고, 치료제(Drug)가 있습니다.
+* **숨겨진 진실(Reality - Unknown to physicians)**:
+    1.  **부유층(Rich)**: 생활 환경이 좋아 약물 복용 여부와 상관없이 생존합니다.
+    2.  **빈곤층(Poor)**:
+        * 유전 인자(Gene)가 없는 경우: 자연 치유력이 없어 사망합니다.
+        * 유전 인자가 있는 경우: 약을 먹으면 알레르기 반응으로 사망하고, 안 먹으면 생존합니다.
+    3.  **현재 처방 관행**: 약값이 비싸서 의사들은 부유층에게만 약을 처방합니다.
+
+이 상황에서 데이터만 관측하면($P(r, d, a)$), 약을 먹은 사람(주로 부유층)은 생존율이 높고, 안 먹은 사람(주로 빈곤층)은 생존율이 낮게 나옵니다. 머신러닝 모델은 "약을 먹는 것이 생존에 유리하다"고 잘못된 결론을 내릴 수 있습니다. [cite_start]하지만 실제 메커니즘(SCM)을 안다면, **"누구에게도 약을 주지 말아야 한다(빈곤층에게는 치명적, 부유층에게는 무의미)"**는 정반대의 결론에 도달합니다. [cite: 2340-2402]
+
+즉, 데이터($P$)는 현실($M$)의 그림자일 뿐이며, 올바른 인과 추론을 위해서는 $M$을 모델링해야 합니다.
+
+![Figure: 기존 통계적 추론과 인과 추론의 패러다임 비교. 통계적 추론은 데이터 P 내에서의 성질 Q(P)를 찾지만, 인과 추론은 데이터 생성 모델 M을 통해 현실을 이해하고 P'를 추정한다.](./images/inference_paradigm.png)
+
+---
+
+# 2. Structural Causal Model (SCM)
+
+인과 관계를 수학적으로 정의하기 위해 SCM을 도입합니다. SCM은 현실의 메커니즘을 **결정론적 함수**와 **확률적 노이즈**의 결합으로 표현합니다.
+
+## 2.1 Definition
+[cite_start]SCM $\mathcal{M}$은 4개의 요소 $\langle V, U, F, P(U) \rangle$로 구성된 튜플입니다. [cite: 2548-2554]
+
+1.  **$V = \{V_1, ..., V_n\}$ (Endogenous Variables)**: 모델 내부에서 결정되며, 우리가 관측할 수 있는 변수들입니다.
+2.  **$U = \{U_1, ..., U_m\}$ (Exogenous Variables)**: 모델 외부에서 결정되는 변수들로, 관측되지 않는 배경 요인(Background factors)이나 노이즈를 의미합니다.
+3.  **$F = \{f_1, ..., f_n\}$ (Structural Functions)**: 각 내생 변수 $V_i$가 어떻게 결정되는지를 정의하는 함수 집합입니다.
+    $$v_i \leftarrow f_i(pa_i, u_i)$$
+    여기서 $pa_i \subseteq V \setminus \{V_i\}$는 $V_i$의 부모 변수(직접적인 원인)들이고, $u_i \subseteq U$는 관련된 외생 변수입니다.
+4.  **$P(U)$**: 외생 변수 $U$에 대한 확률 분포입니다.
+
+## 2.2 Properties of SCM
+[cite_start]SCM은 다음과 같은 중요한 성질을 가집니다. [cite: 2572-2637]
+
+1.  **Induces $P(V)$**: 외생 변수의 분포 $P(U)$와 함수 $F$를 통해 관측 변수들의 결합 확률 분포 $P(V)$가 결정됩니다.
+2.  **Induces Causal Diagram**: 변수 간의 함수적 관계($f_i$)를 통해 인과 그래프(DAG)를 그릴 수 있습니다.
+
+![Figure: SCM의 개념도. 외생 변수 U가 확률 분포 P(U)를 따르고, 함수 F를 통해 내생 변수 V의 값을 결정하여 관측 데이터 분포 P(V)를 유도한다.](./images/scm_conceptual.png)
+
+---
+
+# 3. Causal Diagrams (DAGs)
+
+SCM은 시각적으로 **유향 비순환 그래프(DAG, Directed Acyclic Graph)**로 표현됩니다. [cite_start]그래프 $\mathcal{G} = \langle V, E \rangle$는 다음 규칙에 따라 생성됩니다. [cite: 2683-2687]
+
+1.  **Nodes**: 각 내생 변수 $V_i$를 노드로 합니다.
+2.  **Directed Edges ($\rightarrow$)**: 함수 $f_i$에서 $V_j$가 $V_i$의 인자($pa_i$)로 사용되면 $V_j \rightarrow V_i$ 엣지를 그립니다.
+3.  **Bidirected Edges ($\leftrightarrow$)**: 두 변수 $V_i, V_j$가 공통된 외생 변수(Common unobserved confounder)를 공유하거나, 그들의 외생 변수 $U_i, U_j$가 서로 종속적(Correlated)일 때 점선 양방향 화살표로 연결합니다.
+
+---
+
+# 4. Markovian Factorization
+
+SCM의 가장 강력한 점 중 하나는 복잡한 결합 확률 분포를 간단한 조건부 확률의 곱으로 분해할 수 있다는 것입니다. 이를 **Markovian Factorization** 또는 **Bayesian Factorization**이라고 합니다.
+
+## 4.1 Markovian Condition
+[cite_start]만약 모든 외생 변수 $U_i$들이 서로 **독립(Jointly Independent)**이라면, 즉 그래프에 양방향 엣지($\leftrightarrow$)가 하나도 없다면, 이 모델을 **Markovian**이라고 합니다. [cite: 2988-2991]
+
+## 4.2 Mathematical Derivation
+[cite_start]Markovian 가정 하에서 결합 확률 분포 $P(\mathbf{v})$가 어떻게 분해되는지 단계별로 유도해 보겠습니다. [cite: 2992-2993]
+
+**Step 1: Law of Total Probability**
+모든 변수 $V$의 결합 확률은 외생 변수 $U$를 포함한 전체 확률에서 $U$를 합(Summing out)하여 얻습니다. SCM에서 $v_i$는 $pa_i$와 $u_i$에 의해 결정되므로($P(v_i|pa_i, u_i)$는 0 또는 1), 다음과 같이 쓸 수 있습니다.
+$$P(\mathbf{v}) = \sum_{\mathbf{u}} P(\mathbf{u}) \prod_{V_i \in V} P(v_i \mid pa_i, u_i)$$
+
+**Step 2: Independence of Exogenous Variables**
+Markovian 가정에 의해 $U$들이 서로 독립이므로, $P(\mathbf{u}) = \prod P(u_i)$가 됩니다.
+$$= \sum_{\mathbf{u}} \prod_{V_i \in V} P(v_i \mid pa_i, u_i) P(u_i)$$
+
+**Step 3: Independence of $U_i$ and $Pa_i$**
+외생 변수 $U_i$는 시스템 외부에서 결정되므로 내생 변수인 부모 $Pa_i$와 독립입니다. 따라서 $P(u_i) = P(u_i \mid pa_i)$로 쓸 수 있습니다. 이를 식에 대입하고, 확률의 곱셈 법칙($P(A|B)P(B) = P(A,B)$)을 적용합니다.
+$$= \sum_{\mathbf{u}} \prod_{V_i \in V} P(v_i \mid pa_i, u_i) P(u_i \mid pa_i)$$
+$$= \sum_{\mathbf{u}} \prod_{V_i \in V} P(v_i, u_i \mid pa_i)$$
+
+**Step 4: Commutativity of Sum and Product**
+각 항은 자신에게 해당되는 $u_i$에만 의존하므로, 전체 합($\sum_{\mathbf{u}}$)을 개별 합($\sum_{u_i}$)의 곱으로 바꿀 수 있습니다.
+$$= \prod_{V_i \in V} \left( \sum_{u_i} P(v_i, u_i \mid pa_i) \right)$$
+
+**Step 5: Marginalization (Final Result)**
+괄호 안의 식은 결합 확률에서 $u_i$를 마지널라이즈(Marginalize)한 것과 같으므로 최종적으로 다음 식이 성립합니다.
+$$\boxed{P(\mathbf{v}) = \prod_{V_i \in V} P(v_i \mid pa_i)}$$
+
+이 결과는 관측 불가능한 $U$를 모르더라도, **오직 부모-자식 간의 관계(Local Information)만으로 전체 시스템의 분포를 설명할 수 있음**을 의미합니다.
+
+---
+
+# 5. Conditional Independence & d-separation
+
+그래프 구조는 변수들 간의 조건부 독립성(Conditional Independence) 정보를 담고 있습니다. [cite_start]이를 파악하기 위해 세 가지 기본 구조(Triplets)를 이해해야 합니다. [cite: 3014-3191]
+
+## 5.1 The Three Basic Structures (Triplets)
+
+### 1. Chain (Causal Chain)
+* **구조**: $X \rightarrow Z \rightarrow Y$
+* **해석**: $X$가 $Z$를 유발하고, $Z$가 $Y$를 유발합니다. (예: 공부 습관 $\to$ 수능 점수 $\to$ 대학 합격)
+* **독립성**:
+    * $Z$를 모를 때: $X$와 $Y$는 종속적입니다.
+    * **$Z$를 알 때 (Given $Z$)**: $X$가 $Y$에 미치는 영향은 $Z$에 의해 차단(Blocked)되므로 **$X \perp Y \mid Z$** (독립)입니다.
+
+![Figure: Causal Chain 구조. 중간 변수 Z를 관측하면 X와 Y의 정보 흐름이 차단되어 독립이 된다.](./images/causal_chain.png)
+
+### 2. Fork (Common Cause)
+* **구조**: $X \leftarrow Z \rightarrow Y$
+* **해석**: $Z$가 $X$와 $Y$의 공통 원인입니다. (예: 비 $\to$ 교통체증, 비 $\to$ 우산 사용)
+* **독립성**:
+    * $Z$를 모를 때: 공통 원인에 의해 $X$와 $Y$는 상관관계를 가집니다(Spurious Correlation).
+    * **$Z$를 알 때 (Given $Z$)**: 공통 원인을 통제했으므로 **$X \perp Y \mid Z$** (독립)입니다.
+
+![Figure: Common Cause (Fork) 구조. 공통 원인 Z를 통제하면 X와 Y 사이의 허위 상관관계가 사라진다.](./images/common_cause.png)
+
+### 3. Collider (Common Effect)
+* **구조**: $X \rightarrow Z \leftarrow Y$
+* **해석**: 서로 독립인 $X$와 $Y$가 공통 결과 $Z$를 유발합니다. (예: 감기 $\to$ 결석, 휴일 $\to$ 결석)
+* **독립성**:
+    * $Z$를 모를 때: $X$와 $Y$는 서로 독립입니다. ($P(X,Y) = P(X)P(Y)$)
+    * **$Z$를 알 때 (Given $Z$)**: **$X \not\perp Y \mid Z$** (종속)이 됩니다. 이를 **"Explaining Away"** 현상이라고 합니다. 결석($Z=1$)했는데 휴일이 아니라면($Y=0$), 감기일 확률($X=1$)이 높아지기 때문입니다.
+    * **주의**: Collider 본인뿐만 아니라 **Collider의 자손(Descendant)**을 관측해도 경로가 열립니다.
+
+![Figure: Common Effect (Collider) 구조. 두 독립적인 원인이 공통 결과 Z를 조건부로 알게 되었을 때 종속적으로 변하는 Explaining Away 현상을 보여준다.](./images/common_effect.png)
+
+## 5.2 d-separation Rule
+[cite_start]이 세 가지 규칙을 일반화하여 그래프상의 두 노드 $X, Y$가 조건부 집합 $Z$에 대해 독립인지 판별하는 규칙을 **d-separation**이라고 합니다. [cite: 3224-3228]
+
+* 두 노드 사이의 **모든 경로**가 차단(Blocked)되면 d-separated 되었다고 합니다.
+* **경로가 차단되는 조건**:
+    1.  경로 상에 $Z$에 포함된 Chain이나 Fork 노드가 있을 때.
+    2.  경로 상에 Collider가 있으면서, 그 Collider와 자손들이 하나도 $Z$에 포함되지 않았을 때.
+
+---
+
+# 6. Implementation: Topological Order
+
+DAG에서 부모가 항상 자식보다 먼저 오도록 노드를 정렬하는 것을 위상 정렬(Topological Order)이라고 합니다. [cite_start]이는 인과 추론 알고리즘 구현의 기초가 됩니다. [cite: 3231-3250]
+
+다음은 Python을 이용한 위상 정렬 구현 예시입니다.
+
+```python
+from collections import deque
+
+def topological_order(G):
+    order = deque()
+    # 1. 모든 노드의 진입 차수(in-degree) 계산 (부모의 수)
+    in_degrees = {V: len(G.Pa(V)) for V in G.Vs}
+    
+    while in_degrees:
+        # 2. 부모가 없는(in-degree=0) 소스 노드 찾기
+        for v, v_deg in in_degrees.items():
+            if v_deg == 0:
+                break
+        else:
+            # 루프가 break 없이 끝났다면 사이클이 존재한다는 의미 (DAG가 아님)
+            raise ValueError('cyclic')
+        
+        # 3. 소스 노드를 순서에 추가하고 그래프에서 제거 개념 적용
+        order.append(v)
+        del in_degrees[v]
+        
+        # 4. 해당 노드의 자식들의 진입 차수 감소
+        for c in G.Ch(v):
+            in_degrees[c] -= 1
+            
+    return order
+
+```
+
+---
+
+# 7. Summary
+
+이번 포스트에서는 인과 추론의 기초가 되는 SCM과 인과 그래프에 대해 알아보았습니다.
+
+1. **SCM**: 현실의 메커니즘을 변수, 외생 변수, 함수적 관계로 정의하는 모델 ().
+2. **Markovian Factorization**: 외생 변수의 독립성을 가정하면, 결합 확률을 $P(\mathbf{v}) = \prod P(v_i | pa_i)$로 분해할 수 있습니다.
+3. **d-separation**: Chain, Fork, Collider 구조를 통해 변수 간의 조건부 독립성을 파악할 수 있으며, 특히 Collider가 관측될 때 경로가 열린다는 점에 주의해야 합니다.
+
+---
+
+### Checklist for Content Verification
+
+* [x] **Motivation**: Simpson's Paradox 예시와 Data vs Reality의 차이 설명 포함.
+* [x] **SCM Definition**: 4-tuple 정의 및 구성 요소 설명 포함.
+* [x] **Mathematical Derivation**: Markovian Factorization의 단계별 유도 과정 LaTeX 수식으로 포함.
+* [x] **Basic Structures**: Chain, Fork, Collider의 구조 및 독립성 조건 설명 포함.
+* [x] **d-separation**: 경로 차단 조건 및 규칙 설명 포함.
+* [x] **Algorithm**: 위상 정렬 알고리즘 및 Python 코드 포함.
+
+```
+
+```

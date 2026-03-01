@@ -1,0 +1,215 @@
+---
+title: "[Causal Inference] 02. Causal Models and Graphs (Part 1)"
+description: "Structural Causal Models (SCM), Causal Graphs, and Markovian Factorization"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: From Statistics to Causality
+
+전통적인 통계학이나 머신러닝의 추론(Inference) 패러다임은 데이터의 **결합 확률 분포(Joint Distribution)** $P(\mathbf{v})$를 찾아내는 것에 집중합니다. 예를 들어, "상품 A를 산 고객이 상품 B도 살 확률은 얼마인가?"($P(B|A)$)와 같은 질문은 관측된 데이터의 패턴(Association)만으로 충분히 답할 수 있습니다.
+
+하지만 현실의 문제 해결은 종종 **"만약 우리가 X를 변화시킨다면, Y는 어떻게 변할까?"**라는 질문을 던집니다.
+* 가격을 두 배로 올리면 판매량은 어떻게 될까?
+* 흡연을 금지하면 암 발병률은 낮아질까?
+
+이러한 질문은 데이터 자체($P$)가 아니라 데이터가 생성되는 **현실의 메커니즘(Reality)**에 대한 이해를 요구합니다. 이번 포스트에서는 인과 추론의 핵심 언어인 **구조적 인과 모델(Structural Causal Model, SCM)**과 이를 시각화한 **인과 그래프(Causal Graph)**에 대해 다룹니다.
+
+![Figure: 통계적 추론과 인과적 추론의 차이. 통계적 추론은 데이터 $P$ 내에서의 성질 $Q(P)$를 찾지만, 인과 추론은 데이터 생성 모델 $M$을 통해 현실의 메커니즘을 이해하고, 개입 후의 분포 $P'$를 추정하려 한다.](./images/stats_vs_causal_paradigm.png)
+
+## 1.1 Motivation: Simpson's Paradox Example
+왜 데이터만으로는 충분하지 않을까요? 강의 자료에 제시된 '약물 투여와 생존율' 예시를 봅시다.
+
+* **상황**: 특정 도시에 전염병이 돌고 있고, 치료제(Drug)가 있습니다.
+* **숨겨진 진실(Reality)**:
+    1.  부유층(Rich)은 약물 복용 여부와 상관없이 생존합니다 (좋은 생활 환경).
+    2.  빈곤층(Poor)은 약물을 복용하면 알레르기 반응으로 사망하고, 복용하지 않으면 생존합니다(자연 면역).
+    3.  의사들은 부유층에게만 주로 약을 처방합니다(비용 문제).
+
+이 경우 데이터만 보면 "약물을 복용한 집단(대부분 부유층)"의 생존율이 높게 나타납니다. 알고리즘은 "약을 먹어라"라고 추천할 것입니다. 하지만 실제 메커니즘(빈곤층에게는 치명적)을 안다면 빈곤층에게 약을 주면 안 된다는 정반대의 결론에 도달해야 합니다. 즉, **데이터 생성 과정(Data Generating Process)**을 모델링하지 않으면 잘못된 의사결정을 내리게 됩니다.
+
+---
+
+# 2. Structural Causal Model (SCM)
+
+인과 관계를 수학적으로 엄밀하게 정의하기 위해 **구조적 인과 모델(SCM)**을 도입합니다.
+
+## 2.1 Definition
+SCM $\mathcal{M}$은 다음 4가지 요소의 튜플 $\langle V, U, F, P(U) \rangle$로 정의됩니다.
+
+1.  **$V = \{V_1, ..., V_n\}$**: **내생 변수(Endogenous variables)**. 우리가 관측할 수 있는 변수들입니다. (예: 흡연 여부, 폐암 발병 여부)
+2.  **$U = \{U_1, ..., U_m\}$**: **외생 변수(Exogenous variables)**. 모델 내부의 다른 변수에 의해 설명되지 않는, 시스템 외부에서 결정되는 변수들입니다. (예: 유전적 요인, 미관측 환경 요인)
+3.  **$F = \{f_1, ..., f_n\}$**: **구조적 함수(Structural functions)**. 각 내생 변수 $V_i$가 어떻게 결정되는지를 나타내는 함수입니다.
+    $$v_i \leftarrow f_i(pa_i, u_i)$$
+    여기서 $pa_i \subseteq V \setminus \{V_i\}$는 $V_i$의 **부모(Parents)** 변수 집합이고, $u_i \subseteq U$는 관련된 외생 변수입니다.
+4.  **$P(U)$**: 외생 변수 $U$에 대한 확률 분포입니다.
+
+> **Key Idea**: SCM에서 자연(Nature)은 결정론적(Deterministic) 함수 $F$와 확률적(Probabilistic) 노이즈 $P(U)$의 결합으로 세상을 정의합니다.
+
+![Figure: SCM의 개념적 도식. 외생 변수 U가 확률 분포 P(U)를 따르고, 함수 F를 통해 내생 변수 V의 값을 결정하여 관측 데이터 분포 P(V)를 유도한다.](./images/scm_conceptual_diagram.png)
+
+## 2.2 SCM Induces a Distribution $P(V)$
+SCM은 단순히 변수 간의 관계만 정의하는 것이 아니라, 관측 가능한 변수 $V$의 결합 확률 분포 $P(V)$를 유도(Induce)합니다.
+
+$$P(\mathbf{v}) = \sum_{\mathbf{u} : Y(\mathbf{u}) = \mathbf{v}} P(\mathbf{u})$$
+
+즉, 우리가 관측하는 데이터의 분포는 **외생 변수의 불확실성($P(U)$)이 함수 $F$를 통과하여 내생 변수 $V$로 전파된 결과**입니다.
+
+---
+
+# 3. Causal Diagrams (Graphical Models)
+
+SCM은 수식으로 정의되지만, 이를 직관적으로 이해하고 분석하기 위해 **유향 비순환 그래프(DAG, Directed Acyclic Graph)** 형태인 인과 그래프로 표현할 수 있습니다.
+
+## 3.1 Construction Rules
+SCM $\mathcal{M}$으로부터 인과 그래프 $\mathcal{G}$를 그리는 규칙은 다음과 같습니다.
+
+1.  **Nodes**: 각 내생 변수 $V_i$를 노드(Vertex)로 그립니다.
+2.  **Directed Edges ($\rightarrow$)**: 함수 $f_i$에서 $V_j$가 $V_i$의 입력($pa_i$)으로 사용된다면, $V_j \to V_i$ 화살표를 그립니다.
+3.  **Bidirected Edges ($\leftrightarrow$)**: 두 변수 $V_i, V_j$에 영향을 주는 외생 변수 $U_i, U_j$가 서로 상관관계가 있거나(Correlated), 같은 외생 변수를 공유한다면 점선 양방향 화살표로 연결합니다. 이는 **미관측 교란 요인(Unobserved Confounder)**의 존재를 의미합니다.
+
+![Figure: SCM에서 인과 그래프로의 변환 예시. (좌) 수식으로 표현된 SCM, (우) 이에 대응하는 DAG. 외생 변수 U는 보통 그래프에서 생략되거나 점선으로 표현된다.](./images/scm_to_dag_example.png)
+
+## 3.2 Terminology
+* **Parents ($Pa_i$)**: $V_i$로 직접 화살표를 보내는 변수들.
+* **Children ($Ch_i$)**: $V_i$로부터 직접 화살표를 받는 변수들.
+* **Ancestors / Descendants**: 화살표를 따라 거슬러 올라가거나 내려갈 수 있는 변수들.
+
+---
+
+# 4. Markovian Factorization (Detailed Derivation)
+
+이 포스트의 핵심 파트입니다. SCM과 그래프 구조를 이용하여 복잡한 결합 확률 분포 $P(\mathbf{v})$를 어떻게 간단한 조건부 확률들의 곱으로 분해할 수 있는지 증명합니다.
+
+## 4.1 The Markovian Condition
+만약 외생 변수들 $U$가 서로 **독립(Jointly Independent)**이라면, 즉 그래프 상에 양방향 엣지($\leftrightarrow$)가 하나도 없다면, 이 모델을 **Markovian**이라고 부릅니다.
+
+## 4.2 Derivation of Bayesian Factorization
+우리의 목표는 $P(\mathbf{v})$를 $\prod P(v_i | pa_i)$ 형태로 만드는 것입니다. 이를 **Bayesian Factorization**이라 합니다.
+
+**Step 1: Law of Total Probability**
+모든 변수 $V$의 결합 확률은 외생 변수 $U$를 포함한 결합 확률에서 $U$를 합(Summing out)하여 얻을 수 있습니다.
+$$P(\mathbf{v}) = \sum_{\mathbf{u}} P(\mathbf{v}, \mathbf{u})$$
+
+SCM에서 $V$는 $Pa$와 $U$에 의해 결정되므로($v_i = f_i(pa_i, u_i)$), $P(v_i | pa_i, u_i)$는 결정론적입니다(0 또는 1). 이를 이용하여 식을 전개하면:
+$$P(\mathbf{v}) = \sum_{\mathbf{u}} P(\mathbf{u}) \prod_{V_i \in V} P(v_i \mid \mathbf{pa}_i, \mathbf{u}_i)$$
+
+**Step 2: Independence of Exogenous Variables**
+Markovian 가정에 의해 $U$들이 서로 독립이므로, $P(\mathbf{u}) = \prod P(\mathbf{u}_i)$가 성립합니다. 이를 대입합니다.
+$$= \sum_{\mathbf{u}} \left( \prod_{V_i \in V} P(\mathbf{u}_i) \right) \left( \prod_{V_i \in V} P(v_i \mid \mathbf{pa}_i, \mathbf{u}_i) \right)$$
+
+**Step 3: Independence of $U_i$ and $Pa_i$**
+외생 변수 $U_i$는 시스템 외부에서 결정되므로, 내생 변수인 부모 $Pa_i$와는 독립입니다. 따라서 $P(\mathbf{u}_i) = P(\mathbf{u}_i \mid \mathbf{pa}_i)$로 쓸 수 있습니다.
+$$= \sum_{\mathbf{u}} \prod_{V_i \in V} P(v_i \mid \mathbf{pa}_i, \mathbf{u}_i) P(\mathbf{u}_i \mid \mathbf{pa}_i)$$
+
+**Step 4: Merging Conditional Probabilities**
+곱셈 법칙 $P(A|B)P(B) = P(A,B)$를 적용하여 항을 합칩니다.
+$$= \sum_{\mathbf{u}} \prod_{V_i \in V} P(v_i, \mathbf{u}_i \mid \mathbf{pa}_i)$$
+
+**Step 5: Rearranging Sum and Product**
+전체 외생 변수 $\mathbf{u}$에 대한 합($\sum_{\mathbf{u}}$)을 개별 $\mathbf{u}_i$에 대한 합으로 분리하여 곱셈 기호 안으로 넣습니다. 각 항은 해당되는 $\mathbf{u}_i$에만 의존하기 때문에 가능합니다.
+$$= \prod_{V_i \in V} \left( \sum_{\mathbf{u}_i} P(v_i, \mathbf{u}_i \mid \mathbf{pa}_i) \right)$$
+
+**Step 6: Marginalization**
+괄호 안의 식 $\sum_{\mathbf{u}_i} P(v_i, \mathbf{u}_i \mid \mathbf{pa}_i)$는 결합 확률에서 $\mathbf{u}_i$를 덜어내는(Marginalize) 과정이므로 $P(v_i \mid \mathbf{pa}_i)$가 됩니다.
+
+**Final Result:**
+$$P(\mathbf{v}) = \prod_{V_i \in V} P(v_i \mid \mathbf{pa}_i)$$
+
+이 결과는 매우 강력합니다. 우리가 관측할 수 없는 $U$를 모르더라도, **오직 관측 가능한 데이터 내에서 부모-자식 간의 조건부 확률만 알면 전체 분포를 알 수 있다**는 것을 의미하기 때문입니다.
+
+![Figure: Markovian Factorization 유도 과정 요약. 독립성 가정과 확률의 연쇄 법칙을 통해 복잡한 결합 확률이 조건부 확률의 곱으로 분해됨을 보여준다.](./images/markovian_factorization_derivation.png)
+
+---
+
+# 5. Conditional Independence & d-separation
+
+그래프 구조는 변수들 사이의 조건부 독립(Conditional Independence, CI) 정보를 담고 있습니다. 이를 파악하기 위해 3가지 기본 구조(Triplets)를 이해해야 합니다.
+
+## 5.1 The Three Basic Structures (Triplets)
+
+### 1. Chain ($X \rightarrow Z \rightarrow Y$)
+* **구조**: $X$가 $Z$에 영향을 주고, $Z$가 $Y$에 영향을 줍니다.
+* **독립성**:
+    * $Z$를 모를 때: $X$와 $Y$는 종속입니다 (정보가 흐름).
+    * **$Z$를 알 때 (Given $Z$)**: $X$가 $Y$에 미치는 영향은 이미 $Z$에 의해 설명되었으므로, **$X \perp Y \mid Z$ (독립)**입니다. $Z$가 정보를 차단(Block)합니다.
+
+![Figure: Causal Chain 구조와 독립성. 중간 매개변수 Z를 조건부로 알게 되면 X와 Y 사이의 정보 흐름이 차단되어 독립이 된다.](./images/causal_chain.png)
+
+### 2. Fork / Common Cause ($X \leftarrow Z \rightarrow Y$)
+* **구조**: $Z$가 $X$와 $Y$의 공통 원인입니다. (예: $Z$=날씨, $X$=교통체증, $Y$=우산사용)
+* **독립성**:
+    * $Z$를 모를 때: $X$와 $Y$는 종속입니다 (상관관계 발생).
+    * **$Z$를 알 때 (Given $Z$)**: 공통 원인을 통제했으므로 **$X \perp Y \mid Z$ (독립)**입니다.
+
+![Figure: Common Cause 구조와 독립성. 공통 원인 Z를 통제하면 X와 Y 사이의 허위 상관관계(Spurious Correlation)가 사라져 독립이 된다.](./images/common_cause.png)
+
+### 3. Collider / Common Effect ($X \rightarrow Z \leftarrow Y$)
+* **구조**: $X$와 $Y$가 동시에 $Z$에 영향을 줍니다. (예: $X$=감기, $Y$=휴일, $Z$=결석)
+* **독립성**:
+    * $Z$를 모를 때: $X$와 $Y$는 **독립**입니다 (서로 관계없는 사건).
+    * **$Z$를 알 때 (Given $Z$)**: **$X \not\perp Y \mid Z$ (종속)**이 됩니다.
+* **Explaining Away**: 결석($Z=1$)했다는 사실을 알 때, 휴일이 아니라면($Y=0$), 아플 확률($X=1$)이 높아집니다. 즉, 결과를 알면 원인들 사이에 상관관계가 생깁니다. **Collider는 관측될 때 경로를 엽니다(Open).**
+
+![Figure: Common Effect (Collider) 구조와 Explaining Away 현상. 두 독립적인 원인이 공통 결과 Z를 조건부로 알게 되었을 때 종속적으로 변하는 현상을 설명한다.](./images/collider_structure.png)
+
+## 5.2 d-separation
+이 세 가지 규칙을 일반화한 것이 **d-separation**입니다. 그래프 상의 두 노드 $X, Y$ 사이의 모든 경로가 관측된 변수 집합 $Z$에 의해 차단(Blocked)된다면, $X$와 $Y$는 $Z$에 대해 조건부 독립입니다.
+
+* 경로가 차단되는 경우:
+    1.  경로 상의 Chain이나 Fork 노드가 $Z$에 포함될 때.
+    2.  경로 상의 **Collider 노드와 그 자손들이 $Z$에 포함되지 않을 때**.
+
+## 5.3 Food for Thought (Quiz)
+
+아래 그래프를 보고 독립성을 판별해 봅시다.
+
+![Figure: d-separation 연습을 위한 복합 그래프 예시. A, B, C, D 노드와 실선/점선 엣지가 섞여 있어 다양한 경로의 독립성을 테스트한다.](./images/food_for_thought_graph.png)
+
+1.  **Is $A \perp D$? (No)**
+    * 경로: $A \leftrightarrow B \rightarrow D$.
+    * $B$는 Chain/Fork 역할을 하지만 관측되지 않았으므로 경로가 열려 있습니다.
+2.  **Is $A \perp C$? (Yes)**
+    * 경로: $A \leftrightarrow B \leftarrow C$.
+    * $B$는 Collider입니다. 관측되지 않았으므로 경로는 **차단**되어 있습니다.
+3.  **Is $A \perp C \mid D$? (No)**
+    * $D$는 Collider $B$의 자손(Descendant)입니다.
+    * $D$를 관측하면 $B$가 열리게 되어 경로가 연결됩니다.
+4.  **Is $D \perp C \mid B$? (No)**
+    * 경로 1: $C \rightarrow B \rightarrow D$. $B$를 알면 차단됩니다.
+    * 경로 2: $C \leftrightarrow D$ (Backdoor path, $C \leftarrow U \rightarrow D$). 이 경로는 $B$와 무관하게 열려 있습니다.
+    * 하나라도 열린 경로가 있으므로 종속입니다.
+
+---
+
+# 6. Summary
+
+이번 포스트에서는 인과 추론의 기초가 되는 SCM과 인과 그래프에 대해 알아보았습니다.
+
+1.  **SCM**: 현실의 메커니즘을 변수, 외생 변수, 함수적 관계로 정의하는 모델입니다.
+2.  **Markovian Factorization**: 외생 변수의 독립성을 가정하면, 결합 확률 분포를 $P(\mathbf{v}) = \prod P(v_i | pa_i)$로 분해할 수 있습니다.
+3.  **d-separation**: 그래프 구조(Chain, Fork, Collider)를 통해 변수 간의 조건부 독립성을 파악할 수 있으며, 특히 Collider가 관측될 때 경로가 열린다는 점(Explaining Away)이 중요합니다.
+
+다음 시간에는 이 구조 위에서 실제로 **개입(Intervention)**을 했을 때 어떤 일이 벌어지는지(Pearl's Causal Hierarchy의 2단계)에 대해 다루겠습니다.
+
+---
+
+### **Checklist for Content Verification**
+
+* [x] **Motivation**: Simpson's Paradox (Drug example) included? (Yes)
+* [x] **SCM Definition**: 4-tuple and definition of components included? (Yes)
+* [x] **Induced Distribution**: How SCM induces $P(v)$ described? (Yes)
+* [x] **Causal Diagrams**: Construction rules (Nodes, Edges) included? (Yes)
+* [x] **Markovian Factorization**: Detailed mathematical derivation included? (Yes)
+* [x] **Conditional Independence**: 3 Basic structures (Chain, Fork, Collider) explained? (Yes)
+* [x] **d-separation**: General rule and specific quiz (Food for thought) analysis included? (Yes)
+* [x] **Algebra Review**: Sum of products logic implicitly handled in the derivation section? (Yes)
+
+```

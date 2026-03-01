@@ -1,0 +1,204 @@
+---
+title: "[Causal Inference] 11A. Generalized Propensity Score"
+description: "일반화 성향점수"
+author: "유성현"
+date: "2026-02-04"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: Beyond Binary Treatments
+
+[cite_start]기존의 인과추론 방법론, 특히 **Propensity Score (PS)** 매칭이나 가중치(Weighting) 기법은 주로 **이분형 처치(Binary Treatment)** 상황을 가정합니다[cite: 9]. 예를 들어, 약을 복용했는지($D=1$) 안 했는지($D=0$)와 같은 상황입니다.
+
+[cite_start]하지만 현실 세계의 많은 정책과 처치는 **연속형(Continuous)**이거나 **다중 값(Multi-valued)**을 가집니다[cite: 9].
+* 직업 훈련 프로그램의 **교육 시간** (Continuous)
+* 복용하는 약의 **투여량(Dose)** (Continuous)
+* 다양한 수준의 장학금 지원 액수 (Multi-valued/Ordinal)
+
+이러한 상황에서 단순히 처치 여부만을 따지는 것은 정보의 손실을 야기하며, "얼마나 처치했을 때 효과가 극대화되는가?"라는 **Dose-Response Function**을 추정하기 어렵게 만듭니다. [cite_start]이를 해결하기 위해 Hirano & Imbens (2004)는 기존의 Propensity Score를 확장한 **Generalized Propensity Score (GPS)**를 제안했습니다[cite: 10].
+
+![Figure: 이분형 처치와 연속형 처치의 개념적 차이. 왼쪽은 처치군/대조군이 명확히 나뉘는 반면, 오른쪽은 처치 수준(Dose)이 연속적인 스펙트럼으로 존재하여 각 수준별로 잠재적 결과가 달라짐을 시사한다.](./images/binary_vs_continuous_treatment_concept.png)
+
+---
+
+# 2. Generalized Propensity Score (GPS)의 정의
+
+## 2.1. Notation
+* $X$: 처치(Treatment). 여기서는 연속형 변수일 수 있습니다 (기존의 $D$나 $T$에 해당).
+* $Y$: 결과 변수(Outcome).
+* $Z$: 공변량 벡터(Covariates). (기존의 $X$에 해당하나, 혼동을 피하기 위해 강의 자료의 표기를 따름).
+* $Y(x)$: 처치 수준이 $x$일 때의 잠재적 결과(Potential Outcome).
+
+## 2.2. Definition
+[cite_start]**Generalized Propensity Score (GPS)**는 관측된 공변량 $Z$가 주어졌을 때, 특정 처치 수준 $x$를 받을 조건부 확률 밀도(Conditional Probability Density)로 정의됩니다[cite: 11].
+
+$$
+r(x, z) = f_{X|Z}(x|z)
+[cite_start]$$ [cite: 12]
+
+이분형 처치에서의 PS가 $P(D=1|X)$라는 확률(Probability)이었던 것과 달리, 연속형 처치에서는 **확률 밀도 함수(PDF)**의 값을 갖는다는 점이 핵심입니다.
+
+---
+
+# 3. 핵심 가정 및 성질 (Key Assumptions & Properties)
+
+GPS를 사용하여 인과 효과를 식별(Identification)하기 위해서는 기존 Rosenbaum & Rubin (1983)의 가정을 연속형 처치에 맞게 확장해야 합니다.
+
+## 3.1. Weak Unconfoundedness (약한 교란해소 가정)
+[cite_start]이분형 처치에서의 'Strong Unconfoundedness' ($Y(0), Y(1) \perp D | X$)와 달리, GPS에서는 **Weak Unconfoundedness**를 가정합니다[cite: 17, 18].
+
+$$
+Y(x) \perp X \mid Z \quad \forall x \in \mathcal{X}
+[cite_start]$$ [cite: 19, 20]
+
+* **의미:** 공변량 $Z$를 통제했을 때, 처치 수준 $X$와 해당 처치 수준에서의 잠재적 결과 $Y(x)$는 독립입니다.
+* **Why "Weak"?** 모든 처치 수준에 대한 잠재적 결과들의 결합 분포 $\{Y(x)\}_{x \in \mathcal{X}}$가 $X$와 독립일 필요는 없습니다. [cite_start]우리는 각 처치 수준 $x$ 하나하나에 대해서만 조건부 독립이 성립하면 충분하기 때문에 "Weak"라는 용어를 사용합니다[cite: 21, 22].
+
+## 3.2. Balancing Property (균형 성질)
+[cite_start]표준 PS와 마찬가지로 GPS도 공변량의 균형을 맞추는 성질을 가집니다[cite: 27].
+
+$$
+Z \perp \mathbb{1}\{X=x\} \mid r(x, Z)
+[cite_start]$$ [cite: 31]
+
+* [cite_start]**해석:** GPS 값 $r(x,Z)$가 동일한 하위 그룹(strata) 내에서는, 처치 수준 $X=x$를 받을 확률이 공변량 $Z$에 의존하지 않습니다[cite: 30].
+* [cite_start]이 성질은 GPS가 고차원의 공변량 $Z$ 정보를 $r(x,Z)$라는 1차원 스칼라 값으로 압축(Dimensionality Reduction)하면서도, 교란 요인을 통제할 수 있음을 시사합니다[cite: 114].
+
+---
+
+# 4. GPS를 이용한 편향 제거 (Bias Removal)
+
+Hirano & Imbens (2004)는 GPS를 이용해 편향을 제거하고 Average Potential Outcome을 추정할 수 있음을 증명했습니다.
+
+## 4.1. Theorem: Bias Removal
+[cite_start]처치 할당이 공변량 $Z$에 대해 Weakly Unconfounded 하다면, 다음이 성립합니다[cite: 46, 47].
+
+$$
+\mathbb{E}[Y(x)] = \mathbb{E}[\beta(x, r(x, Z))]
+$$
+
+[cite_start]여기서 $\beta(x, r)$은 다음과 같이 정의된 조건부 기대값입니다[cite: 49].
+
+$$
+\beta(x, r) \triangleq \mathbb{E}[Y(x) \mid r(x, Z) = r]
+$$
+
+## 4.2. Proof (상세 유도 과정)
+[cite_start]이 정리는 **반복 기대의 법칙(Law of Iterated Expectations, LIE)**과 **Weak Unconfoundedness** 가정을 사용하여 유도할 수 있습니다. [cite: 54]
+
+**Step 1: 관측 데이터와의 연결**
+Unconfoundedness 가정에 의해, $r(x,Z)$를 조건부로 주었을 때도 $X$와 $Y(x)$는 독립입니다. [cite_start]따라서 다음이 성립합니다[cite: 39, 57].
+$$
+f_{Y(x)|X, r(x,Z)}(y|x, r) = f_{Y(x)|r(x,Z)}(y|r)
+$$
+[cite_start]즉, 실제 처치 $X=x$를 받은 집단에서의 $Y$의 기대값은 잠재적 결과 $Y(x)$의 기대값과 같습니다[cite: 58].
+$$
+\mathbb{E}[Y \mid X=x, r(x,Z)=r] = \mathbb{E}[Y(x) \mid r(x,Z)=r] = \beta(x, r)
+$$
+(참고: $Y = Y(X)$ 이므로, $X=x$일 때 $Y=Y(x)$)
+
+**Step 2: 전체 기대값 도출**
+우리가 구하고자 하는 것은 $\mathbb{E}[Y(x)]$입니다. [cite_start]이는 $\beta(x, r(x,Z))$의 기대값을 취함으로써 얻을 수 있습니다[cite: 63].
+
+$$
+\begin{aligned}
+\mathbb{E}[\beta(x, r(x, Z))] &= \mathbb{E}\left[ \mathbb{E}[Y(x) \mid r(x, Z)] \right] \quad (\because \text{Definition of } \beta) \\
+&= \mathbb{E}[Y(x)] \quad (\because \text{Law of Iterated Expectations})
+\end{aligned}
+$$
+
+따라서, 관측된 $Y, X, Z$를 이용해 $\beta(x,r)$을 추정하고, 이를 $r(x,Z)$의 분포에 대해 평균을 내면 인과 효과 $\mathbb{E}[Y(x)]$를 얻을 수 있습니다.
+
+---
+
+# 5. Estimation Procedure (3-Step Method)
+
+[cite_start]실제 데이터 분석에서 GPS를 활용하는 방법은 다음 3단계로 요약됩니다[cite: 68].
+
+![Figure: GPS를 이용한 3단계 인과효과 추정 알고리즘 흐름도. 1단계: GPS 추정, 2단계: 조건부 기대값 함수 추정, 3단계: 용량-반응 함수(DRF) 도출 과정을 시각적으로 표현함.](./images/gps_estimation_procedure_flowchart.png)
+
+## Step 1: GPS 모델링 및 추정
+먼저 공변량 $Z$가 주어졌을 때 처치 $X$의 조건부 분포를 모델링합니다. [cite_start]보통 정규분포 등을 가정합니다[cite: 70].
+$$
+X_i \mid Z_i \sim N(\beta_0 + \beta_1^T Z_i, \sigma^2)
+[cite_start]$$ [cite: 91]
+[cite_start]최대우도법(MLE)이나 OLS로 파라미터를 추정한 후, 각 개체 $i$에 대해 GPS 값 $\hat{R}_i$를 계산합니다[cite: 93].
+$$
+\hat{R}_i = \frac{1}{\sqrt{2\pi\hat{\sigma}^2}} \exp \left\{ -\frac{1}{2\hat{\sigma}^2} (X_i - \hat{\beta}_0 - \hat{\beta}_1 Z_i)^2 \right\}
+$$
+
+## Step 2: 조건부 기대값 $\beta(x, r)$ 추정
+[cite_start]관측된 결과 $Y_i$를 처치 $X_i$와 추정된 GPS $\hat{R}_i$에 대해 회귀분석합니다[cite: 71]. [cite_start]이 함수는 인과적 해석을 갖지 않는 단순한 연관성 모델입니다[cite: 83]. [cite_start]유연한 추정을 위해 고차항이나 교차항을 포함한 다항 회귀(Polynomial Regression)를 주로 사용합니다[cite: 95].
+
+$$
+\mathbb{E}[Y_i | X_i, R_i] = \alpha_0 + \alpha_1 X_i + \alpha_2 X_i^2 + \alpha_3 R_i + \alpha_4 R_i^2 + \alpha_5 X_i R_i + \dots
+$$
+
+## Step 3: Dose-Response Function (DRF) 추정
+특정 처치 수준 $x$에서의 평균 잠재적 결과 $\mu(x) = \mathbb{E}[Y(x)]$를 추정합니다. [cite_start]이는 Step 2에서 구한 회귀식에 **고정된 $x$**와 **관측된 $Z_i$로 계산한 $r(x, Z_i)$** 값을 대입하여 모든 개체에 대해 평균을 냄으로써 구합니다[cite: 73, 74].
+
+$$
+\hat{\mu}(x) = \frac{1}{N} \sum_{i=1}^{N} \hat{\beta}(x, \hat{r}(x, Z_i))
+[cite_start]$$ [cite: 104]
+
+이 과정을 관심 있는 모든 $x$ 값에 대해 반복하면 전체 **Dose-Response Function**을 그릴 수 있습니다.
+
+![Figure: Dose-Response Function 예시 그래프. X축은 처치 수준(Dose), Y축은 기대 결과(Outcome)를 나타내며, 점선은 Bootstrap을 통해 구한 신뢰구간을 의미한다.](./images/dose_response_function_example.png)
+
+> **주의사항:** $\beta(x, r)$ 자체는 인과적 해석이 불가능합니다. [cite_start]$r$을 주변화(marginalize)하여 얻은 $\mu(x)$만이 인과적 해석(Dose-Response)을 가집니다[cite: 83, 84].
+
+---
+
+# 6. Example: Normal Distribution Case
+
+[cite_start]강의 자료에 소개된 구체적인 구현 예시를 살펴보겠습니다[cite: 89].
+
+1.  **Treatment Model:** $X|Z$를 정규분포로 가정하고 GPS $\hat{R}_i$를 도출합니다.
+2.  [cite_start]**Outcome Model:** $Y$를 $X$와 $R$의 3차 다항식 및 교차항으로 모델링합니다[cite: 95].
+    $$
+    \begin{aligned}
+    \mathbb{E}[Y|X,R] &= \alpha_0 + \alpha_1 X + \alpha_2 X^2 + \alpha_3 X^3 \\
+    &+ \alpha_4 R + \alpha_5 R^2 + \alpha_6 R^3 \\
+    &+ \alpha_7 XR + \alpha_8 X^2 R + \alpha_9 X R^2
+    \end{aligned}
+    $$
+3.  [cite_start]**Averaging:** 특정 $x$에 대한 인과 효과는 다음과 같이 계산됩니다[cite: 104].
+    $$
+    \hat{\mathbb{E}}[Y(x)] = \frac{1}{N} \sum_{i=1}^{N} \left( \hat{\alpha}_0 + \hat{\alpha}_1 x + \dots + \hat{\alpha}_9 x \hat{r}(x, Z_i)^2 \right)
+    $$
+4.  [cite_start]**Inference:** 표준오차(Standard Errors)는 Bootstrap 방법을 사용하여 구합니다[cite: 106].
+
+---
+
+# 7. Summary & Advantages
+
+**Generalized Propensity Score (GPS)**는 복잡한 현실 데이터에서 인과관계를 추론하기 위한 강력한 도구입니다.
+
+* [cite_start]**확장성(Applicability):** 연속형, 다항형, 순서형 등 다양한 형태의 처치에 적용 가능합니다[cite: 112].
+* [cite_start]**차원 축소(Dimensionality Reduction):** 고차원의 공변량 $Z$를 직접 통제하는 대신, 1차원의 점수 $R$을 통해 균형을 맞춤으로써 추정의 효율성을 높입니다[cite: 114].
+* [cite_start]**유연성(Flexibility):** 모수적 방법(예: 다항 회귀)뿐만 아니라 비모수적 방법(예: Spline, Kernel Smoothing)과 결합하여 사용할 수 있습니다[cite: 97].
+
+GPS를 통해 연구자는 단순한 "효과 있음/없음"을 넘어, "최적의 처치 수준은 무엇인가?"라는 더 깊은 정책적 질문에 답할 수 있게 됩니다.
+
+---
+### Checklist: 강의 자료 반영 여부
+
+* **포함된 내용:**
+    * GPS의 정의 및 수식 ($r(x,z)$) [O]
+    * Weak Unconfoundedness 가정의 정의와 의미 [O]
+    * Balancing Property 설명 및 수식 [O]
+    * Hirano & Imbens (2004)의 Bias Removal 정리 및 증명 (LIE 활용) [O]
+    * 3단계 추정 알고리즘 (GPS 추정 -> 조건부 기대값 -> DRF) [O]
+    * 인과적 해석에 대한 주의사항 ($\beta$ vs $\mu$) [O]
+    * 정규분포 가정 시의 구체적 다항회귀 예시 수식 [O]
+    * Bootstrap을 이용한 추론 [O]
+    * 주요 참고문헌 언급 [O]
+
+* **생략된 내용:**
+    * 없음. (강의 자료 13페이지 분량의 모든 핵심 이론과 수식을 반영함)

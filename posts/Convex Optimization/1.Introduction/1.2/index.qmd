@@ -1,0 +1,179 @@
+---
+title: "[Convex Optimization] 1. Introduction (Part 2)"
+description: "Convex Optimization"
+author: "유성현"
+date: "2026-03-01"
+categories: [Convex Optimization]
+format: 
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+최적화(Optimization)는 공학, 경제학, 통계학, 그리고 머신러닝 전반에 걸쳐 핵심적인 역할을 합니다. 우리는 종종 "비용을 최소화"하거나 "성능을 최대화"하는 문제에 직면합니다. 하지만 모든 최적화 문제가 쉽게 풀리는 것은 아닙니다.
+
+전통적으로 최적화 문제를 바라보는 시각은 **선형(Linear)**이냐 **비선형(Nonlinear)**이냐에 따라 난이도가 갈린다는 것이었습니다. 하지만 최근 수십 년간 이론과 컴퓨팅의 발전으로 인해 우리는 새로운 패러다임을 갖게 되었습니다. 바로 문제의 **볼록성(Convexity)**이 문제를 '쉽게' 풀 수 있는지를 결정하는 결정적 요인이라는 점입니다.
+
+이번 포스트에서는 Boyd & Vandenberghe의 강의 자료를 바탕으로 볼록 최적화(Convex Optimization)의 기본 개념, 이것이 왜 중요한지, 그리고 CVXPY와 같은 도구를 통해 어떻게 해결할 수 있는지 살펴보겠습니다.
+
+# 1. Mathematical Optimization
+
+## 1.1. Standard Form
+
+일반적인 수학적 최적화 문제는 다음과 같은 표준형(Standard Form)으로 기술됩니다.
+
+$$
+\begin{aligned}
+& \text{minimize} & & f_0(x) \\
+& \text{subject to} & & f_i(x) \le 0, \quad i = 1, \dots, m \\
+& & & Ax = b
+\end{aligned}
+$$
+
+여기서 각 요소의 정의는 다음과 같습니다.
+
+* $x \in \mathbb{R}^n$: 최적화 변수(Optimization Variable)입니다. 우리가 결정해야 할 값들의 벡터입니다.
+* $f_0: \mathbb{R}^n \to \mathbb{R}$: **목적 함수(Objective Function)** 또는 비용 함수(Cost Function)입니다. 우리는 이 값을 최소화하고자 합니다.
+* $f_i(x) \le 0$: 부등식 제약 조건(Inequality Constraints)입니다.
+* $Ax = b$: 등식 제약 조건(Equality Constraints)입니다.
+
+이 일반적인 형태의 문제에서 $f_0$와 $f_i$가 어떤 성질을 가지느냐에 따라 문제의 난이도와 풀이 방법이 완전히 달라집니다.
+
+## 1.2. Convex Optimization Problem
+
+**볼록 최적화 문제(Convex Optimization Problem)**는 위 일반 최적화 문제에서 다음 두 가지 조건이 추가된 특수한 형태입니다.
+
+1.  **목적 함수와 부등식 제약 함수가 모두 볼록(Convex)해야 합니다.**
+    즉, $f_0, f_1, \dots, f_m$이 모두 볼록 함수여야 합니다.
+2.  **등식 제약 조건은 선형(Linear)이어야 합니다.**
+    즉, $Ax=b$ 형태를 만족해야 합니다.
+
+### 볼록 함수(Convex Function)의 정의
+
+함수 $f$가 볼록하다는 것은 수학적으로 다음과 같이 정의됩니다. 모든 $x, y$와 $0 \le \theta \le 1$인 $\theta$에 대하여 다음 부등식이 성립해야 합니다.
+
+$$
+f(\theta x + (1-\theta)y) \le \theta f(x) + (1-\theta)f(y)
+$$
+
+이 부등식의 기하학적 의미는 매우 직관적입니다. 함수 위의 임의의 두 점 $(x, f(x))$와 $(y, f(y))$를 잇는 선분(Chord)이 항상 함수의 그래프보다 위에 있거나 같아야 한다는 뜻입니다.
+
+직관적으로 말해, 볼록 함수는 **위로 굽지 않은(have nonnegative or upward curvature)**, 밥그릇과 같은 형태를 가집니다.
+
+# 2. Complexity: When is an optimization problem hard?
+
+최적화 문제의 난이도를 분류하는 관점은 시간이 지나며 크게 변화했습니다.
+
+## 2.1. The Classical View (고전적 관점)
+과거에는 문제의 난이도를 선형성 여부로 판단했습니다.
+
+* **Linear (Zero curvature):** 쉽다 (Easy). 선형 계획법(Linear Programming) 등으로 효율적으로 풀 수 있습니다.
+* **Nonlinear (Nonzero curvature):** 어렵다 (Hard).
+
+## 2.2. The Correct View (현대적 관점)
+하지만 현재 학계와 산업계에서 받아들여지는 "올바른" 관점은 다릅니다. 비선형 문제라 하더라도 볼록성이 보장되면 효율적으로 풀 수 있기 때문입니다.
+
+* **Convex (Nonnegative curvature):** 쉽다 (Easy).
+* **Nonconvex (Negative curvature):** 어렵다 (Hard).
+
+볼록 최적화가 "쉽다"는 것은 단순히 이론적으로 풀 수 있다는 것을 넘어, **효율적이고 신뢰성 있는 알고리즘**이 존재한다는 뜻입니다.
+
+# 3. Solving Convex Optimization Problems
+
+볼록 최적화 문제는 다양한 플랫폼에서 실행 가능한 강력한 알고리즘들을 통해 해결할 수 있습니다.
+
+## 3.1. 주요 알고리즘
+* **Interior-point methods (내부점 방법):** 약 1,000 ~ 10,000개 정도의 변수를 가진 문제에 적합하며 매우 높은 정확도를 보장합니다.
+* **First-order methods (1차 미분 방법):** 그보다 더 큰 대규모 문제(Large-scale)를 풀 때 사용됩니다.
+
+## 3.2. 장점
+볼록 최적화 솔버(Solver)들은 다음과 같은 강력한 특징을 가집니다.
+
+1.  **초기값 불필요:** 초기 시작점(Initial point)을 잘 설정할 필요가 없습니다. 어디서 시작하든 전역 최적해(Global Optimum)로 수렴합니다.
+2.  **Babysitting 불필요:** 알고리즘의 파라미터를 튜닝하거나 수렴 과정을 지켜볼 필요가 없습니다.
+3.  **신뢰성(Reliability):** 마치 선형 연립방정식을 푸는 것만큼이나 안정적으로 답을 내놓습니다.
+
+이러한 신뢰성 덕분에 볼록 최적화 솔버는 임베디드 시스템에 탑재되어 실시간으로 작동할 수 있습니다. 가장 대표적인 예시가 **SpaceX의 Falcon 9 로켓**입니다. Falcon 9은 착륙 시 실시간으로 볼록 최적화 문제를 풀어 궤적을 제어하며, 이 코드는 밀리초(milliseconds) 단위로 실행됩니다.
+
+# 4. Modeling Languages (DSLs)
+
+볼록 최적화가 강력함에도 불구하고, 과거에는 문제를 솔버가 이해할 수 있는 표준 형태로 변환하는 것이 큰 진입장벽이었습니다. 하지만 **도메인 특화 언어(Domain Specific Languages, DSLs)**의 등장으로 상황이 바뀌었습니다.
+
+## 4.1. DSL의 역할
+CVXPY(Python), CVX(Matlab), Convex.jl(Julia)과 같은 모델링 언어들은 다음과 같은 기능을 제공합니다.
+
+* 사용자가 **수학적 수식과 매우 유사한 고수준 언어**로 문제를 기술할 수 있게 합니다.
+* 작성된 문제를 자동으로 솔버가 요구하는 표준 형태로 변환(Transformation)하여 풉니다.
+* **"Say what you want, not how to get it"**: 사용자는 문제의 *구조(What)*만 정의하면 되고, *알고리즘(How)*은 DSL과 솔버가 처리합니다.
+
+이는 교육 및 연구 목적의 프로토타이핑(Rapid Prototyping)에 이상적이며, 복잡한 최적화 애플리케이션 개발 속도를 비약적으로 높여주었습니다.
+
+# 5. CVXPY Example: Non-negative Least Squares
+
+실제 코드를 통해 수학적 문제가 어떻게 구현되는지 살펴보겠습니다. 예제는 **비음수 최소자승법(Non-negative Least Squares)**입니다.
+
+## 5.1. Mathematical Formulation
+우선 수학적 정의는 다음과 같습니다.
+
+$$
+\begin{aligned}
+& \text{minimize} & & \|Ax - b\|_2^2 \\
+& \text{subject to} & & x \ge 0
+\end{aligned}
+$$
+
+* $A \in \mathbb{R}^{m \times n}, b \in \mathbb{R}^m$은 주어진 데이터입니다.
+* $x \in \mathbb{R}^n$은 우리가 찾고자 하는 변수입니다.
+* $x \ge 0$은 벡터의 모든 성분 $x_1, \dots, x_n$이 0보다 크거나 같다는 의미입니다(component-wise).
+
+## 5.2. CVXPY Code Implementation
+위의 수학적 수식은 CVXPY를 사용하면 거의 직역하듯이 코드로 옮길 수 있습니다.
+
+```python
+import cvxpy as cp
+import numpy as np
+
+# 데이터 생성 (예시)
+m, n = 10, 5
+A = np.random.randn(m, n)
+b = np.random.randn(m)
+
+# 1. 변수 선언 (Variable definition)
+x = cp.Variable(n)
+
+# 2. 목적 함수 정의 (Objective definition)
+# 수식: ||Ax - b||_2^2
+# 참고: 자료의 문법을 현대적 CVXPY 문법에 맞춰 해석
+obj = cp.sum_squares(A @ x - b) 
+
+# 3. 제약 조건 정의 (Constraints definition)
+# 수식: x >= 0 (component-wise)
+constr = [x >= 0]
+
+# 4. 문제 정의 및 해결 (Problem definition & Solve)
+prob = cp.Problem(cp.Minimize(obj), constr)
+prob.solve()
+
+print("Optimal value:", prob.value)
+print("Optimal x:", x.value)
+```
+
+이처럼 변수 선언, 목적 함수, 제약 조건을 직관적으로 나열하는 것만으로 최적화 문제를 해결할 수 있습니다.
+
+# 6. Brief History of Convex Optimization
+볼록 최적화는 하루아침에 완성된 분야가 아닙니다. 그 역사는 크게 이론, 알고리즘, 그리고 응용의 세 단계로 나눌 수 있습니다.
+
+## 6.1. Theory (1900-1970)
+* Convex Analysis: 볼록 집합과 볼록 함수에 대한 수학적 기초 이론이 정립된 시기입니다. 최적화 알고리즘보다는 수학적 성질(duality, optimality conditions 등)에 집중했습니다.
+7.2. Algorithms (1947-2000s)
+* 1947: Dantzig가 선형 계획법(Linear Programming)을 위한 Simplex algorithm을 개발했습니다.
+* 1960s: Fiacco & McCormick, Dikin 등에 의해 초기 Interior-point methods가 제안되었습니다.
+* 1970s: Ellipsoid method 및 Subgradient method가 연구되었습니다.
+* 1980s & 90s: Karmarkar, Nesterov & Nemirovski 등에 의해 Interior-point methods가 획기적으로 발전하며, 선형 계획법을 넘어선 볼록 최적화 문제들을 효율적으로 풀 수 있게 되었습니다.
+* 2000s~: 대규모 데이터 처리를 위한 Large-scale convex optimization 방법론들이 등장했습니다.
+7.3. Applications
+* Before 1990: 주로 운영 과학(Operations Research, OR) 분야에서 사용되었으며, 공학 분야의 응용은 제한적이었습니다.
+* Since 1990: 제어(Control), 신호 처리(Signal Processing), 통신(Communications), 회로 설계(Circuit Design) 등 공학 전반으로 확산되었습니다.
+* Since 2000s: 현재는 머신러닝(Machine Learning), 통계학(Statistics), 금융(Finance) 분야의 핵심 도구로 자리 잡았습니다.

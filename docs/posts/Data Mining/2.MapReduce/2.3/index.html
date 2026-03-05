@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.26">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="유성현">
+<meta name="dcterms.date" content="2026-03-05">
+<meta name="description" content="MapReduce: Details">
+
+<title>[Data Mining] 2. MapReduce (Part 3) – shsha0110.github.io</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../../../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../../../">
+<script src="../../../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../../../site_libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="../../../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../../../site_libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../../../site_libs/bootstrap/bootstrap-5b4ad623e5705c0698d39aec6f10cf02.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<meta name="google-site-verification" content="wnUhrJyUH9DivslRuyTASn9K6KXZlRrojFuwYY1q2hI">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../../../../styles.css">
+</head>
+
+<body class="nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top quarto-banner">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../../../../index.html">
+    <span class="navbar-title">shsha0110.github.io</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../../../about.html"> 
+<span class="menu-text">About</span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/"> <i class="bi bi-github" role="img">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://twitter.com"> <i class="bi bi-twitter" role="img">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<header id="title-block-header" class="quarto-title-block default page-columns page-full">
+  <div class="quarto-title-banner page-columns page-full">
+    <div class="quarto-title column-body">
+      <h1 class="title">[Data Mining] 2. MapReduce (Part 3)</h1>
+                  <div>
+        <div class="description">
+          MapReduce: Details
+        </div>
+      </div>
+                          <div class="quarto-categories">
+                <div class="quarto-category">Data Mining</div>
+              </div>
+                  </div>
+  </div>
+    
+  
+  <div class="quarto-title-meta">
+
+      <div>
+      <div class="quarto-title-meta-heading">Author</div>
+      <div class="quarto-title-meta-contents">
+               <p>유성현 </p>
+            </div>
+    </div>
+      
+      <div>
+      <div class="quarto-title-meta-heading">Published</div>
+      <div class="quarto-title-meta-contents">
+        <p class="date">March 5, 2026</p>
+      </div>
+    </div>
+    
+      
+    </div>
+    
+  
+  </header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction">1. Introduction</a></li>
+  <li><a href="#mapreduce-execution-workflow" id="toc-mapreduce-execution-workflow" class="nav-link" data-scroll-target="#mapreduce-execution-workflow">2. MapReduce Execution Workflow</a>
+  <ul class="collapse">
+  <li><a href="#roles-of-processes" id="toc-roles-of-processes" class="nav-link" data-scroll-target="#roles-of-processes">2.1. Roles of Processes</a></li>
+  <li><a href="#data-flow-pipelining" id="toc-data-flow-pipelining" class="nav-link" data-scroll-target="#data-flow-pipelining">2.2. Data Flow &amp; Pipelining</a></li>
+  </ul></li>
+  <li><a href="#coping-with-node-failures" id="toc-coping-with-node-failures" class="nav-link" data-scroll-target="#coping-with-node-failures">3. Coping with Node Failures</a>
+  <ul class="collapse">
+  <li><a href="#master-failure" id="toc-master-failure" class="nav-link" data-scroll-target="#master-failure">3.1. Master Failure</a></li>
+  <li><a href="#map-worker-failure" id="toc-map-worker-failure" class="nav-link" data-scroll-target="#map-worker-failure">3.2. Map Worker Failure</a></li>
+  <li><a href="#reduce-worker-failure" id="toc-reduce-worker-failure" class="nav-link" data-scroll-target="#reduce-worker-failure">3.3. Reduce Worker Failure</a></li>
+  </ul></li>
+  <li><a href="#tuning-number-of-reduce-tasks" id="toc-tuning-number-of-reduce-tasks" class="nav-link" data-scroll-target="#tuning-number-of-reduce-tasks">4. Tuning: Number of Reduce Tasks</a></li>
+  <li><a href="#algorithm-matrix-vector-multiplication" id="toc-algorithm-matrix-vector-multiplication" class="nav-link" data-scroll-target="#algorithm-matrix-vector-multiplication">5. Algorithm: Matrix-Vector Multiplication</a>
+  <ul class="collapse">
+  <li><a href="#case-1-vector-v-fits-in-main-memory" id="toc-case-1-vector-v-fits-in-main-memory" class="nav-link" data-scroll-target="#case-1-vector-v-fits-in-main-memory">5.1. Case 1: Vector <span class="math inline">\(v\)</span> fits in Main Memory</a></li>
+  <li><a href="#case-2-vector-v-is-too-large-stripes-method" id="toc-case-2-vector-v-is-too-large-stripes-method" class="nav-link" data-scroll-target="#case-2-vector-v-is-too-large-stripes-method">5.2. Case 2: Vector <span class="math inline">\(v\)</span> is too large (Stripes Method)</a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content quarto-banner-title-block" id="quarto-document-content">
+
+
+
+
+
+<section id="introduction" class="level1">
+<h1>1. Introduction</h1>
+<ul>
+<li>[Part 1]에서는 분산 시스템의 인프라를, [Part 2]에서는 프로그래밍 모델(Map &amp; Reduce)을 다루었습니다.</li>
+<li>이번 마지막 포스트에서는 MapReduce가 실제 클러스터에서 어떻게 <strong>실행(Execution)</strong>되고, 수천 대의 노드 중 일부가 고장 났을 때 어떻게 <strong>복구(Fault Tolerance)</strong>하는지, 그리고 구글의 핵심 알고리즘인 <strong>PageRank(Matrix-Vector Multiplication)</strong>가 이 위에서 어떻게 돌아가는지 상세히 살펴봅니다.</li>
+</ul>
+<hr>
+</section>
+<section id="mapreduce-execution-workflow" class="level1">
+<h1>2. MapReduce Execution Workflow</h1>
+<ul>
+<li>사용자가 MapReduce 코드를 실행하면 내부적으로 어떤 일이 벌어질까요? 전체 프로세스는 <strong>Master-Worker</strong> 구조로 돌아갑니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/execution_flow.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: MapReduce 프로그램 실행 구조. User Program이 실행되면 Master와 여러 Worker 프로세스가 Fork된다. Master는 Worker들에게 Map 또는 Reduce 작업을 할당(Assign)하고, 데이터는 Worker들 사이에서 이동한다.</figcaption>
+</figure>
+</div>
+<section id="roles-of-processes" class="level2">
+<h2 class="anchored" data-anchor-id="roles-of-processes">2.1. Roles of Processes</h2>
+<ul>
+<li><ol type="1">
+<li><strong>Master Controller</strong></li>
+</ol>
+<ul>
+<li><strong>Scheduler</strong>: 전체 시스템의 지휘자입니다. Map과 Reduce 태스크를 유휴 상태(Idle)인 Worker들에게 할당합니다.</li>
+<li><strong>Monitor</strong>: 각 태스크의 상태(Idle, Executing, Completed)를 추적합니다.</li>
+<li><strong>Coordinator</strong>: Map 태스크가 어디서 끝났고, 그 결과 파일이 어디에 있는지 Reduce 태스크에게 알려줍니다.</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>Workers</strong></li>
+</ol>
+<ul>
+<li>실제 연산을 수행하는 프로세스입니다.</li>
+<li>한 Worker는 시점에 따라 Map 태스크를 맡을 수도, Reduce 태스크를 맡을 수도 있습니다 (동시에는 안 함).</li>
+<li>작업이 끝나면 Master에게 “완료 보고”를 합니다.</li>
+</ul></li>
+</ul>
+</section>
+<section id="data-flow-pipelining" class="level2">
+<h2 class="anchored" data-anchor-id="data-flow-pipelining">2.2. Data Flow &amp; Pipelining</h2>
+<ul>
+<li><p>MapReduce는 모든 Map이 다 끝날 때까지 멍하니 기다리지 않습니다. <strong>Pipelining</strong>을 통해 효율을 극대화합니다.</p></li>
+<li><p><strong>Map Task Output</strong>: Map Worker의 <strong>로컬 디스크(Local Disk)</strong>에 중간 파일(Intermediate Files)로 저장됩니다.</p></li>
+<li><p><strong>Reduce Task Input</strong>: Reduce Worker는 Map 작업이 하나라도 끝나면 즉시 데이터를 읽어오기 시작(Copying/Shuffling)합니다.</p></li>
+<li><p><strong>Execution</strong>: 단, 실제 <code>Reduce()</code> 함수 실행은 필요한 모든 파티션의 데이터를 다 가져온 후에 시작됩니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/pipelining.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: MapReduce의 파이프라이닝. Reduce Worker들은 Map 작업이 완료되는 즉시 데이터를 읽어오기 시작하여 전체 대기 시간을 줄인다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+<section id="coping-with-node-failures" class="level1">
+<h1>3. Coping with Node Failures</h1>
+<ul>
+<li>수천 대의 머신에서 장애는 일상입니다. MapReduce의 가장 강력한 기능은 <strong>사용자 개입 없이 시스템이 알아서 장애를 복구</strong>한다는 점입니다.</li>
+</ul>
+<section id="master-failure" class="level2">
+<h2 class="anchored" data-anchor-id="master-failure">3.1. Master Failure</h2>
+<ul>
+<li><strong>증상</strong>: 지휘자가 사라졌으므로 상태 관리가 불가능합니다.</li>
+<li><strong>대응</strong>: 현재로서는 <strong>작업 전체를 재시작(Restart entire job)</strong>하는 수밖에 없습니다. 하지만 Master는 단 한 대뿐이므로 확률적으로 매우 드뭅니다.</li>
+</ul>
+</section>
+<section id="map-worker-failure" class="level2">
+<h2 class="anchored" data-anchor-id="map-worker-failure">3.2. Map Worker Failure</h2>
+<ul>
+<li><strong>상황</strong>: Map 태스크를 수행하던 노드가 죽었습니다.</li>
+<li><strong>대응</strong>:
+<ul>
+<li><strong>진행 중(In-progress)인 작업</strong>: 당연히 다른 Worker에게 재할당하여 다시 실행합니다.</li>
+<li><strong>완료된(Completed) 작업</strong>: <strong>이 경우에도 다시 실행해야 합니다!</strong>
+<ul>
+<li><strong>Why?</strong>: Map의 결과물은 HDFS(글로벌)가 아니라 해당 노드의 <strong>로컬 디스크</strong>에 저장되기 때문입니다. 노드가 죽으면 그 로컬 파일도 접근 불가능해지므로, 다시 계산해야 합니다.</li>
+</ul></li>
+</ul></li>
+</ul>
+</section>
+<section id="reduce-worker-failure" class="level2">
+<h2 class="anchored" data-anchor-id="reduce-worker-failure">3.3. Reduce Worker Failure</h2>
+<ul>
+<li><strong>상황</strong>: Reduce 태스크를 수행하던 노드가 죽었습니다.</li>
+<li><strong>대응</strong>:
+<ul>
+<li><strong>진행 중인 작업</strong>: 다른 Worker에게 재할당하여 다시 실행합니다.</li>
+<li><strong>완료된 작업</strong>: <strong>다시 실행할 필요가 없습니다.</strong></li>
+<li><strong>Why?</strong>: Reduce의 최종 결과물은 <strong>DFS(Distributed File System)</strong>에 저장되어 3중 복제(Replication)되므로, 노드가 죽어도 데이터는 안전합니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="tuning-number-of-reduce-tasks" class="level1">
+<h1>4. Tuning: Number of Reduce Tasks</h1>
+<ul>
+<li><p>MapReduce 성능 최적화의 핵심 파라미터 중 하나는 “Reduce Task의 개수(<span class="math inline">\(R\)</span>)”를 몇 개로 설정할 것인가입니다.</p></li>
+<li><p><strong>이상적인 경우</strong>: <span class="math inline">\(R\)</span>을 Key의 개수만큼 늘리면 병렬성이 극대화될 것 같지만, 오버헤드가 너무 큽니다.</p></li>
+<li><p><strong>현실적인 문제</strong>:</p>
+<ul>
+<li>Key의 개수는 수십억 개에 달할 수 있습니다.</li>
+<li>Key마다 데이터 양의 편차(Skew)가 큽니다 (예: ‘the’ 단어 vs 희귀 단어).</li>
+</ul></li>
+<li><p><strong>Rule of Thumb</strong>: <span class="math display">\[\# of Nodes &lt; \# of Reduce Tasks &lt; \# of Keys\]</span></p>
+<ul>
+<li>보통 노드 수보다 조금 더 많게 설정하여, 한 태스크가 빨리 끝나면 바로 다음 태스크를 가져와 로드 밸런싱이 되도록 합니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+<section id="algorithm-matrix-vector-multiplication" class="level1">
+<h1>5. Algorithm: Matrix-Vector Multiplication</h1>
+<ul>
+<li>MapReduce는 원래 구글의 <strong>PageRank</strong> 계산을 위해 탄생했습니다. PageRank의 핵심 연산은 거대한 인접 행렬 <span class="math inline">\(M\)</span>과 중요도 벡터 <span class="math inline">\(v\)</span>의 곱셈입니다. <span class="math display">\[x = Mv \quad \Rightarrow \quad x_i = \sum_{j=1}^{n} m_{ij} v_j\]</span>
+<ul>
+<li>여기서 <span class="math inline">\(n\)</span>은 웹 페이지의 개수로, 수백억(Tens of billions) 단위입니다.</li>
+</ul></li>
+</ul>
+<section id="case-1-vector-v-fits-in-main-memory" class="level2">
+<h2 class="anchored" data-anchor-id="case-1-vector-v-fits-in-main-memory">5.1. Case 1: Vector <span class="math inline">\(v\)</span> fits in Main Memory</h2>
+<ul>
+<li><p>행렬 <span class="math inline">\(M\)</span>은 너무 커서 디스크에 있지만, 벡터 <span class="math inline">\(v\)</span>는 메모리에 들어갈 정도로 작다고 가정해 봅시다.</p></li>
+<li><p><strong>Map Function</strong>:</p>
+<ul>
+<li>입력: <span class="math inline">\(((i, j), m_{ij})\)</span> (행렬의 원소 하나)</li>
+<li>동작: 메모리에 있는 전역 벡터 <span class="math inline">\(v\)</span>에서 <span class="math inline">\(v_j\)</span>를 읽어와 곱합니다.</li>
+<li>출력: Key=<span class="math inline">\(i\)</span>, Value=<span class="math inline">\(m_{ij} v_j\)</span></li>
+</ul></li>
+<li><p><strong>Reduce Function</strong>:</p>
+<ul>
+<li>입력: Key=<span class="math inline">\(i\)</span>, Values=<span class="math inline">\([m_{i1}v_{1}, m_{i2}v_{2}, ...]\)</span></li>
+<li>동작: 리스트의 값을 모두 더합니다. (<span class="math inline">\(\sum_j m_{ij} v_j\)</span>)</li>
+<li>출력: <span class="math inline">\((i, x_i)\)</span></li>
+</ul></li>
+</ul>
+</section>
+<section id="case-2-vector-v-is-too-large-stripes-method" class="level2">
+<h2 class="anchored" data-anchor-id="case-2-vector-v-is-too-large-stripes-method">5.2. Case 2: Vector <span class="math inline">\(v\)</span> is too large (Stripes Method)</h2>
+<ul>
+<li>벡터 <span class="math inline">\(v\)</span>조차 너무 커서 메모리에 다 올릴 수 없다면 어떻게 할까요? <strong>Stripe(띠)</strong> 방식으로 쪼개서 처리해야 합니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/matrix_stripes.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3: Stripes Method. 행렬 M을 세로 띠(Vertical Stripes)로, 벡터 v를 가로 띠(Horizontal Stripes)로 나눈다. 각 띠의 너비와 높이를 맞춰서, 한 번에 처리해야 할 벡터의 조각이 메모리에 들어오도록 한다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><ol type="1">
+<li><strong>Divide</strong>: 행렬 <span class="math inline">\(M\)</span>을 세로 띠(Vertical Stripes)로 나누고, 벡터 <span class="math inline">\(v\)</span>를 가로 띠(Horizontal Stripes)로 나눕니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Constraint</strong>: 한 번에 처리할 벡터의 띠 하나가 메모리에 들어갈 수 있도록 크기를 조절합니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><strong>Process</strong>: 각 Map Worker는 행렬의 특정 띠 부분과 벡터의 대응되는 띠 부분만 로드하여 부분 곱(Partial Product)을 계산합니다.</li>
+</ol></li>
+<li><ol start="4" type="1">
+<li><strong>Result</strong>: 이후 Reduce 단계에서 부분 합들을 모아 최종 결과를 만듭니다.</li>
+</ol></li>
+</ul>
+
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/shsha0110\.github\.io");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

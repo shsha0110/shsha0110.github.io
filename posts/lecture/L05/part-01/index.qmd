@@ -1,0 +1,159 @@
+---
+title: "[Causal Inference] 05. Adjustment Criterion (Part 1)"
+description: "Backdoor Criterion - Tightness of the Back-door Criterion"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction
+
+인과 추론(Causal Inference)의 핵심 목표 중 하나는 관찰된 데이터 분포 $P(V)$로부터 개입 분포(Interventional Distribution) $P(Y|do(X))$를 식별(Identification)하는 것입니다. 이를 위한 가장 강력하고 널리 알려진 도구는 **Back-door Criterion**입니다.
+
+하지만 Back-door Criterion은 충분조건(sufficient condition)일 뿐 필요조건(necessary condition)은 아닙니다. 즉, Back-door Criterion을 만족하지 못하더라도 $P(Y|do(X))$를 식별할 수 있는 경우가 존재합니다. [cite_start]이번 포스트에서는 Back-door Criterion을 복습하고, 왜 더 일반화된 **Adjustment Criterion**이 필요한지 그 동기(Motivation)와 한계(Tightness)를 구체적인 그래프 예시를 통해 살펴봅니다[cite: 5, 8, 13].
+
+> [cite_start]**Note:** 본 포스트는 서울대학교 데이터사이언스 대학원 이상학 교수님의 "인과추론 및 실습" 강의 자료를 바탕으로 작성되었습니다[cite: 1, 2, 3].
+
+---
+
+# 2. The Back-door Criterion (Review)
+
+[cite_start]Pearl(2000)이 제시한 Back-door Criterion은 공변량 집합 $Z$를 조정(adjustment)함으로써 인과 효과를 식별할 수 있는 조건을 제시합니다[cite: 38].
+
+## 2.1. Definition
+[cite_start]어떤 변수 집합 $Z$가 변수 쌍 $(X, Y)$에 대해 **Back-door Criterion**을 만족하려면 다음 두 가지 조건을 충족해야 합니다[cite: 18, 23, 32].
+
+1.  [cite_start]**Condition (i) - No Descendants:** $Z$의 어떤 노드도 $X$의 후손(descendant)이 아니어야 합니다[cite: 19, 24, 34].
+2.  [cite_start]**Condition (ii) - Blocking Paths:** $Z$는 $X$로 들어가는 화살표를 포함하는 $X$와 $Y$ 사이의 모든 경로(path)를 차단(block)해야 합니다[cite: 26, 35].
+
+## 2.2. Identification Formula
+[cite_start]만약 집합 $Z$가 위 조건을 만족한다면, $Y$에 대한 $X$의 인과 효과는 다음과 같이 식별 가능합니다[cite: 27, 36, 37].
+
+$$
+P(y|do(x)) = \sum_{z} P(y|x,z)P(z)
+$$
+
+이 식은 우리가 $do$-calculus나 가상의 실험 없이, 관찰된 데이터의 조건부 확률 $P(y|x,z)$와 주변 확률 $P(z)$만으로 인과 효과를 계산할 수 있음을 의미합니다.
+
+---
+
+# 3. Why "No Descendants"? (Simpson's Paradox)
+
+Back-door Criterion의 첫 번째 조건인 "조정 집합 $Z$에 $X$의 후손을 포함하지 말라"는 조건은 왜 필요할까요? [cite_start]이는 **인과 경로(Causal Path)**를 차단하지 않기 위해서입니다[cite: 100].
+
+[cite_start]가장 유명한 예시인 심슨의 역설(Simpson's Paradox)을 통해 이를 직관적으로 이해할 수 있습니다[cite: 40]. 아래 두 가지 그래프 구조를 비교해 봅시다.
+
+### Case 1: Confounder Structure
+첫 번째 경우는 성별($F$)이 약물 복용($X$)과 회복($Y$) 모두에 영향을 주는 **교란 요인(Confounder)**인 상황입니다.
+
+![Figure 1: Confounder Structure. F(성별)는 X(약물)와 Y(회복)의 공통 원인이다. 점선 화살표는 교란 경로를 의미한다.](./images/simpsons_paradox_confounder.png)
+[cite_start]*(그림 설명: $F \to X$, $F \to Y$, $X \to Y$ 구조를 가짐. 여기서 $\emptyset$은 Back-door를 만족하지 못하며, $\{F\}$를 조정해야 올바른 인과 효과를 추정할 수 있음[cite: 39, 53].)*
+
+이 경우 데이터를 합쳐서(Aggregated) 보면 안 되고, 성별($F$)로 층화(stratify)하여 분석해야 합니다. 즉, $\{F\}$는 **Admissible** 합니다.
+
+### Case 2: Mediator Structure
+두 번째 경우는 약물($X$)이 혈압 등 중간 매개체($F$)에 영향을 주고, 그것이 다시 회복($Y$)에 영향을 주는 **매개(Mediator)** 상황입니다.
+
+![Figure 2: Mediator Structure. X(약물)가 F(중간 요인)에 영향을 주고, F가 Y(회복)에 영향을 준다.](./images/simpsons_paradox_mediator.png)
+[cite_start]*(그림 설명: $X \to F \to Y$ 및 $X \to Y$ 구조. 여기서 $F$는 $X$의 후손(Descendant)이다. $F$를 조정해버리면 $X$에서 $Y$로 가는 인과 경로 중 하나를 차단하게 되어 전체 효과를 과소평가하게 된다[cite: 39].)*
+
+이 경우, $F$는 $X$의 후손이므로 Back-door Criterion의 조건 (i)을 위반합니다. 따라서 $\{F\}$는 **Not Admissible** 합니다. [cite_start]데이터를 합쳐서 보는 것($\emptyset$ is admissible)이 오히려 올바른 접근입니다[cite: 54, 55].
+
+### Data Example
+[cite_start]강의 자료의 데이터 예시를 보면 구조적 차이의 중요성이 명확해집니다[cite: 41, 42].
+
+* **Male ($F=0$)**: Drug 60% vs No-Drug 70% (약물이 안 좋아 보임)
+* **Female ($F=1$)**: Drug 20% vs No-Drug 30% (약물이 안 좋아 보임)
+* **Aggregated**: Drug $\approx$ 50% vs No-Drug $\approx$ 40% (약물이 좋아 보임)
+
+구조가 Case 1(Confounder)이라면 층화된 결과(안 좋다)가 진실이고, Case 2(Mediator)라면 합쳐진 결과(좋다)가 진실입니다. 즉, **데이터만으로는 인과 효과를 알 수 없으며, 인과 그래프(구조)에 따라 조정 대상이 달라집니다.**
+
+---
+
+# 4. Conditional Back-door Criterion
+
+Back-door Criterion은 특정 조건부 상황으로 확장될 수 있습니다. [cite_start]이를 **Conditional Back-door Criterion**이라 합니다[cite: 60].
+
+우리가 특정 공변량 $W$가 주어진 상황에서의 $X$의 효과, 즉 $w$-specific effect인 $P(y|do(x), w)$를 알고 싶다고 가정해 봅시다. [cite_start]이때 측정 가능한 집합 $Z$가 있어 $W \cup Z$가 Back-door Criterion을 만족한다면, 이 효과는 다음과 같이 식별됩니다[cite: 61, 63].
+
+$$
+P(y|do(x), \forall w) = \sum_{z} P(y|x,z, \forall w)P(z|\forall w) = P_x(y|W)
+$$
+
+[cite_start]이 공식의 유도는 $do$-calculus에 대한 이해가 필요합니다[cite: 64].
+
+---
+
+# 5. Tightness of the Back-door Criterion
+
+이제 이번 포스트의 핵심 주제인 **Back-door Criterion의 한계(Tightness)**로 넘어갑니다. 질문의 핵심은 다음과 같습니다.
+
+> "Back-door Criterion은 충분조건이다. 그렇다면 필요조건인가?"
+> 즉, "Back-door를 만족하지 못하면 조정(Adjustment)으로 식별이 불가능한가?"
+
+정답은 **"아니오"** 입니다. [cite_start]Back-door Criterion은 충분하지만 필요조건은 아닙니다(Sufficient but not necessary)[cite: 95].
+
+## 5.1. Counter-Example Graph
+다음과 같은 인과 그래프를 고려해 봅시다. [cite_start]여기서 $X = \{X_1, X_2\}$이고 $Y$는 결과 변수입니다[cite: 76, 78].
+
+![Figure 3: Counter-Example DAG for Back-door Criterion. X1 -> Z1 -> Z2 -> X2 -> Y 의 경로와 X1 -> Y 직접 경로가 존재하며, Z2와 Y 사이에 bidirected edge(confounder)가 존재한다.](./images/tightness_dag.png)
+[cite_start]*(그림 설명: $X_1 \to Z_1 \to Z_2 \to X_2 \to Y$, $X_1 \to Y$. 그리고 $Z_2 \leftrightarrow Y$ (점선) 관계가 존재함. $X = \{X_1, X_2\}$가 처리 변수 집합임[cite: 76, 79, 80, 81, 82, 83].)*
+
+## 5.2. Why Back-door Fails here?
+이 그래프에서 가능한 모든 조정 변수 후보는 $\{Z_1, Z_2\}$입니다. [cite_start]그러나 $Z_1$과 $Z_2$는 모두 $X_1$의 후손(descendant)입니다[cite: 86].
+
+* Back-door Criterion의 **Condition (i)**: "$Z$의 어떤 노드도 $X$의 후손이면 안 된다."
+* [cite_start]이 그래프에서는 $X=\{X_1, X_2\}$이므로, $X_1$의 후손인 $Z_1, Z_2$를 조정 집합에 포함하는 순간 **조건 (i)을 위반**하게 됩니다[cite: 78].
+
+따라서, 이 그래프에서는 **Back-door Admissible Set이 존재하지 않습니다.**
+
+## 5.3. But Adjustment IS Possible!
+[cite_start]놀랍게도, $do$-calculus나 다른 방법을 통해 유도해보면 이 그래프에서 $P(y|do(x))$는 여전히 표준 조정 공식(Standard Adjustment Formula) 형태로 식별 가능합니다[cite: 93, 94].
+
+$$
+P(y|do(x)) = \sum_{z} P(y|x,z)P(z)
+$$
+
+이것이 시사하는 바는 명확합니다.
+
+1.  Back-door Criterion은 **너무 보수적(strict)**입니다.
+2.  [cite_start]$X$의 후손(descendant)이라 할지라도, 조정을 위해 사용될 수 있으며 심지어 **필요한 경우**도 있습니다[cite: 102].
+3.  [cite_start]특히, **$X$의 후손이면서 동시에 $X$의 조상(ancestor)인 변수**(예: $X_1$의 후손이면서 $X_2$의 조상인 $Z_2$)들은 인과 경로를 방해하지 않으면서 교란을 제거하는 데 사용될 수 있습니다[cite: 103].
+
+## 5.4. Conclusion: Motivation for Adjustment Criterion
+결국 우리는 Back-door Criterion보다 더 일반화된 기준이 필요합니다. [cite_start]"무조건 후손은 안 된다"가 아니라, **"정말 피해야 할 변수는 무엇인가?"(What are the variables that we really need to avoid?)**를 정의해야 합니다[cite: 104].
+
+[cite_start]Condition (i)의 원래 목적은 **인과 경로(Causal Path)를 보존(preserve)**하는 것입니다[cite: 99, 100]. 따라서 후손이더라도 인과 경로를 막지 않는다면 조정 집합에 포함시킬 수 있어야 합니다. 이것이 바로 다음 포스트에서 다룰 **Adjustment Criterion**의 등장 배경입니다.
+
+---
+
+# 6. Summary
+
+* **Back-door Criterion**은 $P(y|do(x))$를 식별하는 강력한 도구이지만, $X$의 후손을 조정 집합에서 원천적으로 배제합니다.
+* **Simpson's Paradox** 예시는 후손(Mediator)을 통제하면 안 되는 이유를 잘 보여줍니다.
+* 하지만 **복잡한 그래프(Tightness example)**에서는 $X$의 구성요소 사이에 있는 변수($X_1 \to Z \to X_2$)들이 존재하며, 이들은 후손임에도 불구하고 조정이 필요하거나 가능할 수 있습니다.
+* Back-door Criterion은 충분조건이지만 필요조건이 아니며, 이를 보완하기 위해 더 일반적인 **Adjustment Criterion**이 필요합니다.
+
+다음 포스트에서는 어떤 후손이 허용되고 어떤 후손이 금지되는지 명확히 정의하는 **Adjustment Criterion의 정의와 알고리즘**에 대해 자세히 알아보겠습니다.
+
+---
+
+### 누락 방지 검증 (Missing Content Check)
+
+강의 자료(PDF 1-11p)를 기반으로 아래 항목들이 포함되었는지 확인합니다.
+
+* [cite_start][x] **Back-door Criterion의 정의 (조건 i, ii)** [cite: 18, 19, 26]
+* [cite_start][x] **Adjustment Formula 수식** [cite: 37]
+* [cite_start][x] **Simpson's Paradox 예시 (표 및 그래프 구조 설명)** [cite: 41, 42, 53, 55]
+* [cite_start][x] **Conditional Back-door Criterion의 개념 및 수식** [cite: 60, 63]
+* [cite_start][x] **Tightness 예제 그래프 ($X_1 \to Z \to X_2$ 구조)** [cite: 76, 78]
+* [cite_start][x] **Back-door의 한계 설명 (후손이지만 조정 가능한 케이스 존재)** [cite: 93, 94, 95]
+* [cite_start][x] **Condition (i)의 원래 목적 (Causal path 보존)** [cite: 99, 100]
+
+**Note on omitted content:** PDF의 12페이지 이후(Algorithm, Theoretical Tool 등)는 제공된 파일 범위에 포함되지 않아 본 포스트에서는 다루지 않고 "다음 포스트"로 넘겼습니다. 제공된 1~11페이지 내의 내용은 모두 포함되었습니다.

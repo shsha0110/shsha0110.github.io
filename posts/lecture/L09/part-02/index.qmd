@@ -1,0 +1,232 @@
+---
+title: "[Causal Inference] 09. Linear Structural Causal Models (Part 2)"
+description: "Linear Regression"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: The Regression Trap
+
+인과추론(Causal Inference)을 처음 공부할 때 가장 먼저 마주하는 충격적인 사실은 **"우리가 배운 회귀분석(Regression)은 인과관계를 보장하지 않는다"**는 점입니다. 데이터 사이언스나 통계학 수업에서 우리는 $X$가 $Y$에 미치는 영향을 알기 위해 회귀분석을 돌리고 $\beta$ 값을 해석하라고 배웁니다. 하지만 인과적 관점에서 이 접근은 심각한 오류를 범할 수 있습니다.
+
+강의 자료에 소개된 '의학 연구자'의 예시를 통해 이 문제를 직관적으로 살펴보겠습니다.
+
+## 1.1 The Medical Researcher Paradox
+
+우리는 새로운 약물이 질병 치료에 도움이 되는지 확인하려는 연구자입니다.
+데이터를 수집하여 **약물 복용량($X$)**과 **혈액 내 바이오마커 수치($Y$, 높을수록 좋음)** 사이의 관계를 시각화했습니다.
+
+![Figure 1: 약물 복용량(X)과 바이오마커(Y)의 산점도. 언뜻 보기에 양의 상관관계를 보인다.](./images/scatter_plot_initial.png)
+
+데이터에 대해 단순 선형 회귀분석($Y = \beta X + e$)을 수행한 결과, $\beta = 0.375$라는 양의 계수를 얻었습니다.
+즉, **"약물을 많이 복용할수록 바이오마커 수치가 높아진다"**고 결론 내리고 약물 사용을 승인합니다.
+
+그러나, 이 약물이 실제 환자들에게 투여되자 **바이오마커 수치가 오히려 떨어지는 부정적인 결과**가 나타납니다. 약물이 실제로 사람을 해치고 있었던 것입니다.
+
+![Figure 2: 전체 모집단에 약물을 투여했을 때의 실제 인과 효과(녹색 선). 실제 기울기는 음수(-1)로, 약물은 해롭다. 붉은색 회귀선은 데이터의 편향을 반영한 잘못된 추정이다.](./images/scatter_plot_simpsons_paradox.png)
+
+### What Happened?
+왜 처음의 회귀분석은 양의 관계를 보여주었을까요? 이는 **교란 요인(Confounder)**을 고려하지 않았기 때문입니다. 예를 들어, 건강 상태가 나쁜 환자들이 생존을 위해 약물을 더 많이 복용했을 수 있고, 그들의 신체 특성이 바이오마커 수치와 관련이 있었을 수 있습니다.
+
+이 현상은 우리가 구한 **회귀 계수(Regression Coefficient, $r_{yx}$)**와 실제 **구조적 계수(Structural Coefficient, $\lambda_{xy}$)**가 다르다는 것을 보여줍니다.
+
+---
+
+# 2. Regression vs. Structural Causal Model (SCM)
+
+이 차이를 수학적으로 명확히 하기 위해, 회귀분석이 계산하는 것과 인과 모형이 가정하는 세계관을 비교해보겠습니다.
+
+## 2.1 What Regression Computes
+
+회귀분석은 오차의 제곱합(Mean Squared Error)을 최소화하는 기계적인 과정입니다.
+단순 회귀식 $Y = \beta X + e$에서 최소자승법(OLS)은 다음을 최소화합니다.
+
+$$
+\min_\beta \mathbb{E}[(Y - \beta X)^2]
+$$
+
+이를 $\beta$에 대해 미분하고 0으로 두면 다음과 같은 결과를 얻습니다 (변수들이 중심화(centered)되어 있다고 가정할 때):
+
+$$
+\begin{aligned}
+\frac{\partial}{\partial \beta} \mathbb{E}[Y^2 - 2\beta XY + \beta^2 X^2] &= -2\mathbb{E}[XY] + 2\beta\mathbb{E}[X^2] = 0 \\
+\therefore \beta &= \frac{\mathbb{E}[XY]}{\mathbb{E}[X^2]} = \frac{Cov(X, Y)}{Var(X)}
+\end{aligned}
+$$
+
+만약 변수들의 분산이 1로 정규화되어 있다면, $\beta = \mathbb{E}[XY] = \sigma_{xy}$가 됩니다.
+즉, **회귀 계수는 단순히 $X$와 $Y$ 사이의 공분산(상관관계)일 뿐입니다.** 여기에는 어떠한 인과적 방향성도 포함되어 있지 않습니다. 강의 자료에서는 이를 **"Confusion of the Century"**라고 부릅니다.
+
+## 2.2 The Structural View (Ground-Truth)
+
+반면, 구조적 인과 모형(SCM)은 변수 간의 생성 메커니즘을 정의합니다.
+
+$$
+Y \leftarrow \lambda_{xy} X + \epsilon_y
+$$
+
+여기서 $\lambda_{xy}$는 $X$를 1단위 변화시켰을 때 $Y$가 변하는 **인과적 효과(Causal Effect)**, 즉 $\mathbb{E}[Y | do(X)]$를 의미합니다.
+
+만약 $X$와 $Y$ 사이에 교란 요인(Confounder)이 존재한다면, 그래프는 다음과 같습니다.
+
+![Figure 3: 교란 요인이 존재하는 상황의 인과 그래프. X와 Y는 직접적인 인과 경로(실선) 외에도 교란 요인에 의한 뒷문 경로(점선, Back-door path)로 연결되어 있다.](./images/confounded_graph_model.png)
+
+이때 관측되는 공분산 $\sigma_{xy}$는 다음과 같이 분해됩니다.
+
+$$
+\sigma_{xy} = \mathbb{E}[XY] = \mathbb{E}[X(\lambda_{xy}X + \epsilon_y)] = \lambda_{xy}\mathbb{E}[X^2] + \mathbb{E}[X\epsilon_y]
+$$
+
+$\mathbb{E}[X^2]=1$이라고 가정하더라도, 교란 요인 때문에 $X$와 $\epsilon_y$가 상관관계를 가지므로($\mathbb{E}[X\epsilon_y] \neq 0$),
+
+$$
+\sigma_{xy} = \lambda_{xy} + \text{Bias}(\epsilon_{xy})
+$$
+
+가 됩니다. 즉, **단순 회귀 계수($\beta = \sigma_{xy}$)는 인과 계수($\lambda_{xy}$)에 편향(Bias)이 더해진 값**이므로, 인과 효과를 올바르게 추정할 수 없습니다. 이것이 $\lambda_{xy}$가 **식별 불가능(Not Identifiable)**한 상황입니다.
+
+---
+
+# 3. Identification in Linear SCM
+
+**식별(Identification)**이란 관측 가능한 데이터(공분산 행렬 등)로부터 우리가 알고자 하는 인과 파라미터($\lambda$)를 유일하게 복원할 수 있는지 확인하는 과정입니다. 선형 모형에서 이를 해결하기 위한 강력한 도구들을 소개합니다.
+
+## 3.1 The Single-Door Criterion
+
+**Single-Door Criterion**은 특정 조건 하에서 보조 변수 $Z$를 사용하여 $X \to Y$의 직접 효과를 식별하는 방법입니다.
+
+### The Setup
+다음과 같은 그래프를 가정해 봅시다.
+
+![Figure 4: Single-Door Criterion을 설명하기 위한 그래프. Z는 X의 원인이고, X는 Y의 원인이다. Z와 Y 사이에는 점선으로 표시된 교란 관계(상관성)가 존재한다.](./images/single_door_graph.png)
+
+* $Z \to X$ ($\lambda_{zx}$)
+* $X \to Y$ ($\lambda_{xy}$)
+* $Z$와 $Y$ 사이에는 직접적인 인과 관계는 없지만, 교란 요인 $\epsilon_{zy}$에 의해 상관관계가 있음 (dashed line).
+
+이 모형의 구조적 방정식은 다음과 같습니다:
+1.  $X = \lambda_{zx} Z + \epsilon_x$
+2.  $Y = \lambda_{xy} X + \epsilon_y$ (단, $\epsilon_y$와 $Z$는 correlated)
+
+### Derivation using Regression
+우리는 $Y$를 $X$와 $Z$에 대해 다중 회귀분석(Multiple Regression)을 수행합니다.
+
+$$
+Y = \alpha X + \beta Z + e
+$$
+
+이 회귀분석의 계수 $\alpha$와 $\beta$가 구조적 파라미터와 어떤 관계가 있는지 유도해 보겠습니다.
+최소자승법은 다음 목적함수를 최소화합니다.
+
+$$
+\mathcal{L} = \mathbb{E}[(Y - \alpha X - \beta Z)^2]
+$$
+
+이 식을 전개하면:
+$$
+\mathbb{E}[Y^2] - 2\alpha\sigma_{xy} - 2\beta\sigma_{yz} + 2\alpha\beta\sigma_{xz} + \alpha^2\mathbb{E}[X^2] + \beta^2\mathbb{E}[Z^2]
+$$
+(편의상 모든 변수의 분산 $\mathbb{E}[X^2], \mathbb{E}[Z^2]$ 등을 1로 가정)
+
+각 계수에 대해 편미분하여 0으로 둡니다.
+
+1.  $\frac{\partial \mathcal{L}}{\partial \alpha} = -2\sigma_{xy} + 2\alpha + 2\beta\sigma_{xz} = 0 \implies \sigma_{xy} = \alpha + \beta\sigma_{xz}$
+2.  $\frac{\partial \mathcal{L}}{\partial \beta} = -2\sigma_{yz} + 2\beta + 2\alpha\sigma_{xz} = 0 \implies \sigma_{yz} = \beta + \alpha\sigma_{xz}$
+
+이것은 회귀분석의 정규 방정식(Normal Equations)입니다. 이제 구조적 모형(SCM) 관점에서 공분산 $\sigma_{xy}$와 $\sigma_{yz}$를 써보면:
+
+* $\sigma_{xy} = \lambda_{xy} + \lambda_{zx}\sigma_{zy}$ (Path rule 적용)
+* $\sigma_{yz} = \lambda_{xy}\lambda_{zx} + \sigma_{zy}$
+
+이 두 시스템(회귀 계수 시스템과 구조적 파라미터 시스템)을 매칭해보면 놀라운 결과를 얻게 됩니다.
+
+$$
+\begin{cases}
+\alpha = \lambda_{xy} \\
+\beta = \sigma_{zy} (\text{or } \epsilon_{zy})
+\end{cases}
+$$
+
+**결론:** 위와 같은 그래프 구조가 성립한다면, $Y$를 $X$와 $Z$에 대해 회귀분석했을 때 **$X$의 회귀 계수 $\alpha$는 실제 인과 효과 $\lambda_{xy}$와 일치합니다.** $Z$를 통제함으로써 $Z$와 연관된 교란 경로(Back-door path)가 차단되었기 때문입니다.
+
+### Theorem: Single-Door Criterion
+강의 자료에 제시된 정리를 요약하면 다음과 같습니다.
+
+$G$가 인과 그래프일 때, $X \to Y$의 계수 $\lambda_{xy}$는 다음 조건을 만족하는 변수 집합 $Z$가 존재하면 식별 가능합니다.
+
+1.  $Z$는 $Y$의 자손(descendant)을 포함하지 않는다.
+2.  $Z$는 $X \to Y$ 링크를 제거한 그래프 $G_{\underline{X}}$에서 $X$와 $Y$를 **d-separation** 한다.
+
+이 경우, $\lambda_{xy}$는 $Y$를 $X$와 $Z$에 대해 회귀분석했을 때 $X$의 계수($r_{yx \cdot z}$)와 같습니다.
+
+---
+
+## 3.2 The Back-Door Criterion
+
+Single-Door가 선형 모형의 특정 구조에 집중했다면, **Back-Door Criterion**은 더 일반적이고 강력한 도구입니다. 이는 선형뿐만 아니라 비선형 모형에서도 적용됩니다.
+
+### Definition
+변수 집합 $Z$가 다음 두 조건을 만족하면, $X$에서 $Y$로 가는 인과 효과를 식별하기 위한 **Back-Door Set**이라고 합니다.
+
+1.  $Z$의 어떤 원소도 $X$의 자손(descendant)이 아니다. (인과적 후행 변수가 아님)
+2.  $Z$는 $X$와 $Y$ 사이의 모든 **Back-Door Path**(화살표가 $X$로 들어오는 경로)를 차단(block)한다.
+
+### Example Application
+강의 자료의 예제 그래프를 봅시다.
+
+![Figure 5: Back-Door Criterion 예제 그래프. X와 Y 사이에는 직접 경로 외에도 Z를 거치는 뒷문 경로(X <- Z -> Y)가 존재한다. W는 교란 요인이지만 Z를 통해 통제 가능하다.](./images/backdoor_example.png)
+
+* 우리는 $X \to Y$의 총 효과(Total Effect)를 알고 싶습니다.
+* 그래프 상에서 $X \leftarrow Z \to Y$ 경로가 존재하므로, 단순 회귀는 편향됩니다.
+* 이때 $W$를 조건부로 넣으면 어떻게 될까요?
+    * $W$는 $X$의 부모인 $Z$와 $X$ 사이의 경로 상에 있거나, 혹은 또 다른 교란 요인으로 작용할 수 있습니다.
+    * 만약 $W$가 모든 Back-door path를 막는다면, 우리는 $Y$를 $X$와 $W$에 대해 회귀분석하여 $X$의 계수를 취함으로써 인과 효과를 얻을 수 있습니다.
+
+선형 모형에서 Back-door criterion을 만족하는 집합 $Z$를 찾았다면, 인과 효과는 다음과 같이 간단히 구해집니다.
+
+$$
+\text{Total Effect } = r_{yx \cdot z}
+$$
+
+즉, **교란 요인 $Z$들을 모두 회귀식에 포함($Control$)시켰을 때의 $X$의 편회귀 계수**가 바로 인과 효과가 됩니다.
+
+---
+
+# 4. Summary
+
+이번 포스트에서는 선형 구조적 인과 모형(Linear SCM)을 중심으로 회귀분석과 인과추론의 관계를 살펴보았습니다.
+
+1.  **회귀분석 $\neq$ 인과추론**: 회귀 계수($\beta$)는 단순히 공분산 정보를 담고 있을 뿐이며, 구조적 인과 계수($\lambda$)와는 다릅니다.
+2.  **구조적 방정식(Structural Equation)**: 변수 간의 생성 과정을 명시하며, 이를 통해 편향의 원인(Confounding)을 수학적으로 분해할 수 있습니다.
+3.  **식별(Identification)**:
+    * **Single-Door Criterion**: $X$와 $Y$ 사이의 교란 경로를 차단하는 $Z$를 찾아 회귀식에 포함함으로써 $\lambda_{xy}$를 식별합니다.
+    * **Back-Door Criterion**: 더 일반적인 조건으로, $X$로 들어오는 모든 뒷문 경로를 차단하는 변수 집합을 통제 변수로 사용합니다.
+
+결국 "데이터를 회귀분석에 넣고 돌리는 것"이 중요한 것이 아니라, **"어떤 변수들을 통제(Control)해야 하는가?"**를 결정하는 것이 인과추론의 핵심입니다. 이를 위해서는 데이터 이전에 **올바른 인과 그래프(Causal Graph)**를 그리는 것이 선행되어야 합니다.
+
+---
+
+### Lecture Coverage Checklist
+
+* [x] **Overview**: Linear Regression vs Identification (Slide 1)
+* [x] **Medical Researcher Example**: Paradox explained, plots described (Slides 2-5, 52-60)
+* [x] **Regression vs SCM**:
+    * Implicit assumptions of regression (Slides 94-102)
+    * Biased answer derivation (Slides 103-112)
+    * Derivation of regression coefficient $\beta = \sigma_{xy}$ (Slides 116-125)
+* [x] **Regression Equation Implicit Assumption**: Discussion on multiple regression and partial coefficients (Slides 148-183)
+* [x] **D-separation & Regression**: Relationship between conditional independence and zero coefficient (Slides 184-189)
+* [x] **Single-Door Criterion**:
+    * Detailed math derivation using normal equations (Slides 232-304)
+    * Theorem definition (Slides 307-318)
+    * Examples A, B, Y structures (Slides 319-346)
+* [x] **Back-Door Criterion**:
+    * Theorem definition (Slides 380-386)
+    * Example application and total effect calculation (Slides 388-442)

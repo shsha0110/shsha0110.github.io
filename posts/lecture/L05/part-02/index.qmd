@@ -1,0 +1,206 @@
+---
+title: "[Causal Inference] 05. Adjustment Criterion (Part 2)"
+description: "Adjustment Criterion"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction
+
+이전 포스트(Part 1)에서 우리는 **Back-door Criterion**이 인과 효과 식별을 위한 **충분조건(Sufficient condition)**이지만, **필요조건(Necessary condition)**은 아님을 확인했습니다. 즉, Back-door Criterion을 만족하지 못하더라도 변수들의 구조적 위치에 따라 여전히 조정(Adjustment)을 통해 인과 효과를 구할 수 있는 경우가 존재합니다.
+
+이번 포스트에서는 인과 효과 $P(y|do(x))$를 표준 조정 공식(Standard Adjustment Formula)으로 식별하기 위한 **필요충분조건(Necessary and Sufficient Condition)**인 **Adjustment Criterion**에 대해 다룹니다.
+
+$$
+Z \text{ satisfies Adjustment Criterion} \iff P(y|do(x)) = \sum_{z} P(y|x,z)P(z)
+$$
+
+[cite_start]이를 위해 **Proper Causal Path**라는 개념을 도입하고, 복잡한 그래프에서 유효한 조정 집합 $Z$를 찾아내는 알고리즘과 **명시적 구성(Explicit Construction)** 방법을 살펴봅니다[cite: 131, 134].
+
+---
+
+# 2. Proper Causal Paths (PCP)
+
+Adjustment Criterion을 정의하기 전에, **어떤 경로(Path)를 건드리면 안 되는지**를 명확히 해야 합니다.
+
+## 2.1. Definition
+[cite_start]**Proper Causal Path (진인과경로)**는 $X$에서 출발하여 $Y$로 향하는 인과 경로(Directed path) 중, **시작점인 $X$를 제외하고는 $X$ 집합의 다른 노드를 거치지 않는 경로**를 의미합니다[cite: 138, 139].
+
+* **Causal Path:** 화살표의 방향이 일관되게 $X$에서 $Y$로 흐르는 경로.
+* **Proper:** 경로상에 $X$의 다른 원소가 포함되지 않음.
+
+![Figure 1: Proper vs Non-proper Causal Paths. $X_1 \to W_3 \to Y$와 $X_2 \to W_2 \to Y$는 Proper하다. 반면 $X_1 \to W_1 \to X_2 \dots$는 중간에 $X_2$를 거치므로 Non-proper하다.](./images/proper_causal_path_example.png)
+[cite_start]*(그림 설명: $X=\{X_1, X_2\}$인 상황. $X_1 \to W_3 \to Y$는 $X$의 다른 원소를 거치지 않으므로 Proper Causal Path이다. 반면 $X_1 \to W_1 \to X_2 \to W_2 \to Y$는 경로 중간에 $X_2(\in X)$가 포함되므로 Non-proper Causal Path이다.)* [cite: 146, 148]
+
+## 2.2. Why Proper Causal Paths Matter?
+우리가 구하고자 하는 것은 $X$가 $Y$에 미치는 **총 효과(Total Effect)**입니다. [cite_start]따라서 $X$에서 $Y$로 흐르는 인과적 흐름을 담고 있는 **Proper Causal Path를 차단해서는 안 됩니다**[cite: 160].
+
+만약 Proper Causal Path 상에 있는 변수(Mediator)나 그 변수의 후손(Descendant)을 조정 집합 $Z$에 포함하면 어떻게 될까요?
+간단한 체인 구조 $X \to W \to Y$와 $W \to Z$가 있는 그래프를 가정해 봅시다. [cite_start]여기서 $P(y|do(x)) = P(y|x)$입니다 (Back-door 경로가 없음)[cite: 152, 161].
+
+하지만 우리가 $Z$(Mediator의 후손)에 대해 조정(Adjustment)을 수행하면 편향이 발생합니다. 이를 수식으로 확인해 봅시다.
+
+$$
+\begin{aligned}
+\sum_{z} P(y|x,z)P(z) &= \sum_{z,w} P(y|x,z,w)P(w|x,z)P(z) \quad (\text{Law of Total Probability}) \\
+&= \sum_{z,w} P(y|w)P(w|x,z)P(z) \quad (Y \perp\!\!\perp X, Z | W) \\
+&= \sum_{w} P(y|w) \sum_{z} P(w|x,z)P(z)
+\end{aligned}
+$$
+[cite_start][cite: 162-165]
+
+진정한 인과 효과는 $P(y|do(x)) = \sum_w P(y|w)P(w|x)$입니다. 하지만 위 식의 두 번째 항 $\sum_{z} P(w|x,z)P(z)$는 일반적으로 $P(w|x)$와 다릅니다. [cite_start]이는 $P(z) \neq P(z|x)$이기 때문입니다[cite: 172, 174].
+
+[cite_start]결국, Proper Causal Path 상의 변수나 그 후손을 조정하면 인과 효과 추정치가 **왜곡(disturbed)**됩니다[cite: 175].
+
+---
+
+# 3. The Adjustment Criterion
+
+Shpitser et al. (2010)은 Back-door Criterion을 일반화하여 **Adjustment Criterion**을 제안했습니다. [cite_start]집합 $Z$가 $(X, Y)$에 대해 Admissible하기 위해서는 다음 두 조건을 만족해야 합니다[cite: 179].
+
+## 3.1. Condition (i): Preserve Causal Paths
+> **Condition (i):** $Z$의 어떤 원소도 $X$에서 $Y$로 가는 **Proper Causal Path** 상에 있는 변수($X$ 제외)의 후손(descendant)이 아니어야 한다.
+
+$$
+Z \cap De(W \setminus X) = \emptyset, \quad \text{for any } W \text{ on a proper causal path}
+$$
+
+[cite_start]이 조건은 우리가 인과 경로를 실수로 차단하거나 왜곡하는 것을 방지합니다[cite: 180, 186]. 즉, "미래의 변수"를 통제하지 말라는 원칙을 더 엄밀하게 정의한 것입니다.
+
+## 3.2. Condition (ii): Block Spurious Paths
+> **Condition (ii):** $Z$는 $X$와 $Y$ 사이의 모든 **Proper Non-causal Path**를 차단(block)해야 한다.
+
+$$
+(Y \perp\!\!\perp X | Z)_{\mathcal{G}'}
+$$
+
+여기서 **Proper Non-causal Path**란 $X$에서 시작하지만 인과 경로가 아닌(화살표가 $X$로 들어오거나 중간에 꺾이는) 경로들을 의미합니다. [cite_start]이것들은 교란(Confounding) 요인이므로 반드시 막아야 합니다[cite: 190, 197].
+
+> [cite_start]**Note:** 초기 논문에서는 단순히 'non-causal paths'라고 했으나, 이후 'proper non-causal paths'로 수정되었습니다[cite: 198, 199].
+
+---
+
+# 4. Implementation Idea: The $\mathcal{G}'$ Method
+
+Condition (ii)를 그래프상에서 직관적으로 검사하기 위해 보조 그래프 $\mathcal{G}'$를 사용할 수 있습니다.
+
+### Step 1: Forbidden Set ($F$) 확인
+먼저 Condition (i)에 위배되는 변수들을 찾습니다. Proper Causal Path 위에 있는 모든 변수(X 제외)와 그 후손들을 모아 집합 $F$를 만듭니다. [cite_start]$Z$는 $F$와 겹치면 안 됩니다[cite: 217, 218].
+
+$$
+F = De(W \setminus X)_{\mathcal{G}_{\overline{X}}}
+$$
+
+### Step 2: Construct $\mathcal{G}'$
+원래 그래프 $\mathcal{G}$에서 **모든 Proper Causal Path의 첫 번째 엣지(Edge)를 제거**합니다. [cite_start]이렇게 만든 그래프를 $\mathcal{G}'$라고 합니다[cite: 227, 313].
+
+### Step 3: D-separation Test
+$\mathcal{G}'$에서 $X$와 $Y$가 $Z$에 의해 d-separated 되는지 확인합니다.
+
+$$
+(X \perp\!\!\perp Y | Z)_{\mathcal{G}'}
+$$
+
+$\mathcal{G}'$에서는 인과 경로가 끊겨 있으므로, 남은 연결은 모두 Non-causal Path입니다. [cite_start]만약 $Z$가 이들을 모두 막는다면 Condition (ii)가 만족됩니다[cite: 228, 314].
+
+---
+
+# 5. A Worked Example
+
+복잡한 그래프 예시를 통해 실제로 적용해 봅시다.
+* **Target:** $X=\{X_1, X_2\}$, $Y=\{Y_1, Y_2\}$
+* [cite_start]**Candidates:** $Z=\{C, D, I\}$가 Admissible한가? [cite: 263]
+
+![Figure 2: Example Graph for Adjustment Criterion. $X=\{X_1, X_2\}$에서 $Y=\{Y_1, Y_2\}$로 가는 복잡한 경로들이 얽혀 있다.](./images/complex_dag_example.png)
+
+### Step 1: Identify Proper Causal Paths
+$X$에서 $Y$로 가는 Proper Causal Path를 찾습니다.
+* $X_1 \to Y_1$
+* $X_1 \to E \to Y_2$
+* $X_1 \to D \to I \to Y_1$ (이 경로는 $X_2$를 안 거치므로 Proper)
+* $X_2 \to F \to Y_2$
+[cite_start]등이 있습니다[cite: 260].
+
+### Step 2: Check Condition (i) (Forbidden Set)
+Proper Causal Path 위에 있는 중간 변수들은 $E, F$ 등입니다.
+* $E$의 후손: $\{E, Y_2 \dots\}$
+* $F$의 후손: $\{F, H, Y_2 \dots\}$
+따라서 $Z$에 $E, F, H$가 포함되면 안 됩니다.
+[cite_start]우리의 후보 $Z=\{C, D, I\}$는 이들과 겹치지 않으므로 **Condition (i) 만족**[cite: 293, 294].
+
+### Step 3: Check Condition (ii) via $\mathcal{G}'$
+$\mathcal{G}'$를 만들기 위해 Proper Causal Path의 첫 엣지를 자릅니다.
+* $X_1 \to Y_1$ 제거
+* $X_1 \to D$ 제거
+* $X_1 \to E$ 제거
+* $X_2 \to F$ 제거
+[cite_start]등등[cite: 313].
+
+![Figure 3: The Modified Graph $\mathcal{G}'$. Proper Causal Path의 첫 번째 엣지들이 제거된 상태이다. 점선 화살표와 Back-door 경로들만 남았다.](./images/g_prime_example.png)
+
+이제 $\mathcal{G}'$에서 $(X \perp\!\!\perp Y | \{C, D, I\})$인지 확인합니다.
+$C, D, I$를 조건부로 주었을 때, 남은 교란 경로들이 모두 차단된다면 $Z$는 유효합니다. [cite_start]이 예제에서는 $\mathcal{G}'$에서 $X$와 $Y$가 분리되므로 **Condition (ii) 만족**입니다[cite: 333, 334].
+
+---
+
+# 6. Explicit Construction of Admissible Sets
+
+"매번 $Z$를 추측하고 검증해야 하나요?"라는 질문에 대한 답으로, 유효한 조정 집합을 **직접 구성(Explicit Construction)**하는 방법이 있습니다. [cite_start]이를 **One-shot Verification**이라고도 합니다[cite: 413].
+
+### Lemma: Constructive Method
+만약 어떤 Admissible Set이 존재한다면, 다음 집합 $Z_0$도 반드시 Admissible합니다.
+
+$$
+Z_0 = An^{-}(X \cup Y) \setminus F
+$$
+
+* [cite_start]$An^{-}(X \cup Y)$: $X$와 $Y$의 조상(Ancestors)들의 집합 ($X, Y$ 자신 제외)[cite: 358, 363].
+* [cite_start]$F$: Condition (i)에 의해 금지된 변수들 (Proper Causal Path 상의 변수 및 후손)[cite: 354].
+
+### Significance
+[cite_start]이 정리가 강력한 이유는 **"$Z_0$가 실패하면, 그 어떤 $Z$도 실패한다"**는 점입니다[cite: 359, 412]. 즉, 우리는 $Z_0$ 딱 하나만 만들어보고 테스트하면 됩니다.
+
+### Apply to Example
+위의 예제 그래프에 적용해 봅시다.
+1.  [cite_start]**Forbidden Set ($F$):** $\{E, F, H\}$ (PC Path 상의 변수와 그 후손)[cite: 402].
+2.  [cite_start]**Ancestors ($An^{-}$):** $X, Y$의 조상을 모두 찾으면 $\{A, B, C, D, E, F, I\}$ 입니다[cite: 403].
+3.  **Construct $Z_0$:**
+    $$Z_0 = \{A, B, C, D, E, F, I\} \setminus \{E, F, H\} = \{A, B, C, D, I\}$$
+4.  **Verification:** 이 $Z_0$가 $\mathcal{G}'$에서 $X$와 $Y$를 d-separation 시키는지 확인합니다. [cite_start]확인 결과 Admissible 합니다[cite: 404, 405].
+
+---
+
+# 7. Summary
+
+* **Proper Causal Path:** $X$에서 시작해 $Y$로 가는 경로 중, 다시 $X$를 거치지 않는 경로. 이 경로들은 인과 효과의 본질이므로 **절대 차단하거나 조정해서는 안 됩니다.**
+* **Adjustment Criterion:**
+    1.  (i) Proper Causal Path 상의 변수(및 후손)를 $Z$에 포함하지 말 것.
+    2.  (ii) $Z$는 모든 Proper Non-causal Path(교란 경로)를 차단할 것.
+* **Implementation:** $\mathcal{G}'$(PC Path의 첫 엣지 제거)를 이용하면 Condition (ii)를 d-separation 문제로 쉽게 환원할 수 있습니다.
+* **Constructive Solution:** $Z_0 = An^{-}(X \cup Y) \setminus F$를 계산함으로써, 유효한 조정 집합의 존재 여부를 한 번에 파악할 수 있습니다.
+
+이로써 우리는 Back-door Criterion의 한계를 넘어, 그래프 구조만 주어진다면 언제, 무엇을 조정해야 하는지 완벽하게 판단할 수 있는 도구를 갖추게 되었습니다.
+
+---
+### 누락 방지 검증 (Missing Content Check)
+
+강의 자료(PDF 0502 파일)의 내용을 기반으로 아래 항목들이 포함되었는지 확인합니다.
+
+* [cite_start][x] **Adjustment Criterion 정의 (필요충분조건)** [cite: 134]
+* [cite_start][x] **Proper Causal Path 정의 및 예시** [cite: 138-148]
+* [cite_start][x] **Proper Causal Path 조정 시 발생하는 편향(Math Derivation)** [cite: 162-176]
+* [cite_start][x] **Adjustment Criterion의 두 가지 조건 (i), (ii)** [cite: 179-197]
+* [cite_start][x] **Implementation Idea (Forbidden Set $F$, Graph $\mathcal{G}'$)** [cite: 202-234]
+* [cite_start][x] **복잡한 그래프 예제 (Evaluating Set Z)** [cite: 247-334]
+* [cite_start][x] **Explicit Construction Lemma ($Z_0$) 및 예제 적용** [cite: 353-405]
+* [cite_start][x] **One-shot verification의 의미** [cite: 412, 413]
+
+**Note:** 제공된 PDF의 모든 핵심 내용(페이지 1-22)이 본 포스트에 반영되었습니다.

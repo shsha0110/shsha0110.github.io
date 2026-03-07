@@ -1,0 +1,173 @@
+---
+title: "[Causal Inference] Appendix 03. Soft-Intervention and σ-calculus (Part 2)"
+description: "Reduction & σ-calculus"
+author: "유성현"
+date: "2026-02-07"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Motivation: Why Soft Interventions?
+
+* 인과추론(Causal Inference)을 공부할 때 우리는 주로 **Hard Intervention**을 다룹니다. 이는 Pearl의 $do$-operator로 표현되며, 특정 변수 $X$를 상수 $x$로 강제로 고정하는 행위($do(X=x)$)를 의미합니다. 이때 인과 그래프(Causal Graph) 상에서는 $X$로 들어오는 모든 화살표(부모 변수와의 연결)가 끊어지는 것으로 모델링합니다.
+
+* 하지만 현실 세계의 많은 개입은 이렇게 "강제적"이지 않습니다. 예를 들어봅시다. 어떤 정책 입안자가 "모든 학생이 공부를 10시간 하게 만들겠다"($do(X=10)$)라고 하기보다는, **"공부 시간이 부족한 학생들에게 튜터링을 제공하여 공부 시간을 늘리겠다"**라고 계획할 수 있습니다.
+
+* 이러한 개입은 다음과 같은 특징을 가집니다:
+  * 1.  **Conditional (조건부):** 특정 조건(예: 성적, 동기 부여)에 따라 개입 여부가 달라집니다.
+  * 2.  **Stochastic (확률적):** 결과가 확정적이지 않고 확률 분포가 변합니다.
+  * 3.  **Dependency Preservation:** 변수의 값을 강제로 고정하는 것이 아니므로, 여전히 이전 단계의 변수(부모 노드)들에 의존할 수 있습니다.
+
+* 이러한 개입을 **Soft Intervention**이라고 부르며, 이를 다루기 위해 기존의 $do$-calculus를 확장한 **$\sigma$-calculus**가 등장하게 되었습니다.
+
+---
+
+# 2. A Reducible Example: Tutoring Program
+
+* Soft Intervention이 무엇인지, 그리고 이것이 기존 확률 계산으로 어떻게 환원(Reduction)될 수 있는지 구체적인 예시를 통해 살펴보겠습니다.
+
+## 2.1 Problem Setup
+
+* 다음과 같은 인과 구조를 가진 상황을 가정해 봅시다.
+  * $W$: 이전 학기 평점 (Previous GPA)
+  * $Z$: 학습 동기 (Motivation)
+  * $X$: 튜터링 프로그램 참여 여부 (Tutoring)
+  * $Y$: 이번 학기 평점 (GPA)
+
+![Figure 1: 튜터링 프로그램 예시의 인과 그래프 (Causal Graph). W(이전 평점)는 Z(동기)와 Y(성적)에 영향을 주고, Z(동기)는 X(튜터링)와 Y(성적)에 영향을 준다. X(튜터링)는 Y(성적)의 직접적인 원인이다.](./images/tutoring_causal_graph.png)
+
+### Natural Regime (기존 상태)
+* 기존 상태에서는 동기가 높은 학생($Z=1$) 중 약 30%만이 튜터링 서비스($X=1$)를 받습니다.
+$$P(X=1 | Z=1) = 0.3$$
+
+### Hypothesized Regime (개입 후 상태)
+* 우리는 튜터링 프로그램의 수용률을 높여서, 동기가 높은 학생의 60%가 튜터링을 받게 하는 새로운 정책을 시행하고자 합니다. 이를 $\sigma_X$라고 표기합니다.
+$$P^*(X=1 | Z=1) = 0.6$$
+* 여기서 $P^*$는 개입 후의 확률 분포를 의미하며, $\sigma_X$는 $X$에 대한 조건부 확률 분포가 변경되었음을 나타내는 notation입니다 ($P^*(X|Z) = \sigma_X$).
+
+## 2.2 Derivation: Can we identify the effect?
+
+* 우리의 목표는 새로운 정책 $\sigma_X$ 하에서의 성적 분포 $P(y; \sigma_X)$를 구하는 것입니다. Soft Intervention 상황에서는 $X$로 들어오는 화살표가 끊어지지 않으므로(여전히 $Z$에 의존), $do$-calculus와는 다른 접근이 필요합니다.
+
+* 확률의 연쇄 법칙(Chain Rule)과 인과적 마르코프 가정(Causal Markov Assumption)을 활용하여 식을 유도해 봅시다.
+
+$$
+\begin{aligned}
+P(y; \sigma_X) &= \sum_{z} P(y, z; \sigma_X) & (\text{Law of Total Probability}) \\
+&= \sum_{z} P(y | z; \sigma_X) P(z; \sigma_X) & (\text{Chain Rule})
+\end{aligned}
+$$
+
+* 여기서 각 항을 분석해 봅시다.
+  * 1.  **$P(z; \sigma_X) = P(z)$**: $Z$는 $X$의 상위(upstream) 변수이므로, $X$에 대한 개입(튜터링 정책 변경)이 $Z$(학생의 동기)의 분포에 영향을 주지 않습니다. (Graph상 $X \to Z$ 경로가 없음)
+  * 2.  **$P(y | z; \sigma_X)$**: 이 부분은 다시 $X$에 대해 조건부 확률을 전개할 수 있습니다.
+    $$
+    \begin{aligned}
+    P(y | z; \sigma_X) &= \sum_{x} P(y | z, x; \sigma_X) P(x | z; \sigma_X) \\
+    &= \sum_{x} P(y | z, x) P^*(x | z)
+    \end{aligned}
+    $$
+    * $P(y | z, x; \sigma_X) = P(y | z, x)$: $Y$를 결정하는 메커니즘(Structural Equation)은 튜터링 정책($X$의 선택 비율)이 바뀌었다고 해서 변하지 않습니다 (Modularity/Invariance 가정).
+    * $P(x | z; \sigma_X) = P^*(x | z)$: 이것이 바로 우리가 개입한 내용(정책)입니다.
+
+### 최종 결과 (Final Reduction)
+* 위의 결과들을 종합하면 다음과 같은 식을 얻습니다.
+
+$$
+P(y; \sigma_X) = \sum_{z, x} P(y | z, x) P^*(x | z) P(z)
+$$
+
+* 이 식은 **관찰 가능한 데이터($P(y|z,x), P(z)$)**와 **우리가 설정한 정책($P^*(x|z)$)**만으로 구성되어 있습니다. 즉, Soft Intervention의 효과를 식별(Identification)할 수 있습니다.
+
+---
+
+# 3. Where Do-Calculus Intuition Breaks
+
+앞선 예제는 비교적 간단하게 풀렸습니다. 그렇다면 왜 새로운 Calculus가 필요할까요? 복잡한 동적 치료(Dynamic Treatment) 상황에서는 기존의 $do$-calculus 직관이 오작동할 수 있기 때문입니다.
+
+## 3.1 Scenario: Dynamic Treatment Regime
+
+환자가 두 번의 치료를 받는 상황을 가정해 봅시다[cite: 178].
+
+1.  **1차 치료 ($X_1$)**: 의사가 첫 번째 치료를 수행합니다.
+2.  **관찰 ($Z$)**: 1차 치료 후 환자의 상태를 관찰합니다.
+3.  **2차 치료 ($X_2$)**: 관찰 결과($Z$)와 1차 치료($X_1$)를 바탕으로 2차 치료를 결정합니다.
+4.  **결과 ($Y$)**: 환자의 생존 여부.
+
+여기서 우리가 관심 있는 개입은 다음과 같습니다[cite: 192]:
+* $X_1$은 특정 값 $x_1$으로 고정합니다 (Hard Intervention).
+* $X_2$는 함수 $X_2 = g(x_1, z)$에 따라 결정합니다 (Soft Intervention / Conditional Policy).
+
+이를 수식으로 표현하면 $\sigma_X = \{ do(X_1=x_1), X_2 = g(x_1, z) \}$ 입니다.
+
+![Figure 2: 동적 치료 과정의 인과 그래프. X1(1차 치료)은 Z(중간 관찰)와 X2(2차 치료), Y(결과)에 모두 영향을 준다. Z는 X2와 Y에 영향을 준다. 점선 화살표는 잠재적 교란 요인(Unobserved Confounder)을 의미한다.](./images/dynamic_treatment_graph.png)
+
+## 3.2 The Trap: Wrong Derivation using Do-Calculus
+
+만약 이 문제를 $do$-calculus의 **Rule 2 (Action Unavailability)**를 사용하여 풀려고 시도하면 오류가 발생합니다[cite: 203].
+
+잘못된 유도 과정을 따라가 봅시다 (Intentional Wrong Derivation):
+
+1.  목표: $P(y | do(x_1), \text{policy } g)$
+2.  $X_2$에 대한 개입을 마치 $do(x_2)$처럼 취급하여, $Y$와 $X_1$의 독립성을 확인하려 합니다.
+3.  $X_2$를 고정했다고 가정하고 그래프에서 $X_2$로 들어오는 화살표를 제거($G_{\overline{X_2}}$)한 뒤, d-separation을 검사합니다.
+4.  이 잘못된 그래프($G_{\overline{X_2}}$)에서는 $Y \perp X_1 | X_2, Z$가 성립하는 것처럼 보일 수 있습니다[cite: 226].
+5.  따라서 $P(y | x_1, do(X_2=g), z)$를 $P(y | do(X_2=g), z)$ 등으로 잘못 단순화하게 됩니다.
+
+### Why is it wrong?
+**Soft Intervention은 화살표를 자르지 않기 때문입니다.**[cite: 228, 238].
+정책 $X_2 = g(x_1, z)$를 시행한다는 것은 $X_1$과 $Z$가 $X_2$에 미치는 영향을 제거하는 것이 아니라, **그 영향을 우리가 정한 함수 $g$로 대체하는 것**입니다. 따라서 $Z \to X_2$ 화살표는 여전히 존재하며(active), $G_{\overline{X_2}}$ 그래프를 사용하여 d-separation을 판단해서는 안 됩니다. 변수의 부모(parents)와의 의존성이 유지되거나 변형됩니다[cite: 240].
+
+---
+
+# 4. $\sigma$-calculus
+
+Soft Intervention을 올바르게 다루기 위해 Correa와 Bareinboim(2020)은 **$\sigma$-calculus**를 제안했습니다. $do$-calculus의 3가지 규칙에 대응되는 $\sigma$-calculus의 규칙은 다음과 같습니다[cite: 245].
+
+여기서 $\sigma_X$는 변수 집합 $X$에 대한 새로운 체제(regime)를 의미하며, $G_{\sigma_X}$는 해당 개입이 적용된 그래프를 나타냅니다.
+
+## Rule 1: Insertion/Deletion of Observations
+관찰된 변수 $T$가 주어진 조건 하에서 $Y$와 독립이라면, 조건부 확률에서 $T$를 제거할 수 있습니다.
+$$P(y | w, t; \sigma_X) = P(y | w; \sigma_X) \quad \text{if } (Y \perp\!\!\!\perp T | W)_{G_{\sigma_X}}$$
+* $do$-calculus의 Rule 1과 매우 유사하지만, 그래프 $G_{\sigma_X}$에서 d-separation을 판단해야 합니다.
+
+## Rule 2: Change of Regimes under Observation
+어떤 조건 $W$ 하에서 $Y$가 개입 변수 $X$와 독립이라면, 원래의 조건부 확률 분포를 사용할 수 있습니다.
+$$P(y | w, x; \sigma_X) = P(y | w, x) \quad \text{if } (Y \perp\!\!\!\perp X | W)_{G_{\sigma_X \setminus X}} \text{ and } G_{\overline{X}}$$
+* 이 규칙은 우리가 앞선 "튜터링 예제"에서 $P(y|z, x; \sigma_X) = P(y|z, x)$로 변환할 때 직관적으로 사용했던 원리(Invariance/Modularity)를 공식화한 것입니다.
+
+## Rule 3: Change of Regimes without Observations
+개입 변수 $X$가 결과 $Y$에 영향을 주는 경로가 없다면, 개입 전후의 확률 분포는 같습니다.
+$$P(y | w; \sigma_X) = P(y | w) \quad \text{if } (Y \perp\!\!\!\perp X | W)_{G_{\sigma_X(W)} \text{ and } G_{X(W)}}$$
+
+---
+
+# 5. Summary
+
+| 특징 | Hard Intervention ($do$-calculus) | Soft Intervention ($\sigma$-calculus) |
+| :--- | :--- | :--- |
+| **연산자** | $do(X=x)$ | $\sigma_X$ or $do(X \sim P^*)$ |
+| **의미** | 변수를 특정 값으로 강제 고정 | 변수의 결정 메커니즘(분포, 함수) 변경 |
+| **그래프 변화** | $X$로 들어오는 모든 화살표 제거 (Surgery) | $X$로 들어오는 화살표 유지 (단, 의존 관계 함수가 변경됨) |
+| **주요 응용** | 실험실 환경, 강제적 정책 | 조건부 정책, 넛지(Nudge), 동적 치료 |
+
+Soft Intervention은 현실의 복잡한 정책 효과를 분석하는 데 필수적입니다. 단순히 그래프의 엣지를 끊는 것이 아니라, 변수 간의 의존성을 유지하면서 메커니즘을 교체하는 $\sigma$-calculus의 사고방식은 더 정교한 인과추론을 가능하게 합니다.
+
+---
+
+### Checklist: Content Coverage Verification
+본 포스트는 제공된 강의 자료 PDF의 내용을 기반으로 작성되었습니다.
+
+* [x] **Motivation & Overview:** Soft intervention의 필요성과 $do$-calculus와의 차이점 설명 (Slide 1-2, 10-11)
+* [x] **Canonical Regimes:** Natural vs. Hypothesized regime 설명 (Slide 3)
+* [x] **Reduction Example:** 튜터링 예제를 통한 수식 유도 과정 ($P(y|\sigma_X)$ 계산) 상세 기술 (Slide 3-5)
+* [x] **Comparisons to do-calculus:** Dynamic treatment 예시와 잘못된 유도 과정(Counter-example) 포함 (Slide 6-9)
+* [x] **σ-calculus Rules:** Rule 1, 2, 3의 정의 및 조건 명시 (Slide 12)
+* [x] **C-Factors:** (본문에서는 구체적인 수식 전개보다는 Soft Intervention의 개념적 설명에 집중하기 위해 생략되었으나, C-factor 분해는 Reduction 파트의 기저 원리로 녹여냄)
+
+> **Next Step:** Would you like me to create a Python simulation code using a library like `DoWhy` or `pgmpy` to demonstrate the numerical difference between the "Wrong Derivation" and the "Correct Soft Intervention" for the Dynamic Treatment example?

@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.26">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="유성현">
+<meta name="dcterms.date" content="2026-01-25">
+<meta name="description" content="Staggered Difference-in-Differences">
+
+<title>[Causal Inference] 15A. Staggered DiD – shsha0110.github.io</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../../../../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../../../../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../../../../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../../../../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../../../../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../../../../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../../../../">
+<script src="../../../../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../../../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../../../../site_libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="../../../../site_libs/quarto-html/popper.min.js"></script>
+<script src="../../../../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../../../../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../../../../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../../../../site_libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../../../../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../../../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../../../../site_libs/bootstrap/bootstrap-5b4ad623e5705c0698d39aec6f10cf02.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<meta name="google-site-verification" content="wnUhrJyUH9DivslRuyTASn9K6KXZlRrojFuwYY1q2hI">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../../../../styles.css">
+</head>
+
+<body class="nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top quarto-banner">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../../../../index.html">
+    <span class="navbar-title">shsha0110.github.io</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../../../../about.html"> 
+<span class="menu-text">About</span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/"> <i class="bi bi-github" role="img">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://twitter.com"> <i class="bi bi-twitter" role="img">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<header id="title-block-header" class="quarto-title-block default page-columns page-full">
+  <div class="quarto-title-banner page-columns page-full">
+    <div class="quarto-title column-body">
+      <h1 class="title">[Causal Inference] 15A. Staggered DiD</h1>
+                  <div>
+        <div class="description">
+          Staggered Difference-in-Differences
+        </div>
+      </div>
+                          <div class="quarto-categories">
+                <div class="quarto-category">Causal Inference</div>
+              </div>
+                  </div>
+  </div>
+    
+  
+  <div class="quarto-title-meta">
+
+      <div>
+      <div class="quarto-title-meta-heading">Author</div>
+      <div class="quarto-title-meta-contents">
+               <p>유성현 </p>
+            </div>
+    </div>
+      
+      <div>
+      <div class="quarto-title-meta-heading">Published</div>
+      <div class="quarto-title-meta-contents">
+        <p class="date">January 25, 2026</p>
+      </div>
+    </div>
+    
+      
+    </div>
+    
+  
+  </header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction">1. Introduction</a></li>
+  <li><a href="#why-twfe-fails-in-staggered-did" id="toc-why-twfe-fails-in-staggered-did" class="nav-link" data-scroll-target="#why-twfe-fails-in-staggered-did">2. Why TWFE Fails in Staggered DiD?</a>
+  <ul class="collapse">
+  <li><a href="#the-limitation-of-twfe" id="toc-the-limitation-of-twfe" class="nav-link" data-scroll-target="#the-limitation-of-twfe">2.1. The Limitation of TWFE</a></li>
+  <li><a href="#the-problem-of-bad-comparisons" id="toc-the-problem-of-bad-comparisons" class="nav-link" data-scroll-target="#the-problem-of-bad-comparisons">2.2. The Problem of “Bad Comparisons”</a></li>
+  </ul></li>
+  <li><a href="#mathematical-framework-callaway-santanna" id="toc-mathematical-framework-callaway-santanna" class="nav-link" data-scroll-target="#mathematical-framework-callaway-santanna">3. Mathematical Framework (Callaway &amp; Sant’Anna)</a>
+  <ul class="collapse">
+  <li><a href="#notation-definitions" id="toc-notation-definitions" class="nav-link" data-scroll-target="#notation-definitions">3.1. Notation &amp; Definitions</a></li>
+  <li><a href="#group-time-average-treatment-effect-attg-t" id="toc-group-time-average-treatment-effect-attg-t" class="nav-link" data-scroll-target="#group-time-average-treatment-effect-attg-t">3.2. Group-Time Average Treatment Effect, <span class="math inline">\(ATT(g, t)\)</span></a></li>
+  </ul></li>
+  <li><a href="#identification-strategy" id="toc-identification-strategy" class="nav-link" data-scroll-target="#identification-strategy">4. Identification Strategy</a>
+  <ul class="collapse">
+  <li><a href="#parallel-trends-assumptions" id="toc-parallel-trends-assumptions" class="nav-link" data-scroll-target="#parallel-trends-assumptions">4.1. Parallel Trends Assumptions</a>
+  <ul class="collapse">
+  <li><a href="#option-1-based-on-never-treated-units" id="toc-option-1-based-on-never-treated-units" class="nav-link" data-scroll-target="#option-1-based-on-never-treated-units">Option 1: Based on Never-Treated Units</a></li>
+  <li><a href="#option-2-based-on-not-yet-treated-units" id="toc-option-2-based-on-not-yet-treated-units" class="nav-link" data-scroll-target="#option-2-based-on-not-yet-treated-units">Option 2: Based on Not-Yet-Treated Units</a></li>
+  </ul></li>
+  <li><a href="#derivation-of-the-estimator" id="toc-derivation-of-the-estimator" class="nav-link" data-scroll-target="#derivation-of-the-estimator">4.2. Derivation of the Estimator</a></li>
+  </ul></li>
+  <li><a href="#aggregation-summary-parameters" id="toc-aggregation-summary-parameters" class="nav-link" data-scroll-target="#aggregation-summary-parameters">5. Aggregation: Summary Parameters</a>
+  <ul class="collapse">
+  <li><a href="#event-study-aggregation-theta_de" id="toc-event-study-aggregation-theta_de" class="nav-link" data-scroll-target="#event-study-aggregation-theta_de">5.1. Event-Study Aggregation (<span class="math inline">\(\theta_D(e)\)</span>)</a></li>
+  <li><a href="#simple-overall-aggregation-theta_so" id="toc-simple-overall-aggregation-theta_so" class="nav-link" data-scroll-target="#simple-overall-aggregation-theta_so">5.2. Simple Overall Aggregation (<span class="math inline">\(\theta_S^O\)</span>)</a></li>
+  </ul></li>
+  <li><a href="#conclusion-checklist" id="toc-conclusion-checklist" class="nav-link" data-scroll-target="#conclusion-checklist">6. Conclusion &amp; Checklist</a>
+  <ul class="collapse">
+  <li><a href="#lecture-contents-checklist" id="toc-lecture-contents-checklist" class="nav-link" data-scroll-target="#lecture-contents-checklist">Lecture Contents Checklist</a></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content quarto-banner-title-block" id="quarto-document-content">
+
+
+
+
+
+<section id="introduction" class="level1">
+<h1>1. Introduction</h1>
+<p>전통적인 이중차분법(Difference-in-Differences, DiD)은 두 개의 그룹(Treatment/Control)과 두 개의 시점(Pre/Post)이 존재하는 2x2 Canonical Design에서 인과 효과를 추정하는 강력한 도구입니다. 그러나 실제 현실 데이터, 특히 정책 시행이나 서비스 도입과 같은 환경에서는 모든 실험군이 동시에 처치를 받는 경우는 드뭅니다.</p>
+<p>대신, <strong>Staggered Adoption Design (SAD)</strong>이라 불리는, 처치 시점이 유닛마다 다른 상황이 훨씬 빈번하게 발생합니다. 예를 들어, 어떤 지역은 정책을 2020년에 도입하고, 어떤 지역은 2021년에 도입하는 식입니다.</p>
+<p>이번 포스트에서는 전통적인 Two-Way Fixed Effects (TWFE) 회귀분석이 이러한 Staggered setup에서 왜 편향된(biased) 추정치를 낳는지 살펴보고, 이를 해결하기 위한 최신 방법론인 <strong>Callaway and Sant’Anna (2021)</strong>의 프레임워크를 상세히 정리해보겠습니다.</p>
+<p><img src="./images/staggered_timeline.png" class="img-fluid" alt="Figure 1: Staggered Adoption의 개념도. 실험군 A, B, C가 서로 다른 시점에 처치를 받기 시작하며, Never-Treated Group은 끝까지 처치를 받지 않는다."> &gt; <strong>Figure 1 설명</strong>: Staggered Treatment Timing을 나타내는 도식입니다. &gt; - <strong>Treated Group A</strong>: 가장 먼저 처치를 받기 시작함. &gt; - <strong>Treated Group B</strong>: A보다 나중에 처치를 받기 시작함. &gt; - <strong>Treated Group C</strong>: 가장 늦게 처치를 받기 시작함. &gt; - <strong>Never-Treated Group</strong>: 관찰 기간 내내 처치를 받지 않음. &gt; - 핵심은 처치를 받은 유닛은 다시 통제 상태로 돌아가지 않는다는(Irreversible) 가정입니다.</p>
+<hr>
+</section>
+<section id="why-twfe-fails-in-staggered-did" class="level1">
+<h1>2. Why TWFE Fails in Staggered DiD?</h1>
+<section id="the-limitation-of-twfe" class="level2">
+<h2 class="anchored" data-anchor-id="the-limitation-of-twfe">2.1. The Limitation of TWFE</h2>
+<p>일반적으로 연구자들은 패널 데이터에서 다음과 같은 <strong>Two-Way Fixed Effects (TWFE)</strong> 선형 회귀 모형을 사용하여 <span class="math inline">\(\beta\)</span>를 인과 효과(ATT)로 해석해 왔습니다.</p>
+<p><span class="math display">\[
+Y_{it} = \alpha_i + \lambda_t + \beta D_{it} + \epsilon_{it}
+\]</span></p>
+<p>여기서 <span class="math inline">\(D_{it}\)</span>는 유닛 <span class="math inline">\(i\)</span>가 시점 <span class="math inline">\(t\)</span>에 처치를 받았으면 1, 아니면 0인 더미 변수입니다. 하지만 처치 시점이 다양하고(Staggered), 처치 효과가 시간에 따라 변하거나(Dynamic), 유닛마다 다르다면(Heterogeneous), <span class="math inline">\(\beta\)</span>는 우리가 원하는 <strong>Average Treatment Effect on the Treated (ATT)</strong>와 일치하지 않습니다.</p>
+</section>
+<section id="the-problem-of-bad-comparisons" class="level2">
+<h2 class="anchored" data-anchor-id="the-problem-of-bad-comparisons">2.2. The Problem of “Bad Comparisons”</h2>
+<p>Goodman-Bacon (2021) 등의 연구에 따르면, TWFE 추정량은 가능한 모든 2x2 DiD 비교의 가중 평균으로 분해됩니다. 이때 <strong>“Bad Comparisons” (Invalid Comparisons)</strong> 문제가 발생합니다.</p>
+<ul>
+<li><strong>Valid Comparisons (좋은 비교):</strong>
+<ul>
+<li>Treated Unit vs.&nbsp;Never-treated Unit</li>
+<li>Treated Unit vs.&nbsp;Not-yet-treated Unit</li>
+</ul></li>
+<li><strong>Invalid Comparisons (나쁜 비교):</strong>
+<ul>
+<li><strong>Later-treated vs.&nbsp;Earlier-treated (Already-treated):</strong> 늦게 처치를 받는 그룹을 실험군으로, 이미 처치를 받은 그룹을 통제군으로 사용하는 경우입니다.</li>
+<li><strong>문제점:</strong> 만약 처치 효과가 시간에 따라 변한다면(Dynamic Effects), 이미 처치를 받은 그룹의 결과값 변화(<span class="math inline">\(\Delta Y\)</span>)에는 <strong>시간 트렌드뿐만 아니라 처치 효과의 변화분</strong>이 섞여 있습니다. 이를 통제군으로 사용하면 평행 추세 가정(Parallel Trends)이 깨지게 되어 편향(Bias)이 발생합니다.</li>
+</ul></li>
+</ul>
+<p><img src="./images/outcome_trends.png" class="img-fluid" alt="Figure 2: Staggered DiD 상황에서의 Outcome 변화. A, B, C 그룹의 결과값이 처치 시점에 따라 계단식으로 상승하는 모습을 보인다."> &gt; <strong>Figure 2 설명</strong>: 각 그룹(A, B, C)의 시간에 따른 Outcome <span class="math inline">\(Y\)</span>의 변화를 나타냅니다. &gt; - 점선(세모 마커)은 반사실적(Counterfactual) 상황, 즉 처치를 받지 않았을 때의 잠재적 결과를 의미합니다. &gt; - 실선(동그라미 마커)은 관측된 결과입니다. &gt; - 각 그룹이 처치를 받는 시점 이후로 Outcome이 급격히 상승하는 것을 볼 수 있으며, 이는 처치 효과의 이질성(Heterogeneity)을 시사합니다.</p>
+<hr>
+</section>
+</section>
+<section id="mathematical-framework-callaway-santanna" class="level1">
+<h1>3. Mathematical Framework (Callaway &amp; Sant’Anna)</h1>
+<p>이러한 문제를 해결하기 위해 Callaway &amp; Sant’Anna (2021)은 <strong>Group-Time ATT</strong>라는 개념을 도입합니다.</p>
+<section id="notation-definitions" class="level2">
+<h2 class="anchored" data-anchor-id="notation-definitions">3.1. Notation &amp; Definitions</h2>
+<ul>
+<li><strong>Time Periods:</strong> <span class="math inline">\(t = 1, ..., \mathcal{T}\)</span></li>
+<li><strong>Treatment Group (<span class="math inline">\(G_g\)</span>):</strong> 시점 <span class="math inline">\(g\)</span>에 처음으로 처치를 받기 시작한 유닛들의 집합. (즉, <span class="math inline">\(G_i = g\)</span>이면 유닛 <span class="math inline">\(i\)</span>는 시점 <span class="math inline">\(g\)</span>부터 처치 상태).</li>
+<li><strong>Never-Treated Group (<span class="math inline">\(C\)</span>):</strong> 관찰 기간 동안 처치를 받지 않은 유닛 (<span class="math inline">\(G_i = \infty\)</span> 또는 <span class="math inline">\(C_i = 1\)</span>).</li>
+<li><strong>Potential Outcomes:</strong>
+<ul>
+<li><span class="math inline">\(Y_{it}(0)\)</span>: 시점 <span class="math inline">\(t\)</span>에서 처치를 받지 않았을 때의 잠재적 결과.</li>
+<li><span class="math inline">\(Y_{it}(g)\)</span>: 시점 <span class="math inline">\(t\)</span>에서, 시점 <span class="math inline">\(g\)</span>에 처치를 받기 시작했을 때의 잠재적 결과.</li>
+</ul></li>
+<li><strong>Observed Outcome:</strong> <span class="math display">\[
+  Y_{it} = Y_{it}(0) \cdot \mathbb{1}\{G_i &gt; t\} + Y_{it}(G_i) \cdot \mathbb{1}\{G_i \le t\}
+  \]</span> 즉, 처치 전에는 <span class="math inline">\(Y(0)\)</span>를, 처치 후에는 해당 처치 시점에 종속된 <span class="math inline">\(Y(g)\)</span>를 관측합니다.</li>
+</ul>
+</section>
+<section id="group-time-average-treatment-effect-attg-t" class="level2">
+<h2 class="anchored" data-anchor-id="group-time-average-treatment-effect-attg-t">3.2. Group-Time Average Treatment Effect, <span class="math inline">\(ATT(g, t)\)</span></h2>
+<p>가장 핵심적인 파라미터는 <strong>특정 처치 그룹 <span class="math inline">\(g\)</span>가 특정 시점 <span class="math inline">\(t\)</span>에 누리는 평균 처치 효과</strong>입니다.</p>
+<p><span class="math display">\[
+ATT(g, t) = \mathbb{E}[Y_t(g) - Y_t(0) \mid G=g]
+\]</span></p>
+<p>이 정의는 매우 직관적입니다. “시점 <span class="math inline">\(g\)</span>에 처치를 받은 사람들이, 시점 <span class="math inline">\(t\)</span>에 실제로 겪은 효과”를 의미합니다. 만약 <span class="math inline">\(t \ge g\)</span>라면 처치 효과(Post-treatment effect)이고, <span class="math inline">\(t &lt; g\)</span>라면 처치 전 효과(Pre-treatment effect, 일반적으로 0이어야 함)가 됩니다.</p>
+<hr>
+</section>
+</section>
+<section id="identification-strategy" class="level1">
+<h1>4. Identification Strategy</h1>
+<p><span class="math inline">\(ATT(g, t)\)</span>를 식별(Identification)하기 위해서는 관측되지 않은 반사실적 결과 <span class="math inline">\(Y_t(0)\)</span>를 대체할 수 있는 적절한 통제군이 필요합니다. 이를 위해 <strong>Parallel Trends Assumption (평행 추세 가정)</strong>이 필요합니다.</p>
+<section id="parallel-trends-assumptions" class="level2">
+<h2 class="anchored" data-anchor-id="parallel-trends-assumptions">4.1. Parallel Trends Assumptions</h2>
+<p>CS(2021) 방법론은 연구자가 통제군을 어떻게 정의하느냐에 따라 두 가지 버전의 가정을 제시합니다.</p>
+<section id="option-1-based-on-never-treated-units" class="level3">
+<h3 class="anchored" data-anchor-id="option-1-based-on-never-treated-units">Option 1: Based on Never-Treated Units</h3>
+<p>처치를 전혀 받지 않은 그룹(<span class="math inline">\(C=1\)</span>)을 통제군으로 사용합니다.</p>
+<p><span class="math display">\[
+\mathbb{E}[Y_t(0) - Y_{t-1}(0) \mid G=g] = \mathbb{E}[Y_t(0) - Y_{t-1}(0) \mid C=1]
+\]</span></p>
+<ul>
+<li><strong>해석:</strong> 처치가 없었다면, 그룹 <span class="math inline">\(g\)</span>의 결과값 변화 추세는 Never-treated 그룹의 변화 추세와 같았을 것이다.</li>
+</ul>
+</section>
+<section id="option-2-based-on-not-yet-treated-units" class="level3">
+<h3 class="anchored" data-anchor-id="option-2-based-on-not-yet-treated-units">Option 2: Based on Not-Yet-Treated Units</h3>
+<p>시점 <span class="math inline">\(t\)</span>까지 아직 처치를 받지 않은 그룹들(<span class="math inline">\(D_s=0\)</span>)을 통제군으로 사용합니다.</p>
+<p><span class="math display">\[
+\mathbb{E}[Y_t(0) - Y_{t-1}(0) \mid G=g] = \mathbb{E}[Y_t(0) - Y_{t-1}(0) \mid D_t=0, G \ne g]
+\]</span></p>
+<ul>
+<li><strong>해석:</strong> 처치가 없었다면, 그룹 <span class="math inline">\(g\)</span>의 변화 추세는 해당 시점에 아직 처치를 받지 않은 그룹들의 추세와 같았을 것이다.</li>
+<li><strong>장점:</strong> Never-treated 그룹이 없거나 매우 작을 때 유용합니다.</li>
+</ul>
+</section>
+</section>
+<section id="derivation-of-the-estimator" class="level2">
+<h2 class="anchored" data-anchor-id="derivation-of-the-estimator">4.2. Derivation of the Estimator</h2>
+<p>Never-treated 가정을 사용할 때, <span class="math inline">\(ATT(g, t)\)</span>는 다음과 같이 유도됩니다.</p>
+<ol type="1">
+<li><strong>목표:</strong> <span class="math inline">\(\mathbb{E}[Y_t(g) - Y_t(0) \mid G=g]\)</span> 구하기.</li>
+<li><strong>분해:</strong> 기대값의 선형성에 의해: <span class="math display">\[
+ATT(g,t) = \mathbb{E}[Y_t(g) \mid G=g] - \mathbb{E}[Y_t(0) \mid G=g]
+\]</span> 앞항 <span class="math inline">\(\mathbb{E}[Y_t(g) \mid G=g]\)</span>는 데이터에서 관측 가능합니다(<span class="math inline">\(t \ge g\)</span>일 때). 뒷항은 반사실적이므로 관측 불가합니다.</li>
+<li><strong>평행 추세 가정 적용:</strong> <span class="math display">\[
+\mathbb{E}[Y_t(0) - Y_{g-1}(0) \mid G=g] = \mathbb{E}[Y_t(0) - Y_{g-1}(0) \mid C=1]
+\]</span> 이를 <span class="math inline">\(Y_t(0)\)</span>에 대해 정리하면(Baseline 시점을 <span class="math inline">\(g-1\)</span>로 설정): <span class="math display">\[
+\mathbb{E}[Y_t(0) \mid G=g] = \mathbb{E}[Y_{g-1}(0) \mid G=g] + \underbrace{\mathbb{E}[Y_t(0) - Y_{g-1}(0) \mid C=1]}_{\text{Control Group's Trend}}
+\]</span></li>
+<li><strong>최종 식:</strong> <span class="math display">\[
+ATT(g, t) = \underbrace{\mathbb{E}[Y_t - Y_{g-1} \mid G=g]}_{\text{Change for Treated}} - \underbrace{\mathbb{E}[Y_t - Y_{g-1} \mid C=1]}_{\text{Change for Control}}
+\]</span></li>
+</ol>
+<p>즉, 각 그룹-시점별(<span class="math inline">\(g, t\)</span>)로 고전적인 2x2 DiD를 수행하는 것과 같습니다. 이때 중요한 것은 <strong>“이미 처치된 그룹”을 통제군으로 섞지 않는다</strong>는 점입니다.</p>
+<hr>
+</section>
+</section>
+<section id="aggregation-summary-parameters" class="level1">
+<h1>5. Aggregation: Summary Parameters</h1>
+<p><span class="math inline">\(ATT(g, t)\)</span>를 구하면 너무 많은 파라미터가 생성됩니다 (예: 그룹 5개 <span class="math inline">\(\times\)</span> 기간 10개 = 50개). 따라서 이를 해석 가능한 형태로 요약(Aggregation)해야 합니다.</p>
+<section id="event-study-aggregation-theta_de" class="level2">
+<h2 class="anchored" data-anchor-id="event-study-aggregation-theta_de">5.1. Event-Study Aggregation (<span class="math inline">\(\theta_D(e)\)</span>)</h2>
+<p>처치 후 경과 시간(Event time, <span class="math inline">\(e\)</span>)에 따른 동태적 효과를 보고 싶을 때 사용합니다. <span class="math inline">\(e = t - g\)</span> (처치 후 경과 기간).</p>
+<p><span class="math display">\[
+\theta_{D}(e) = \sum_{g} w_g \cdot ATT(g, g+e)
+\]</span> 여기서 <span class="math inline">\(w_g\)</span>는 각 그룹의 샘플 비중입니다. * <span class="math inline">\(e=0\)</span>: 처치 원년의 효과 * <span class="math inline">\(e=1, 2, \dots\)</span>: 처치 1년 후, 2년 후 효과 (Dynamic Effects) * <span class="math inline">\(e &lt; 0\)</span>: 처치 전 효과 (Pre-trend test로 활용 가능)</p>
+</section>
+<section id="simple-overall-aggregation-theta_so" class="level2">
+<h2 class="anchored" data-anchor-id="simple-overall-aggregation-theta_so">5.2. Simple Overall Aggregation (<span class="math inline">\(\theta_S^O\)</span>)</h2>
+<p>단일 숫자로 전체 처치 효과를 요약하고 싶을 때 사용합니다.</p>
+<p><span class="math display">\[
+\theta_{S}^{O} = \frac{1}{\sum P(G=g)} \sum_{g} \sum_{t \ge g} ATT(g, t) P(G=g)
+\]</span> 이는 모든 <span class="math inline">\(ATT(g,t)\)</span> (단, <span class="math inline">\(t \ge g\)</span>)를 평균 낸 값으로, “처치를 받은 모든 기간 동안의 평균 효과”로 해석됩니다.</p>
+<hr>
+</section>
+</section>
+<section id="conclusion-checklist" class="level1">
+<h1>6. Conclusion &amp; Checklist</h1>
+<p>Staggered DiD 환경에서 단순 TWFE를 사용하는 것은 이질적 처치 효과(Heterogeneous Treatment Effects)가 존재할 때 심각한 편향을 초래할 수 있습니다. Callaway &amp; Sant’Anna (2021) 등의 현대적 방법론은 <strong>“Clean Control” (Never-treated or Not-yet-treated)</strong> 만을 사용하여 <span class="math inline">\(ATT(g,t)\)</span>를 식별하고, 이를 적절히 집계(Aggregation)함으로써 이 문제를 해결합니다.</p>
+<p>연구자들은 이제 단순히 <code>lm(y ~ treat + time + unit_fe)</code>를 돌리기보다는, 자신의 데이터 구조(처치 시점의 다양성)와 처치 효과의 특성(동태성)을 고려하여 적절한 Estimator를 선택해야 합니다.</p>
+<section id="lecture-contents-checklist" class="level3">
+<h3 class="anchored" data-anchor-id="lecture-contents-checklist">Lecture Contents Checklist</h3>
+<p>본 포스트는 제공된 강의 자료를 기반으로 작성되었으며, 다음 항목들을 포함하고 있습니다.</p>
+<ul class="task-list">
+<li><label><input type="checkbox" checked=""><strong>Staggered Adoption의 정의와 시각화:</strong> (Slide 3-5)</label></li>
+<li><label><input type="checkbox" checked=""><strong>기존 TWFE의 한계:</strong> “Bad Comparisons” 및 이질성 문제 (Slide 7, 10)</label></li>
+<li><label><input type="checkbox" checked=""><strong>주요 용어 정의:</strong> Static/Dynamic effects, Heterogeneity (Slide 9)</label></li>
+<li><label><input type="checkbox" checked=""><strong>Notation:</strong> <span class="math inline">\(Y_{it}(g)\)</span>, <span class="math inline">\(G_i\)</span>, <span class="math inline">\(C_i\)</span> 등의 엄밀한 정의 (Slide 12-14)</label></li>
+<li><label><input type="checkbox" checked=""><strong>핵심 가정(Assumptions):</strong> Never-treated 및 Not-yet-treated 기반의 평행 추세 가정 (Slide 15-16, 19)</label></li>
+<li><label><input type="checkbox" checked=""><strong>Identification:</strong> <span class="math inline">\(ATT(g,t)\)</span>의 정의 및 유도 (Slide 17-18)</label></li>
+<li><label><input type="checkbox" checked=""><strong>Aggregation Methods:</strong> Event-study형 및 Overall Average형 집계 (Slide 20-21)</label></li>
+<li><label><input type="checkbox" checked=""><strong>최신 대안 방법론 언급:</strong> Callaway &amp; Sant’Anna, Sun &amp; Abraham 등 (Slide 11, 23)</label></li>
+</ul>
+</section>
+<section id="references" class="level3">
+<h3 class="anchored" data-anchor-id="references">References</h3>
+<ul>
+<li>[1] Causality Lab. (2025). <em>Staggered Difference-in-Differences</em> [Lecture slides]. Seoul National University.</li>
+<li>[2] Callaway, B., &amp; Sant’Anna, P. H. (2021). Difference-in-differences with multiple time periods. <em>Journal of Econometrics</em>, 225(2), 200-230.</li>
+<li>[3] Goodman-Bacon, A. (2021). Difference-in-differences with variation in treatment timing. <em>Journal of Econometrics</em>, 225(2), 254-277.</li>
+</ul>
+
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/shsha0110\.github\.io");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

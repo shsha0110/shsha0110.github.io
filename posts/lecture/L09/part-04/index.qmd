@@ -1,0 +1,178 @@
+---
+title: "[Causal Inference] 09. Linear Structural Causal Models (Part 4)"
+description: "IV to Instrumental Sets"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: Beyond a Single Instrument
+
+지난 포스트에서는 $X \to Y$ 관계에서 교란 요인이 존재할 때, 도구 변수(Instrumental Variable, IV) $Z$를 사용하여 인과 효과 $\lambda_{xy}$를 식별하는 방법을 배웠습니다. 핵심은 $\lambda_{xy} = \sigma_{zy} / \sigma_{zx}$라는 간단한 비율 식이었습니다.
+
+하지만 현실의 인과 모형은 훨씬 복잡합니다.
+1.  **Multiple Causes:** $Y$에 영향을 주는 변수가 $X_1, X_2, \dots, X_k$로 여러 개일 수 있습니다.
+2.  **Entangled Instruments:** 도구 변수 $Z_1, Z_2$가 각각 하나의 $X$에만 영향을 주는 것이 아니라, 서로 얽혀서(cross-paths) 영향을 줄 수 있습니다.
+
+이런 상황에서는 단일 IV 공식을 사용할 수 없습니다. 이번 포스트에서는 이를 해결하기 위한 **Instrumental Sets**의 개념과, 이를 그래프 이론적으로 풀어내는 **Match-Block 알고리즘**에 대해 알아봅니다.
+
+---
+
+# 2. Instrumental Sets: The Generalization of IV
+
+## 2.1 The Problem of Entanglement
+
+아래와 같은 상황을 가정해 봅시다.
+
+![Figure 1: 두 개의 도구 변수(Z1, Z2)와 두 개의 원인 변수(X1, X2)가 서로 얽혀 있는 인과 그래프. Z1은 X1, X2 모두에 영향을 주고, Z2 역시 X1, X2 모두에 영향을 준다. Y로 가는 모든 경로는 X를 통과한다.](./images/instrumental_set_problem.png)
+
+[cite_start]이 그래프에서 $Z_1$은 $X_1$과 $X_2$ 모두의 부모이고, $Z_2$ 역시 마찬가지입니다[cite: 1674]. 따라서 $Z_1$을 $X_1$만을 위한 도구 변수로 사용할 수 없습니다. $X_2$를 통해 $Y$에 영향을 미치는 경로가 존재하기 때문입니다.
+
+## 2.2 Linear System Formulation
+
+하지만 우리에게는 $Z_1, Z_2$라는 두 개의 외생 변수(Exogenous Variables)와 $X_1, X_2$라는 두 개의 내생 변수(Endogenous Variables)가 있습니다. [cite_start]이를 연립방정식(Linear System)으로 세워볼 수 있습니다[cite: 1700].
+
+$Z$에서 $Y$로 가는 공분산 $\sigma_{z_i y}$는 $Z$에서 $X$를 거쳐 $Y$로 가는 모든 경로의 합으로 표현됩니다 (Wright's Path Rule).
+
+$$
+\begin{aligned}
+\sigma_{z_1 y} &= \sigma_{z_1 x_1}\lambda_{x_1 y} + \sigma_{z_1 x_2}\lambda_{x_2 y} \\
+\sigma_{z_2 y} &= \sigma_{z_2 x_1}\lambda_{x_1 y} + \sigma_{z_2 x_2}\lambda_{x_2 y}
+\end{aligned}
+$$
+[cite_start][cite: 1718]
+
+여기서 $\sigma_{z_i x_j}$와 $\sigma_{z_i y}$는 데이터로부터 계산 가능한 값들입니다. 우리가 구하고 싶은 미지수는 $\lambda_{x_1 y}, \lambda_{x_2 y}$ 두 개입니다. 식도 2개, 미지수도 2개이므로 행렬 형태로 풀 수 있습니다.
+
+$$
+\begin{pmatrix} \sigma_{z_1 y} \\ \sigma_{z_2 y} \end{pmatrix} = 
+\begin{pmatrix} \sigma_{z_1 x_1} & \sigma_{z_1 x_2} \\ \sigma_{z_2 x_1} & \sigma_{z_2 x_2} \end{pmatrix}
+\begin{pmatrix} \lambda_{x_1 y} \\ \lambda_{x_2 y} \end{pmatrix}
+$$
+
+만약 공분산 행렬 $\Sigma_{ZX}$가 역행렬을 가진다면(Invertible), 우리는 $\Lambda_{XY}$를 유일하게 구할 수 있습니다.
+
+---
+
+# 3. Graphical Condition: Non-Intersecting Paths
+
+행렬이 역행렬을 가진다는 것(Full Rank)은 그래프 상에서 어떤 의미일까요? 단순히 변수의 개수($|Z| = |X|$)가 같다고 해서 해결되는 것은 아닙니다.
+
+## 3.1 The Problem of Collinearity
+
+만약 경로들이 서로 "겹친다면" 방정식들이 선형 종속(Linearly Dependent) 관계가 되어 풀 수 없게 됩니다.
+
+![Figure 2: Z1에서 Z2를 거쳐 X로 가는 구조. Z1에서 Y로 가는 경로는 Z2에서 Y로 가는 경로의 상수배가 되어버려 시스템이 퇴화(Degenerate)된다.](./images/degenerate_paths.png)
+
+위 그림과 같은 경우, $Z_1$에서 $Y$로 가는 영향력은 전적으로 $Z_2$를 경유합니다. 수식으로 보면:
+$$
+\sigma_{z_1 y} = \lambda_{z_1 z_2} \sigma_{z_2 y}
+$$
+[cite_start]즉, 첫 번째 식은 두 번째 식의 상수배($\lambda_{z_1 z_2}$)에 불과하므로, 새로운 정보를 주지 못합니다[cite: 1720]. 이를 **Degenerate System**이라고 합니다.
+
+## 3.2 The Non-Intersecting Path Theorem
+
+이 문제를 해결하기 위한 그래프 이론적 조건은 다음과 같습니다.
+
+> [cite_start]**Theorem:** 선형 시스템이 Non-degenerate(Full Rank)하기 위한 필요충분조건은, $\{Z_1, Z_2\}$에서 $\{X_1, X_2\}$로 가는 **서로 교차하지 않는 경로(Non-intersecting paths)**들의 매칭(Matching)이 존재하는 것이다[cite: 1723].
+
+![Figure 3: Z1 -> X1, Z2 -> X2 경로가 서로 교차하지 않고 독립적으로 연결된 그래프. 이 경우 행렬은 Full Rank를 가지며 식별 가능하다.](./images/non_intersecting_paths.png)
+
+[cite_start]이 조건은 **Max-Flow Algorithm**을 통해 효율적으로 검증할 수 있습니다[cite: 1734]. $Z$들을 소스(Source), $X$들을 싱크(Sink)로 보고, 각 노드의 용량을 1로 설정했을 때 흐름(Flow)의 크기가 $|X|$와 같다면 식별 가능합니다.
+
+---
+
+# 4. Instrumental Subsets (ISs)
+
+모든 $X$에 대해 도구 변수 $Z$를 찾는 것이 불가능한 경우도 있습니다.
+
+## 4.1 Concept
+
+만약 $X = \{X_1, X_2, X_3\}$인데, $X_3$를 위한 적절한 도구 변수가 없다면 어떻게 해야 할까요? 전체 시스템을 풀 수는 없지만, 부분적으로 $\{X_1, X_2\}$의 인과 효과만이라도 식별할 수 있지 않을까요? [cite_start]이를 **Instrumental Subset (IS)** 문제라고 합니다[cite: 1752].
+
+## 4.2 Definition
+
+[cite_start]변수 집합 $Z$가 $X \subseteq Pa(Y)$에 대한 Instrumental Set이 되기 위한 조건은 다음과 같습니다 [cite: 1738-1742]:
+1.  $|Z| = |X| = n$ (변수 개수가 같아야 함)
+2.  $Z$의 원소들은 $X$의 자손이 아님.
+3.  $Z$에서 $Y$로 가는 모든 Trek(경로)은 $X$를 통과해야 함.
+4.  경로들이 서로 꼬이지 않고 명확히 매칭되어야 함 (Trek condition).
+
+---
+
+# 5. The Match-Block Algorithm
+
+[cite_start]주어진 복잡한 그래프에서 유효한 Instrumental Subset을 효율적으로 찾아내는 알고리즘이 바로 **Match-Block** 알고리즘입니다[cite: 1757].
+
+## 5.1 Algorithm Overview
+
+이 알고리즘은 반복적으로 Max-Flow를 수행하며 후보군을 좁혀나가는 방식입니다.
+
+1.  **Initialize:** 모든 $Z$와 모든 $X$를 후보로 둡니다.
+2.  **Max-Flow:** $Z$에서 $X$로 가는 Max-Flow를 계산합니다.
+3.  **Pruning (Block):** Flow를 받지 못한 $X$ 노드들은 식별 불가능하므로 제거합니다. 또한, 제거된 $X$의 조상(Ancestor)이 되는 $Z$들도 더 이상 유효하지 않을 수 있으므로 검토합니다.
+4.  **Repeat:** 더 이상 제거되는 노드가 없을 때까지 반복합니다.
+
+## 5.2 Visual Walkthrough
+
+강의 자료의 예시를 통해 단계를 따라가 봅시다.
+
+**Step 1: Initial Setup**
+복잡한 그래프가 주어집니다. $X_1, \dots, X_5$와 $Z_1, \dots, Z_5$가 얽혀 있습니다.
+
+![Figure 4: 복잡한 인과 그래프 예시. X3는 Z로부터 직접적인 경로가 부족해 보인다.](./images/match_block_step1.png)
+
+**Step 2: First Max-Flow & Pruning**
+[cite_start]$Z$ 전체에서 $X$ 전체로 Max-Flow를 돌렸더니, $X_4$로 가는 유량(Flow)이 0임이 밝혀졌습니다[cite: 1786].
+$\to$ **Action:** $X_4$를 비활성화(Disable)합니다.
+$\to$ **Chain Reaction:** $X_4$가 제거됨에 따라, $X_4$의 조상이었던 노드들이나 연관된 경로들이 영향을 받습니다. [cite_start]특히 $Z_3, Z_5$가 영향을 받습니다[cite: 1786].
+
+**Step 3: Iteration**
+$X_4$를 뺀 상태에서 다시 Max-Flow를 돌립니다. [cite_start]이번에는 $X_3$로 가는 Flow가 부족해집니다[cite: 1814].
+$\to$ **Action:** $X_3$를 비활성화합니다.
+
+**Step 4: Final Set**
+[cite_start]$X_3, X_4$가 제거된 후 남은 노드들($X_1, X_2, X_5$)에 대해 Max-Flow를 돌리면, $\{Z_1, Z_2, Z_4\}$와 완벽한 매칭(비교차 경로)이 형성됨을 확인할 수 있습니다[cite: 1828].
+
+![Figure 5: 최종적으로 식별된 Instrumental Subset. 붉은색 실선으로 표시된 경로들이 X1, X2, X5를 식별 가능하게 한다.](./images/match_block_final.png)
+
+**Conclusion:**
+최종적으로 식별 가능한 부분 집합은 $\{X_1, X_2, X_5\}$이며, 이를 위한 도구 변수 집합은 $\{Z_1, Z_2, Z_4\}$입니다. 우리는 전체를 다 알 수는 없었지만, 이 알고리즘을 통해 **"알 수 있는 것"**을 최대한 찾아냈습니다.
+
+---
+
+# 6. Summary
+
+이번 포스트에서는 선형 구조적 인과 모형(Linear SCM)에서 단일 도구 변수의 한계를 넘어서는 방법론들을 다루었습니다.
+
+1.  **Instrumental Sets:** 여러 개의 원인 변수($X$)가 있을 때, 같은 수의 도구 변수($Z$)를 사용하여 연립방정식을 통해 인과 효과를 식별합니다.
+2.  **Full Rank Condition:** 이를 위해서는 $Z$에서 $X$로 가는 경로들이 서로 교차하지 않아야(Non-intersecting) 합니다. 이는 행렬의 역행렬 존재 여부와 직결됩니다.
+3.  **Match-Block Algorithm:** 전체 식별이 불가능할 때, Max-Flow 알고리즘을 반복적으로 적용하여 식별 가능한 **최대 부분 집합(Instrumental Subset)**을 효율적으로 찾아냅니다.
+
+이로써 선형 모형에서의 식별 이론(Identification Theory)에 대한 깊이 있는 논의를 마칩니다. 다음 시간에는 더 일반적인 상황이나 다른 식별 전략에 대해 다룰 예정입니다.
+
+---
+
+### Lecture Coverage Checklist
+
+* [x] **Instrumental Sets**:
+    * 정의 및 필요성 (Slides 1673-1675)
+    * Linear System 수식화 $\sigma_{zy} = \Sigma \lambda_{xy}$ (Slides 1689-1701)
+    * Solvability condition (Full Rank) (Slide 1703)
+* [x] **Graphical Conditions**:
+    * Collinearity & Degenerate Systems 예시 (Slides 1711-1720)
+    * Non-intersecting Paths Theorem (Slides 1722-1734)
+    * Max-flow와의 연결 (Slide 1734)
+* [x] **Instrumental Subsets (ISs)**:
+    * 정의 (Conditions 1-4) (Slide 1737-1742)
+    * 부분 식별의 필요성 (Slide 1751)
+* [x] **Match-Block Algorithm**:
+    * 알고리즘의 목적 (Efficiently finding ISs) (Slide 1758)
+    * Step-by-step 실행 과정 (Max-flow -> Disable nodes -> Repeat) (Slides 1772-1828)
+    * 최종 결과 도출 (Slide 1828)

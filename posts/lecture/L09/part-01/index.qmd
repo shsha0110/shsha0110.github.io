@@ -1,0 +1,206 @@
+---
+title: "[Causal Inference] 09. Linear Structural Causal Models (Part 1)"
+description: "Introduction"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+[cite_start]본 포스트는 서울대학교 데이터사이언스 대학원 이상학 교수님의 "Linear Structural Causal Models" 강의 자료를 바탕으로 작성되었습니다[cite: 1, 2, 3]. Causal Inference의 핵심 도구인 SCM(Structural Causal Model)을 선형(Linear) 가정하에 두었을 때 발생하는 수학적 성질과, 이를 통해 인과 효과를 식별(Identification)하는 방법론인 **Wright's Rules**를 중점적으로 다룹니다.
+
+# 1. Introduction to Linear SCM
+
+## 1.1 Linear SCM의 정의
+
+일반적인 Non-parametric SCM에서 변수 $V_i$는 부모 변수 $Pa_i$와 외생 변수(Exogenous variable) $U_i$의 임의의 함수 $f_i$로 결정됩니다 ($V_i \leftarrow f_i(Pa_i, U_i)$). [cite_start]**Linear SCM**은 이 함수 $f$가 선형 방정식(Linear Equation)의 형태를 띤다고 가정합니다[cite: 11, 20].
+
+$$
+V_j \leftarrow \sum_{k \in Pa_j} \lambda_{kj} V_k + \epsilon_j
+$$
+
+여기서 각 요소의 의미는 다음과 같습니다:
+
+* **Structural Coefficient ($\lambda_{kj}$)**: $V_k$가 $V_j$에 미치는 직접적인 인과 효과(Direct Cause)를 나타냅니다. [cite_start]즉, $V_k$가 1단위 변할 때 $V_j$의 변화량을 의미합니다[cite: 14, 21].
+* [cite_start]**Error Term ($\epsilon_j$)**: 기존 Non-parametric 모델의 $U_j$에 대응하며, 선형 모델에서는 관습적으로 $\epsilon$ (또는 $\sigma^\circ$)으로 표기합니다[cite: 20, 22].
+
+## 1.2 주요 가정 및 데이터 정규화
+
+[cite_start]수식의 간결함을 위해, 우리는 데이터가 정규화(Normalized)되어 있다고 가정합니다[cite: 15].
+$$
+\mathbb{E}[X] = 0, \quad \mathbb{E}[X^2] = 1
+$$
+[cite_start]또한, 에러 항 $\epsilon$은 다변량 정규분포(Multivariate Gaussian)를 따르며, 이는 공분산 행렬 $\Sigma$에 의해 분포가 완전히 결정됨을 의미합니다[cite: 16].
+
+## 1.3 그래프 표현 (Graphical Representation)
+
+Linear SCM의 그래프 표현은 Non-parametric 모델과 두 가지 중요한 차이점이 있습니다.
+
+1.  [cite_start]**Directed Edge (화살표)**: 변수 간의 관계를 나타내는 화살표 위에 해당 구조적 계수(Structural Coefficient, $\lambda$)를 명시합니다[cite: 39].
+2.  **Bidirected Edge (양방향 점선)**: 에러 항 간의 공분산을 나타냅니다.
+    * [cite_start]$\epsilon_{xy} = \mathbb{E}[\epsilon_x \epsilon_y] = \text{cov}(\epsilon_x, \epsilon_y)$[cite: 50].
+    * [cite_start]Non-parametric 모델에서는 양방향 화살표가 명시적인 잠재 변수(Latent Variable) $U$의 존재를 암시하는 반면, Linear SCM에서는 에러 항 간의 공분산(Covariance) 그 자체를 의미하여 수학적으로 유용한 도구가 됩니다 [cite: 51-53].
+
+![Figure 1: Linear SCM의 그래프 표현 방식. 좌측은 Non-parametric 모델로 에러 항이 명시적 노드로 표현되지만, 우측 Linear SCM에서는 구조적 계수 $\lambda$가 엣지에 부여되고, 에러 항 간의 상관관계는 $\epsilon_{xy}$라는 양방향 점선(Bidirected edge)으로 축약되어 표현된다.](./images/linear_scm_graph_comparison.png)
+
+# 2. Interventions in Linear SCM
+
+인과 추론의 핵심 질문은 "개입(Intervention)"의 효과를 추정하는 것입니다. 즉, $\mathbb{E}[Y | do(X=x)]$를 구하는 것입니다. Linear SCM에서는 이 과정이 매우 직관적인 선형 결합으로 도출됩니다.
+
+## 2.1 Derivation of Intervention Effect
+
+$X \to Y$ 관계를 가진 간단한 모델 $Y = \lambda X + \epsilon_y$를 가정해 봅시다. [cite_start]여기서 $do(X=x)$를 수행했을 때 $Y$의 기댓값은 다음과 같이 유도됩니다 [cite: 65-74].
+
+1.  **Definition**:
+    $$\mathbb{E}[Y|do(X=x)] = \int y P(Y=y|do(x)) dy$$
+2.  **Substitution**: $Y$의 구조 방정식 대입
+    $$= \int y P(\lambda x + \epsilon_y = y) dy$$
+3.  **Variable Change**: $e = y - \lambda x$로 치환하면, $de = dy$이고 $y = e + \lambda x$가 됩니다.
+    $$= \int (\lambda x + e) P(\epsilon_y = e) de$$
+4.  **Linearity of Expectation**:
+    $$= \lambda x \int P(\epsilon_y = e) de + \int e P(\epsilon_y = e) de$$
+5.  **Result**: 첫 번째 항의 적분은 확률밀도함수의 전체 합이므로 1, 두 번째 항은 에러 항의 기댓값($\mathbb{E}[\epsilon_y]$)이므로 가정에 의해 0이 됩니다.
+    $$= \lambda x + 0 = \lambda x$$
+
+[cite_start]결론적으로, 선형 모델에서 $X$에 $x$만큼의 개입을 가했을 때 $Y$의 기댓값은 구조적 계수 $\lambda$와 $x$의 곱인 $\lambda x$가 됩니다[cite: 74, 81].
+
+# 3. The Identification Problem & Wright's Rules
+
+우리가 실제로 관측하는 데이터는 $X, Y$ 등의 **관측 변수(Observed Variables)**와 그들의 **공분산(Covariance, $\Sigma$)**입니다. [cite_start]반면 우리가 알고 싶은 것은 인과적 효과를 나타내는 **구조적 계수(Structural Coefficients, $\lambda$)**입니다 [cite: 83-91].
+
+[cite_start]**Identification(식별)** 문제는 "관측된 공분산($\sigma_{xy}$)으로부터 미지의 구조적 계수($\lambda_{xy}$)를 구해낼 수 있는가?"로 정의됩니다[cite: 113]. 이를 연결해 주는 강력한 도구가 바로 1921년 Sewall Wright가 제안한 **Wright's Rules**입니다.
+
+## 3.1 Case Study: Direct Effect vs. Confounding
+
+가장 기본적인 관계부터 공분산 $\sigma_{xy}$를 구조적 계수로 분해해 봅시다.
+
+### Case 1: Direct Effect ($X \to Y$)
+가장 단순한 인과 관계입니다.
+$$
+\begin{aligned}
+\sigma_{xy} &= \mathbb{E}[XY] \\
+&= \mathbb{E}[X(\lambda X + \epsilon_y)] \\
+&= \lambda \mathbb{E}[XX] + \mathbb{E}[X\epsilon_y]
+\end{aligned}
+$$
+데이터가 정규화되어 있으므로 $\mathbb{E}[XX]=1$이고, 원인($X$)과 결과의 에러($\epsilon_y$)는 독립이므로 $\mathbb{E}[X\epsilon_y]=0$입니다.
+$$\therefore \sigma_{xy} = \lambda$$
+[cite_start]즉, 교란 요인이 없을 때 관측된 상관관계는 인과 효과와 같습니다[cite: 109].
+
+### Case 2: Confounded Relationship ($X \leftrightarrow Y$)
+[cite_start]만약 $X$와 $Y$ 사이에 관측되지 않은 공통 원인(Latent Confounder)이 있어 에러 항 간의 공분산 $\epsilon_{xy}$가 존재한다면 어떻게 될까요? [cite: 129-134].
+
+![Figure 2: Confounding이 존재하는 상황. $X$에서 $Y$로 가는 직접 경로($\lambda$) 외에, 에러 항 간의 공분산($\epsilon_{xy}$)으로 표현된 뒷문 경로(backdoor path)가 존재한다.](./images/confounded_graph.png)
+
+$$
+\begin{aligned}
+\sigma_{xy} &= \mathbb{E}[XY] \\
+&= \mathbb{E}[X(\lambda X + \epsilon_y)] \\
+&= \lambda \mathbb{E}[XX] + \mathbb{E}[X\epsilon_y] \\
+&= \lambda + \mathbb{E}[\epsilon_x \epsilon_y] \quad (\because X \leftarrow \epsilon_x) \\
+&= \lambda + \epsilon_{xy}
+\end{aligned}
+$$
+
+여기서 중요한 통찰을 얻을 수 있습니다:
+> **Correlation = Causal Effect + Confounding Bias**
+> $$\sigma_{xy} = \lambda + \epsilon_{xy}$$
+
+[cite_start]관측된 상관관계($\sigma_{xy}$)는 "진짜 인과 효과($\lambda$)"와 "교란 요인($\epsilon_{xy}$)"의 합으로 구성됩니다[cite: 134].
+
+## 3.2 Path Decomposition (경로 분해)
+
+조금 더 복잡한 구조로 확장해 보겠습니다. [cite_start]공분산이 그래프상의 "경로(Path)"와 어떻게 연결되는지 주목해야 합니다[cite: 179].
+
+### Case 3: Chain Structure ($X \to Z \to Y$) with Confounding ($X \leftrightarrow Z$)
+[cite_start]$X$가 $Z$에 영향을 주고, $Z$가 $Y$에 영향을 주는데, $X$와 $Z$ 사이에 교란 요인이 있는 상황입니다 [cite: 163-171].
+
+구조 방정식:
+* $Z = \lambda_{xz}X + \epsilon_z$
+* $Y = \lambda_{zy}Z + \epsilon_y$
+
+$X$와 $Y$의 공분산 $\sigma_{xy}$를 구해봅시다.
+
+$$
+\begin{aligned}
+\sigma_{xy} &= \mathbb{E}[XY] \\
+&= \mathbb{E}[X(\lambda_{zy}Z + \epsilon_y)] \\
+&= \lambda_{zy}\mathbb{E}[XZ] \quad (\because \mathbb{E}[X\epsilon_y]=0)
+\end{aligned}
+$$
+
+여기서 $\mathbb{E}[XZ]$ (즉, $\sigma_{xz}$)를 먼저 구해야 합니다.
+$$
+\begin{aligned}
+\mathbb{E}[XZ] &= \mathbb{E}[X(\lambda_{xz}X + \epsilon_z)] \\
+&= \lambda_{xz}\mathbb{E}[XX] + \mathbb{E}[X\epsilon_z] \\
+&= \lambda_{xz} + \epsilon_{xz} \quad (\because X=\epsilon_x, \mathbb{E}[\epsilon_x \epsilon_z]=\epsilon_{xz})
+\end{aligned}
+$$
+
+이를 원래 식에 대입하면:
+$$
+\sigma_{xy} = \lambda_{zy}(\lambda_{xz} + \epsilon_{xz}) = \lambda_{zy}\lambda_{xz} + \lambda_{zy}\epsilon_{xz}
+$$
+
+[cite_start]이 결과는 그래프 상에서 $X$에서 $Y$로 가는 **두 가지 경로의 합**으로 해석될 수 있습니다 [cite: 172-177].
+1.  **Causal Path**: $X \xrightarrow{\lambda_{xz}} Z \xrightarrow{\lambda_{zy}} Y$ (계수의 곱: $\lambda_{xz}\lambda_{zy}$)
+2.  **Confounded Path**: $X \stackrel{\epsilon_{xz}}{\leftrightarrow} Z \xrightarrow{\lambda_{zy}} Y$ (계수의 곱: $\epsilon_{xz}\lambda_{zy}$)
+
+## 3.3 Wright's Rules (1921)
+
+위의 예시들을 일반화한 것이 바로 **Wright's Rules**입니다. [cite_start]비순환 모델(Acyclic Models)에서 두 변수 $X, Y$ 사이의 공분산 $\sigma_{xy}$는 다음과 같이 계산됩니다 [cite: 235-244].
+
+> **Wright's Rule:**
+> $\sigma_{xy}$는 $X$와 $Y$ 사이의 모든 **Open Path**에 대해, 각 경로를 구성하는 **계수(Path Coefficient)들의 곱의 합**이다.
+
+여기서 **Open Path**란:
+1.  **Non-self-intersecting**: 같은 노드를 두 번 지나지 않아야 함.
+2.  [cite_start]**No Colliders**: 화살표가 서로 충돌하는 지점($\rightarrow V \leftarrow$)이 없어야 함 (Active path여야 함)[cite: 205].
+
+### 적용 예제 (Complex Graph)
+
+다음과 같은 복잡한 그래프를 생각해 봅시다. [cite_start]$W, X, Y, Z$ 변수가 얽혀 있습니다 [cite: 223, 230-233].
+
+![Figure 3: Wright's Rule 적용 예제. $X$와 $Y$ 사이의 공분산을 구하기 위해 가능한 모든 유효한 경로(Treks)를 식별하고 각 경로의 계수 곱을 합산한다.](./images/wright_rule_complex_example.png)
+
+위 그래프에서 $X$와 $Y$ 사이의 공분산 $\sigma_{xy}$를 구성하는 경로는 3가지가 있습니다:
+
+1.  **Direct Causal Path**: $X \xrightarrow{\lambda_{xy}} Y$
+    * 값: $\lambda_{xy}$
+2.  **Backdoor Path via $W$**: $X \xleftarrow{\lambda_{wx}} W \stackrel{\epsilon_{wy}}{\leftrightarrow} Y$
+    * 값: $\lambda_{wx}\epsilon_{wy}$
+    * (주의: 화살표 방향을 거스르는 $X \leftarrow W$ 이동이 포함됨)
+3.  **Complex Path via $W, Z$**: $X \xleftarrow{\lambda_{zx}} Z \xleftarrow{\lambda_{wz}} W \stackrel{\epsilon_{wy}}{\leftrightarrow} Y$
+    * 값: $\lambda_{zx}\lambda_{wz}\epsilon_{wy}$
+
+[cite_start]따라서 전체 공분산은 이들의 합이 됩니다[cite: 233].
+$$\sigma_{xy} = \lambda_{xy} + \lambda_{wx}\epsilon_{wy} + \lambda_{zx}\lambda_{wz}\epsilon_{wy}$$
+
+# 4. Summary
+
+Linear Structural Causal Model(Linear SCM)은 복잡한 인과 관계를 선형 방정식 시스템으로 단순화하여, 데이터의 공분산 구조와 인과적 파라미터 간의 관계를 명확하게 보여줍니다.
+
+1.  **Linearity**: 모든 관계는 선형이며, 에러는 가우시안 분포를 따릅니다.
+2.  **Intervention**: 선형성 덕분에 개입($do(x)$)의 효과는 구조적 계수 $\lambda$와 $x$의 단순 곱으로 나타납니다.
+3.  **Covariance Decomposition**: 관측된 공분산은 **Wright's Rules**에 따라 그래프상의 모든 활성 경로(Active Path)의 합으로 분해됩니다. 이는 "상관관계는 인과관계가 아니다"라는 격언을 수학적으로 정량화하여, 상관관계 중 얼마만큼이 인과관계($\lambda$)이고 얼마만큼이 교란($\epsilon$)인지 구별할 수 있게 해 줍니다.
+
+---
+
+### Lecture Content Checklist
+
+| Section / Concept | Included? | Note |
+| :--- | :---: | :--- |
+| **1. Intro to Linear SCM** | ✅ | 정의, 가정(Normalized, Gaussian), 그래프 표기법 포함 |
+| **2. Interventions** | ✅ | 적분을 통한 $\mathbb{E}[Y\|do(x)] = \lambda x$ 유도 과정 상세 포함 |
+| **3. Identification Problem** | ✅ | 관측(공분산)과 미지수(구조계수)의 관계 설정 |
+| **4. Connecting Observed with Unobserved** | ✅ | $\sigma_{xy} = \lambda + \epsilon_{xy}$ 유도 포함 |
+| **5. Chain Rule ("Curious Property")** | ✅ | $X \to Z \to Y$ 구조에서의 공분산 분해 포함 |
+| **6. Backdoor Path Calculation** | ✅ | 교란 변수가 포함된 경로 계산 포함 |
+| **7. Wright's Rules** | ✅ | Path tracing 규칙의 정의와 적용 예시 포함 |
+| **8. Complex Examples** | ✅ | 다중 경로(Direct + Backdoor)가 혼재된 예제 분석 포함 |

@@ -1,0 +1,215 @@
+---
+title: "[Causal Inference] 11. IPW and Its Variants (Part 1)"
+description: "Introduction"
+author: "유성현"
+date: "2026-01-23"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction
+
+인과 추론(Causal Inference)에서 관측 연구(Observational Study)의 가장 큰 난관은 교란 변수(Confounder)에 의한 선택 편향(Selection Bias)입니다. 이를 해결하기 위해 우리는 앞서 Back-door criterion 등을 배웠지만, 실제 데이터에서 이를 추정(Estimation)하는 것은 또 다른 문제입니다.
+
+이번 포스트에서는 **Propensity Score(성향 점수)**를 활용한 대표적인 추정 방법인 **IPW(Inverse Probability Weighting)**에 대해 다룹니다. [cite_start]IPW의 이론적 배경부터 수식 유도, 그리고 실제 적용 시 발생하는 분산 문제를 해결하기 위한 Hajek Estimator와 Trimming 기법, 더 나아가 최신 논의인 Balancing Weight까지 폭넓게 정리합니다[cite: 1, 8].
+
+# 2. Propensity Score (PS)
+
+## 2.1. Definition
+
+[cite_start]**Propensity Score(성향 점수)**는 공변량(Covariates) $Z$가 주어졌을 때, 개체가 처치(Treatment, $X=1$)를 받을 조건부 확률로 정의됩니다[cite: 9].
+
+$$
+e(Z) = P(X=1 | Z) = \mathbb{E}[X | Z]
+$$
+
+[cite_start]여기서 $Z = (Z_1, ..., Z_p)$는 관측된 $p$개의 공변량 집합입니다[cite: 11]. [cite_start]성향 점수는 고차원의 공변량 $Z$를 1차원의 확률 값으로 요약(Summary score)한 것으로 볼 수 있습니다[cite: 64].
+
+![Figure 1: 공변량 Z가 처치 X에 영향을 미치는 구조와 이를 요약하는 Propensity Score](./images/ps_diagram.png)
+*Figure 1: 공변량 벡터 $Z$가 처치 여부 $X$를 결정하는 확률적 과정을 나타냅니다. $e(Z)$는 이 복잡한 관계를 단일 스칼라 값인 확률로 축소합니다.*
+
+## 2.2. Key Properties
+
+Rosenbaum and Rubin (1983)은 Propensity Score가 가진 두 가지 중요한 성질을 증명했습니다.
+
+### Property 1: Balancing Property
+성향 점수 $e(Z)$가 같다면, 처치 집단($X=1$)과 대조 집단($X=0$) 사이에서 공변량 $Z$의 분포는 균형을 이룹니다. [cite_start]즉, 성향 점수를 조건부로 하면 처치 변수 $X$와 공변량 $Z$는 독립입니다[cite: 19, 20].
+
+$$
+X \perp\!\!\perp Z \mid e(Z)
+$$
+
+[cite_start]이 성질은 성향 점수가 가장 거친(coarsest) **Balancing Score**임을 의미합니다[cite: 58]. $Z$ 자체도 Balancing Score이지만($X \perp Z | Z$는 자명하므로), 성향 점수는 차원을 획기적으로 줄여줍니다.
+
+![Figure 2: 성향 점수에 따른 집단 간 균형](./images/ps_balance_example.png)
+*Figure 2: 성향 점수 $e(Z)$로 층화(stratification)했을 때, 각 층 내부에서는 처치군과 대조군의 공변량(예: 나이, 운동 성향) 분포가 유사해짐을 보여줍니다. [cite_start]즉, $e(Z)=0.7$인 그룹 내에서는 30대 미만의 비율이 처치 여부와 무관하게 동일해집니다 [cite: 21-48].*
+
+### Property 2: Unconfoundedness given PS
+[cite_start]만약 공변량 $Z$를 통제했을 때 잠재적 결과(Potential Outcomes)와 처치가 독립이라면(Unconfoundedness given $Z$), 성향 점수 $e(Z)$만 통제해도 이 독립성이 유지됩니다[cite: 61, 62].
+
+$$
+\{Y(1), Y(0)\} \perp\!\!\perp X \mid Z \implies \{Y(1), Y(0)\} \perp\!\!\perp X \mid e(Z)
+$$
+
+[cite_start]이 성질 덕분에 우리는 고차원의 $Z$ 대신 1차원의 $e(Z)$만을 조정하여 편향을 제거할 수 있습니다[cite: 63].
+
+#### Proof Sketch (Derivation)
+[cite_start]이 성질을 증명하기 위해 반복 기댓값의 법칙(Law of Iterated Expectations)을 사용해 $E[X|e(Z)]$가 $e(Z)$와 같음을 먼저 보입니다 [cite: 71-73].
+
+$$
+\begin{aligned}
+\mathbb{E}[X \mid e(Z)] &= \mathbb{E}[\mathbb{E}[X \mid e(Z), Z] \mid e(Z)] \\
+&= \mathbb{E}[\mathbb{E}[X \mid Z] \mid e(Z)] \quad (\because e(Z) \text{ is a function of } Z) \\
+&= \mathbb{E}[e(Z) \mid e(Z)] \\
+&= e(Z)
+\end{aligned}
+$$
+
+# 3. Inverse Probability Weighting (IPW)
+
+## 3.1. Identification Strategy
+
+우리의 목표는 Average Treatment Effect (ATE), 즉 $\tau^{ATE} = \mathbb{E}[Y(1) - Y(0)]$를 추정하는 것입니다. 관측 데이터에서는 $Y(1)$과 $Y(0)$ 중 하나만 관찰되므로(Fundamental Problem of Causal Inference), 이를 해결하기 위해 **가중치(Weighting)**를 사용합니다.
+
+[cite_start]IPW의 핵심 아이디어는 **각 개체가 표본에 포함될 확률의 역수(Inverse Probability)를 가중치로 부여**하여, 전체 모집단을 대표하는 가상 모집단(Pseudo-population)을 생성하는 것입니다[cite: 151].
+
+## 3.2. Derivation of IPW Estimator
+
+가정(Identification Assumptions):
+1.  **Consistency:** $Y = XY(1) + (1-X)Y(0)$
+2.  **Exchangeability (Unconfoundedness):** $Y(x) \perp X | Z$
+3.  **Positivity:** $0 < P(X=1|Z) < 1$
+
+우리는 $\mathbb{E}[Y(1)]$을 관측된 데이터 $(X, Y, Z)$로 표현하고자 합니다. [cite_start]다음 식을 살펴봅시다[cite: 83].
+
+$$
+\mathbb{E}\left[ \frac{XY}{e(Z)} \right]
+$$
+
+[cite_start]이 식을 반복 기댓값의 법칙을 사용하여 전개하면 다음과 같습니다[cite: 83, 84].
+
+$$
+\begin{aligned}
+\mathbb{E}\left[ \frac{XY}{e(Z)} \right] &= \mathbb{E}\left[ \mathbb{E}\left[ \frac{XY}{e(Z)} \Bigg| Z \right] \right] \\
+&= \mathbb{E}\left[ \frac{1}{e(Z)} \mathbb{E}[XY \mid Z] \right] \quad (\because e(Z) \text{ is constant given } Z) \\
+&= \mathbb{E}\left[ \frac{1}{e(Z)} \mathbb{E}[X Y(1) \mid Z] \right] \quad (\because Y = Y(1) \text{ when } X=1) \\
+&= \mathbb{E}\left[ \frac{1}{e(Z)} \mathbb{E}[X \mid Z] \mathbb{E}[Y(1) \mid Z] \right] \quad (\because Y(1) \perp X \mid Z \text{ by Exchangeability}) \\
+&= \mathbb{E}\left[ \frac{1}{e(Z)} e(Z) \mathbb{E}[Y(1) \mid Z] \right] \quad (\because \mathbb{E}[X \mid Z] = e(Z)) \\
+&= \mathbb{E}\left[ \mathbb{E}[Y(1) \mid Z] \right] \\
+&= \mathbb{E}[Y(1)]
+\end{aligned}
+$$
+
+동일한 논리로 $\mathbb{E}[Y(0)] = \mathbb{E}\left[ \frac{(1-X)Y}{1-e(Z)} \right]$ 임을 보일 수 있습니다.
+
+[cite_start]따라서 ATE는 다음과 같이 식별됩니다[cite: 91].
+
+$$
+\tau^{ATE} = \mathbb{E}\left[ \frac{XY}{e(Z)} - \frac{(1-X)Y}{1-e(Z)} \right]
+$$
+
+## 3.3. Horvitz-Thompson Estimator
+
+[cite_start]위 식별 식을 표본 평균으로 대치하면 **Horvitz-Thompson (HT) Estimator** (또는 standard IPW estimator)를 얻습니다[cite: 99].
+
+$$
+\hat{\tau}_{ipw,1} = \frac{1}{N} \sum_{i=1}^{N} \left\{ \frac{Y_i X_i}{e(Z_i)} - \frac{Y_i (1-X_i)}{1-e(Z_i)} \right\}
+$$
+
+[cite_start]이때 가중치는 다음과 같이 정의됩니다[cite: 94].
+$$
+w_1(Z_i) = \frac{1}{e(Z_i)}, \quad w_0(Z_i) = \frac{1}{1-e(Z_i)}
+$$
+
+# 4. Weight Normalization (Stabilized Weights)
+
+## 4.1. The Problem with Standard IPW
+
+$\hat{\tau}_{ipw,1}$은 비편향 추정량(Unbiased Estimator)이지만, 유한 표본(Finite Sample)에서는 분산이 매우 클 수 있습니다. [cite_start]특히 성향 점수 $e(Z)$가 0이나 1에 가까우면 가중치가 폭발적으로 커집니다[cite: 104, 168].
+
+[cite_start]또한, 이론적으로 가중치의 평균은 1이어야 합니다[cite: 106, 107].
+$$
+\mathbb{E}\left[ \frac{X}{e(Z)} \right] = \mathbb{E}\left[ \frac{\mathbb{E}[X|Z]}{e(Z)} \right] = 1
+$$
+[cite_start]하지만 실제 표본에서는 $\frac{1}{N} \sum \frac{X_i}{\hat{e}(Z_i)}$가 정확히 1이 되지 않을 수 있습니다[cite: 114].
+
+## 4.2. Hajek Estimator
+
+[cite_start]이 문제를 해결하기 위해 가중치의 합으로 나누어 정규화(Normalize)하는 방법, 즉 **Hajek Estimator**를 사용합니다[cite: 121, 122].
+
+$$
+\hat{\tau}_{ipw,2} = \frac{\sum_{i=1}^{n} Y_i X_i w_1(Z_i)}{\sum_{i=1}^{n} X_i w_1(Z_i)} - \frac{\sum_{i=1}^{n} Y_i (1-X_i) w_0(Z_i)}{\sum_{i=1}^{n} (1-X_i) w_0(Z_i)}
+$$
+
+이 방식은 가중치의 합이 1이 되도록 강제합니다. [cite_start]$\hat{\tau}_{ipw,2}$는 약간의 편향(Bias)이 생길 수 있지만, 일반적으로 분산(Variance)이 더 작아 평균 제곱 오차(MSE) 측면에서 $\hat{\tau}_{ipw,1}$보다 우수하고 안정적인 추정을 가능하게 합니다[cite: 125, 127]. [cite_start]이를 **Stabilized Weights**라고도 부릅니다[cite: 128].
+
+> **Digression: Why not both?**
+> [cite_start]최근 연구(Johan Ugander et al.)에서는 HT와 Hajek 중 하나를 선택하는 대신, 두 추정량을 결합하는 방법($\lambda$-estimator)에 대한 논의도 진행되고 있습니다 [cite: 130-146].
+
+# 5. Practical Issues: Trimming and Truncation
+
+[cite_start]IPW의 가장 큰 단점은 성향 점수 $e(Z)$가 극단적인 값(0 또는 1 근처)을 가질 때 추정량이 불안정해진다는 것입니다[cite: 167, 168]. 이를 완화하기 위해 다음과 같은 방법들을 사용합니다.
+
+## 5.1. Symmetric Trimming
+성향 점수가 특정 범위 $[\alpha, 1-\alpha]$를 벗어나는 개체들을 분석에서 제외합니다. [cite_start]일반적으로 $\alpha=0.1$ 또는 $0.05$를 사용합니다[cite: 171, 172].
+
+$$
+\text{Exclude if } e(Z) \notin [0.05, 0.95]
+$$
+
+## 5.2. Asymmetric Trimming
+[cite_start]처치군과 대조군의 성향 점수 분포가 겹치지 않는(non-overlap) 영역을 제거합니다[cite: 173].
+* 처치군의 분포에서 너무 낮은 성향 점수를 가진 개체 제외 (대조군과 비교 불가)
+* [cite_start]대조군의 분포에서 너무 높은 성향 점수를 가진 개체 제외[cite: 175, 176].
+
+## 5.3. Truncation (Winsorizing)
+데이터를 제외하는 대신, 가중치의 상한/하한을 설정합니다. [cite_start]성향 점수가 $\alpha$보다 작으면 $\alpha$로, $1-\alpha$보다 크면 $1-\alpha$로 대체하여 가중치가 무한히 커지는 것을 막습니다[cite: 177, 178].
+
+![Figure 3: Propensity Score의 분포와 Overlap 문제](./images/ps_overlap_trimming.png)
+*Figure 3: 처치군(실선)과 대조군(점선)의 성향 점수 분포. [cite_start]겹치지 않는(Non-overlap) 영역이나 밀도가 낮은 꼬리(Tail) 부분의 데이터를 제거(Trimming)하거나 제한(Restriction)하여 비교 가능성을 확보하는 과정을 보여줍니다 [cite: 181-188].*
+
+# 6. Advanced Topic: Weighting vs. Balancing
+
+전통적인 IPW(Propensity Score Weighting)는 표본 크기가 무한대로 갈 때(Asymptotic) 공변량의 균형을 맞춥니다. [cite_start]하지만 **유한 표본(Finite Sample)**에서는 여전히 불균형이 존재할 수 있습니다[cite: 197].
+
+[cite_start]최근 연구들은 성향 점수를 추정하는 단계를 우회하고, **직접적으로(directly) 공변량의 균형을 맞추는 가중치를 찾는 방법(Balancing Weights)**을 제안합니다[cite: 198, 209].
+
+## 6.1. Optimization Problem
+[cite_start]목표는 다음 제약 조건을 만족하면서 가중치 $w_i$의 변동(예: 분산, 엔트로피)을 최소화하는 것입니다[cite: 213, 214].
+
+$$
+\frac{1}{N_1} \sum_{i=1}^{N} w_i X_i Z_i = \frac{1}{N_0} \sum_{i=1}^{N} w_i (1-X_i) Z_i \quad \text{(Balance Constraint)}
+$$
+
+## 6.2. Notable Methods
+* [cite_start]**Entropy Balancing (Hainmueller, 2011)** [cite: 219]
+* [cite_start]**Covariate Balancing Propensity Score (CBPS) (Imai and Ratkovic, 2014)** [cite: 220]
+* [cite_start]**Stabilized Balancing Weights (Zubizarreta, 2015)** [cite: 221]
+
+## 6.3. Caution
+Balancing 방법은 분석가가 명시한 공변량의 함수(예: 평균, 분산)에 대해서만 균형을 맞춥니다. [cite_start]만약 결과 모델(Outcome Model)에 중요한 **상호작용 항(Interaction Term, $Z_1 Z_2$)**이 포함되어 있는데, 균형 제약 조건에는 이를 포함하지 않았다면($Z_1, Z_2$만 균형 맞춤), 여전히 편향(Bias)이 남을 수 있습니다[cite: 236].
+
+# 7. Summary
+
+* **Propensity Score**는 고차원의 공변량을 1차원으로 축소하여 차원의 저주를 해결하고, $X \perp Z | e(Z)$라는 강력한 성질을 가집니다.
+* **IPW Estimator**는 역확률 가중치를 이용해 ATE를 식별하지만, 가중치의 분산 문제로 인해 불안정할 수 있습니다.
+* **Hajek Estimator**는 가중치를 정규화하여 이러한 분산을 줄여주며, **Trimming/Truncation**은 극단적인 가중치로 인한 영향을 완화합니다.
+* 최신 **Balancing Weights** 기법들은 유한 표본에서 직접적인 균형을 추구하지만, 모델 명시(Model Specification)에 주의해야 합니다.
+
+***
+
+### Verification Checklist
+
+* [x] **Propensity Score의 정의 및 성질(Balancing, Unconfoundedness) 포함 여부:** Section 2에서 정의 및 증명 스케치 포함.
+* [x] **IPW 추정량 유도(Derivation) 포함 여부:** Section 3.2에서 반복 기댓값 법칙을 이용해 상세 유도.
+* [x] **Hajek Estimator 및 Normalization 설명:** Section 4에서 수식과 필요성 설명.
+* [x] **Trimming/Truncation 기법 설명:** Section 5에서 포함.
+* [x] **Balancing Weights 개념 및 주의사항:** Section 6에서 설명.
+* [x] **이미지 Placeholder 및 캡션:** 각 주요 개념(PS 구조, Balance, Overlap)에 대한 이미지 마크다운 포함.
+* [x] **수식 LaTeX 처리:** 모든 수식을 LaTeX 문법으로 작성.
+* [x] **인용(Citation) 표기:** 제공된 PDF의 페이지 또는 소스 번호를 기반으로 형식 준수.

@@ -10,7 +10,694 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>A blog built with Quarto</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Tue, 10 Mar 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Wed, 11 Mar 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>[Data Mining] 4. Frequent Itemsets (Part 1)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.1/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-대규모-데이터셋의-패턴-탐색" class="level1">
+<h1>1. Introduction: 대규모 데이터셋의 패턴 탐색</h1>
+<p>데이터 마이닝 및 기계학습 분야에서 가장 근본적인 문제 중 하나는 대규모 데이터셋 내에서 빈번하게 발생하는 항목들의 패턴을 찾는 것입니다. 이를 직관적으로 이해하기 위해 대형 마트(Supermarket)의 관리자 사례를 생각해 볼 수 있습니다.</p>
+<p>마트의 관리자는 수많은 고객의 구매 영수증 데이터를 분석하여, <strong>어떤 상품들이 주로 함께 판매되는지 그 패턴을 식별</strong>하고자 합니다. 이러한 패턴을 파악하면 상품의 진열 위치를 최적화하거나 교차 판매(Cross-selling) 전략을 세울 수 있습니다. 하지만 현대 마트에서 발생하는 거래 데이터의 규모는 매우 방대하기 때문에, 사람이 이를 수작업으로 일일이 확인하고 패턴을 찾는 것은 불가능에 가깝습니다. 따라서 이를 효율적으로 탐색하기 위한 알고리즘과 수학적 모델링이 필수적입니다.</p>
+<hr>
+</section>
+<section id="association-rule-discovery-연관-규칙-탐색" class="level1">
+<h1>2. Association Rule Discovery (연관 규칙 탐색)</h1>
+<p>연관 규칙 탐색의 일차적인 목표는 수많은 고객들에 의해 ’함께 구매되는 항목(items)’들을 식별하는 것입니다. 판매 데이터를 전처리 및 분석하여 특정 상품 간의 통계적 의존성(dependencies)을 찾아내는 접근법을 취합니다.</p>
+<p>가장 널리 알려진 고전적인 연관 규칙의 예시는 다음과 같습니다: &gt; <strong>“만약 어떤 고객이 기저귀(Diaper)와 우유(Milk)를 샀다면, 그 고객은 맥주(Beer)도 함께 구매할 가능성이 높다.”</strong></p>
+<p>이러한 숨겨진 패턴을 발견한다면, 마트에서 기저귀 코너 바로 옆에 6캔들이 맥주(six-packs)가 진열되어 있는 전략적인 배치를 보더라도 전혀 놀라운 일이 아닐 것입니다.</p>
+<p>일반적으로 연관 규칙은 특정 항목 집합을 구매한 사람들이 다른 특정 항목 집합도 구매하는 경향성을 나타내며, 수식적 형태로는 다음과 같이 표현할 수 있습니다:</p>
+<ul>
+<li><strong>Association Rules</strong>: “항목 집합 <img src="https://latex.codecogs.com/png.latex?%5C%7Bx,%20y%5C%7D">를 구매한 사람들은 항목 집합 <img src="https://latex.codecogs.com/png.latex?%5C%7Bz,%20v%5C%7D">도 구매하는 경향이 있다.”</li>
+</ul>
+<hr>
+</section>
+<section id="the-market-basket-model-장바구니-모델" class="level1">
+<h1>3. The Market-Basket Model (장바구니 모델)</h1>
+<p>위에서 설명한 마트의 사례를 수학적으로 추상화한 것이 바로 <strong>장바구니 모델(The Market-Basket Model)</strong>입니다. 장바구니 모델은 기본적으로 두 거대한 집합 간의 <strong>다대다 매핑(Many-to-many mapping)</strong> 관계로 정의됩니다.</p>
+<ul>
+<li>수학적 모델링을 위해 두 개의 집합을 정의해 보겠습니다.
+<ul>
+<li><ol type="1">
+<li><strong>Items (항목 집합, <img src="https://latex.codecogs.com/png.latex?I">)</strong>: 마트에서 판매되는 모든 물건 등 분석 대상이 되는 대규모 항목들의 집합입니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Baskets (장바구니 집합, <img src="https://latex.codecogs.com/png.latex?B">)</strong>: 고객이 한 번의 거래(영수증)에서 구매한 물건들의 집합입니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+<p>이때 개별 장바구니 <img src="https://latex.codecogs.com/png.latex?b%20%5Cin%20B">는 전체 항목 집합 <img src="https://latex.codecogs.com/png.latex?I">의 작은 부분 집합(small subset)으로 구성됩니다 (<img src="https://latex.codecogs.com/png.latex?b%20%5Csubset%20I">).</p>
+<p>다음은 5개의 장바구니로 구성된 간단한 매핑 테이블 예시입니다:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Basket</th>
+<th style="text-align: left;">Items</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">1</td>
+<td style="text-align: left;">Bread, Coke, Milk</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2</td>
+<td style="text-align: left;">Beer, Bread</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">3</td>
+<td style="text-align: left;">Beer, Coke, Diaper, Milk</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">4</td>
+<td style="text-align: left;">Beer, Bread, Diaper, Milk</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">5</td>
+<td style="text-align: left;">Coke, Diaper, Milk</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="frequent-itemsets-support-빈발-항목-집합과-지지도" class="level1">
+<h1>4. Frequent Itemsets &amp; Support (빈발 항목 집합과 지지도)</h1>
+<p>장바구니 모델에서의 주요 목표는 함께 빈번하게 등장하는 항목들의 집합을 찾는 것, 즉 <strong>빈발 항목 집합(Frequent Itemsets)</strong>을 찾는 것입니다. 이를 엄밀하게 정의하기 위해 <strong>지지도(Support)</strong>라는 개념을 도입합니다.</p>
+<p>특정 항목 집합 <img src="https://latex.codecogs.com/png.latex?I">에 대한 지지도는 집합 <img src="https://latex.codecogs.com/png.latex?I">의 모든 원소를 동시에 포함하고 있는 장바구니의 개수(혹은 비율)로 정의됩니다. 수식으로 표현하면, 항목 집합 <img src="https://latex.codecogs.com/png.latex?X">의 지지도 <img src="https://latex.codecogs.com/png.latex?supp(X)">는 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?supp(X)%20=%20%7C%5C%7Bb%20%5Cin%20B%20%5Cmid%20X%20%5Csubseteq%20b%5C%7D%7C"></p>
+<p>이때, 사전에 사용자가 지정한 <strong>지지도 임계값(Support threshold)</strong>을 <img src="https://latex.codecogs.com/png.latex?s">라고 가정해 봅시다. 특정 항목 집합 <img src="https://latex.codecogs.com/png.latex?I">가 최소 <img src="https://latex.codecogs.com/png.latex?s">개 이상의 장바구니에 등장한다면 (<img src="https://latex.codecogs.com/png.latex?supp(I)%20%5Cgeq%20s">), 우리는 이 집합 <img src="https://latex.codecogs.com/png.latex?I">를 <strong>빈발 항목 집합(Frequent Itemset)</strong>이라고 정의합니다.</p>
+<ul>
+<li>앞선 테이블 예시를 다시 살펴보겠습니다:
+<ul>
+<li>만약 우리가 구하고자 하는 항목 집합이 <code>{Beer, Bread}</code>라면, 이 두 항목을 모두 포함하고 있는 장바구니는 Basket 2와 Basket 4입니다. 따라서 <code>{Beer, Bread}</code>의 지지도는 2가 됩니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+<section id="단계별-빈발-항목-집합-탐색-detailed-example" class="level1">
+<h1>5. 단계별 빈발 항목 집합 탐색 (Detailed Example)</h1>
+<p>개념을 완벽히 숙지하기 위해, 다음의 데이터셋에서 빈발 항목 집합을 유도하는 과정을 단계별로 살펴보겠습니다.</p>
+<ul>
+<li><p><strong>전체 항목 집합(Items)</strong>: {milk(<img src="https://latex.codecogs.com/png.latex?m">), coke(<img src="https://latex.codecogs.com/png.latex?c">), pepsi(<img src="https://latex.codecogs.com/png.latex?p">), beer(<img src="https://latex.codecogs.com/png.latex?b">), juice(<img src="https://latex.codecogs.com/png.latex?j">)}</p></li>
+<li><p><strong>지지도 임계값(<img src="https://latex.codecogs.com/png.latex?s">)</strong>: 3 (즉, 최소 3개 이상의 장바구니에 등장해야 함)</p></li>
+<li><p>주어진 8개의 장바구니(<img src="https://latex.codecogs.com/png.latex?B1%20%5Csim%20B8">) 데이터는 다음과 같습니다:</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?B1%20=%20%5C%7Bm,%20c,%20b%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B2%20=%20%5C%7Bm,%20p,%20j%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B3%20=%20%5C%7Bm,%20b%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B4%20=%20%5C%7Bc,%20j%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B5%20=%20%5C%7Bm,%20p,%20b%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B6%20=%20%5C%7Bm,%20c,%20b,%20j%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B7%20=%20%5C%7Bc,%20b,%20j%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B8%20=%20%5C%7Bb,%20c%5C%7D"></li>
+</ul></li>
+</ul>
+<p>이제 이 데이터에서 빈발 항목 집합(Frequent Itemsets)을 도출해 봅시다.</p>
+<section id="step-1.-단일-항목-1-itemsets의-지지도-계산" class="level2">
+<h2 class="anchored" data-anchor-id="step-1.-단일-항목-1-itemsets의-지지도-계산"><strong>Step 1. 단일 항목 (1-Itemsets)의 지지도 계산</strong></h2>
+<ul>
+<li>먼저 각 개별 상품이 몇 개의 장바구니에 담겼는지 계산합니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?m"> (milk): B1, B2, B3, B5, B6 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 지지도 5 (<img src="https://latex.codecogs.com/png.latex?%5Cgeq%203">, 빈발함)</li>
+<li><img src="https://latex.codecogs.com/png.latex?c"> (coke): B1, B4, B6, B7, B8 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 지지도 5 (<img src="https://latex.codecogs.com/png.latex?%5Cgeq%203">, 빈발함)</li>
+<li><img src="https://latex.codecogs.com/png.latex?p"> (pepsi): B2, B5 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 지지도 2 (<img src="https://latex.codecogs.com/png.latex?%3C%203">, 탈락)</li>
+<li><img src="https://latex.codecogs.com/png.latex?b"> (beer): B1, B3, B5, B6, B7, B8 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 지지도 6 (<img src="https://latex.codecogs.com/png.latex?%5Cgeq%203">, 빈발함)</li>
+<li><img src="https://latex.codecogs.com/png.latex?j"> (juice): B2, B4, B6, B7 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 지지도 4 (<img src="https://latex.codecogs.com/png.latex?%5Cgeq%203">, 빈발함)</li>
+</ul></li>
+</ul>
+<p>단일 빈발 항목 집합은 <strong><code>{m}, {c}, {b}, {j}</code></strong> 입니다.</p>
+</section>
+<section id="step-2.-쌍으로-구성된-항목-2-itemsets의-지지도-계산" class="level2">
+<h2 class="anchored" data-anchor-id="step-2.-쌍으로-구성된-항목-2-itemsets의-지지도-계산"><strong>Step 2. 쌍으로 구성된 항목 (2-Itemsets)의 지지도 계산</strong></h2>
+<ul>
+<li>살아남은 빈발 단일 항목들을 조합하여 쌍(Pair)을 만들고, 이들의 지지도를 계산합니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5C%7Bm,%20c%5C%7D">: B1, B6 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 지지도 2 (<img src="https://latex.codecogs.com/png.latex?%3C%203">, 탈락)</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5C%7Bm,%20b%5C%7D">: B1, B3, B5, B6 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 지지도 4 (<img src="https://latex.codecogs.com/png.latex?%5Cgeq%203">, 빈발함)</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5C%7Bm,%20j%5C%7D">: B2, B6 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 지지도 2 (<img src="https://latex.codecogs.com/png.latex?%3C%203">, 탈락)</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5C%7Bc,%20b%5C%7D">: B1, B6, B7, B8 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 지지도 4 (<img src="https://latex.codecogs.com/png.latex?%5Cgeq%203">, 빈발함)</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5C%7Bc,%20j%5C%7D">: B4, B6, B7 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 지지도 3 (<img src="https://latex.codecogs.com/png.latex?%5Cgeq%203">, 빈발함)</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5C%7Bb,%20j%5C%7D">: B6, B7 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 지지도 2 (<img src="https://latex.codecogs.com/png.latex?%3C%203">, 탈락)</li>
+</ul></li>
+<li>위의 탐색을 통해, 임계값 3을 넘는 최종적인 모든 빈발 항목 집합은 다음과 같이 도출됩니다: &gt; <strong>Frequent itemsets: <code>{m}, {c}, {b}, {j}, {m, b}, {b, c}, {c, j}</code></strong></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="abstraction-장바구니-모델의-일반화-및-활용" class="level1">
+<h1>6. Abstraction: 장바구니 모델의 일반화 및 활용</h1>
+<p>장바구니 모델(Market-Basket Model)은 단순한 대형 마트의 구매 데이터를 넘어서, 다양한 형태의 데이터를 다룰 수 있는 고도로 <strong>추상화된 모델(Abstract)</strong>입니다.</p>
+<p>데이터가 <strong>다대다 매핑(Many-to-many mapping)</strong>의 구조를 띠고 있기만 하다면, 어떠한 데이터셋이든 이 모델을 적용하여 의미 있는 연관성을 찾을 수 있습니다. 반드시 물리적인 형태의 항목(items)이 장바구니(baskets) “안에(in)” 담겨있을 필요는 없습니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.1/images/bipartite_graph.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Group 1(A~E)의 노드와 Group 2(F~J)의 노드 사이의 다대다 매핑을 보여주는 이분 그래프(Bipartite Graph). 좌측 노드를 장바구니로, 우측 노드를 항목으로 치환하여 생각하면 Market-Basket Model의 추상적 구조를 완벽히 대변합니다.</figcaption>
+</figure>
+</div>
+<p>위 그림처럼 Group 1 집합과 Group 2 집합 사이의 이분 그래프(Bipartite Graph) 구조를 갖는 현실 세계의 문제들은 모두 이 알고리즘의 적용 대상이 될 수 있습니다. 대표적인 예시는 다음과 같습니다:</p>
+<ol type="1">
+<li><strong>주제 탐색 (Topic discovery)</strong>:
+<ul>
+<li>Items = 단어 (Words)</li>
+<li>Baskets = 문서 (Documents)</li>
+<li>특정 문서들에 자주 함께 등장하는 단어들의 묶음을 찾아내어, 숨겨진 토픽을 식별합니다.</li>
+</ul></li>
+<li><strong>표절 탐지 (Plagiarism)</strong>:
+<ul>
+<li>Items = 원본 문서들 (Documents)</li>
+<li>Baskets = 문장들 (Sentences)</li>
+<li>동일한 문장들이 여러 문서에 공통적으로 다수 등장한다면 표절의 증거로 삼을 수 있습니다.</li>
+</ul></li>
+<li><strong>의료 데이터 및 바이오마커 식별 (Biomarkers)</strong>:
+<ul>
+<li>Items = 약물이나 바이오마커 (Drugs)</li>
+<li>Baskets = 환자들 (Patients)</li>
+<li>특정 환자군에서 공통으로 처방된 약물 조합이나, 발현되는 바이오마커의 빈번한 조합을 추적하여 임상적 의의를 발굴합니다.</li>
+</ul></li>
+</ol>
+<p>이처럼 빈발 항목 탐색 알고리즘은 본질적인 추상성을 바탕으로 자연어 처리(NLP), 문서 분석, 생물정보학(Bioinformatics) 등 다양한 도메인에서 강력한 도구로 활용되고 있습니다.</p>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.1/</guid>
+  <pubDate>Wed, 11 Mar 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 4. Frequent Itemsets (Part 2)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.2/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-빈발-항목-집합에서-연관-규칙으로" class="level1">
+<h1>1. Introduction: 빈발 항목 집합에서 연관 규칙으로</h1>
+<p>이전 포스트에서는 대규모 장바구니 데이터에서 특정 빈도 이상 함께 등장하는 <strong>빈발 항목 집합(Frequent Itemsets)</strong>을 찾는 방법을 다루었습니다. 하지만 데이터 마이닝의 궁극적인 목표는 단순히 “무엇이 자주 같이 팔리는가?”를 넘어, <strong>“A를 샀을 때 B를 살 확률은 얼마나 되는가?”</strong>와 같은 실질적인 <strong>연관 규칙(Association Rules)</strong>을 도출하는 것입니다.</p>
+<p>이번 포스트에서는 추출된 빈발 항목 집합을 바탕으로 유의미한 연관 규칙을 생성하고 평가하는 세 가지 핵심 지표(Support, Confidence, Interest)를 알아봅니다. 나아가 너무 많은 규칙이 생성되는 것을 방지하기 위해 결과 집합을 효율적으로 압축하는 방법(Closed &amp; Maximal Itemsets)에 대해 논의하겠습니다.</p>
+<hr>
+</section>
+<section id="association-rules-연관-규칙-정의" class="level1">
+<h1>2. Association Rules (연관 규칙) 정의</h1>
+<p>어떤 장바구니가 항목 집합 <img src="https://latex.codecogs.com/png.latex?I">의 모든 원소를 포함하고 있을 때, 해당 장바구니가 항목 집합 <img src="https://latex.codecogs.com/png.latex?J">의 원소들도 포함할 것이라는 조건부 패턴을 <strong>연관 규칙(Association Rule)</strong>이라고 하며, 기호로는 다음과 같이 표기합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?I%20%5Crightarrow%20J"></p>
+<ul>
+<li><p><strong>가정</strong>: 기본적으로 규칙을 구성하는 두 집합 <img src="https://latex.codecogs.com/png.latex?I">와 <img src="https://latex.codecogs.com/png.latex?J">는 교집합이 없는 서로소(Disjoint) 관계라고 가정합니다 (<img src="https://latex.codecogs.com/png.latex?I%20%5Ccap%20J%20=%20%5Cemptyset">).</p></li>
+<li><p><strong>예시 데이터:</strong></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?B1%20=%20%5C%7Bm,%20c,%20b%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B2%20=%20%5C%7Bm,%20p,%20j%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B3%20=%20%5C%7Bm,%20c,%20b,%20n%5C%7D"> (원 슬라이드의 18p 기준 보강)</li>
+<li><img src="https://latex.codecogs.com/png.latex?B4%20=%20%5C%7Bc,%20j%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B5%20=%20%5C%7Bm,%20p,%20b%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B6%20=%20%5C%7Bm,%20c,%20b,%20j%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B7%20=%20%5C%7Bc,%20b,%20j%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B8%20=%20%5C%7Bb,%20c%5C%7D"></li>
+</ul></li>
+</ul>
+<p>이 데이터에서 도출할 수 있는 직관적인 연관 규칙의 예시는 <img src="https://latex.codecogs.com/png.latex?%5C%7Bm,%20b%5C%7D%20%5Crightarrow%20%5C%7Bc%5C%7D"> 입니다. 이는 “우유(<img src="https://latex.codecogs.com/png.latex?m">)와 맥주(<img src="https://latex.codecogs.com/png.latex?b">)를 산 사람은 콜라(<img src="https://latex.codecogs.com/png.latex?c">)도 살 것이다”라는 가설을 의미합니다.</p>
+<p>이러한 규칙이 통계적으로 유의미한지 어떻게 판단할 수 있을까요? 이를 위해 세 가지 수학적 지표를 도입합니다.</p>
+<hr>
+</section>
+<section id="규칙을-평가하는-핵심-지표-metrics" class="level1">
+<h1>3. 규칙을 평가하는 핵심 지표 (Metrics)</h1>
+<section id="지지도-support" class="level2">
+<h2 class="anchored" data-anchor-id="지지도-support">3.1 지지도 (Support)</h2>
+<p>첫 번째 지표는 <strong>지지도(Support)</strong>입니다. 특정 규칙 <img src="https://latex.codecogs.com/png.latex?I%20%5Crightarrow%20J">가 전체 데이터에서 얼마나 자주 발생하는지를 측정합니다.</p>
+<ul>
+<li><strong>정의</strong>: 규칙 <img src="https://latex.codecogs.com/png.latex?I%20%5Crightarrow%20J">의 지지도는 두 집합의 합집합(<img src="https://latex.codecogs.com/png.latex?I%20%5Ccup%20J">)에 대한 지지도와 동일하게 정의됩니다. <img src="https://latex.codecogs.com/png.latex?support(I%20%5Crightarrow%20J)%20=%20support(I%20%5Ccup%20J)"></li>
+<li><strong>해석</strong>: 지지도가 높을수록 해당 규칙이 보편적으로 자주 발생하는 패턴임을 의미합니다. 빈발 항목 집합의 탐색과 마찬가지로 지지도가 높은 것이 바람직합니다.</li>
+<li><strong>예제</strong>: 위 데이터에서 규칙 <img src="https://latex.codecogs.com/png.latex?%5C%7Bm,%20b%5C%7D%20%5Crightarrow%20c">의 지지도를 구해보면, 합집합인 <img src="https://latex.codecogs.com/png.latex?%5C%7Bm,%20b,%20c%5C%7D">가 포함된 장바구니는 B1, B3, B6이므로 (슬라이드 예시 맥락에 따라) 해당 규칙의 지지도는 데이터셋 구성에 따라 계산됩니다. (본문 예제상 <img src="https://latex.codecogs.com/png.latex?B3=%5C%7Bm,b%5C%7D"> 였다면 <img src="https://latex.codecogs.com/png.latex?support%20=%202">가 됨).</li>
+</ul>
+</section>
+<section id="신뢰도-confidence" class="level2">
+<h2 class="anchored" data-anchor-id="신뢰도-confidence">3.2 신뢰도 (Confidence)</h2>
+<p>두 번째 지표는 <strong>신뢰도(Confidence)</strong>입니다. 지지도가 절대적인 발생 빈도를 의미한다면, 신뢰도는 <strong>조건부 확률(Conditional Probability)</strong>의 개념을 차용합니다.</p>
+<ul>
+<li><strong>정의</strong>: 장바구니에 <img src="https://latex.codecogs.com/png.latex?I">가 이미 존재할 때, <img src="https://latex.codecogs.com/png.latex?J">도 함께 존재할 확률입니다. <img src="https://latex.codecogs.com/png.latex?conf(I%20%5Crightarrow%20J)%20=%20P(J%20%5Cmid%20I)%20=%20%5Cfrac%7BP(I%20%5Ccup%20J)%7D%7BP(I)%7D"> 이는 전체 데이터에 대한 빈도인 support를 활용하여 다음과 같이 나타낼 수 있습니다. <img src="https://latex.codecogs.com/png.latex?conf(I%20%5Crightarrow%20J)%20=%20%5Cfrac%7Bsupport(I%20%5Ccup%20J)%7D%7Bsupport(I)%7D"></li>
+<li><strong>예제</strong>: <img src="https://latex.codecogs.com/png.latex?support(%5C%7Bm,%20b,%20c%5C%7D)%20=%202"> 이고, <img src="https://latex.codecogs.com/png.latex?support(%5C%7Bm,%20b%5C%7D)%20=%204"> 라면, 규칙 <img src="https://latex.codecogs.com/png.latex?%5C%7Bm,%20b%5C%7D%20%5Crightarrow%20c">의 신뢰도는 <img src="https://latex.codecogs.com/png.latex?2%20/%204%20=%200.5"> (50%)가 됩니다.</li>
+</ul>
+</section>
+<section id="관심도-interest" class="level2">
+<h2 class="anchored" data-anchor-id="관심도-interest">3.3 관심도 (Interest)</h2>
+<p>신뢰도가 높은 규칙이라고 해서 무조건 유용한 것은 아닙니다. 예를 들어, 규칙 <img src="https://latex.codecogs.com/png.latex?X%20%5Crightarrow%20milk"> 가 높은 신뢰도를 보였다고 합시다. 만약 우유(milk)가 마트에 온 고객 90%가 기본적으로 구매하는 필수재라면, <img src="https://latex.codecogs.com/png.latex?X">라는 조건이 우유 구매에 미치는 실질적인 영향력은 미미할 것입니다.</p>
+<p>이러한 한계를 보완하기 위해 <strong>관심도(Interest)</strong>라는 지표를 사용합니다.</p>
+<ul>
+<li><strong>정의</strong>: 조건 <img src="https://latex.codecogs.com/png.latex?I">가 주어졌을 때 <img src="https://latex.codecogs.com/png.latex?J">가 발생할 조건부 확률에서, <img src="https://latex.codecogs.com/png.latex?J">의 기본 발생 확률(기저 확률, Prior)을 뺀 값입니다. <img src="https://latex.codecogs.com/png.latex?Interest(I%20%5Crightarrow%20J)%20=%20conf(I%20%5Crightarrow%20J)%20-%20P(J)%20=%20P(J%20%5Cmid%20I)%20-%20P(J)"> 여기서 <img src="https://latex.codecogs.com/png.latex?P(J)">는 전체 장바구니 중 <img src="https://latex.codecogs.com/png.latex?J">를 포함하고 있는 장바구니의 비율을 의미합니다.</li>
+<li><strong>해석</strong>:
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?Interest%20%5Capprox%200">: <img src="https://latex.codecogs.com/png.latex?I">와 <img src="https://latex.codecogs.com/png.latex?J">는 독립적입니다. 즉 규칙의 의미가 없습니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?Interest%20%3E%200">: 양의 상관관계를 가집니다. (<img src="https://latex.codecogs.com/png.latex?I">가 <img src="https://latex.codecogs.com/png.latex?J">의 구매를 촉진함)</li>
+<li><img src="https://latex.codecogs.com/png.latex?Interest%20%3C%200">: 음의 상관관계를 가집니다. (<img src="https://latex.codecogs.com/png.latex?I">를 사면 <img src="https://latex.codecogs.com/png.latex?J">를 사지 않는 경향이 있음)</li>
+</ul></li>
+<li><strong>예제</strong>: 앞서 신뢰도가 <img src="https://latex.codecogs.com/png.latex?0.5">였던 <img src="https://latex.codecogs.com/png.latex?%5C%7Bm,%20b%5C%7D%20%5Crightarrow%20c"> 규칙을 다시 봅시다. 만약 전체 8개의 장바구니 중 <img src="https://latex.codecogs.com/png.latex?c">가 5개에 포함되어 있다면 <img src="https://latex.codecogs.com/png.latex?P(%5C%7Bc%5C%7D)%20=%205/8">입니다. <img src="https://latex.codecogs.com/png.latex?Interest%20=%200.5%20-%20%5Cfrac%7B5%7D%7B8%7D%20=%20-%5Cfrac%7B1%7D%7B8%7D"> 놀랍게도 관심도는 음수입니다! 신뢰도는 50%나 되었지만, 이는 콜라(<img src="https://latex.codecogs.com/png.latex?c">) 자체가 워낙 잘 팔리는 상품이기 때문이지, 우유와 맥주를 샀기 때문이 아니라는 것을 의미합니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="mining-association-rules-연관-규칙-마이닝-알고리즘" class="level1">
+<h1>4. Mining Association Rules (연관 규칙 마이닝 알고리즘)</h1>
+<p>유의미한 연관 규칙을 마이닝하는 목표는 <strong>“최소 지지도 <img src="https://latex.codecogs.com/png.latex?s">와 최소 신뢰도 <img src="https://latex.codecogs.com/png.latex?c">를 동시에 만족하는 모든 규칙을 찾는 것”</strong>입니다. (관심도는 상대적인 척도이므로 보통 임계값을 설정하는 필터링 용도보다는 최종 해석 용도로 쓰입니다.)</p>
+<p>가장 어려운 부분은 앞서 해결한 ’빈발 항목 집합(Frequent Itemsets) 찾기’이며, 이를 구하고 나면 연관 규칙을 도출하는 것은 상대적으로 쉽습니다.</p>
+<section id="규칙-생성-단계-rule-generation" class="level2">
+<h2 class="anchored" data-anchor-id="규칙-생성-단계-rule-generation"><strong>규칙 생성 단계 (Rule Generation):</strong></h2>
+<ul>
+<li><ol type="1">
+<li>미리 찾아둔 모든 빈발 항목 집합 <img src="https://latex.codecogs.com/png.latex?I">를 순회합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><img src="https://latex.codecogs.com/png.latex?I">의 모든 진부분집합 <img src="https://latex.codecogs.com/png.latex?A%20%5Csubset%20I">에 대하여, <img src="https://latex.codecogs.com/png.latex?A%20%5Crightarrow%20I%20%5Csetminus%20A"> 형태의 규칙을 생성합니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li>생성된 규칙의 신뢰도를 평가합니다. <img src="https://latex.codecogs.com/png.latex?conf(A%20%5Crightarrow%20I%20%5Csetminus%20A)%20=%20%5Cfrac%7Bsupport(I)%7D%7Bsupport(A)%7D"></li>
+</ol></li>
+</ul>
+<section id="가지치기-pruning-성질" class="level3">
+<h3 class="anchored" data-anchor-id="가지치기-pruning-성질">가지치기 (Pruning) 성질</h3>
+<p>모든 부분집합에 대해 연관 규칙을 평가하는 것은 비용이 듭니다. 여기서 중요한 수학적 성질을 이용해 연산을 크게 줄일 수 있습니다(Version 2 전략).</p>
+<blockquote class="blockquote">
+<p><strong>“만약 규칙 <img src="https://latex.codecogs.com/png.latex?%5C%7Ba,%20b,%20c%5C%7D%20%5Crightarrow%20%5C%7Bd%5C%7D">가 신뢰도 임계값을 넘지 못했다면, 규칙 <img src="https://latex.codecogs.com/png.latex?%5C%7Ba,%20b%5C%7D%20%5Crightarrow%20%5C%7Bc,%20d%5C%7D"> 역시 신뢰도 임계값을 넘지 못한다.”</strong></p>
+</blockquote>
+</section>
+</section>
+<section id="증명-및-직관적-이해" class="level2">
+<h2 class="anchored" data-anchor-id="증명-및-직관적-이해"><strong>증명 및 직관적 이해:</strong></h2>
+<ul>
+<li>두 규칙의 합집합은 <img src="https://latex.codecogs.com/png.latex?%5C%7Ba,%20b,%20c,%20d%5C%7D">로 동일하므로 분자인 <img src="https://latex.codecogs.com/png.latex?support(I)">는 같습니다. 반면, 부분집합의 지지도는 그 크기가 작아질수록 커지거나 최소한 같습니다. 즉, <img src="https://latex.codecogs.com/png.latex?support(%5C%7Ba,%20b%5C%7D)%20%5Cgeq%20support(%5C%7Ba,%20b,%20c%5C%7D)"> 가 항상 성립합니다.</li>
+<li>따라서 분모가 커지므로, <img src="https://latex.codecogs.com/png.latex?conf(%5C%7Ba,%20b%5C%7D%20%5Crightarrow%20%5C%7Bc,%20d%5C%7D)%20%5Cleq%20conf(%5C%7Ba,%20b,%20c%5C%7D%20%5Crightarrow%20%5C%7Bd%5C%7D)"> 가 성립합니다. 더 조건이 많은 강력한 규칙이 임계값 탈락을 했다면, 약한 규칙은 보나마나 탈락이라는 뜻입니다. 이를 통해 탐색 공간을 극적으로 줄일 수 있습니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="compacting-the-output-규칙-압축-기법" class="level1">
+<h1>5. Compacting the Output: 규칙 압축 기법</h1>
+<p>규모가 큰 데이터셋에서는 임계값을 넘는 연관 규칙이 수백만 개씩 쏟아져 나오게 됩니다. 임계값을 높이는 것 외에 이러한 결과를 의미론적으로 압축(Post-processing)하는 두 가지 기법이 있습니다.</p>
+<p>만약 <img src="https://latex.codecogs.com/png.latex?support(%5C%7BA,%20B,%20C%5C%7D)%20=%20support(%5C%7BA,%20B%5C%7D)"> 라고 가정해 봅시다. 이 경우 <img src="https://latex.codecogs.com/png.latex?%5C%7BA,%20B%5C%7D">를 포함하는 모든 장바구니는 무조건 <img src="https://latex.codecogs.com/png.latex?C">도 포함한다는 뜻입니다. 따라서 <img src="https://latex.codecogs.com/png.latex?%5C%7BA,%20B%5C%7D">를 독립적인 후보군에서 지워버려도 정보의 손실이 없습니다. 이 개념에서 출발한 것이 Closed와 Maximal의 개념입니다.</p>
+<section id="closed-itemsets-닫힌-항목-집합" class="level2">
+<h2 class="anchored" data-anchor-id="closed-itemsets-닫힌-항목-집합">5.1 Closed Itemsets (닫힌 항목 집합)</h2>
+<ul>
+<li><strong>정의</strong>: 자신의 어떠한 직계 상위집합(Immediate superset)도 자신과 동일한 지지도를 가지지 않는 항목 집합.</li>
+<li><strong>장점</strong>: 본래의 모든 빈도 정보를 100% 손실 없이 보존하면서도 불필요한 부분집합들을 안전하게 제거하여 결과를 압축할 수 있습니다.</li>
+<li><strong>단점</strong>: 여전히 남는 규칙의 수가 방대하고 계산이 복잡합니다.</li>
+</ul>
+</section>
+<section id="maximal-frequent-itemsets-최대-빈발-항목-집합" class="level2">
+<h2 class="anchored" data-anchor-id="maximal-frequent-itemsets-최대-빈발-항목-집합">5.2 Maximal Frequent Itemsets (최대 빈발 항목 집합)</h2>
+<ul>
+<li><strong>정의</strong>: 자신의 직계 상위집합 중 그 어떠한 것도 ’빈발(Frequent)’하지 않은 항목 집합. (즉, 지지도 임계값 <img src="https://latex.codecogs.com/png.latex?s"> 이상을 넘는 상위집합이 없는 마지노선 항목)</li>
+<li><strong>장점</strong>: 가지치기 효과가 매우 강력하여 결과를 가장 작은 크기로 압축해주며 처리 속도가 빠릅니다.</li>
+<li><strong>단점</strong>: 압축률이 너무 높은 나머지 그 하위 집합들이 실제로 어느 정도의 지지도를 가졌는지 세부적인 빈도 정보를 상실하게 됩니다. 예를 들어 <img src="https://latex.codecogs.com/png.latex?%5C%7BA,%20B,%20C%5C%7D">가 마지노선으로 저장되었다면, 단일품목 <img src="https://latex.codecogs.com/png.latex?%5C%7BA%5C%7D">가 얼마나 압도적으로 많이 팔렸는지는 데이터베이스에서 날아가 버립니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="pop-quiz-개념-마스터하기" class="level1">
+<h1>6. Pop Quiz: 개념 마스터하기</h1>
+<p>이론을 완벽히 정립하기 위해 슬라이드에 제시된 퀴즈를 단계별로 풀어보겠습니다.</p>
+<ul>
+<li><strong>데이터셋 (지지도 임계값 <img src="https://latex.codecogs.com/png.latex?s=2">):</strong>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?B1">: {apple, butter, milk}</li>
+<li><img src="https://latex.codecogs.com/png.latex?B2">: {apple, butter, banana, walnuts, milk}</li>
+<li><img src="https://latex.codecogs.com/png.latex?B3">: {butter, milk, banana}</li>
+<li><img src="https://latex.codecogs.com/png.latex?B4">: {apple, milk}</li>
+</ul></li>
+</ul>
+<section id="q1.-compute-the-support-for-itemset-apple-butter." class="level3">
+<h3 class="anchored" data-anchor-id="q1.-compute-the-support-for-itemset-apple-butter.">Q1. Compute the support for itemset {apple, butter}.</h3>
+<ul>
+<li><strong>풀이</strong>: 전체 장바구니 중 {apple, butter}를 동시에 포함하는 것을 찾습니다. <img src="https://latex.codecogs.com/png.latex?B1">, <img src="https://latex.codecogs.com/png.latex?B2">가 이에 해당합니다.</li>
+<li><strong>정답</strong>: <strong>2</strong></li>
+</ul>
+</section>
+<section id="q2.-compute-the-confidence-for-the-rule-apple-rightarrow-butter." class="level3">
+<h3 class="anchored" data-anchor-id="q2.-compute-the-confidence-for-the-rule-apple-rightarrow-butter.">Q2. Compute the confidence for the rule {apple} <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> {butter}.</h3>
+<ul>
+<li><strong>풀이</strong>: <img src="https://latex.codecogs.com/png.latex?conf(%5C%7Bapple%5C%7D%20%5Crightarrow%20%5C%7Bbutter%5C%7D)%20=%20%5Cfrac%7Bsupport(%5C%7Bapple,%20butter%5C%7D)%7D%7Bsupport(%5C%7Bapple%5C%7D)%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?support(%5C%7Bapple,%20butter%5C%7D)%20=%202"> (Q1 결과)</li>
+<li><img src="https://latex.codecogs.com/png.latex?support(%5C%7Bapple%5C%7D)%20=%203"> (<img src="https://latex.codecogs.com/png.latex?B1,%20B2,%20B4">)</li>
+<li><strong>정답</strong>: <strong>2/3</strong> (<img src="https://latex.codecogs.com/png.latex?%5Capprox%2066.7%5C%25">)</li>
+</ul>
+</section>
+<section id="q3.-compute-the-interest-of-apple-rightarrow-butter." class="level3">
+<h3 class="anchored" data-anchor-id="q3.-compute-the-interest-of-apple-rightarrow-butter.">Q3. Compute the interest of {apple} <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> {butter}.</h3>
+<ul>
+<li><strong>풀이</strong>: <img src="https://latex.codecogs.com/png.latex?Interest%20=%20conf%20-%20P(%5C%7Bbutter%5C%7D)"></li>
+<li><img src="https://latex.codecogs.com/png.latex?conf%20=%202/3"> (Q2 결과)</li>
+<li><img src="https://latex.codecogs.com/png.latex?P(%5C%7Bbutter%5C%7D)%20=%20%5Cfrac%7Bsupport(%5C%7Bbutter%5C%7D)%7D%7B%5Ctext%7B%EC%A0%84%EC%B2%B4%20%EC%9E%A5%EB%B0%94%EA%B5%AC%EB%8B%88%20%EC%88%98%7D%7D%20=%20%5Cfrac%7B3%7D%7B4%7D"> (<img src="https://latex.codecogs.com/png.latex?B1,%20B2,%20B3"> 에 포함됨)</li>
+<li><img src="https://latex.codecogs.com/png.latex?Interest%20=%20%5Cfrac%7B2%7D%7B3%7D%20-%20%5Cfrac%7B3%7D%7B4%7D%20=%20%5Cfrac%7B8%7D%7B12%7D%20-%20%5Cfrac%7B9%7D%7B12%7D%20=%20-%5Cfrac%7B1%7D%7B12%7D"></li>
+<li><strong>정답</strong>: <strong>-1/12</strong>. (사과를 사는 행위는 버터 구매에 오히려 미세한 음의 영향을 줍니다.)</li>
+</ul>
+</section>
+<section id="q4.-is-apple-butter-maximal-andor-closed" class="level3">
+<h3 class="anchored" data-anchor-id="q4.-is-apple-butter-maximal-andor-closed">Q4. Is {apple, butter} maximal and/or closed?</h3>
+<ul>
+<li><strong>Maximal 판별</strong>: {apple, butter}의 상위 집합 중 ’빈발’한 것(지지도 <img src="https://latex.codecogs.com/png.latex?%5Cge%202">)이 있는지 확인합니다. {apple, butter, milk} 집합이 <img src="https://latex.codecogs.com/png.latex?B1,%20B2">에 속하여 지지도 2를 가집니다. 즉 상위집합이 빈발하므로 <strong>Maximal이 아닙니다(No).</strong></li>
+<li><strong>Closed 판별</strong>: {apple, butter}의 상위 집합 중 ’지지도’가 완전히 동일한 것이 있는지 확인합니다. {apple, butter}의 지지도(2)와 {apple, butter, milk}의 지지도(2)가 동일합니다. 따라서 즉시 상위집합이 동일한 지지도를 가지므로 <strong>Closed가 아닙니다(No).</strong></li>
+<li><strong>정답</strong>: <strong>둘 다 아니다 (No, No)</strong></li>
+</ul>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.2/</guid>
+  <pubDate>Wed, 11 Mar 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 4. Frequent Itemsets (Part 3)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.3/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-현실의-데이터는-너무-크다" class="level1">
+<h1>1. Introduction: 현실의 데이터는 너무 크다</h1>
+<p>지난 포스트들에서는 빈발 항목 집합(Frequent Itemsets)과 연관 규칙(Association Rules)의 개념, 그리고 결과를 유의미하게 압축하는 방법론을 다루었습니다. 이론적으로는 모든 항목 조합을 다 세어보면 될 것 같지만, 현실의 데이터 마이닝 환경에서는 <strong>“어떻게 세어야 하는가(How to count)?”</strong>가 가장 치명적인 문제가 됩니다.</p>
+<p>이번 포스트에서는 장바구니 모델 데이터가 실제 디스크에 어떻게 저장되는지, 그리고 빈발 쌍(Frequent Pairs)을 찾기 위해 메모리 상에서 카운팅을 수행할 때 마주하게 되는 <strong>메인 메모리 병목(Main-Memory Bottleneck)</strong> 현상에 대해 깊이 있게 살펴보겠습니다.</p>
+<hr>
+</section>
+<section id="market-basket-data의-표현과-연산-비용" class="level1">
+<h1>2. Market-Basket Data의 표현과 연산 비용</h1>
+<p>대형 마트나 웹 로그와 같은 장바구니 데이터(Market-Basket Data)는 그 크기가 메인 메모리 용량을 아득히 초과할 정도로 거대합니다. 따라서 이러한 데이터는 일반적으로 분산 파일 시스템(DFS)이나 대용량 파일의 형태로 <strong>장바구니 단위(Basket-by-basket)</strong>로 디스크에 저장됩니다.</p>
+<ul>
+<li>장바구니 하나하나의 크기는 작을 수 있지만, 장바구니의 총 개수와 항목(Items)의 총 가짓수는 천문학적입니다.</li>
+<li>메인 메모리에 전체 데이터를 한 번에 올릴 수 없기 때문에, 알고리즘은 디스크에서 데이터를 읽어오며 연산을 수행해야 합니다.</li>
+</ul>
+<p><strong>Computational Cost (연산 비용의 척도)</strong> 대규모 데이터를 마이닝할 때 진정한 병목 현상은 CPU 연산 속도가 아니라 <strong>디스크 I/O 횟수</strong>에서 발생합니다. 따라서 연관 규칙 탐색 알고리즘의 효율성은 <strong>데이터를 처음부터 끝까지 몇 번 스캔(Pass)하는가</strong>에 의해 결정됩니다. 디스크 접근을 최소화하고, 한 번의 Pass에서 최대한 많은 정보를 메모리에서 처리하는 것이 핵심입니다.</p>
+<hr>
+</section>
+<section id="main-memory-bottleneck-메인-메모리-병목" class="level1">
+<h1>3. Main-Memory Bottleneck (메인 메모리 병목)</h1>
+<p>장바구니 데이터를 스캔하면서 특정 항목이나 조합이 몇 번 등장했는지 카운팅(Counting)하려면, 그 결과값을 저장할 공간이 메인 메모리에 있어야 합니다. 즉, 우리가 추적하고 셀 수 있는 대상의 가짓수는 <strong>메인 메모리의 크기</strong>에 의해 물리적인 한계를 맞이합니다.</p>
+<p>메모리가 부족하다고 해서 가상 메모리로 디스크 스와핑(Swapping in/out)을 시도하는 것은 성능 측면에서 “재앙(Disaster)”에 가깝습니다. 빈번한 디스크 I/O가 발생하여 알고리즘이 사실상 멈춰버리기 때문입니다.</p>
+<p><strong>최적화 기법: 정수 매핑(Integer Mapping)</strong> 메모리를 아끼기 위한 기초적이고 필수적인 테크닉은 항목(Item)의 이름을 문자열 그대로 쓰지 않는 것입니다. 해시 테이블(Hash table)을 구축하여, 식별된 <img src="https://latex.codecogs.com/png.latex?n">개의 서로 다른 고유 항목들을 <img src="https://latex.codecogs.com/png.latex?1">부터 <img src="https://latex.codecogs.com/png.latex?n">까지의 연속된 <strong>정수(Integers)로 변환</strong>합니다. 이를 통해 각 항목은 단 4바이트(int)로 표현될 수 있습니다.</p>
+<hr>
+</section>
+<section id="왜-쌍pairs을-찾는-것이-가장-어려운가" class="level1">
+<h1>4. 왜 ’쌍(Pairs)’을 찾는 것이 가장 어려운가?</h1>
+<p>빈발 항목 집합을 탐색할 때, 가장 연산이 까다롭고 메모리를 많이 잡아먹는 단계는 바로 <strong>빈발 쌍(Frequent pairs, 크기가 2인 부분집합)</strong>을 찾는 과정입니다.</p>
+<ul>
+<li>단일 항목(1-Itemset)은 항목의 총 개수(<img src="https://latex.codecogs.com/png.latex?n">)만큼만 세면 되므로 메모리 부담이 적습니다.</li>
+<li>3개 이상의 묶음(Triples, Quadruples…)은 크기가 커질수록 해당 묶음이 특정 장바구니에 온전히 포함될 <strong>확률이 기하급수적으로(Exponentially) 감소</strong>합니다. 즉, 빈발할 확률이 매우 낮기 때문에 고려해야 할 후보군 자체가 적습니다.</li>
+<li>반면, 2개짜리 쌍(Pairs)은 조합의 수도 <img src="https://latex.codecogs.com/png.latex?O(n%5E2)">으로 매우 많으면서, 동시에 빈발하게 등장할 가능성도 높습니다.</li>
+</ul>
+<p>이러한 이유로 데이터 마이닝 알고리즘들은 우선 빈발 쌍(Pairs)을 효율적으로 찾는 문제에 집중한 뒤, 이를 확장하여 더 큰 집합을 찾도록 설계됩니다.</p>
+<hr>
+</section>
+<section id="메모리-상에서-pairs를-카운팅하는-두-가지-접근법" class="level1">
+<h1>5. 메모리 상에서 Pairs를 카운팅하는 두 가지 접근법</h1>
+<p>모든 가능한 쌍 <img src="https://latex.codecogs.com/png.latex?(i,%20j)">의 등장 횟수(Count)를 메인 메모리에 저장해야 한다고 할 때, 다음과 같은 두 가지 대표적인 자료구조 기법이 존재합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.3/images/counting_pairs_methods.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 메모리 상에서 Item pair의 빈도를 저장하는 두 가지 방식. 왼쪽은 모든 가능한 조합에 대해 4바이트씩 할당하는 Triangular Matrix 방식이며, 오른쪽은 실제 데이터에 등장한(occurring) 조합에 대해서만 12바이트씩 할당하는 Triples 방식을 나타냅니다.</figcaption>
+</figure>
+</div>
+<section id="삼각-행렬-방법-triangular-matrix-method" class="level2">
+<h2 class="anchored" data-anchor-id="삼각-행렬-방법-triangular-matrix-method">5.1 삼각 행렬 방법 (Triangular-Matrix Method)</h2>
+<ul>
+<li><p><strong>원리</strong>: <img src="https://latex.codecogs.com/png.latex?i%20%3C%20j"> 인 모든 쌍 <img src="https://latex.codecogs.com/png.latex?(i,%20j)">에 대해 고정된 1차원 배열(Matrix)을 만들어 카운트를 저장합니다.</p></li>
+<li><p><strong>구조</strong>: 쌍들은 사전식 순서(Lexicographic order)로 저장됩니다.</p>
+<blockquote class="blockquote">
+<p><img src="https://latex.codecogs.com/png.latex?%5C%7B1,2%5C%7D,%20%5C%7B1,3%5C%7D,%20%5Cdots,%20%5C%7B1,n%5C%7D,%20%5C%7B2,3%5C%7D,%20%5C%7B2,4%5C%7D,%20%5Cdots,%20%5C%7Bn-1,%20n%5C%7D"></p>
+</blockquote></li>
+<li><p><strong>비용</strong>: 각 쌍의 등장 횟수를 저장하는 데 <strong>4바이트(정수 1개)</strong>가 필요합니다. 배열의 인덱스 자체가 <img src="https://latex.codecogs.com/png.latex?i">와 <img src="https://latex.codecogs.com/png.latex?j">의 정보를 내포하므로 <img src="https://latex.codecogs.com/png.latex?(i,%20j)"> 자체를 저장할 필요가 없습니다.</p></li>
+</ul>
+</section>
+<section id="트리플-방법-triples-method" class="level2">
+<h2 class="anchored" data-anchor-id="트리플-방법-triples-method">5.2 트리플 방법 (Triples Method)</h2>
+<ul>
+<li><strong>원리</strong>: 실제로 장바구니에 한 번이라도 등장한 쌍에 대해서만 카운트를 저장합니다. 해시 테이블을 이용합니다.</li>
+<li><strong>구조</strong>: <img src="https://latex.codecogs.com/png.latex?(i,%20j,%20count)"> 형태의 트리플(튜플) 구조로 저장합니다.</li>
+<li><strong>비용</strong>: 항목 <img src="https://latex.codecogs.com/png.latex?i"> (4바이트) + 항목 <img src="https://latex.codecogs.com/png.latex?j"> (4바이트) + 등장 횟수 <img src="https://latex.codecogs.com/png.latex?c"> (4바이트) = <strong>1쌍당 12바이트</strong>가 필요합니다. (해시 테이블 관리를 위한 약간의 오버헤드는 별도로 존재합니다.)</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="수학적-비교-언제-어떤-방법이-더-유리한가" class="level1">
+<h1>6. 수학적 비교: 언제 어떤 방법이 더 유리한가?</h1>
+<p>두 방식의 메모리 점유율을 수식으로 비교해 보겠습니다. 전체 항목의 개수를 <img src="https://latex.codecogs.com/png.latex?n">이라고 합시다. 가능한 모든 쌍의 개수는 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bn(n-1)%7D%7B2%7D"> 개입니다.</p>
+<ol type="1">
+<li><strong>Triangular-Matrix의 총 메모리</strong>: <img src="https://latex.codecogs.com/png.latex?Total%20Bytes%20=%204%20%5Ctimes%20%5Cfrac%7Bn(n-1)%7D%7B2%7D">
+<ul>
+<li>이 방식은 실제 쌍의 등장 여부와 관계없이 <strong>항상 고정된 메모리</strong>를 차지합니다.</li>
+</ul></li>
+<li><strong>Triples Method의 총 메모리</strong>: 전체 가능한 쌍 중에서 실제 장바구니 데이터에 한 번이라도 등장하여 <img src="https://latex.codecogs.com/png.latex?count%20%3E%200"> 인 쌍의 비율을 <img src="https://latex.codecogs.com/png.latex?p">라고 합시다. <img src="https://latex.codecogs.com/png.latex?Total%20Bytes%20=%2012%20%5Ctimes%20p%20%5Ctimes%20%5Cfrac%7Bn(n-1)%7D%7B2%7D"></li>
+</ol>
+<p><strong>결론 (The <img src="https://latex.codecogs.com/png.latex?1/3"> Rule)</strong>: Triples 방법이 Triangular-Matrix 방법보다 메모리 측면에서 우수하려면 다음 부등식을 만족해야 합니다. <img src="https://latex.codecogs.com/png.latex?12%20%5Ctimes%20p%20%5Ctimes%20%5Cfrac%7Bn(n-1)%7D%7B2%7D%20%3C%204%20%5Ctimes%20%5Cfrac%7Bn(n-1)%7D%7B2%7D"> <img src="https://latex.codecogs.com/png.latex?12p%20%3C%204%20%5Cimplies%20p%20%3C%20%5Cfrac%7B1%7D%7B3%7D"></p>
+<p>즉, <strong>실제 데이터에 등장하는 항목 쌍의 비율(<img src="https://latex.codecogs.com/png.latex?p">)이 전체 가능한 조합의 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B3%7D"> 미만일 경우</strong>, 희소성(Sparsity)을 띠게 되므로 <strong>Triples 방법(해시 테이블 방식)을 사용하는 것이 유리</strong>합니다. 반대로 데이터가 빽빽하여 대부분의 조합이 한 번 이상 등장한다면 행렬 방식이 유리합니다.</p>
+<hr>
+</section>
+<section id="naïve-algorithm의-한계와-과제" class="level1">
+<h1>7. Naïve Algorithm의 한계와 과제</h1>
+<p>가장 단순한 접근법(Naïve Algorithm)은 메모리 위에 위에서 언급한 구조(Matrix나 Hash Table)를 통째로 올려두고, 데이터를 한 번 스캔(1-Pass)하면서 발견되는 모든 쌍의 카운트를 1씩 올리는 것입니다.</p>
+<p>만약 장바구니 <img src="https://latex.codecogs.com/png.latex?b">가 <img src="https://latex.codecogs.com/png.latex?n_b">개의 항목을 담고 있다면, 이 장바구니 하나에서만 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bn_b(n_b-1)%7D%7B2%7D"> 개의 쌍이 생성되어 카운팅을 요구합니다.</p>
+<ul>
+<li>이 방법은 <img src="https://latex.codecogs.com/png.latex?n"> (전체 항목의 수)이 커지면 메모리가 <img src="https://latex.codecogs.com/png.latex?n%5E2"> 에 비례하여 폭발적으로 증가하기 때문에 곧바로 한계에 부딪힙니다.
+<ul>
+<li><strong>월마트(Wal-Mart)</strong>: 항목 약 <img src="https://latex.codecogs.com/png.latex?100,000">개</li>
+<li><strong>웹 페이지 분석</strong>: 항목 약 <img src="https://latex.codecogs.com/png.latex?10,000,000,000"> (10B) 개</li>
+</ul></li>
+</ul>
+<p>만약 아이템이 <img src="https://latex.codecogs.com/png.latex?1,000,000"> (1M) 개라고 가정해 봅시다. 쌍의 개수는 약 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B10%5E%7B12%7D%7D%7B2%7D"> 개이며, Triangular Matrix 방식을 적용하여 4바이트씩만 곱해도 무려 <strong>2 Terabytes</strong>의 메인 메모리가 필요합니다. 10억(1B) 개라면 상상할 수도 없는 메모리가 요구됩니다.</p>
+<ul>
+<li><strong>“Q: 이렇게 항목이 너무 많을 때 우리는 어떻게 더 나은 탐색을 할 수 있을까요?”</strong>
+<ul>
+<li>메모리에 모든 조합을 올려두고 세는 Naïve 방식은 현실에서 불가능합니다. 이를 영리하게 극복하기 위해 등장한 개념이 바로 다음 포스트에서 다룰 <strong>A-Priori 알고리즘</strong>입니다.</li>
+</ul></li>
+</ul>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.3/</guid>
+  <pubDate>Wed, 11 Mar 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 4. Frequent Itemsets (Part 4)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.4/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-on²-메모리-장벽을-넘어서" class="level1">
+<h1>1. Introduction: O(n²) 메모리 장벽을 넘어서</h1>
+<p>이전 포스트에서는 모든 항목의 조합을 한 번에 탐색하려는 Naïve 알고리즘이 메인 메모리 병목(Main-Memory Bottleneck)으로 인해 실패하는 과정을 확인했습니다. 항목이 수십만 개 이상인 현실의 대규모 장바구니 데이터를 처리하기 위해서는 디스크 접근(Pass)을 최소화하면서도, 메모리 사용량을 지수적으로 줄일 수 있는 영리한 알고리즘이 필요합니다.</p>
+<p>이러한 배경에서 등장한 것이 바로 데이터 마이닝 역사상 가장 상징적인 알고리즘 중 하나인 <strong>A-Priori Algorithm(선험적 알고리즘)</strong>입니다. 이 알고리즘은 <strong>두 번의 데이터 스캔(Two-Pass Approach)</strong>만으로 메모리 사용량을 획기적으로 통제하며, 그 기저에는 수학적 직관인 <strong>단조성(Monotonicity)</strong>이 자리 잡고 있습니다.</p>
+<hr>
+</section>
+<section id="key-idea-monotonicity-단조성" class="level1">
+<h1>2. Key Idea: Monotonicity (단조성)</h1>
+<p>A-Priori 알고리즘의 심장부는 ’단조성(Monotonicity)’이라는 단순명료한 확률적/집합적 성질입니다.</p>
+<blockquote class="blockquote">
+<p><strong>단조성(Monotonicity) 원리</strong> 만약 특정 항목 집합 <img src="https://latex.codecogs.com/png.latex?I">가 최소 지지도 <img src="https://latex.codecogs.com/png.latex?s"> 이상 등장하는 빈발 항목 집합(Frequent Itemset)이라면, <img src="https://latex.codecogs.com/png.latex?I">의 <strong>모든 부분집합(Subset) <img src="https://latex.codecogs.com/png.latex?J%20%5Csubseteq%20I"> 역시 반드시 빈발 항목 집합</strong>이다.</p>
+</blockquote>
+<p>이는 직관적으로 당연합니다. 장바구니 데이터에 우유, 맥주, 기저귀를 동시에 산 사람(집합 <img src="https://latex.codecogs.com/png.latex?I">)이 100명이라면, 최소한 우유와 맥주를 산 사람(집합 <img src="https://latex.codecogs.com/png.latex?J">)은 무조건 100명 이상일 수밖에 없기 때문입니다.</p>
+<p>이 명제의 <strong>대우(Contrapositive)</strong>를 취하면, 조합 탐색의 가지치기(Pruning)를 위한 핵심 법칙이 도출됩니다.</p>
+<blockquote class="blockquote">
+<p><strong>“어떤 단일 항목 <img src="https://latex.codecogs.com/png.latex?i">가 지지도 <img src="https://latex.codecogs.com/png.latex?s">를 넘지 못한다면(빈발하지 않다면), 항목 <img src="https://latex.codecogs.com/png.latex?i">를 포함하는 그 어떠한 쌍(Pair)이나 부분집합도 절대 빈발할 수 없다.”</strong></p>
+</blockquote>
+<p>이 대우 명제를 이용하면, 우리는 처음부터 빈발하지 않은 단일 아이템들을 메모리상에서 과감히 제거해버릴 수 있습니다. 이것이 A-Priori의 핵심 전략입니다.</p>
+<hr>
+</section>
+<section id="a-priori-algorithm-2-pass-approach" class="level1">
+<h1>3. A-Priori Algorithm: 2-Pass Approach</h1>
+<p>A-Priori는 거대한 디스크 데이터를 메모리에 효율적으로 올리기 위해 데이터를 두 번 읽는(Pass 1, Pass 2) 방식으로 동작합니다. 가장 찾기 힘든 <strong>빈발 쌍(Frequent Pairs)</strong>을 찾는 과정을 단계별로 살펴보겠습니다.</p>
+<section id="pass-1-단일-항목의-빈도수-측정" class="level2">
+<h2 class="anchored" data-anchor-id="pass-1-단일-항목의-빈도수-측정">3.1 Pass 1: 단일 항목의 빈도수 측정</h2>
+<p>첫 번째 스캔의 목표는 개별 항목(1-Itemset)들의 등장 횟수를 세고, 이들 중 지지도 <img src="https://latex.codecogs.com/png.latex?s">를 넘는 <strong>빈발 항목(Frequent items)</strong>을 식별하는 것입니다.</p>
+<ol type="1">
+<li><strong>테이블 1</strong>: 데이터베이스에 존재하는 모든 문자열 항목(Item names)을 <img src="https://latex.codecogs.com/png.latex?1">부터 <img src="https://latex.codecogs.com/png.latex?n">까지의 정수(Integers)로 번역하는 매핑 테이블을 생성합니다.</li>
+<li><strong>테이블 2</strong>: 각 항목 <img src="https://latex.codecogs.com/png.latex?1%20%5Cdots%20n">의 빈도를 카운팅할 1차원 정수 배열(Array of counts)을 0으로 초기화하고, 디스크에서 Baskets를 읽어 들이며 카운트를 증가시킵니다.</li>
+<li>이 단계에서 요구되는 메모리 공간은 전체 항목의 개수 <img src="https://latex.codecogs.com/png.latex?n">에만 비례(<img src="https://latex.codecogs.com/png.latex?O(n)">)하므로 매우 작고 안전합니다.</li>
+</ol>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.4/images/apriori_pass1.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: A-Priori Pass 1 메모리 구조. 디스크의 Baskets를 한 번 스캔(Pass 1)하면서 이름-정수 변환 테이블과 각 단일 항목의 발생 횟수를 카운팅하는 1차원 배열을 메인 메모리에 저장합니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="between-pass-1-2-메모리-최적화-재매핑" class="level2">
+<h2 class="anchored" data-anchor-id="between-pass-1-2-메모리-최적화-재매핑">3.2 Between Pass 1 &amp; 2: 메모리 최적화 재매핑</h2>
+<p>Pass 1이 끝난 후, 카운트 배열을 스캔하여 빈도수가 <img src="https://latex.codecogs.com/png.latex?s"> 이상인 항목들만 남깁니다. 이렇게 살아남은 빈발 항목들의 개수를 <img src="https://latex.codecogs.com/png.latex?m">이라고 합시다 (<img src="https://latex.codecogs.com/png.latex?m%20%5Cll%20n">).</p>
+<ul>
+<li>이제 다음 Pass에서 메모리를 획기적으로 줄이기 위해 <strong>인덱스 재배열(Renumbering)</strong>을 수행합니다.
+<ul>
+<li>살아남은 빈발 항목 <img src="https://latex.codecogs.com/png.latex?m">개에 대해서만 <img src="https://latex.codecogs.com/png.latex?1">부터 <img src="https://latex.codecogs.com/png.latex?m">까지 새로운 연속된 정수 인덱스를 부여합니다.</li>
+<li>크기 <img src="https://latex.codecogs.com/png.latex?n">짜리 배열을 새로 생성하여, <img src="https://latex.codecogs.com/png.latex?i">번째 항목이 빈발 항목이면 새로운 번호(<img src="https://latex.codecogs.com/png.latex?1%20%5Cdots%20m">)를 저장하고, 빈발 항목이 아니면 <img src="https://latex.codecogs.com/png.latex?0">을 저장합니다. (이렇게 하면 어떤 항목이 빈발한지 아닌지 <img src="https://latex.codecogs.com/png.latex?O(1)">로 판별 가능해집니다.)</li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.4/images/apriori_remapping.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Pass 1과 Pass 2 사이의 메모리 최적화 과정. 이전의 카운트 배열은 사라지고, 오직 빈발 아이템만이 새로운 번호(1~m)를 부여받은 변환 배열로 교체됩니다. 빈발하지 않은 아이템은 0으로 처리됩니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="pass-2-빈발-쌍pairs-탐색" class="level2">
+<h2 class="anchored" data-anchor-id="pass-2-빈발-쌍pairs-탐색">3.3 Pass 2: 빈발 쌍(Pairs) 탐색</h2>
+<p>두 번째 스캔에서는 디스크에서 Baskets를 처음부터 다시 읽습니다. 하지만 이번에는 모든 것을 세지 않습니다.</p>
+<ol type="1">
+<li>각 장바구니를 읽을 때마다, 포함된 항목들 중 <strong>“빈발 항목(재매핑된 번호가 1~m 사이인 것)”</strong>들만 추려냅니다.</li>
+<li>장바구니 내에 살아남은 빈발 항목들 사이에서만 쌍(Pairs)을 생성합니다. 단조성에 의해, 여기에 속하지 않은 항목이 포함된 쌍은 어차피 빈발할 수 없으므로 무시합니다.</li>
+<li>이 쌍들의 빈도를 저장하기 위해 이전 포스트에서 배운 <strong>삼각 행렬(Triangular matrix)</strong>이나 <strong>트리플(Triples)</strong> 자료구조를 메인 메모리에 할당하여 카운팅합니다.</li>
+</ol>
+<p>이때 소모되는 메모리는 전체 아이템의 제곱(<img src="https://latex.codecogs.com/png.latex?O(n%5E2)">)이 아니라, 빈발 아이템 개수의 제곱(<img src="https://latex.codecogs.com/png.latex?O(m%5E2)">)에 비례하므로 메모리 병목을 완벽히 피할 수 있습니다!</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.4/images/apriori_pass2.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: A-Priori Pass 2 메모리 구조. 두 번째 데이터 스캔 시, 오직 1부터 m까지 매핑된 빈발 아이템 간의 조합(Pairs)에 대해서만 카운팅 행렬(Triangular matrix)을 생성하여 연산을 수행합니다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+<section id="k-tuple의-확장-the-a-priori-pipeline" class="level1">
+<h1>4. K-tuple의 확장: The A-Priori Pipeline</h1>
+<p>쌍(Pairs, 2-tuples)을 넘어 크기 <img src="https://latex.codecogs.com/png.latex?k">의 다중 항목 집합을 찾기 위해서 A-Priori 알고리즘은 <strong>Generate-and-Test 파이프라인</strong>을 반복합니다. 각 단계 <img src="https://latex.codecogs.com/png.latex?k">에서 우리는 두 개의 집합을 정의합니다: * <img src="https://latex.codecogs.com/png.latex?C_k"> (Candidate): 조건을 통과하여 빈발할 “가능성”이 있는 크기 <img src="https://latex.codecogs.com/png.latex?k">의 후보 집합 * <img src="https://latex.codecogs.com/png.latex?L_k"> (Large/Frequent): 실제 Baskets를 카운팅한 결과, 지지도 임계값을 통과한 진정한 빈발 <img src="https://latex.codecogs.com/png.latex?k">-집합</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.4/images/apriori_pipeline.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: K-tuple 탐색 파이프라인. 전체 아이템에서 시작하여 C_k (Candidate)를 구성하고 필터링(Filter)하여 L_k (Frequent)를 남깁니다. 이 L_k를 이용해 다시 C_{k+1}을 Construct하는 순환 고리를 형성합니다.</figcaption>
+</figure>
+</div>
+<section id="pipeline-process" class="level3">
+<h3 class="anchored" data-anchor-id="pipeline-process"><strong>Pipeline Process:</strong></h3>
+<ul>
+<li><ol type="1">
+<li><img src="https://latex.codecogs.com/png.latex?All%20%5C%20Items%20%5Crightarrow%20C_1%20%5Cxrightarrow%7BFilter%7D%20L_1"> (이 단계가 Pass 1)</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><img src="https://latex.codecogs.com/png.latex?L_1%20%5Cxrightarrow%7BConstruct%7D%20C_2%20%5Cxrightarrow%7BFilter%7D%20L_2"> (이 단계가 Pass 2)</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><img src="https://latex.codecogs.com/png.latex?L_2%20%5Cxrightarrow%7BConstruct%7D%20C_3%20%5Cxrightarrow%7BFilter%7D%20L_3%20%5Cdots"></li>
+</ol></li>
+</ul>
+</section>
+<section id="construct-단계의-엄밀한-조건-example" class="level2">
+<h2 class="anchored" data-anchor-id="construct-단계의-엄밀한-조건-example">4.1 Construct 단계의 엄밀한 조건 (Example)</h2>
+<p><img src="https://latex.codecogs.com/png.latex?L_%7Bk-1%7D">로부터 <img src="https://latex.codecogs.com/png.latex?C_k">를 생성(Construct)할 때는 단순한 조합이 아니라 <strong>단조성 원칙을 극한으로 적용</strong>해야 합니다. <img src="https://latex.codecogs.com/png.latex?C_k">의 후보가 되려면, 그 집합의 <strong>모든 크기 <img src="https://latex.codecogs.com/png.latex?k-1"> 짜리 부분집합이 전부 <img src="https://latex.codecogs.com/png.latex?L_%7Bk-1%7D"> 안에 존재</strong>해야만 합니다. 하나라도 없다면 탈락입니다.</p>
+<ul>
+<li><strong>예제 상황:</strong>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?C_1%20=%20%5C%7B%5C%7B1%5C%7D,%20%5C%7B2%5C%7D,%20%5C%7B3%5C%7D,%20%5C%7B4%5C%7D,%20%5C%7B5%5C%7D,%20%5Cdots,%20%5C%7B10%5C%7D%5C%7D"></li>
+<li><strong>Filter</strong>: 지지도 계산 후 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <img src="https://latex.codecogs.com/png.latex?L_1%20=%20%5C%7B%5C%7B1%5C%7D,%20%5C%7B2%5C%7D,%20%5C%7B3%5C%7D,%20%5C%7B4%5C%7D,%20%5C%7B5%5C%7D%5C%7D"></li>
+<li><strong>Construct</strong>: <img src="https://latex.codecogs.com/png.latex?L_1"> 내에서 2개씩 짝짓기 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <img src="https://latex.codecogs.com/png.latex?C_2%20=%20%5C%7B%5C%7B1,2%5C%7D,%20%5C%7B1,3%5C%7D,%20%5Cdots,%20%5C%7B4,5%5C%7D%5C%7D"></li>
+<li><strong>Filter</strong>: 지지도 계산 후 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <img src="https://latex.codecogs.com/png.latex?L_2%20=%20%5C%7B%5C%7B1,2%5C%7D,%20%5C%7B2,3%5C%7D,%20%5C%7B2,4%5C%7D,%20%5C%7B3,4%5C%7D,%20%5C%7B4,5%5C%7D%5C%7D"></li>
+</ul></li>
+<li>자, 이제 <img src="https://latex.codecogs.com/png.latex?L_2">를 바탕으로 <img src="https://latex.codecogs.com/png.latex?C_3"> 후보를 생성해 봅시다.
+<ul>
+<li><strong>후보 <img src="https://latex.codecogs.com/png.latex?%5C%7B2,%203,%204%5C%7D"></strong>: 이것의 크기 2짜리 부분집합은 <img src="https://latex.codecogs.com/png.latex?%5C%7B2,3%5C%7D,%20%5C%7B2,4%5C%7D,%20%5C%7B3,4%5C%7D"> 입니다. 세 개 모두 <img src="https://latex.codecogs.com/png.latex?L_2"> 안에 존재하므로 합격! <strong><img src="https://latex.codecogs.com/png.latex?C_3">에 편입</strong>됩니다.</li>
+<li><strong>후보 <img src="https://latex.codecogs.com/png.latex?%5C%7B1,%202,%203%5C%7D"></strong>: 부분집합은 <img src="https://latex.codecogs.com/png.latex?%5C%7B1,2%5C%7D,%20%5C%7B1,3%5C%7D,%20%5C%7B2,3%5C%7D"> 입니다. 이 중 <img src="https://latex.codecogs.com/png.latex?%5C%7B1,3%5C%7D">은 <img src="https://latex.codecogs.com/png.latex?L_2">에 없습니다. 단조성 원리에 의해 합격될 리 없으므로 즉시 <strong>기각(Prune) 및 탈락!</strong></li>
+<li><strong>후보 <img src="https://latex.codecogs.com/png.latex?%5C%7B2,%204,%205%5C%7D"></strong>: 부분집합 <img src="https://latex.codecogs.com/png.latex?%5C%7B2,5%5C%7D">가 <img src="https://latex.codecogs.com/png.latex?L_2">에 없으므로 <strong>탈락!</strong></li>
+</ul></li>
+</ul>
+<p>이러한 방식으로 후보군 <img src="https://latex.codecogs.com/png.latex?C"> 자체를 기하급수적으로 줄이는 것이 A-Priori의 강력함입니다.</p>
+<hr>
+</section>
+</section>
+<section id="pop-quiz-a-priori-알고리즘-직접-적용해-보기" class="level1">
+<h1>5. Pop Quiz: A-Priori 알고리즘 직접 적용해 보기</h1>
+<p>이론을 체화하기 위해 슬라이드 마지막에 제시된 퀴즈를 직접 수행해 보겠습니다.</p>
+<section id="조건" class="level2">
+<h2 class="anchored" data-anchor-id="조건"><strong>조건:</strong></h2>
+<ul>
+<li>지지도 임계값 <img src="https://latex.codecogs.com/png.latex?s=3"></li>
+<li>장바구니 데이터:
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?B1%20=%20%5C%7Bapple,%20butter,%20milk%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B2%20=%20%5C%7Bapple,%20butter,%20banana,%20walnuts,%20milk%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B3%20=%20%5C%7Bbutter,%20milk%5C%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?B4%20=%20%5C%7Bapple,%20milk%5C%7D"></li>
+</ul></li>
+</ul>
+</section>
+<section id="step-1-pass-1-c_1-카운팅-및-l_1-도출" class="level2">
+<h2 class="anchored" data-anchor-id="step-1-pass-1-c_1-카운팅-및-l_1-도출"><strong>[Step 1] Pass 1: <img src="https://latex.codecogs.com/png.latex?C_1"> 카운팅 및 <img src="https://latex.codecogs.com/png.latex?L_1"> 도출</strong></h2>
+<ul>
+<li>디스크를 1회 스캔하여 각 아이템의 등장 빈도를 셉니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?apple">: B1, B2, B4 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 3</li>
+<li><img src="https://latex.codecogs.com/png.latex?butter">: B1, B2, B3 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 3</li>
+<li><img src="https://latex.codecogs.com/png.latex?milk">: B1, B2, B3, B4 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 4</li>
+<li><img src="https://latex.codecogs.com/png.latex?banana">: B2 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 1</li>
+<li><img src="https://latex.codecogs.com/png.latex?walnuts">: B2 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 1</li>
+</ul></li>
+<li>임계값 <img src="https://latex.codecogs.com/png.latex?s=3">을 적용하여 필터링(<img src="https://latex.codecogs.com/png.latex?Filter">)합니다.
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?L_1%20=%20%5C%7Bapple,%20butter,%20milk%5C%7D"></strong> (banana와 walnuts는 가지치기 당하여 영구 탈락합니다.)</li>
+</ul></li>
+</ul>
+</section>
+<section id="step-2-pass-2를-위한-c_2-생성-construct" class="level2">
+<h2 class="anchored" data-anchor-id="step-2-pass-2를-위한-c_2-생성-construct"><strong>[Step 2] Pass 2를 위한 <img src="https://latex.codecogs.com/png.latex?C_2"> 생성 (Construct)</strong></h2>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?L_1">의 요소들을 이용해 생성 가능한 모든 쌍의 조합을 구성합니다.
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?C_2%20=%20%5C%7B%5C%7Bapple,%20butter%5C%7D,%20%5C%7Bapple,%20milk%5C%7D,%20%5C%7Bbutter,%20milk%5C%7D%5C%7D"></strong></li>
+</ul></li>
+</ul>
+</section>
+<section id="step-3-pass-2-c_2-카운팅-및-l_2-도출" class="level2">
+<h2 class="anchored" data-anchor-id="step-3-pass-2-c_2-카운팅-및-l_2-도출"><strong>[Step 3] Pass 2: <img src="https://latex.codecogs.com/png.latex?C_2"> 카운팅 및 <img src="https://latex.codecogs.com/png.latex?L_2"> 도출</strong></h2>
+<ul>
+<li>데이터베이스를 다시 스캔하여 <img src="https://latex.codecogs.com/png.latex?C_2">에 포함된 쌍들의 빈도를 카운팅합니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5C%7Bapple,%20butter%5C%7D">: B1, B2 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 2 (지지도 미달)</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5C%7Bapple,%20milk%5C%7D">: B1, B2, B4 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 3</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5C%7Bbutter,%20milk%5C%7D">: B1, B2, B3 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 3</li>
+</ul></li>
+<li>임계값 <img src="https://latex.codecogs.com/png.latex?s=3">을 적용하여 필터링합니다.
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?L_2%20=%20%5C%7B%5C%7Bapple,%20milk%5C%7D,%20%5C%7Bbutter,%20milk%5C%7D%5C%7D"></strong></li>
+</ul></li>
+</ul>
+</section>
+<section id="step-4-c_3-생성-시도-및-종료" class="level2">
+<h2 class="anchored" data-anchor-id="step-4-c_3-생성-시도-및-종료"><strong>[Step 4] <img src="https://latex.codecogs.com/png.latex?C_3"> 생성 시도 및 종료</strong></h2>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?L_2">를 바탕으로 크기 3의 집합 <img src="https://latex.codecogs.com/png.latex?C_3"> 생성을 시도합니다. 유일한 조합은 <img src="https://latex.codecogs.com/png.latex?%5C%7Bapple,%20butter,%20milk%5C%7D"> 입니다. 하지만 이 집합의 부분집합 중 하나인 <img src="https://latex.codecogs.com/png.latex?%5C%7Bapple,%20butter%5C%7D">가 <img src="https://latex.codecogs.com/png.latex?L_2">에 존재하지 않습니다. 따라서 A-Priori의 단조성 규칙에 의해 후보군을 생성할 수 없습니다.
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?C_3%20=%20%5Cemptyset"></strong></li>
+</ul></li>
+<li>더 이상 탐색할 빈발 항목이 없으므로 알고리즘이 성공적으로 <strong>종료</strong>됩니다.</li>
+</ul>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.4/</guid>
+  <pubDate>Wed, 11 Mar 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>[Deep Learning] 3. Neural Networks (Part 1)</title>
   <dc:creator>유성현 </dc:creator>
@@ -3140,948 +3827,6 @@ font-style: inherit;">+=</span> count</span>
   <category>Data Mining</category>
   <guid>https://shsha0110.github.io/posts/Data Mining/2.MapReduce/2.2/</guid>
   <pubDate>Wed, 04 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Data Mining] 2. MapReduce (Part 3)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Data Mining/2.MapReduce/2.3/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>1. Introduction</h1>
-<ul>
-<li>[Part 1]에서는 분산 시스템의 인프라를, [Part 2]에서는 프로그래밍 모델(Map &amp; Reduce)을 다루었습니다.</li>
-<li>이번 마지막 포스트에서는 MapReduce가 실제 클러스터에서 어떻게 <strong>실행(Execution)</strong>되고, 수천 대의 노드 중 일부가 고장 났을 때 어떻게 <strong>복구(Fault Tolerance)</strong>하는지, 그리고 구글의 핵심 알고리즘인 <strong>PageRank(Matrix-Vector Multiplication)</strong>가 이 위에서 어떻게 돌아가는지 상세히 살펴봅니다.</li>
-</ul>
-<hr>
-</section>
-<section id="mapreduce-execution-workflow" class="level1">
-<h1>2. MapReduce Execution Workflow</h1>
-<ul>
-<li>사용자가 MapReduce 코드를 실행하면 내부적으로 어떤 일이 벌어질까요? 전체 프로세스는 <strong>Master-Worker</strong> 구조로 돌아갑니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/2.MapReduce/2.3/images/execution_flow.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: MapReduce 프로그램 실행 구조. User Program이 실행되면 Master와 여러 Worker 프로세스가 Fork된다. Master는 Worker들에게 Map 또는 Reduce 작업을 할당(Assign)하고, 데이터는 Worker들 사이에서 이동한다.</figcaption>
-</figure>
-</div>
-<section id="roles-of-processes" class="level2">
-<h2 class="anchored" data-anchor-id="roles-of-processes">2.1. Roles of Processes</h2>
-<ul>
-<li><ol type="1">
-<li><strong>Master Controller</strong></li>
-</ol>
-<ul>
-<li><strong>Scheduler</strong>: 전체 시스템의 지휘자입니다. Map과 Reduce 태스크를 유휴 상태(Idle)인 Worker들에게 할당합니다.</li>
-<li><strong>Monitor</strong>: 각 태스크의 상태(Idle, Executing, Completed)를 추적합니다.</li>
-<li><strong>Coordinator</strong>: Map 태스크가 어디서 끝났고, 그 결과 파일이 어디에 있는지 Reduce 태스크에게 알려줍니다.</li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>Workers</strong></li>
-</ol>
-<ul>
-<li>실제 연산을 수행하는 프로세스입니다.</li>
-<li>한 Worker는 시점에 따라 Map 태스크를 맡을 수도, Reduce 태스크를 맡을 수도 있습니다 (동시에는 안 함).</li>
-<li>작업이 끝나면 Master에게 “완료 보고”를 합니다.</li>
-</ul></li>
-</ul>
-</section>
-<section id="data-flow-pipelining" class="level2">
-<h2 class="anchored" data-anchor-id="data-flow-pipelining">2.2. Data Flow &amp; Pipelining</h2>
-<ul>
-<li><p>MapReduce는 모든 Map이 다 끝날 때까지 멍하니 기다리지 않습니다. <strong>Pipelining</strong>을 통해 효율을 극대화합니다.</p></li>
-<li><p><strong>Map Task Output</strong>: Map Worker의 <strong>로컬 디스크(Local Disk)</strong>에 중간 파일(Intermediate Files)로 저장됩니다.</p></li>
-<li><p><strong>Reduce Task Input</strong>: Reduce Worker는 Map 작업이 하나라도 끝나면 즉시 데이터를 읽어오기 시작(Copying/Shuffling)합니다.</p></li>
-<li><p><strong>Execution</strong>: 단, 실제 <code>Reduce()</code> 함수 실행은 필요한 모든 파티션의 데이터를 다 가져온 후에 시작됩니다.</p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/2.MapReduce/2.3/images/pipelining.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: MapReduce의 파이프라이닝. Reduce Worker들은 Map 작업이 완료되는 즉시 데이터를 읽어오기 시작하여 전체 대기 시간을 줄인다.</figcaption>
-</figure>
-</div>
-<hr>
-</section>
-</section>
-<section id="coping-with-node-failures" class="level1">
-<h1>3. Coping with Node Failures</h1>
-<ul>
-<li>수천 대의 머신에서 장애는 일상입니다. MapReduce의 가장 강력한 기능은 <strong>사용자 개입 없이 시스템이 알아서 장애를 복구</strong>한다는 점입니다.</li>
-</ul>
-<section id="master-failure" class="level2">
-<h2 class="anchored" data-anchor-id="master-failure">3.1. Master Failure</h2>
-<ul>
-<li><strong>증상</strong>: 지휘자가 사라졌으므로 상태 관리가 불가능합니다.</li>
-<li><strong>대응</strong>: 현재로서는 <strong>작업 전체를 재시작(Restart entire job)</strong>하는 수밖에 없습니다. 하지만 Master는 단 한 대뿐이므로 확률적으로 매우 드뭅니다.</li>
-</ul>
-</section>
-<section id="map-worker-failure" class="level2">
-<h2 class="anchored" data-anchor-id="map-worker-failure">3.2. Map Worker Failure</h2>
-<ul>
-<li><strong>상황</strong>: Map 태스크를 수행하던 노드가 죽었습니다.</li>
-<li><strong>대응</strong>:
-<ul>
-<li><strong>진행 중(In-progress)인 작업</strong>: 당연히 다른 Worker에게 재할당하여 다시 실행합니다.</li>
-<li><strong>완료된(Completed) 작업</strong>: <strong>이 경우에도 다시 실행해야 합니다!</strong>
-<ul>
-<li><strong>Why?</strong>: Map의 결과물은 HDFS(글로벌)가 아니라 해당 노드의 <strong>로컬 디스크</strong>에 저장되기 때문입니다. 노드가 죽으면 그 로컬 파일도 접근 불가능해지므로, 다시 계산해야 합니다.</li>
-</ul></li>
-</ul></li>
-</ul>
-</section>
-<section id="reduce-worker-failure" class="level2">
-<h2 class="anchored" data-anchor-id="reduce-worker-failure">3.3. Reduce Worker Failure</h2>
-<ul>
-<li><strong>상황</strong>: Reduce 태스크를 수행하던 노드가 죽었습니다.</li>
-<li><strong>대응</strong>:
-<ul>
-<li><strong>진행 중인 작업</strong>: 다른 Worker에게 재할당하여 다시 실행합니다.</li>
-<li><strong>완료된 작업</strong>: <strong>다시 실행할 필요가 없습니다.</strong></li>
-<li><strong>Why?</strong>: Reduce의 최종 결과물은 <strong>DFS(Distributed File System)</strong>에 저장되어 3중 복제(Replication)되므로, 노드가 죽어도 데이터는 안전합니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="tuning-number-of-reduce-tasks" class="level1">
-<h1>4. Tuning: Number of Reduce Tasks</h1>
-<ul>
-<li><p>MapReduce 성능 최적화의 핵심 파라미터 중 하나는 “Reduce Task의 개수(<img src="https://latex.codecogs.com/png.latex?R">)”를 몇 개로 설정할 것인가입니다.</p></li>
-<li><p><strong>이상적인 경우</strong>: <img src="https://latex.codecogs.com/png.latex?R">을 Key의 개수만큼 늘리면 병렬성이 극대화될 것 같지만, 오버헤드가 너무 큽니다.</p></li>
-<li><p><strong>현실적인 문제</strong>:</p>
-<ul>
-<li>Key의 개수는 수십억 개에 달할 수 있습니다.</li>
-<li>Key마다 데이터 양의 편차(Skew)가 큽니다 (예: ‘the’ 단어 vs 희귀 단어).</li>
-</ul></li>
-<li><p><strong>Rule of Thumb</strong>: <img src="https://latex.codecogs.com/png.latex?%5C#%20of%20Nodes%20%3C%20%5C#%20of%20Reduce%20Tasks%20%3C%20%5C#%20of%20Keys"></p>
-<ul>
-<li>보통 노드 수보다 조금 더 많게 설정하여, 한 태스크가 빨리 끝나면 바로 다음 태스크를 가져와 로드 밸런싱이 되도록 합니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="algorithm-matrix-vector-multiplication" class="level1">
-<h1>5. Algorithm: Matrix-Vector Multiplication</h1>
-<ul>
-<li>MapReduce는 원래 구글의 <strong>PageRank</strong> 계산을 위해 탄생했습니다. PageRank의 핵심 연산은 거대한 인접 행렬 <img src="https://latex.codecogs.com/png.latex?M">과 중요도 벡터 <img src="https://latex.codecogs.com/png.latex?v">의 곱셈입니다. <img src="https://latex.codecogs.com/png.latex?x%20=%20Mv%20%5Cquad%20%5CRightarrow%20%5Cquad%20x_i%20=%20%5Csum_%7Bj=1%7D%5E%7Bn%7D%20m_%7Bij%7D%20v_j">
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?n">은 웹 페이지의 개수로, 수백억(Tens of billions) 단위입니다.</li>
-</ul></li>
-</ul>
-<section id="case-1-vector-v-fits-in-main-memory" class="level2">
-<h2 class="anchored" data-anchor-id="case-1-vector-v-fits-in-main-memory">5.1. Case 1: Vector <img src="https://latex.codecogs.com/png.latex?v"> fits in Main Memory</h2>
-<ul>
-<li><p>행렬 <img src="https://latex.codecogs.com/png.latex?M">은 너무 커서 디스크에 있지만, 벡터 <img src="https://latex.codecogs.com/png.latex?v">는 메모리에 들어갈 정도로 작다고 가정해 봅시다.</p></li>
-<li><p><strong>Map Function</strong>:</p>
-<ul>
-<li>입력: <img src="https://latex.codecogs.com/png.latex?((i,%20j),%20m_%7Bij%7D)"> (행렬의 원소 하나)</li>
-<li>동작: 메모리에 있는 전역 벡터 <img src="https://latex.codecogs.com/png.latex?v">에서 <img src="https://latex.codecogs.com/png.latex?v_j">를 읽어와 곱합니다.</li>
-<li>출력: Key=<img src="https://latex.codecogs.com/png.latex?i">, Value=<img src="https://latex.codecogs.com/png.latex?m_%7Bij%7D%20v_j"></li>
-</ul></li>
-<li><p><strong>Reduce Function</strong>:</p>
-<ul>
-<li>입력: Key=<img src="https://latex.codecogs.com/png.latex?i">, Values=<img src="https://latex.codecogs.com/png.latex?%5Bm_%7Bi1%7Dv_%7B1%7D,%20m_%7Bi2%7Dv_%7B2%7D,%20...%5D"></li>
-<li>동작: 리스트의 값을 모두 더합니다. (<img src="https://latex.codecogs.com/png.latex?%5Csum_j%20m_%7Bij%7D%20v_j">)</li>
-<li>출력: <img src="https://latex.codecogs.com/png.latex?(i,%20x_i)"></li>
-</ul></li>
-</ul>
-</section>
-<section id="case-2-vector-v-is-too-large-stripes-method" class="level2">
-<h2 class="anchored" data-anchor-id="case-2-vector-v-is-too-large-stripes-method">5.2. Case 2: Vector <img src="https://latex.codecogs.com/png.latex?v"> is too large (Stripes Method)</h2>
-<ul>
-<li>벡터 <img src="https://latex.codecogs.com/png.latex?v">조차 너무 커서 메모리에 다 올릴 수 없다면 어떻게 할까요? <strong>Stripe(띠)</strong> 방식으로 쪼개서 처리해야 합니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/2.MapReduce/2.3/images/matrix_stripes.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: Stripes Method. 행렬 M을 세로 띠(Vertical Stripes)로, 벡터 v를 가로 띠(Horizontal Stripes)로 나눈다. 각 띠의 너비와 높이를 맞춰서, 한 번에 처리해야 할 벡터의 조각이 메모리에 들어오도록 한다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><ol type="1">
-<li><strong>Divide</strong>: 행렬 <img src="https://latex.codecogs.com/png.latex?M">을 세로 띠(Vertical Stripes)로 나누고, 벡터 <img src="https://latex.codecogs.com/png.latex?v">를 가로 띠(Horizontal Stripes)로 나눕니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>Constraint</strong>: 한 번에 처리할 벡터의 띠 하나가 메모리에 들어갈 수 있도록 크기를 조절합니다.</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><strong>Process</strong>: 각 Map Worker는 행렬의 특정 띠 부분과 벡터의 대응되는 띠 부분만 로드하여 부분 곱(Partial Product)을 계산합니다.</li>
-</ol></li>
-<li><ol start="4" type="1">
-<li><strong>Result</strong>: 이후 Reduce 단계에서 부분 합들을 모아 최종 결과를 만듭니다.</li>
-</ol></li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Data Mining</category>
-  <guid>https://shsha0110.github.io/posts/Data Mining/2.MapReduce/2.3/</guid>
-  <pubDate>Wed, 04 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Machine Learning] 1. Introduction</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Machine Learing/1.Introduction/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-what-is-machine-learning" class="level1">
-<h1>1. Introduction: What is Machine Learning?</h1>
-<ul>
-<li><p>전통적인 프로그래밍이 규칙(Rule)을 사람이 직접 작성하여 데이터를 처리했다면, <strong>머신러닝(Machine Learning)</strong>은 데이터로부터 의사결정(Decision)이나 예측(Prediction)을 수행하는 모델을 학습하는 과정입니다.</p></li>
-<li><p>가장 직관적인 예시로 사진 분류를 들 수 있습니다. 우리가 찍은 사진이 “풍경(Landscape)”인지 “음식(Food)”인지 구분하는 문제를 생각해봅시다.</p></li>
-<li><p>이처럼 머신러닝의 주된 초점은 <strong>데이터(Data)에 기반하여 유용한 결정이나 예측을 내리는 것</strong>입니다. 얼굴 인식(Face detection)이나 음성 인식(Speech recognition) 등이 대표적인 예입니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="foundations-assumptions-and-goals" class="level1">
-<h1>2. Foundations: Assumptions and Goals</h1>
-<ul>
-<li>과거의 데이터를 가지고 미래를 예측한다는 것은 논리적으로 비약이 있을 수 있습니다. 이를 수학적, 통계적으로 정당화하기 위해 머신러닝에서는 중요한 가정과 목표를 설정합니다.</li>
-</ul>
-<section id="the-iid-assumption" class="level2">
-<h2 class="anchored" data-anchor-id="the-iid-assumption">2.1. The IID Assumption</h2>
-<ul>
-<li>우리가 수집한 학습 데이터(Training Data)가 미래의 데이터(Query)를 대변할 수 있으려면, 다음과 같은 강력한 가정이 필요합니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>I.I.D. (Independent and Identically Distributed)</strong></p>
-<ol type="1">
-<li>모든 학습 데이터는 서로 <strong>독립적(Independent)</strong>이다.</li>
-<li>학습 데이터와 테스트 데이터(Query)는 <strong>동일한 확률 분포(Identically Distributed)</strong>에서 추출된다.</li>
-</ol>
-</blockquote>
-<ul>
-<li>이 가정이 성립해야만 과거의 데이터로 학습한 모델이 미래의 상황에서도 작동할 것이라고 기대할 수 있습니다.</li>
-</ul>
-</section>
-<section id="two-main-problems" class="level2">
-<h2 class="anchored" data-anchor-id="two-main-problems">2.2. Two Main Problems</h2>
-<ul>
-<li>머신러닝이 해결해야 할 근본적인 문제는 크게 두 가지로 요약됩니다.
-<ul>
-<li><ol type="1">
-<li><strong>Estimation (추정)</strong>:</li>
-</ol>
-<ul>
-<li>데이터에는 필연적으로 잡음(Noise)이 섞여 있습니다. (예: 같은 치료를 받아도 환자마다 결과가 다를 수 있음)</li>
-<li>이러한 잡음이 섞인 데이터를 집계하여 <strong>정확한 예측값</strong>을 찾아내는 과정입니다.</li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>Generalization (일반화)</strong>:</li>
-</ol>
-<ul>
-<li>학습 과정에서 보지 못한(Unseen) 새로운 상황이나 실험에 대해 결과를 예측하는 능력입니다.</li>
-<li>단순히 주어진 데이터를 외우는 것이 아니라, 데이터 너머의 통찰(Insight)을 확장하는 것이 목표입니다.</li>
-</ul></li>
-</ul></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="problem-characteristics-solutions" class="level1">
-<h1>3. Problem Characteristics &amp; Solutions</h1>
-<ul>
-<li><p>머신러닝 문제를 구조적으로 바라보기 위해 문제(Problem)와 해결책(Solution)의 특성을 나누어 생각할 수 있습니다.</p></li>
-<li><p><strong>Problem Characteristics</strong>:</p>
-<ul>
-<li><strong>Problem Class</strong>: 학습 데이터의 성격과 테스트 시 주어지는 질문(Query)의 유형. (예: 지도 학습 vs 비지도 학습)</li>
-<li><strong>Assumptions</strong>: 데이터 소스나 솔루션의 형태에 대한 사전 지식.</li>
-<li><strong>Evaluation Criteria</strong>: 시스템의 성능을 어떻게 측정할 것인가?</li>
-</ul></li>
-<li><p><strong>Solution Characteristics</strong>:</p>
-<ul>
-<li><strong>Model Type</strong>: 데이터의 어떤 측면을 모델링할 것인가?</li>
-<li><strong>Model Class</strong>: 어떤 파라미터화된 모델 군(Parametric class)을 사용할 것인가? (예: 선형 모델, 신경망 등)</li>
-<li><strong>Algorithm</strong>: 모델을 데이터에 적합(Fitting)시키고 예측을 수행하는 계산 과정.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="problem-class-supervised-learning-sl" class="level1">
-<h1>4. Problem Class: Supervised Learning (SL)</h1>
-<ul>
-<li><strong>지도 학습(Supervised Learning)</strong>은 학습 시스템에 <strong>입력(Input)</strong>과 그에 상응하는 <strong>정답(Output, Label)</strong>이 함께 주어지는 경우입니다.</li>
-<li>출력 값의 형태에 따라 크게 두 가지로 나뉩니다.</li>
-</ul>
-<section id="classification-분류" class="level2">
-<h2 class="anchored" data-anchor-id="classification-분류">4.1. Classification (분류)</h2>
-<ul>
-<li><p>출력값 <img src="https://latex.codecogs.com/png.latex?y">가 <strong>이산적인(Discrete)</strong> 작은 집합에서 선택되는 경우입니다.</p></li>
-<li><p><strong>Training Data</strong>: <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BZ%7D_n%20:%20%5C%7B(x%5E%7B(1)%7D,%20y%5E%7B(1)%7D),%20...,%20(x%5E%7B(n)%7D,%20y%5E%7B(n)%7D)%5C%7D"></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">: 분류할 객체 (특징 벡터)</li>
-<li><img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D">: 타겟 값 (Target value, Class label)</li>
-</ul></li>
-<li><p><strong>Types</strong>:</p>
-<ul>
-<li><strong>Binary Classification</strong>: <img src="https://latex.codecogs.com/png.latex?y">가 두 가지 값 중 하나 (예: 스팸/햄, 양성/음성).</li>
-<li><strong>Multi-class Classification</strong>: <img src="https://latex.codecogs.com/png.latex?y">가 여러 개의 클래스 중 하나.</li>
-</ul></li>
-</ul>
-</section>
-<section id="regression-회귀" class="level2">
-<h2 class="anchored" data-anchor-id="regression-회귀">4.2. Regression (회귀)</h2>
-<ul>
-<li><p>출력값 <img src="https://latex.codecogs.com/png.latex?y">가 <strong>연속적인(Continuous)</strong> 실수 값이거나 아주 큰 유한 집합인 경우입니다.</p></li>
-<li><p><strong>Difference</strong>: 입력 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">의 정의는 분류와 같지만, 출력 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D%20%5Cin%20%5Cmathbb%7BR%7D%5Ek">라는 점이 다릅니다.</p></li>
-<li><p><strong>Example</strong>: 주택 가격 예측, 주가 예측 등.</p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Machine Learing/1.Introduction/images/regression_plot.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: 선형 회귀(Linear Regression)의 예시. 붉은 점은 주어진 데이터 <img src="https://latex.codecogs.com/png.latex?(x,%20y)">를 나타내며, 파란 실선은 이 데이터를 가장 잘 설명하는 모델(Curve fit)을 나타낸다. 새로운 <img src="https://latex.codecogs.com/png.latex?x">가 들어왔을 때 실선상의 <img src="https://latex.codecogs.com/png.latex?y">값을 예측한다.</figcaption>
-</figure>
-</div>
-<hr>
-</section>
-</section>
-<section id="problem-class-unsupervised-learning-usl" class="level1">
-<h1>5. Problem Class: Unsupervised Learning (USL)</h1>
-<ul>
-<li><strong>비지도 학습(Unsupervised Learning)</strong>은 정답(Output) 없이 입력 데이터만 주어지는 경우입니다. 데이터 내재된 <strong>패턴(Pattern)</strong>이나 <strong>구조(Structure)</strong>를 찾는 것이 목표입니다.</li>
-</ul>
-<section id="density-estimation-밀도-추정" class="level2">
-<h2 class="anchored" data-anchor-id="density-estimation-밀도-추정">5.1. Density Estimation (밀도 추정)</h2>
-<ul>
-<li>주어진 샘플 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(1)%7D,%20...,%20x%5E%7B(n)%7D">이 어떤 확률 분포 <img src="https://latex.codecogs.com/png.latex?Pr(X)">에서 추출되었다고 할 때, 새로운 데이터 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(n+1)%7D">이 등장할 확률 <img src="https://latex.codecogs.com/png.latex?Pr(x%5E%7B(n+1)%7D)">을 예측하는 문제입니다.</li>
-<li>지도 학습의 전처리 단계나 서브루틴으로 자주 사용됩니다.</li>
-</ul>
-</section>
-<section id="clustering-군집화" class="level2">
-<h2 class="anchored" data-anchor-id="clustering-군집화">5.2. Clustering (군집화)</h2>
-<ul>
-<li>데이터들을 유사한(Similar) 그룹으로 묶는 과정입니다.</li>
-<li><strong>Goal</strong>: 군집 내(Intra-cluster) 거리는 최소화하고, 군집 간(Inter-cluster) 거리는 최대화하는 파티션을 찾습니다.</li>
-<li><strong>Soft Clustering</strong>: 하나의 샘플이 여러 군집에 확률적으로 속할 수 있음을 허용합니다. (예: A 군집에 0.9, B 군집에 0.1)</li>
-</ul>
-</section>
-<section id="dimensionality-reduction-차원-축소" class="level2">
-<h2 class="anchored" data-anchor-id="dimensionality-reduction-차원-축소">5.3. Dimensionality Reduction (차원 축소)</h2>
-<ul>
-<li>고차원 데이터 <img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D%5ED">를 정보를 최대한 보존하면서 저차원 <img src="https://latex.codecogs.com/png.latex?d%20%3C%20D"> 공간으로 변환하는 문제입니다.</li>
-<li><strong>Usage</strong>: 데이터 시각화(Visualization) 또는 지도 학습을 위한 전처리(Preprocessing)로 활용됩니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="problem-class-reinforcement-learning-rl" class="level1">
-<h1>6. Problem Class: Reinforcement Learning (RL)</h1>
-<ul>
-<li><p><strong>강화 학습(Reinforcement Learning)</strong>은 지도 학습이나 비지도 학습과는 완전히 다른 패러다임입니다. 정답이 미리 주어지지 않으며, <strong>에이전트(Agent)</strong>가 <strong>환경(Environment)</strong>과 상호작용하며 학습합니다.</p></li>
-<li><p><strong>Goal</strong>: 입력(State, <img src="https://latex.codecogs.com/png.latex?x">)에서 출력(Action, <img src="https://latex.codecogs.com/png.latex?y">)으로 가는 정책(Policy)을 학습하되, 장기적인 <strong>보상(Reward)의 총합</strong>을 최대화하는 것이 목표입니다.</p></li>
-<li><p><strong>Process</strong>:</p>
-<ul>
-<li><ol type="1">
-<li>에이전트가 현재 상태 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(0)%7D">를 관측하고 행동 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(0)%7D">를 선택.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li>환경으로부터 보상 <img src="https://latex.codecogs.com/png.latex?r%5E%7B(0)%7D">을 받고, 새로운 상태 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(1)%7D">로 전이.</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li>이 과정을 반복.</li>
-</ol></li>
-</ul></li>
-<li><p><strong>Challenge</strong>: 에이전트의 행동이 미래의 보상뿐만 아니라 미래에 관측할 데이터(State)에도 영향을 미칩니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="other-problem-classes" class="level1">
-<h1>7. Other Problem Classes</h1>
-<section id="sequence-learning" class="level2">
-<h2 class="anchored" data-anchor-id="sequence-learning">7.1. Sequence Learning</h2>
-<ul>
-<li>입력 시퀀스로부터 출력 시퀀스(<img src="https://latex.codecogs.com/png.latex?y_1,%20...,%20y_m">)를 예측하는 문제입니다.</li>
-<li>일반적으로 <strong>상태 머신(State Machine)</strong>으로 모델링합니다.
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?f">: 입력에 따라 다음 <strong>은닉 상태(Hidden State)</strong>를 계산.</li>
-<li><img src="https://latex.codecogs.com/png.latex?g">: 현재 은닉 상태로부터 출력을 계산.</li>
-</ul></li>
-<li>지도 학습의 일종으로 볼 수 있지만, 내부의 은닉 상태를 알 수 없으므로(Unknown hidden state sequence) 내부 함수들을 학습해야 한다는 점이 독특합니다.</li>
-</ul>
-</section>
-<section id="advanced-settings" class="level2">
-<h2 class="anchored" data-anchor-id="advanced-settings">7.2. Advanced Settings</h2>
-<ul>
-<li><strong>Semi-Supervised Learning (준지도 학습)</strong>: 소수의 레이블된 데이터와 다수의 레이블 없는 데이터를 함께 사용합니다.</li>
-<li><strong>Active Learning (능동 학습)</strong>: 레이블링 비용이 비쌀 때(예: 의료 영상 판독), 알고리즘이 학습에 가장 도움이 되는 데이터를 선별하여 레이블링을 요청합니다.</li>
-<li><strong>Transfer Learning (전이 학습/Meta-Learning)</strong>: 서로 다르지만 관련된 여러 태스크의 분포를 활용하여, 새로운 태스크를 적은 데이터로 빠르게 학습하는 방법입니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="assumptions" class="level1">
-<h1>8. Assumptions</h1>
-<ul>
-<li>머신러닝은 데이터를 통해 미지의 세계를 예측하는 과정이므로, 수학적 정당성을 확보하기 위해 데이터 소스나 솔루션에 대한 <strong>가정(Assumption)</strong>이 필수적입니다.</li>
-</ul>
-<section id="common-assumptions" class="level2">
-<h2 class="anchored" data-anchor-id="common-assumptions">8.1. Common Assumptions</h2>
-<ul>
-<li><strong>I.I.D. (Independent and Identically Distributed)</strong>: 데이터가 서로 독립적이며 동일한 확률 분포를 따른다는 가장 기본적인 가정입니다.</li>
-<li><strong>Markov Chain</strong>: 데이터가 마르코프 체인에 의해 생성된다고 가정할 수도 있습니다 (시계열 데이터 등).</li>
-<li><strong>Adversarial Process</strong>: 데이터를 생성하는 프로세스가 적대적일 수도 있습니다 (예: 스팸 필터링, 보안).</li>
-<li><strong>Hypothesis Space</strong>: 데이터를 생성하는 ’True Model’이 우리가 설정한 특정 가설 집합(Hypothesis Set) 안에 완벽하게 포함된다고 가정하기도 합니다.</li>
-</ul>
-</section>
-<section id="why-assumptions-matter" class="level2">
-<h2 class="anchored" data-anchor-id="why-assumptions-matter">8.2. Why Assumptions Matter?</h2>
-<ul>
-<li>가정을 설정하는 것의 효과는 가능한 가설(Hypothesis)의 공간을 줄여주는 것입니다. 표현할 수 있는 공간이 줄어든다는 것은, 역설적으로 <strong>학습에 필요한 데이터의 양을 줄여준다</strong>는 강력한 이점을 제공합니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="evaluation-criteria" class="level1">
-<h1>9. Evaluation Criteria</h1>
-<ul>
-<li>모델이 내놓은 예측이나 결정이 ‘좋은지’ 판단하기 위해서는 명확한 <strong>평가 기준(Evaluation Criteria)</strong>이 필요합니다. 이는 개별 예측에 대한 평가와 시스템 전체의 거동에 대한 평가로 나뉩니다.</li>
-</ul>
-<section id="loss-functions-loss-function" class="level2">
-<h2 class="anchored" data-anchor-id="loss-functions-loss-function">9.1. Loss Functions (Loss Function)</h2>
-<ul>
-<li>개별 예측의 품질은 <strong>손실 함수(Loss Function)</strong> <img src="https://latex.codecogs.com/png.latex?L(g,%20a)">로 정의됩니다. 이는 정답이 <img src="https://latex.codecogs.com/png.latex?a">일 때, 모델이 <img src="https://latex.codecogs.com/png.latex?g">라고 추측(Guess)함으로써 발생하는 페널티(Penalty)의 양입니다.</li>
-</ul>
-<section id="classification-loss" class="level3">
-<h3 class="anchored" data-anchor-id="classification-loss"><strong>Classification Loss</strong></h3>
-<ul>
-<li><p><strong>0-1 Loss</strong>: 유한한 도메인(분류 등)에서 사용됩니다. <img src="https://latex.codecogs.com/png.latex?%0A%20%20L(g,%20a)%20=%20%5Cbegin%7Bcases%7D%200%20&amp;%20%5Ctext%7Bif%20%7D%20g%20=%20a%20%5C%5C%201%20&amp;%20%5Ctext%7Botherwise%7D%20%5Cend%7Bcases%7D%0A%20%20"></p></li>
-<li><p><strong>Asymmetric Loss (비대칭 손실)</strong>:</p>
-<ul>
-<li>어떤 오류가 다른 오류보다 훨씬 치명적일 때 사용합니다. 예를 들어, 알레르기 유발 음식을 탐지할 때, 알레르기가 없는데 있다고 하는 것보다, <strong>있는데 없다고 하는 것(False Negative)이 훨씬 위험</strong>합니다. <img src="https://latex.codecogs.com/png.latex?%0A%20%20L(g,%20a)%20=%20%5Cbegin%7Bcases%7D%201%20&amp;%20%5Ctext%7Bif%20%7D%20g=1%20%5Ctext%7B%20and%20%7D%20a=0%20%5Ctext%7B%20(False%20Positive)%7D%20%5C%5C%2010%20&amp;%20%5Ctext%7Bif%20%7D%20g=0%20%5Ctext%7B%20and%20%7D%20a=1%20%5Ctext%7B%20(False%20Negative)%7D%20%5C%5C%200%20&amp;%20%5Ctext%7Botherwise%7D%20%5Cend%7Bcases%7D%0A%20%20"></li>
-</ul></li>
-</ul>
-</section>
-<section id="regression-loss" class="level3">
-<h3 class="anchored" data-anchor-id="regression-loss"><strong>Regression Loss</strong></h3>
-<ul>
-<li><strong>Squared Loss</strong>: 예측값과 실제값 차이의 제곱입니다. <img src="https://latex.codecogs.com/png.latex?L(g,%20a)%20=%20(g%20-%20a)%5E2"></li>
-<li><strong>Linear Loss (Absolute Loss)</strong>: 차이의 절댓값입니다. <img src="https://latex.codecogs.com/png.latex?L(g,%20a)%20=%20%7Cg%20-%20a%7C"></li>
-</ul>
-</section>
-</section>
-<section id="system-level-evaluation" class="level2">
-<h2 class="anchored" data-anchor-id="system-level-evaluation">9.2. System-level Evaluation</h2>
-<ul>
-<li>단일 예측이 아니라, 전체 예측에 대한 평가 기준도 필요합니다.
-<ul>
-<li><strong>Minimizing Expected Loss (Risk)</strong>: 모든 예측에 대한 기대 손실을 최소화하는 것으로, 가장 보편적인 기준입니다.</li>
-<li><strong>Minimizing Maximum Loss</strong>: 최악의 경우(Worst-case)를 방어합니다.</li>
-<li>그 외에도 Regret(후회) 최소화, 점근적(Asymptotic) 동작 분석, PAC(Probably Approximately Correct) 러닝 등이 있습니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="solution-characteristics" class="level1">
-<h1>10. Solution Characteristics</h1>
-<ul>
-<li>문제 해결을 위한 솔루션은 크게 <strong>모델 유형(Model Type)</strong>, <strong>모델 클래스(Model Class)</strong>, 그리고 <strong>알고리즘(Algorithm)</strong>으로 구체화됩니다.</li>
-</ul>
-<section id="model-type-fitting" class="level2">
-<h2 class="anchored" data-anchor-id="model-type-fitting">10.1. Model Type &amp; Fitting</h2>
-<ul>
-<li><strong>No Model</strong>: 최근접 이웃(Nearest Neighbor) 방법처럼 별도의 학습 과정 없이 과거 데이터의 평균을 답으로 내는 경우입니다.</li>
-<li><strong>Prediction Rule</strong>: 학습 데이터에 모델을 <strong>적합(Fit)</strong>시키고, 이를 이용해 예측하는 방식입니다.
-<ul>
-<li>모델은 파라미터 벡터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 가지는 함수 <img src="https://latex.codecogs.com/png.latex?y%20=%20h(x;%20%5Ctheta)">로 표현됩니다.</li>
-<li>새로운 입력 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(n+1)%7D">에 대해 <img src="https://latex.codecogs.com/png.latex?h(x%5E%7B(n+1)%7D;%20%5Ctheta)">로 예측을 수행합니다.</li>
-</ul></li>
-<li><strong>The Fitting Process (Optimization)</strong>:
-<ul>
-<li><p>모델 학습은 최적화 문제로 귀결됩니다.</p></li>
-<li><p><strong>Ideal</strong>: 데이터의 실제 분포 <img src="https://latex.codecogs.com/png.latex?Pr(X,%20Y)">를 안다면 <strong>Expected Loss (Test Error)</strong>를 최소화합니다.</p></li>
-<li><p><strong>Reality</strong>: 실제 분포를 모르므로, <strong>Training Error (Empirical Risk)</strong>를 최소화하는 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 찾습니다. <img src="https://latex.codecogs.com/png.latex?%5Cepsilon_%7Bn%7D(%5Ctheta)%20=%20%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7DL(h(x%5E%7B(i)%7D;%5Ctheta),%20y%5E%7B(i)%7D)"></p>
-<ul>
-<li>주의: 단순히 학습 에러만 줄이다 보면 <strong>과적합(Overfitting)</strong>이 발생할 수 있습니다.</li>
-</ul></li>
-</ul></li>
-</ul>
-</section>
-<section id="model-class-vs.-fitting" class="level2">
-<h2 class="anchored" data-anchor-id="model-class-vs.-fitting">10.2. Model Class vs.&nbsp;Fitting</h2>
-<ul>
-<li><strong>Model Class (<img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BM%7D">)</strong>: 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">에 의해 결정될 수 있는 가능한 모든 모델의 집합입니다.
-<ul>
-<li>예: 선형 회귀 모델 클래스 <img src="https://latex.codecogs.com/png.latex?h(x;%20%5Ctheta,%20%5Ctheta_0)%20=%20%5Ctheta%5E%5Ctop%20x%20+%20%5Ctheta_0">.</li>
-<li><strong>Parametric Models</strong>: 고정된 유한한 개수의 파라미터를 가짐.</li>
-</ul></li>
-<li><strong>Model Selection</strong>: 어떤 모델 클래스 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BM%7D">을 사용할지(예: 선형 vs 신경망)를 결정하는 문제입니다.</li>
-<li><strong>Model Fitting</strong>: 선택된 클래스 내에서 최적의 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 찾아 특정 모델을 확정하는 과정입니다.</li>
-</ul>
-</section>
-<section id="algorithm" class="level2">
-<h2 class="anchored" data-anchor-id="algorithm">10.3. Algorithm</h2>
-<ul>
-<li>좋은 모델을 찾기 위해 실행해야 하는 <strong>계산 과정(Computational Instructions)</strong>입니다.</li>
-<li>예: 최소 제곱법(Least-squares minimization)을 통해 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon_n(%5Ctheta)">를 최소화하는 파라미터를 계산.</li>
-<li>일부 알고리즘(예: 퍼셉트론)은 명시적으로 특정 기준을 최적화하는 것처럼 보이지 않을 수도 있습니다.</li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Machine Learning</category>
-  <guid>https://shsha0110.github.io/posts/Machine Learing/1.Introduction/</guid>
-  <pubDate>Wed, 04 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Machine Learning] 2. Linear Classifier</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Machine Learing/2.Linear-Classifier/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-classification" class="level1">
-<h1>1. Introduction: Classification</h1>
-<ul>
-<li><p>기계 학습(Machine Learning)에서 가장 기본적이면서도 중요한 문제는 <strong>분류(Classification)</strong>입니다. 그중에서도 두 개의 클래스로 데이터를 구분하는 <strong>이진 분류(Binary Classification)</strong>는 다양한 알고리즘의 기초가 됩니다.</p></li>
-<li><p>이번 포스트에서는 분류 문제의 수학적 정의부터 시작하여, 가장 직관적인 모델인 <strong>선형 분류기(Linear Classifier)</strong>의 작동 원리와 기하학적 의미를 살펴보고, 학습 알고리즘을 평가하는 방법론인 <strong>Cross-Validation</strong>까지 다룹니다.</p></li>
-</ul>
-<section id="the-classification-problem" class="level2">
-<h2 class="anchored" data-anchor-id="the-classification-problem">1.1 The Classification Problem</h2>
-<ul>
-<li>이진 분류기는 데이터 공간 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5Ed">에 존재하는 입력 벡터 <img src="https://latex.codecogs.com/png.latex?x">를 <img src="https://latex.codecogs.com/png.latex?%5C%7B-1,%20+1%5C%7D">의 레이블로 매핑하는 함수입니다. <img src="https://latex.codecogs.com/png.latex?%0Ah:%20%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5C%7B-1,%20+1%5C%7D%0A">
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?h">는 <strong>가설(Hypothesis)</strong> 또는 분류기(Classifier)를 의미합니다.</li>
-</ul></li>
-<li>실제 문제에서는 원본 데이터(Raw Data)를 그대로 사용하기보다, 특징 추출(Feature Extraction) 과정을 거친 특징 벡터(Feature Vector)를 사용하는 경우가 많습니다. 이를 함수 <img src="https://latex.codecogs.com/png.latex?%5Cvarphi">로 표현하면 다음과 같습니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ax%20=%20%5Cvarphi(%5Ctext%7Braw%20input%7D)%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%0A"></p>
-<ul>
-<li>우리의 목표는 입력 <img src="https://latex.codecogs.com/png.latex?x">가 주어졌을 때, 적절한 레이블 <img src="https://latex.codecogs.com/png.latex?y">를 출력하는 함수 <img src="https://latex.codecogs.com/png.latex?h">를 찾는 것입니다.</li>
-</ul>
-</section>
-<section id="supervised-learning-setup" class="level2">
-<h2 class="anchored" data-anchor-id="supervised-learning-setup">1.2 Supervised Learning Setup</h2>
-<ul>
-<li>지도 학습(Supervised Learning) 환경에서는 입력과 정답이 쌍으로 이루어진 <strong>학습 데이터셋(Training Dataset)</strong> <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BD%7D_n">이 주어집니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BD%7D_n%20=%20%5C%7B(x%5E%7B(1)%7D,%20y%5E%7B(1)%7D),%20...,%20(x%5E%7B(n)%7D,%20y%5E%7B(n)%7D)%5C%7D%0A">
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">: <img src="https://latex.codecogs.com/png.latex?d%20%5Ctimes%201"> 차원의 열 벡터(Column Vector)</li>
-<li><img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D">: <img src="https://latex.codecogs.com/png.latex?%5C%7B-1,%20+1%5C%7D"> 중 하나의 값을 가지는 레이블</li>
-</ul></li>
-<li>이 데이터의 의미는 명확합니다. 우리가 학습한 가설 <img src="https://latex.codecogs.com/png.latex?h">에 입력 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">를 넣었을 때, 실제 레이블인 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D">가 출력되기를 기대하는 것입니다.</li>
-</ul>
-</section>
-</section>
-<section id="generalization-error-metrics" class="level1">
-<h1>2. Generalization &amp; Error Metrics</h1>
-<ul>
-<li><p>분류기가 학습 데이터에 대해서만 잘 작동하는 것은 큰 의미가 없습니다. 우리가 진정으로 원하는 것은 <strong>새로운 데이터(New Data)</strong>에 대해 잘 작동하는 능력, 즉 <strong>일반화(Generalization)</strong> 능력입니다.</p></li>
-<li><p>이를 위해 우리는 학습 데이터와 테스트 데이터가 <strong>동일한 확률 분포에서 독립적으로 추출(i.i.d.)</strong> 되었다고 가정합니다.</p></li>
-</ul>
-<section id="training-error-vs.-test-error" class="level2">
-<h2 class="anchored" data-anchor-id="training-error-vs.-test-error">2.1 Training Error vs.&nbsp;Test Error</h2>
-<ul>
-<li><p>모델의 성능을 정량화하기 위해 <strong>0-1 Loss</strong> 기반의 에러를 정의합니다.</p></li>
-<li><p><strong>Training Error (학습 오차, <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BE%7D_n">)</strong>:</p>
-<ul>
-<li>학습 데이터셋 내에서 분류기가 틀린 비율입니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BE%7D_n(h)%20=%20%5Cfrac%7B1%7D%7Bn%7D%20%5Csum_%7Bi=1%7D%5E%7Bn%7D%20%5Cmathbb%7BI%7D(h(x%5E%7B(i)%7D)%20%5Cneq%20y%5E%7B(i)%7D)%0A"></li>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BI%7D(%5Ccdot)">는 조건이 참이면 1, 거짓이면 0을 반환하는 지시 함수(Indicator Function)입니다.</li>
-</ul></li>
-<li><p><strong>Test Error (테스트 오차, <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BE%7D">)</strong>:</p>
-<ul>
-<li>학습에 사용되지 않은 새로운 데이터 <img src="https://latex.codecogs.com/png.latex?n'">개에 대한 오차입니다. 일반화 성능을 측정하는 지표가 됩니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BE%7D(h)%20=%20%5Cfrac%7B1%7D%7Bn'%7D%20%5Csum_%7Bi=n+1%7D%5E%7Bn+n'%7D%20%5Cmathbb%7BI%7D(h(x%5E%7B(i)%7D)%20%5Cneq%20y%5E%7B(i)%7D)%0A"></li>
-</ul></li>
-</ul>
-</section>
-<section id="hypothesis-class-mathcalh" class="level2">
-<h2 class="anchored" data-anchor-id="hypothesis-class-mathcalh">2.2 Hypothesis Class (<img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D">)</h2>
-<ul>
-<li>학습 알고리즘은 가능한 모든 분류기의 집합인 <strong>가설 공간(Hypothesis Class, <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D">)</strong> 중에서 최적의 <img src="https://latex.codecogs.com/png.latex?h">를 찾아내는 과정입니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BD%7D_n%20%5Cxrightarrow%7B%5Ctext%7BLearning%20Algorithm%7D(%5Cmathcal%7BH%7D)%7D%20h%20%5Cin%20%5Cmathcal%7BH%7D%0A"></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D">의 선택은 테스트 에러에 큰 영향을 미칩니다. <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D">가 너무 복잡하면 과적합(Overfitting)의 위험이 있고, 너무 단순하면 데이터의 패턴을 충분히 학습하지 못할 수 있습니다. 따라서 일반화 성능을 높이기 위해 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D">의 표현력(Expressiveness)을 적절히 제한하는 것이 중요합니다.</li>
-</ul>
-</section>
-</section>
-<section id="linear-classifiers" class="level1">
-<h1>3. Linear Classifiers</h1>
-<ul>
-<li>선형 분류기는 데이터 공간을 <strong>초평면(Hyperplane)</strong>으로 나누어 클래스를 구분하는 모델입니다.</li>
-</ul>
-<section id="definition" class="level2">
-<h2 class="anchored" data-anchor-id="definition">3.1 Definition</h2>
-<ul>
-<li><p>선형 분류기는 파라미터 벡터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">와 스칼라 오프셋(offset) <img src="https://latex.codecogs.com/png.latex?%5Ctheta_0%20%5Cin%20%5Cmathbb%7BR%7D">에 의해 정의됩니다. 즉, 가설 공간 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BH%7D">는 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5E%7Bd+1%7D"> 공간의 벡터들로 구성됩니다.</p></li>
-<li><p>분류 함수는 다음과 같이 정의됩니다. <img src="https://latex.codecogs.com/png.latex?%0Ah(x;%20%5Ctheta,%20%5Ctheta_0)%20=%20%5Ctext%7Bsign%7D(%5Ctheta%5E%5Ctop%20x%20+%20%5Ctheta_0)%20=%0A%5Cbegin%7Bcases%7D%0A+1%20&amp;%20%5Ctext%7Bif%20%7D%20%5Ctheta%5E%5Ctop%20x%20+%20%5Ctheta_0%20%3E%200%20%5C%5C%0A-1%20&amp;%20%5Ctext%7Botherwise%7D%0A%5Cend%7Bcases%7D%0A"></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x">: 두 벡터의 내적(Dot Product)으로, 결과는 스칼라입니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bsign%7D(%5Ccdot)">: 입력이 양수이면 +1, 그렇지 않으면(0 포함) -1을 반환합니다.</li>
-</ul></li>
-</ul>
-</section>
-<section id="geometric-interpretation" class="level2">
-<h2 class="anchored" data-anchor-id="geometric-interpretation">3.2 Geometric Interpretation</h2>
-<ul>
-<li><p>기하학적으로 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">와 <img src="https://latex.codecogs.com/png.latex?%5Ctheta_0">는 <img src="https://latex.codecogs.com/png.latex?d">차원 공간 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5Ed">를 두 개의 반공간(Half-space)으로 나누는 <strong>초평면(Hyperplane)</strong>을 결정합니다.</p></li>
-<li><p><strong>Decision Boundary (결정 경계)</strong>: <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x%20+%20%5Ctheta_0%20=%200"> 인 지점들의 집합입니다.</p></li>
-<li><p><strong>Normal Vector (<img src="https://latex.codecogs.com/png.latex?%5Ctheta">)</strong>: 초평면에 수직인 법선 벡터입니다. <img src="https://latex.codecogs.com/png.latex?%5Ctheta">가 가리키는 방향에 있는 반공간은 <strong>Positive (+)</strong>로, 반대편은 <strong>Negative (-)</strong>로 분류됩니다.</p></li>
-<li><p><strong>Offset (<img src="https://latex.codecogs.com/png.latex?%5Ctheta_0">)</strong>: 초평면이 원점에서 얼마나 떨어져 있는지를 결정합니다.</p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Machine Learing/2.Linear-Classifier/images/linear_classifier_geometry.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: 선형 분류기의 기하학적 예시. 2차원 평면 위의 데이터 포인트들(+, -)이 하나의 직선(Hyperplane)에 의해 구분되고 있다. 벡터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">는 결정 경계(검은 선)에 수직이며 Positive 클래스 쪽을 향하고 있다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="example-calculation" class="level2">
-<h2 class="anchored" data-anchor-id="example-calculation">3.3 Example Calculation</h2>
-<ul>
-<li>구체적인 예시를 통해 계산 과정을 살펴보겠습니다.
-<ul>
-<li>파라미터: <img src="https://latex.codecogs.com/png.latex?%5Ctheta%20=%20%5Cbegin%7Bbmatrix%7D%20-1%20%5C%5C%201.5%20%5Cend%7Bbmatrix%7D,%20%5Cquad%20%5Ctheta_0%20=%203"></li>
-<li>데이터 포인트 1: <img src="https://latex.codecogs.com/png.latex?x%5E%7B(1)%7D%20=%20%5Cbegin%7Bbmatrix%7D%203%20%5C%5C%202%20%5Cend%7Bbmatrix%7D"></li>
-<li>데이터 포인트 2: <img src="https://latex.codecogs.com/png.latex?x%5E%7B(2)%7D%20=%20%5Cbegin%7Bbmatrix%7D%204%20%5C%5C%20-1%20%5Cend%7Bbmatrix%7D"></li>
-</ul></li>
-<li><strong>Case 1: <img src="https://latex.codecogs.com/png.latex?x%5E%7B(1)%7D"> 분류</strong></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0Ah(x%5E%7B(1)%7D)%20&amp;=%20%5Ctext%7Bsign%7D%5Cleft(%20%5Cbegin%7Bbmatrix%7D%20-1%20&amp;%201.5%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%203%20%5C%5C%202%20%5Cend%7Bbmatrix%7D%20+%203%20%5Cright)%20%5C%5C%0A&amp;=%20%5Ctext%7Bsign%7D((-1%20%5Ctimes%203)%20+%20(1.5%20%5Ctimes%202)%20+%203)%20%5C%5C%0A&amp;=%20%5Ctext%7Bsign%7D(-3%20+%203%20+%203)%20%5C%5C%0A&amp;=%20%5Ctext%7Bsign%7D(3)%20=%20+1%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li><strong>Case 2: <img src="https://latex.codecogs.com/png.latex?x%5E%7B(2)%7D"> 분류</strong></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0Ah(x%5E%7B(2)%7D)%20&amp;=%20%5Ctext%7Bsign%7D%5Cleft(%20%5Cbegin%7Bbmatrix%7D%20-1%20&amp;%201.5%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%204%20%5C%5C%20-1%20%5Cend%7Bbmatrix%7D%20+%203%20%5Cright)%20%5C%5C%0A&amp;=%20%5Ctext%7Bsign%7D((-1%20%5Ctimes%204)%20+%20(1.5%20%5Ctimes%20-1)%20+%203)%20%5C%5C%0A&amp;=%20%5Ctext%7Bsign%7D(-4%20-%201.5%20+%203)%20%5C%5C%0A&amp;=%20%5Ctext%7Bsign%7D(-2.5)%20=%20-1%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li>위 계산을 통해 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(1)%7D">은 양성 클래스, <img src="https://latex.codecogs.com/png.latex?x%5E%7B(2)%7D">는 음성 클래스로 분류됨을 확인할 수 있습니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>Think Deeper:</strong></p>
-<ol type="1">
-<li><strong>법선 벡터 찾기</strong>: 결정 경계에 수직인 벡터는 무엇인가? <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 바로 <img src="https://latex.codecogs.com/png.latex?%5Ctheta"> 입니다.</li>
-<li><strong>분류 반전시키기</strong>: 결정 경계(직선)의 위치는 그대로 두고, 모든 (+) 포인트를 (-)로, (-) 포인트를 (+)로 분류하려면 어떻게 해야 할까요?
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Ctheta">와 <img src="https://latex.codecogs.com/png.latex?%5Ctheta_0">의 부호를 모두 반대로 바꾸면 됩니다 (<img src="https://latex.codecogs.com/png.latex?-%5Ctheta,%20-%5Ctheta_0">).</li>
-<li>부등호의 방향이 반대가 되어 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bsign%7D"> 함수의 결과가 역전되기 때문입니다.</li>
-</ul></li>
-</ol>
-</blockquote>
-</section>
-</section>
-<section id="learning-algorithms" class="level1">
-<h1>4. Learning Algorithms</h1>
-<ul>
-<li>그렇다면 최적의 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">와 <img src="https://latex.codecogs.com/png.latex?%5Ctheta_0">는 어떻게 찾을 수 있을까요? 가장 단순한 형태의 알고리즘부터 살펴보겠습니다.</li>
-</ul>
-<section id="algorithm-1-random-linear-classifier" class="level2">
-<h2 class="anchored" data-anchor-id="algorithm-1-random-linear-classifier">4.1 Algorithm 1: Random Linear Classifier</h2>
-<ul>
-<li><p>매우 단순한 접근법은 무작위로 여러 개의 가설을 생성한 뒤, 학습 데이터에서의 에러(Training Error)가 가장 낮은 것을 선택하는 것입니다.</p></li>
-<li><p><strong>Algorithm: <code>Random-Linear-Classifier</code>(<img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BD%7D_n,%20k,%20d">)</strong></p>
-<ul>
-<li><ol type="1">
-<li>Loop <code>j</code> from 1 to <code>k</code>:</li>
-</ol>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5Ed">와 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D">에서 무작위로 파라미터 <img src="https://latex.codecogs.com/png.latex?(%5Ctheta%5E%7B(j)%7D,%20%5Ctheta_0%5E%7B(j)%7D)">를 샘플링합니다.</li>
-</ul></li>
-<li><ol start="2" type="1">
-<li>각 <img src="https://latex.codecogs.com/png.latex?j">에 대해 학습 에러 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BE%7D_n(%5Ctheta%5E%7B(j)%7D,%20%5Ctheta_0%5E%7B(j)%7D)">를 계산합니다.</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li>학습 에러를 최소화하는 인덱스 <img src="https://latex.codecogs.com/png.latex?j%5E*">를 찾습니다: <img src="https://latex.codecogs.com/png.latex?j%5E*%20=%20%5Carg%20%5Cmin_%7Bj%20%5Cin%20%5C%7B1,%20...,%20k%5C%7D%7D%20%5Cmathcal%7BE%7D_n(%5Ctheta%5E%7B(j)%7D,%20%5Ctheta_0%5E%7B(j)%7D)"></li>
-</ol></li>
-<li><ol start="4" type="1">
-<li>최적의 파라미터 <img src="https://latex.codecogs.com/png.latex?(%5Ctheta%5E%7B(j%5E*)%7D,%20%5Ctheta_0%5E%7B(j%5E*)%7D)">를 반환합니다.</li>
-</ol></li>
-</ul></li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>Study Question:</strong> <img src="https://latex.codecogs.com/png.latex?k">가 증가하면 학습 에러 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BE%7D_n">은 어떻게 될까요? 일반적으로 <img src="https://latex.codecogs.com/png.latex?k">가 커질수록 더 많은 가설을 탐색하므로, 운 좋게 좋은 분류기를 찾을 확률이 높아져 학습 에러는 감소하는 경향이 있습니다. 하지만 이것이 테스트 에러(일반화 성능)의 감소를 보장하지는 않습니다.</p>
-</blockquote>
-</section>
-</section>
-<section id="evaluating-learning-algorithms" class="level1">
-<h1>5. Evaluating Learning Algorithms</h1>
-<ul>
-<li>학습된 가설 <img src="https://latex.codecogs.com/png.latex?h">의 성능을 평가할 때는 여러 변동성(Variability) 요인을 고려해야 합니다.
-<ul>
-<li><ol type="1">
-<li>어떤 학습 데이터 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BD%7D_n">이 선택되었는가?</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li>어떤 테스트 데이터가 선택되었는가?</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li>알고리즘 내부의 무작위성(예: Random Initialization)</li>
-</ol></li>
-</ul></li>
-<li>따라서 단 한 번의 학습과 테스트로 알고리즘을 평가하는 것은 위험합니다.</li>
-</ul>
-<section id="algorithm-2-cross-validation-교차-검증" class="level2">
-<h2 class="anchored" data-anchor-id="algorithm-2-cross-validation-교차-검증">5.1 Algorithm 2: Cross-Validation (교차 검증)</h2>
-<ul>
-<li><p>데이터가 제한적인 상황에서 데이터를 재사용하면서도 신뢰성 있게 알고리즘을 평가하는 방법으로 <strong>K-Fold Cross-Validation</strong>이 있습니다. (여기서 <img src="https://latex.codecogs.com/png.latex?k">는 앞선 알고리즘의 반복 횟수와는 다른 의미입니다.)</p></li>
-<li><p><strong>Algorithm: <code>Cross-Validate</code>(<img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BD%7D,%20k">)</strong></p>
-<ul>
-<li><ol type="1">
-<li>전체 데이터 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BD%7D">를 대략 같은 크기를 가진 <img src="https://latex.codecogs.com/png.latex?k">개의 조각(Chunk) <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BD%7D_1,%20%5Cmathcal%7BD%7D_2,%20...,%20%5Cmathcal%7BD%7D_k">로 나눕니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li>Loop <code>i</code> from 1 to <code>k</code>:</li>
-</ol>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BD%7D_i">를 제외한 나머지 데이터 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BD%7D%20%5Csetminus%20%5Cmathcal%7BD%7D_i">로 가설 <img src="https://latex.codecogs.com/png.latex?h_i">를 학습합니다.</li>
-<li>제외해둔 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BD%7D_i">를 테스트 셋으로 사용하여 에러 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BE%7D_i(h_i)">를 계산합니다.</li>
-</ul></li>
-<li><ol start="3" type="1">
-<li>계산된 <img src="https://latex.codecogs.com/png.latex?k">개의 에러의 평균을 반환합니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BCV%20Error%7D%20=%20%5Cfrac%7B1%7D%7Bk%7D%20%5Csum_%7Bi=1%7D%5E%7Bk%7D%20%5Cmathcal%7BE%7D_i(h_i)"></li>
-</ol></li>
-</ul></li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>핵심 통찰 (Key Insight):</strong> Cross-Validation은 특정한 하나의 가설 <img src="https://latex.codecogs.com/png.latex?h">를 평가하는 것이 아닙니다. 이 과정은 <strong>가설을 만들어내는 “학습 알고리즘” 자체의 성능</strong>을 평가하는 것입니다. 최종적으로 우리가 사용할 모델은 전체 데이터를 사용하여 다시 학습시킨 결과물이 됩니다.</p>
-</blockquote>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Machine Learning</category>
-  <guid>https://shsha0110.github.io/posts/Machine Learing/2.Linear-Classifier/</guid>
-  <pubDate>Wed, 04 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Deep Learning] 1. Introduction (Part 1)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Deep Learning/1.Introduction/1.1/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>1. Introduction</h1>
-<ul>
-<li>이번 포스트에서는 기계학습(Machine Learning, ML) 과정의 첫 번째 강의 내용을 정리합니다. 이 강의의 주된 목표는 <strong>얕은 학습(Shallow Learning)</strong>부터 <strong>딥러닝(Deep Learning)</strong>에 이르기까지, 연구와 응용에 필요한 알고리즘, 수학, 이론, 그리고 그 이면에 있는 직관(Intuition)을 다지는 것입니다. 또한, 강의 후반부에서는 최신 딥러닝의 핵심인 <strong>Transformer</strong>의 구현과 학습 과정까지 다룰 예정입니다.</li>
-</ul>
-<section id="what-is-machine-learning" class="level2">
-<h2 class="anchored" data-anchor-id="what-is-machine-learning">1.1 What is Machine Learning?</h2>
-<ul>
-<li>기계학습이란 근본적으로 <strong>데이터 <img src="https://latex.codecogs.com/png.latex?x">로부터 학습하는 알고리즘</strong>에 대한 연구입니다. 이를 수학적 함수 관계로 표현하면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%0Ax%20%5Cxrightarrow%7Bf(x)%7D%20y%0A">
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?x">는 입력 데이터(Input Data), <img src="https://latex.codecogs.com/png.latex?y">는 우리가 얻고자 하는 출력(Output), 그리고 <img src="https://latex.codecogs.com/png.latex?f">는 데이터로부터 학습된 함수(Model)를 의미합니다.</li>
-</ul></li>
-</ul>
-</section>
-</section>
-<section id="types-of-machine-learning-problems" class="level1">
-<h1>2. Types of Machine Learning Problems</h1>
-<ul>
-<li>기계학습 문제는 주어진 데이터의 형태와 목표에 따라 크게 세 가지 범주로 나눌 수 있습니다: <strong>지도 학습(Supervised Learning)</strong>, <strong>비지도 학습(Unsupervised Learning)</strong>, 그리고 <strong>환경과의 상호작용(Interaction with Environments)</strong>입니다.</li>
-</ul>
-<section id="supervised-learning-지도-학습" class="level2">
-<h2 class="anchored" data-anchor-id="supervised-learning-지도-학습">2.1 Supervised Learning (지도 학습)</h2>
-<ul>
-<li><p>지도 학습은 정답(Label)이 주어진 상태에서 모델을 학습시키는 방식입니다. 입력 <img src="https://latex.codecogs.com/png.latex?x">와 정답 <img src="https://latex.codecogs.com/png.latex?y">의 쌍(Pair)이 주어졌을 때, 새로운 <img src="https://latex.codecogs.com/png.latex?x">에 대해 <img src="https://latex.codecogs.com/png.latex?y">를 예측하는 함수를 찾는 것이 목표입니다.</p></li>
-<li><p><strong>Binary/Multiclass Classification (분류)</strong></p>
-<ul>
-<li>입력 <img src="https://latex.codecogs.com/png.latex?x">가 주어졌을 때, 이산적인(Discrete) 클래스 <img src="https://latex.codecogs.com/png.latex?y">를 찾는 문제입니다. <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5C%7B1,%20%5Cdots,%20K%5C%7D">
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?K">는 클래스의 개수</li>
-</ul></li>
-<li>예: 이메일 스팸 분류(Binary), 손글씨 숫자 인식(Multiclass)</li>
-</ul></li>
-<li><p><strong>Regression (회귀)</strong></p>
-<ul>
-<li>입력 <img src="https://latex.codecogs.com/png.latex?x">가 주어졌을 때, 연속적인(Continuous) 실수 값 <img src="https://latex.codecogs.com/png.latex?y">를 예측하는 문제입니다. <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd%7D"></li>
-<li>예: 주택 가격 예측, 주가 예측</li>
-</ul></li>
-<li><p><strong>Sequence Annotation</strong></p>
-<ul>
-<li>입력 시퀀스 <img src="https://latex.codecogs.com/png.latex?x_%7B1%7D,%20%5Cdots,%20x_%7Bn%7D">이 주어졌을 때, 이에 대응하는 출력 시퀀스 <img src="https://latex.codecogs.com/png.latex?y_%7B1%7D,%20%5Cdots,%20y_%7Bm%7D">을 찾는 문제입니다.</li>
-<li>예: 품사 태깅(Part-of-Speech Tagging), 개체명 인식</li>
-</ul></li>
-<li><p><strong>Prediction (Forecasting)</strong></p>
-<ul>
-<li>과거의 데이터 <img src="https://latex.codecogs.com/png.latex?x_%7Bt%7D">와 이전 시점까지의 출력 <img src="https://latex.codecogs.com/png.latex?y_%7B1%7D,%20%5Cdots,%20y_%7Bt-1%7D">이 주어졌을 때, 현재 시점의 <img src="https://latex.codecogs.com/png.latex?y_%7Bt%7D">를 예측하는 문제입니다.</li>
-<li>예: 시계열 분석, 언어 모델의 다음 단어 예측</li>
-</ul></li>
-</ul>
-<section id="case-study-image-classification" class="level3">
-<h3 class="anchored" data-anchor-id="case-study-image-classification">Case Study: Image Classification</h3>
-<ul>
-<li>이미지 분류 문제를 예로 들어봅시다. 컴퓨터가 이미지를 인식하는 과정은 인간의 직관과는 다릅니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/1.Introduction/1.1/images/cat_pixel_grid.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: 고양이 이미지와 픽셀 그리드 표현</figcaption>
-</figure>
-</div>
-<blockquote class="blockquote">
-<p><strong>Figure 1 설명</strong>: 좌측은 사람이 보는 고양이 이미지입니다. 우측은 컴퓨터가 인식하는 동일한 이미지의 데이터 형태입니다. 컴퓨터에게 이미지는 <img src="https://latex.codecogs.com/png.latex?%5B0,%20255%5D"> 사이의 숫자로 이루어진 거대한 그리드(Grid)일 뿐입니다. 예를 들어, <img src="https://latex.codecogs.com/png.latex?800%20%5Ctimes%20600"> 해상도의 컬러 이미지는 <img src="https://latex.codecogs.com/png.latex?800%20%5Ctimes%20600%20%5Ctimes%203"> (RGB 채널)개의 숫자로 구성된 텐서(Tensor)입니다. 기계학습 모델은 이 숫자 패턴에서 ’고양이(Cat)’라는 추상적인 레이블을 도출해내야 합니다.</p>
-</blockquote>
-</section>
-</section>
-<section id="unsupervised-learning-비지도-학습" class="level2">
-<h2 class="anchored" data-anchor-id="unsupervised-learning-비지도-학습">2.2 Unsupervised Learning (비지도 학습)</h2>
-<ul>
-<li><p>비지도 학습은 정답 레이블 <img src="https://latex.codecogs.com/png.latex?y"> 없이, 입력 데이터 <img src="https://latex.codecogs.com/png.latex?x"> 자체의 구조나 패턴을 학습하는 방식입니다.</p></li>
-<li><p><strong>Clustering (군집화)</strong>: 데이터를 대표하는 프로토타입(Prototypes)이나 그룹을 찾습니다.</p></li>
-<li><p><strong>Sequence Analysis</strong>: 관측된 데이터 이면에 존재하는 잠재적인 인과 시퀀스(Latent Causal Sequence)를 찾습니다.</p>
-<ul>
-<li>대표 모델: HMM(Hidden Markov Model), Kalman Filter</li>
-</ul></li>
-<li><p><strong>Independent Components / Dictionary Learning</strong>: 관측 데이터를 구성하는 독립적인 요인(Factors)들을 찾아냅니다.</p>
-<ul>
-<li>대표 예시: 칵테일 파티 문제(Cocktail Party Problem) - 여러 목소리가 섞인 오디오에서 개별 화자의 목소리 분리.</li>
-</ul></li>
-<li><p><strong>Novelty Detection</strong>: 데이터 분포에서 벗어난 이상치(Odd one out)를 탐지합니다.</p></li>
-</ul>
-<section id="case-study-dimensionality-reduction" class="level3">
-<h3 class="anchored" data-anchor-id="case-study-dimensionality-reduction">Case Study: Dimensionality Reduction</h3>
-<ul>
-<li>데이터의 차원을 축소하여 시각화하거나 노이즈를 제거하는 것도 비지도 학습의 중요한 응용입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/1.Introduction/1.1/images/pca_example.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: Principal Component Analysis (PCA) 예시</figcaption>
-</figure>
-</div>
-<blockquote class="blockquote">
-<p><strong>Figure 2 설명</strong>: 좌측 그래프는 2차원 평면상의 데이터 분포를 보여주며, 데이터의 분산이 가장 큰 방향인 주성분 벡터 <img src="https://latex.codecogs.com/png.latex?V_1,%20V_2">를 나타냅니다. 우측 그래프들은 PCA를 통해 고차원 데이터(예: 유전체 데이터)를 저차원(PC1, PC2)으로 투영하여 시각화한 결과입니다. 이를 통해 복잡한 데이터 내의 숨겨진 구조(예: 지리적 위치에 따른 유전적 군집)를 파악할 수 있습니다.</p>
-</blockquote>
-</section>
-</section>
-<section id="interaction-with-environments" class="level2">
-<h2 class="anchored" data-anchor-id="interaction-with-environments">2.3 Interaction with Environments</h2>
-<ul>
-<li>정적인 데이터셋을 학습하는 것을 넘어, 환경과 상호작용하며 데이터를 수집하고 학습하는 방식들입니다.
-<ul>
-<li><ol type="1">
-<li><strong>Online Learning</strong>: 데이터가 순차적으로 들어옵니다. <img src="https://latex.codecogs.com/png.latex?x_t">를 관측하고 <img src="https://latex.codecogs.com/png.latex?f(x_t)">를 예측한 뒤, 실제 <img src="https://latex.codecogs.com/png.latex?y_t">를 관측하여 모델을 업데이트합니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>Active Learning</strong>: 모델이 학습에 도움이 될 만한 <img src="https://latex.codecogs.com/png.latex?x_t">를 선별하여 라벨 <img src="https://latex.codecogs.com/png.latex?y_t">를 질의(Query)하고, 모델을 개선한 뒤 다음 <img src="https://latex.codecogs.com/png.latex?x">를 선택합니다.</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><strong>Bandits (Multi-armed Bandits)</strong>: 여러 선택지(Arm) 중 하나를 고르고 보상을 받습니다. 상태(State) 개념이 없거나 단일 상태인 강화학습의 특수한 형태로 볼 수 있습니다.</li>
-</ol></li>
-<li><ol start="4" type="1">
-<li><strong>Reinforcement Learning (RL, 강화학습)</strong>: 에이전트가 행동을 취하고, 환경이 이에 반응하여 보상과 다음 상태를 반환하는 과정을 반복합니다.</li>
-</ol></li>
-</ul></li>
-</ul>
-<section id="reinforcement-learning-framework" class="level3">
-<h3 class="anchored" data-anchor-id="reinforcement-learning-framework">Reinforcement Learning Framework</h3>
-<ul>
-<li>강화학습은 다음과 같은 순환 구조(Loop)를 가집니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/1.Introduction/1.1/images/rl_loop.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: 강화학습의 Agent-Environment 상호작용 루프</figcaption>
-</figure>
-</div>
-<blockquote class="blockquote">
-<p><strong>Figure 3 설명</strong>: * <strong>Agent</strong>: 의사결정을 내리는 주체입니다. * <strong>Environment</strong>: 에이전트가 상호작용하는 세계입니다. * <strong>State (<img src="https://latex.codecogs.com/png.latex?s_t">)</strong>: 현재 시점 <img src="https://latex.codecogs.com/png.latex?t">에서의 환경의 상태입니다. * <strong>Action (<img src="https://latex.codecogs.com/png.latex?a_t">)</strong>: 에이전트가 상태 <img src="https://latex.codecogs.com/png.latex?s_t">에서 취하는 행동입니다. * <strong>Reward (<img src="https://latex.codecogs.com/png.latex?r_t">)</strong>: 행동에 대한 결과로 환경이 주는 피드백(점수)입니다. * <strong>Next State (<img src="https://latex.codecogs.com/png.latex?s_%7Bt+1%7D">)</strong>: 행동의 결과로 변환된 새로운 상태입니다.</p>
-</blockquote>
-<ul>
-<li><p>RL의 대표적인 예시는 다음과 같습니다.</p></li>
-<li><p><strong>Robot Locomotion</strong>:</p>
-<ul>
-<li><strong>Objective</strong>: 로봇을 앞으로 이동시키기.</li>
-<li><strong>State</strong>: 관절의 각도 및 위치.</li>
-<li><strong>Action</strong>: 관절에 가하는 토크(Torque).</li>
-<li><strong>Reward</strong>: 넘어지지 않고 앞으로 나아갈 때 양의 보상.</li>
-</ul></li>
-<li><p><strong>Atari Games / Go (바둑)</strong>:</p>
-<ul>
-<li>게임의 화면 픽셀(Atari)이나 바둑판의 돌 위치(Go)가 <strong>State</strong>가 되며, 게임 승리 또는 점수 획득이 <strong>Reward</strong>가 됩니다. 특히 바둑의 경우 가능한 상태 공간(State Space)의 크기가 우주적으로 넓기 때문에 효율적인 학습 알고리즘이 필수적입니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-</section>
-</section>
-<section id="discriminative-vs.-generative-models" class="level1">
-<h1>3. Discriminative vs.&nbsp;Generative Models</h1>
-<ul>
-<li>기계학습 모델은 데이터를 확률적으로 모델링하는 방식에 따라 <strong>Discriminative(판별)</strong> 모델과 <strong>Generative(생성)</strong> 모델로 구분됩니다.</li>
-</ul>
-<section id="discriminative-models-판별-모델" class="level2">
-<h2 class="anchored" data-anchor-id="discriminative-models-판별-모델">3.1 Discriminative Models (판별 모델)</h2>
-<ul>
-<li><p>Discriminative 모델은 입력 <img src="https://latex.codecogs.com/png.latex?x">가 주어졌을 때 출력 <img src="https://latex.codecogs.com/png.latex?y">가 나타날 조건부 확률 <strong><img src="https://latex.codecogs.com/png.latex?p(y%7Cx)">를 직접 추정</strong>합니다.</p></li>
-<li><p><strong>특징</strong>:</p>
-<ul>
-<li>데이터의 클래스 간 경계(Decision Boundary)를 찾는 데 집중합니다.</li>
-<li>데이터의 생성 원리보다는 분류 자체에 최적화되어 있습니다.</li>
-<li>일반적으로 더 간단한 솔루션을 제공하며, 수렴(Convergence) 속도가 빠르고 분류 성능이 좋은 경향이 있습니다.</li>
-<li>예: Logistic Regression, SVM, Decision Trees, 일반적인 Neural Networks 분류기.</li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/1.Introduction/1.1/images/discriminative_boundary.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 4: Discriminative Model의 결정 경계</figcaption>
-</figure>
-</div>
-<blockquote class="blockquote">
-<p><strong>Figure 4 설명</strong>: 서로 다른 두 클래스(동그라미와 네모)를 구분하는 결정 경계(직선)를 보여줍니다. 판별 모델은 데이터가 어떻게 분포하는지(각 군집의 모양)보다는 두 군집을 어떻게 <strong>나눌 것인가</strong>에 초점을 맞춥니다.</p>
-</blockquote>
-</section>
-<section id="generative-models-생성-모델" class="level2">
-<h2 class="anchored" data-anchor-id="generative-models-생성-모델">3.2 Generative Models (생성 모델)</h2>
-<ul>
-<li><p>Generative 모델은 입력 <img src="https://latex.codecogs.com/png.latex?x">와 출력 <img src="https://latex.codecogs.com/png.latex?y">의 결합 확률 분포 <strong><img src="https://latex.codecogs.com/png.latex?p(y,%20x)">를 추정</strong>합니다.</p></li>
-<li><p><strong>메커니즘</strong>:</p>
-<ul>
-<li>데이터 <img src="https://latex.codecogs.com/png.latex?x">가 생성되는 확률 분포 <img src="https://latex.codecogs.com/png.latex?p(x)">를 모델링합니다.</li>
-<li>베이즈 정리(Bayes’ Rule)를 사용하여 조건부 확률을 유도할 수 있습니다: <img src="https://latex.codecogs.com/png.latex?p(y%7Cx)%20=%20%5Cfrac%7Bp(y,%20x)%7D%7Bp(x)%7D%20=%20%5Cfrac%7Bp(x%7Cy)p(y)%7D%7Bp(x)%7D"></li>
-</ul></li>
-<li><p><strong>특징</strong>:</p>
-<ul>
-<li>데이터의 분포 자체를 학습하므로, 새로운 데이터 <img src="https://latex.codecogs.com/png.latex?x">를 <strong>생성(Generation)</strong>할 수 있습니다.</li>
-<li>최근의 Image Generation(Imagen, DALL-E)이나 Large Language Models(LLMs)가 이에 해당합니다.</li>
-<li>예: Naive Bayes, Gaussian Mixture Models, GANs, Diffusion Models.</li>
-</ul></li>
-</ul>
-<section id="generative-ai-examples" class="level3">
-<h3 class="anchored" data-anchor-id="generative-ai-examples">Generative AI Examples</h3>
-<ul>
-<li>강의 자료에서는 Generative Model의 최신 응용 사례로 다음을 제시합니다.
-<ul>
-<li><strong>Image</strong>: 텍스트 프롬프트로부터 이미지 생성 (예: 초밥으로 만든 집과 웰시코기).</li>
-<li><strong>Music</strong>: 프롬프트, 이미지, 비디오로부터 음악 생성 및 플레이리스트 구성.</li>
-<li><strong>Language</strong>: 대규모 언어 모델을 통한 질의응답 및 추론.</li>
-</ul></li>
-</ul>
-
-
-
-</section>
-</section>
-</section>
-
- ]]></description>
-  <category>Deep Learning</category>
-  <guid>https://shsha0110.github.io/posts/Deep Learning/1.Introduction/1.1/</guid>
-  <pubDate>Tue, 03 Mar 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>
 </rss>

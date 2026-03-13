@@ -1,0 +1,166 @@
+---
+title: "[Optimization] Lecture 2. Introduction to Convex Optimization (Part 3)"
+description: "Convex Optimization Applications"
+author: "유성현"
+date: "2026-03-09"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. Portfolio Optimization (포트폴리오 최적화)
+
+금융 공학에서 가장 고전적이고 중요한 문제 중 하나인 **평균-분산 포트폴리오 최적화(Mean-Variance Portfolio Optimization)**는 주어진 예산을 여러 자산에 어떻게 분배할지 결정하는 문제입니다.
+
+## 1.1 변수 설정 및 의미
+* **$d$개의 금융 자산:** 주식, 채권 등 투자 가능한 자산의 수입니다.
+* **$x \in \mathbb{R}^d$ (Decision Vector):** 자산 배분 비중 벡터입니다. $x_i$는 $i$번째 자산에 투자하는 예산의 비율입니다.
+  * $1^\top x = 1$: 총투자 비중의 합은 1(100%)이어야 합니다.
+  * **Long position ($x_i \ge 0$):** 자산을 매수하여 보유하는 전략.
+  * **Short position ($x_i < 0$):** 주식을 빌려서 매도한 후 나중에 갚는 공매도 전략.
+* **$||x||_1 = \sum_{i=1}^d |x_i|$:** 포트폴리오의 **레버리지(Leverage)** 크기를 의미합니다.
+* **수익률 (Return):**
+  * $i$번째 자산의 수익률 $r_i = (p'_i - p_i)/p_i$ (초기 가격 $p_i$, 기말 가격 $p'_i$).
+  * 포트폴리오 전체의 수익률은 $r^\top x$입니다.
+* **통계적 파라미터:** 수익률 벡터 $r$은 확률 변수입니다.
+  * $\mathbb{E}[r^\top x] = \mu^\top x$: 포트폴리오의 **기대 수익(Expected Return)**.
+  * $\text{Var}(r^\top x) = x^\top \Sigma x$: 포트폴리오의 **위험(Risk)**. 여기서 $\Sigma$는 공분산 행렬입니다.
+
+## 1.2 볼록 최적화로의 정식화
+투자자의 목표는 **기대 수익은 최대화하되 위험은 최소화**하는 것입니다. 이를 수식으로 나타내면 다음과 같습니다.
+
+$$
+\begin{aligned}
+\text{maximize} \quad & \mu^\top x - \gamma x^\top \Sigma x \\
+\text{subject to} \quad & 1^\top x = 1, \\
+& x \in C'
+\end{aligned}
+$$
+
+* $\gamma > 0$: 투자자의 **위험 회피(Risk Aversion) 파라미터**입니다.
+* $C'$: 추가적인 투자 제약. 
+  * 공매도를 금지한다면 $C' = \mathbb{R}^d_+$.
+  * 레버리지를 제한한다면 $C' = \{x \in \mathbb{R}^d : ||x||_1 \le B\}$.
+
+**왜 이 문제가 볼록 최적화인가?**
+1. 제약 조건은 초평면($1^\top x = 1$)과 볼록 집합 $C'$의 교집합이므로 **볼록 집합**입니다.
+2. 공분산 행렬 $\Sigma$는 항상 **양의 준정부호(Positive Semidefinite)**입니다. 따라서 $x^\top \Sigma x$는 볼록이고, 이를 뺀 $\mu^\top x - \gamma x^\top \Sigma x$는 **오목(Concave) 함수**가 됩니다.
+3. 오목 함수의 최대화는, 함수에 음수를 취한 볼록 함수를 최소화하는 문제와 동치입니다.
+   $$
+   \min\{-\mu^\top x + \gamma x^\top \Sigma x : 1^\top x = 1, x \in C'\}
+   $$
+   따라서 이 문제는 **Convex Minimization Problem**입니다.
+
+---
+
+# 2. Uncertainty Quantification (불확실성 정량화)
+
+앞선 모델의 한계는 **참 공분산 행렬 $\Sigma$를 정확히 알 수 없다**는 것입니다. 데이터로부터 구한 경험적 공분산(Empirical Covariance) $\overline{\Sigma}$를 대신 사용($x^\top \overline{\Sigma} x$)하면 리스크를 과소평가하여 치명적인 손실을 볼 수 있습니다. 
+
+따라서 오차를 고려한 **최악의 시나리오(Worst-case risk)**에 대비하는 **Robust Optimization**이 필요합니다.
+
+## 2.1 Nuclear Norm Ball을 이용한 오차 모델링
+통계학적 결과에 따르면, 참 공분산 행렬 $\Sigma$와 경험적 공분산 행렬 $\overline{\Sigma}$의 차이는 높은 확률로 특정 범위 내에 존재합니다. 이 범위를 **Nuclear Norm($|| \cdot ||_{nuc}$)**을 사용하여 제약합니다.
+
+$$
+||\Sigma - \overline{\Sigma}||_{nuc} \le \epsilon
+$$
+(참고: 행렬의 Nuclear Norm은 모든 특이값(Singular Values)의 합입니다.)
+
+이를 통해 $\overline{\Sigma}$ 주변에 반경 $\epsilon$인 Nuclear Norm Ball을 정의할 수 있습니다.
+$$
+\{\overline{\Sigma} + S \in \mathbb{R}^{d \times d} : ||S||_{nuc} \le \epsilon\}
+$$
+
+![Figure 2.1: Nuclear-norm-ball around the empirical covariance matrix](./images/nuclear_norm_ball.png) 
+
+## 2.2 Worst-case Risk 상한(Upper Bound) 도출
+우리는 오차 행렬 $S$가 허용 범위 $\epsilon$ 내에 있을 때, 이미 결정된 포트폴리오 $x$가 가질 수 있는 **가장 큰 리스크(Maximum Risk)**를 측정하고자 합니다. 공분산 행렬은 PSD 성질을 만족해야 하므로($\overline{\Sigma} + S \ge 0$), 다음과 같은 최대화 문제를 풉니다.
+
+$$
+\begin{aligned}
+\text{maximize}_S \quad & x^\top (\overline{\Sigma} + S) x \\
+\text{subject to} \quad & \overline{\Sigma} + S \ge 0, \\
+& ||S||_{nuc} \le \epsilon
+\end{aligned}
+$$
+
+이 최적화 문제의 해답은 참 리스크($x^\top \Sigma x$)가 가질 수 있는 가장 보수적인(안전한) **상한(Upper Bound)**을 제공합니다. 이 상한값을 다시 최소화하는 $x$를 찾는 것이 Robust Portfolio Optimization의 핵심입니다.
+
+---
+
+# 3. Support Vector Machine (SVM)
+
+머신러닝의 대표적인 분류(Classification) 알고리즘인 SVM 역시 볼록 최적화 문제입니다. 레이블이 $y_i \in \{-1, 1\}$인 데이터 $(x_i, y_i)$들을 가장 잘 나누는 결정 경계(초평면, Hyperplane) $w^\top x = b$를 찾는 것이 목표입니다.
+
+## 3.1 Hard Margin SVM (완벽히 분리 가능한 경우)
+가장 좋은 결정 경계는 데이터와의 여백, 즉 **Margin**이 가장 큰 경계입니다. 두 클래스를 가르는 평행한 두 초평면 $w^\top x = b$와 $w^\top x = b + 1$ 사이의 유클리드 거리가 바로 이 Margin이며, 그 값은 $1/||w||_2$에 비례합니다.
+
+Margin을 최대화하는 것은 $||w||_2$를 최소화하는 것과 같으므로 다음과 같이 정식화됩니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & ||w||_2 \\
+\text{subject to} \quad & y_i(w^\top x_i - b) \ge 0, \quad i=1,\dots,n
+\end{aligned}
+$$ 
+(이 문제가 Feasible하다면, 새로운 데이터 $x$는 $\text{sign}(w^\top x - b)$로 완벽히 분류됩니다).
+
+## 3.2 Soft Margin SVM과 Hinge Loss (분리 불가능한 경우)
+실제 데이터는 노이즈로 인해 완벽히 분리되지 않습니다. 이때는 완고한 제약조건을 푸는 대신, 오분류된 데이터에 페널티를 부과합니다.
+
+직관적으로 오분류 개수 $\sum_{i=1}^n \mathbf{1}(y_i \neq \text{sign}(w^\top x_i - b))$를 최소화하고 싶지만, 이 함수는 계단형이라 미분도 불가능하고 **Non-convex**합니다. 따라서 이를 근사하면서 동시에 상한 역할을 하는 **Hinge Loss(힌지 손실)**를 도입합니다.
+
+$$
+\text{Hinge Loss} = \sum_{i=1}^n \max\{0, 1 - y_i(w^\top x_i - b)\}
+$$ 
+
+Hinge 함수는 앞선 포스트에서 배운 'Pointwise Maximum' 성질 덕분에 항상 **볼록 함수**가 됩니다. 최종적인 최적화 형태는 다음과 같습니다.
+
+$$
+\min_{w,b} \lambda ||w||_2^2 + \frac{1}{n} \sum_{i=1}^n \max\{0, 1 - y_i(w^\top x_i - b)\}
+$$ 
+($\lambda$: Margin 크기와 오분류 페널티 간의 Trade-off를 조절하는 파라미터) 
+
+---
+
+# 4. LASSO (Least Absolute Shrinkage and Selection Operator)
+
+통계학과 머신러닝의 선형 회귀 모형 $y = \beta^\top x$에서 회귀 계수 $\beta$를 추정할 때, 가장 흔히 쓰이는 방법은 평균 제곱 오차(MSE)를 최소화하는 것입니다.
+
+$$
+\min_\beta \frac{1}{n} \sum_{i=1}^n (y_i - \beta^\top x_i)^2 = \min_\beta \frac{1}{n} ||y - X\beta||_2^2
+$$ 
+
+하지만 데이터 변수 간의 다중공선성(Collinear covariates)이나 과적합(Overfitting) 문제가 발생할 수 있습니다. 이를 해결하기 위해 **LASSO**는 목적 함수에 제약을 걸어 변수 선택(Variable selection)과 정규화(Regularization)를 동시에 수행합니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & \frac{1}{n} ||y - X\beta||_2^2 \\
+\text{subject to} \quad & ||\beta||_1 \le t
+\end{aligned}
+$$ 
+
+* **$L_1$-Norm 제약:** $||\beta||_1 \le t$ 제약은 기하학적으로 각진 다이아몬드 형태를 가지므로, 최적해 $\beta$의 많은 성분들이 정확히 0이 되는 **Sparsity(희소성)**를 유도합니다.
+* **Lagrangian Form:** 이 문제는 보통 조절 파라미터 $\lambda$를 이용한 아래의 무제약 최적화 문제 형태로 자주 쓰입니다.
+  $$
+  \min_\beta \frac{1}{n} ||y - X\beta||_2^2 + \lambda ||\beta||_1
+  $$ 
+
+---
+
+# 5. Facility Location (입지 선정 문제)
+
+$n$개의 가구(Household) 위치 $x_1, \dots, x_n \in \mathbb{R}^d$가 주어졌을 때, 모든 가구를 커버하는 하나의 병원을 지으려 합니다. 
+가장 바람직한 위치 $x$는 **"가장 멀리 있는 가구까지의 거리를 최소화"**하는 곳이어야 합니다.
+
+$$
+\min_x \max_{i=1,\dots,n} ||x - x_i||
+$$ 
+
+이 수식은 구조적으로 $\max$ 연산이 포함된 Minimax 문제지만, 내부의 함수 $\max_i ||x - x_i||$는 앞서 배운 거리 함수들의 'Pointwise Maximum'이므로 **볼록 함수**가 됩니다. 따라서 이 문제 역시 매우 직관적인 형태의 볼록 최적화 문제로 다룰 수 있습니다.

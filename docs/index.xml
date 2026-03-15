@@ -128,89 +128,579 @@
   <pubDate>Mon, 16 Mar 2026 15:00:00 GMT</pubDate>
 </item>
 <item>
-  <title>[Linear Algebra Supplement] 특이값 분해(SVD)의 계산 과정과 실전 활용 예시</title>
-  <dc:creator>Quarto Blog</dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/2.Introduction-to-Convex-Optimization/</link>
+  <title>[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 1)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/</link>
   <description><![CDATA[ 
 
 
 
 
 
-<p>특이값 분해(SVD)는 임의의 <img src="https://latex.codecogs.com/png.latex?m%20%5Ctimes%20n"> 직사각형 행렬 <img src="https://latex.codecogs.com/png.latex?A">를 세 개의 행렬의 곱으로 분해하는 기법입니다. <img src="https://latex.codecogs.com/png.latex?A%20=%20U%20%5CSigma%20V%5E%5Ctop"> 이 수식이 실제로 어떻게 작동하는지, 간단한 <img src="https://latex.codecogs.com/png.latex?3%20%5Ctimes%202"> 행렬을 직접 분해해 보면서 수학적 원리를 이해하고, 이어서 이것이 현실 세계에서 어떻게 쓰이는지 살펴보겠습니다.</p>
-<hr>
-<section id="수학적-계산-예시-step-by-step" class="level1" data-number="1">
-<h1 data-number="1"><span class="header-section-number">1</span> 1. 수학적 계산 예시 (Step-by-Step)</h1>
-<p>다음과 같은 <img src="https://latex.codecogs.com/png.latex?3%20%5Ctimes%202"> 행렬 <img src="https://latex.codecogs.com/png.latex?A">가 있다고 가정해 봅시다. (예: 3명의 사용자가 2개의 상품에 매긴 평점 데이터)</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AA%20=%20%5Cbegin%7Bbmatrix%7D%201%20&amp;%201%20%5C%5C%201%20&amp;%200%20%5C%5C%200%20&amp;%201%20%5Cend%7Bbmatrix%7D%0A"></p>
-<p>우리의 목표는 이 행렬을 <img src="https://latex.codecogs.com/png.latex?A%20=%20U%20%5CSigma%20V%5E%5Ctop"> 형태로 쪼개는 것입니다. (여기서는 실전에서 가장 많이 쓰이는 <strong>Thin SVD(축소형 SVD)</strong>를 기준으로 계산합니다.)</p>
-<section id="step-1-atop-a-계산-및-고유벡터-도출-우특이벡터-v" class="level3" data-number="1.0.1">
-<h3 data-number="1.0.1" class="anchored" data-anchor-id="step-1-atop-a-계산-및-고유벡터-도출-우특이벡터-v"><span class="header-section-number">1.0.1</span> Step 1: <img src="https://latex.codecogs.com/png.latex?A%5E%5Ctop%20A"> 계산 및 고유벡터 도출 (우특이벡터 <img src="https://latex.codecogs.com/png.latex?V">)</h3>
-<p>먼저, 특이값을 찾기 위해 <img src="https://latex.codecogs.com/png.latex?A%5E%5Ctop%20A">를 계산합니다. <img src="https://latex.codecogs.com/png.latex?%0AA%5E%5Ctop%20A%20=%20%5Cbegin%7Bbmatrix%7D%201%20&amp;%201%20&amp;%200%20%5C%5C%201%20&amp;%200%20&amp;%201%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%201%20&amp;%201%20%5C%5C%201%20&amp;%200%20%5C%5C%200%20&amp;%201%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%202%20&amp;%201%20%5C%5C%201%20&amp;%202%20%5Cend%7Bbmatrix%7D%0A"> 이 <img src="https://latex.codecogs.com/png.latex?2%20%5Ctimes%202"> 대칭행렬의 고유값(<img src="https://latex.codecogs.com/png.latex?%5Clambda">)과 고유벡터를 구합니다. * <img src="https://latex.codecogs.com/png.latex?%5Clambda_1%20=%203%20%5Cimplies"> 정규화된 고유벡터 <img src="https://latex.codecogs.com/png.latex?v_1%20=%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%5Cbegin%7Bbmatrix%7D%201%20%5C%5C%201%20%5Cend%7Bbmatrix%7D"> * <img src="https://latex.codecogs.com/png.latex?%5Clambda_2%20=%201%20%5Cimplies"> 정규화된 고유벡터 <img src="https://latex.codecogs.com/png.latex?v_2%20=%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%5Cbegin%7Bbmatrix%7D%20-1%20%5C%5C%201%20%5Cend%7Bbmatrix%7D"></p>
-<p>이 고유벡터들을 열로 갖는 행렬이 바로 <strong>우특이벡터 행렬 <img src="https://latex.codecogs.com/png.latex?V"></strong>입니다. <img src="https://latex.codecogs.com/png.latex?%0AV%20=%20%5Cbegin%7Bbmatrix%7D%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20&amp;%20-%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5C%5C%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20&amp;%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5Cend%7Bbmatrix%7D%0A"></p>
+<section id="introduction-순차-데이터sequence-data-처리를-향하여" class="level1">
+<h1>1. Introduction: 순차 데이터(Sequence Data) 처리를 향하여</h1>
+<p>기존의 Feedforward Neural Networks(예: CNN, MLP)는 고정된 크기의 입력값을 받아 고정된 크기의 출력값을 반환하는 구조를 가집니다. 그러나 자연어 처리(NLP), 음성 인식, 비디오 분석과 같은 도메인에서는 입력 데이터의 길이가 가변적이며, 이전 시점의 데이터가 현재 시점에 영향을 미치는 <strong>순차적 특성(Sequential nature)</strong>을 지닙니다.</p>
+<p>이러한 순차 데이터를 효과적으로 모델링하기 위해 등장한 개념이 바로 <strong>순환 신경망(Recurrent Neural Networks, RNN)</strong>입니다. RNN은 내부에 ’상태(State)’를 저장할 수 있는 메모리 구조를 도입하여, 시계열 데이터를 처리할 수 있도록 설계되었습니다.</p>
 </section>
-<section id="step-2-특이값-행렬-sigma-도출" class="level3" data-number="1.0.2">
-<h3 data-number="1.0.2" class="anchored" data-anchor-id="step-2-특이값-행렬-sigma-도출"><span class="header-section-number">1.0.2</span> Step 2: 특이값 행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma"> 도출</h3>
-<p>특이값 <img src="https://latex.codecogs.com/png.latex?%5Csigma_i">는 앞서 구한 고유값의 양의 제곱근입니다. * <img src="https://latex.codecogs.com/png.latex?%5Csigma_1%20=%20%5Csqrt%7B%5Clambda_1%7D%20=%20%5Csqrt%7B3%7D"> * <img src="https://latex.codecogs.com/png.latex?%5Csigma_2%20=%20%5Csqrt%7B%5Clambda_2%7D%20=%20%5Csqrt%7B1%7D%20=%201"></p>
-<p>따라서 <strong>대각 행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma"></strong>는 다음과 같습니다. (가장 큰 특이값이 항상 왼쪽 위에 오도록 정렬합니다.) <img src="https://latex.codecogs.com/png.latex?%0A%5CSigma%20=%20%5Cbegin%7Bbmatrix%7D%20%5Csqrt%7B3%7D%20&amp;%200%20%5C%5C%200%20&amp;%201%20%5Cend%7Bbmatrix%7D%0A"></p>
-</section>
-<section id="step-3-좌특이벡터-u-도출" class="level3" data-number="1.0.3">
-<h3 data-number="1.0.3" class="anchored" data-anchor-id="step-3-좌특이벡터-u-도출"><span class="header-section-number">1.0.3</span> Step 3: 좌특이벡터 <img src="https://latex.codecogs.com/png.latex?U"> 도출</h3>
-<p>좌특이벡터 <img src="https://latex.codecogs.com/png.latex?u_i">는 다음 공식을 통해 구할 수 있습니다: <img src="https://latex.codecogs.com/png.latex?u_i%20=%20%5Cfrac%7B1%7D%7B%5Csigma_i%7D%20A%20v_i"></p>
+<section id="architectures-of-neural-networks" class="level1">
+<h1>2. Architectures of Neural Networks</h1>
+<p>네트워크가 입력(Input)과 출력(Output)을 어떻게 매핑하느냐에 따라 다양한 아키텍처로 분류할 수 있습니다. RNN은 구조적 유연성을 바탕으로 다양한 형태의 매핑을 지원합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/images/network_architectures.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 다양한 신경망 아키텍처 비교. 빨간색은 입력, 초록색은 은닉층, 파란색은 출력을 나타낸다. 좌측부터 One-to-one, One-to-many, Many-to-one, Many-to-many 구조를 시각화한 도식.</figcaption>
+</figure>
+</div>
 <ul>
-<li><img src="https://latex.codecogs.com/png.latex?u_1%20=%20%5Cfrac%7B1%7D%7B%5Csqrt%7B3%7D%7D%20%5Cbegin%7Bbmatrix%7D%201%20&amp;%201%20%5C%5C%201%20&amp;%200%20%5C%5C%200%20&amp;%201%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5C%5C%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%20%5Cfrac%7B2%7D%7B%5Csqrt%7B6%7D%7D%20%5C%5C%20%5Cfrac%7B1%7D%7B%5Csqrt%7B6%7D%7D%20%5C%5C%20%5Cfrac%7B1%7D%7B%5Csqrt%7B6%7D%7D%20%5Cend%7Bbmatrix%7D"></li>
-<li><img src="https://latex.codecogs.com/png.latex?u_2%20=%20%5Cfrac%7B1%7D%7B1%7D%20%5Cbegin%7Bbmatrix%7D%201%20&amp;%201%20%5C%5C%201%20&amp;%200%20%5C%5C%200%20&amp;%201%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%20-%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5C%5C%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%200%20%5C%5C%20-%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5C%5C%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5Cend%7Bbmatrix%7D"></li>
+<li><strong>One to one</strong>: 단일 입력 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 단일 출력. 전통적인 Feedforward Network의 형태입니다.
+<ul>
+<li><em>Example</em>: 이미지 분류 (Image <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> Label)</li>
+</ul></li>
+<li><strong>One to many</strong>: 단일 입력 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 순차 출력. 하나의 정보를 바탕으로 일련의 시퀀스를 생성합니다.
+<ul>
+<li><em>Example</em>: 이미지 캡셔닝 (Image <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> Sequence of words)</li>
+</ul></li>
+<li><strong>Many to one</strong>: 순차 입력 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 단일 출력. 시계열 데이터를 모두 읽은 후 하나의 결론을 도출합니다.
+<ul>
+<li><em>Example</em>: 비디오 행동 분류, 감성 분석 (Sequence of words/images <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> Label)</li>
+</ul></li>
+<li><strong>Many to many</strong>: 순차 입력 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 순차 출력. 입력 시퀀스와 출력 시퀀스의 길이가 같거나 다를 수 있습니다.
+<ul>
+<li><em>Example 1</em>: 기계 번역 (Sequence of words in English <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> Sequence of words in Korean)</li>
+<li><em>Example 2</em>: 프레임 단위 비디오 분류 (Sequence of images <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> Sequence of labels)</li>
+</ul></li>
 </ul>
-<p>이 벡터들을 모으면 <strong>좌특이벡터 행렬 <img src="https://latex.codecogs.com/png.latex?U"></strong>가 됩니다. <img src="https://latex.codecogs.com/png.latex?%0AU%20=%20%5Cbegin%7Bbmatrix%7D%20%5Cfrac%7B2%7D%7B%5Csqrt%7B6%7D%7D%20&amp;%200%20%5C%5C%20%5Cfrac%7B1%7D%7B%5Csqrt%7B6%7D%7D%20&amp;%20-%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5C%5C%20%5Cfrac%7B1%7D%7B%5Csqrt%7B6%7D%7D%20&amp;%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5Cend%7Bbmatrix%7D%0A"></p>
 </section>
-<section id="step-4-분해-완료" class="level3" data-number="1.0.4">
-<h3 data-number="1.0.4" class="anchored" data-anchor-id="step-4-분해-완료"><span class="header-section-number">1.0.4</span> Step 4: 분해 완료</h3>
-<p>결과적으로 행렬 <img src="https://latex.codecogs.com/png.latex?A">는 다음과 같이 세 행렬의 곱으로 완벽히 분해되었습니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cunderbrace%7B%5Cbegin%7Bbmatrix%7D%201%20&amp;%201%20%5C%5C%201%20&amp;%200%20%5C%5C%200%20&amp;%201%20%5Cend%7Bbmatrix%7D%7D_%7BA%7D%20=%0A%5Cunderbrace%7B%5Cbegin%7Bbmatrix%7D%20%5Cfrac%7B2%7D%7B%5Csqrt%7B6%7D%7D%20&amp;%200%20%5C%5C%20%5Cfrac%7B1%7D%7B%5Csqrt%7B6%7D%7D%20&amp;%20-%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5C%5C%20%5Cfrac%7B1%7D%7B%5Csqrt%7B6%7D%7D%20&amp;%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5Cend%7Bbmatrix%7D%7D_%7BU%7D%0A%5Cunderbrace%7B%5Cbegin%7Bbmatrix%7D%20%5Csqrt%7B3%7D%20&amp;%200%20%5C%5C%200%20&amp;%201%20%5Cend%7Bbmatrix%7D%7D_%7B%5CSigma%7D%0A%5Cunderbrace%7B%5Cbegin%7Bbmatrix%7D%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20&amp;%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5C%5C%20-%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20&amp;%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%7D%7D%20%5Cend%7Bbmatrix%7D%7D_%7BV%5E%5Ctop%7D%0A"></p>
+<section id="mathematical-formulation-of-vanilla-rnn" class="level1">
+<h1>3. Mathematical Formulation of Vanilla RNN</h1>
+<p>RNN의 가장 핵심적인 아이디어는 <strong>시퀀스가 처리됨에 따라 업데이트되는 ‘내부 상태(Internal State)’</strong>를 가진다는 것입니다. 매 타임스텝(time step) <img src="https://latex.codecogs.com/png.latex?t">마다, 네트워크는 이전 시점의 은닉 상태(hidden state) <img src="https://latex.codecogs.com/png.latex?h_%7Bt-1%7D">과 현재 시점의 입력 <img src="https://latex.codecogs.com/png.latex?x_%7Bt%7D">를 받아 새로운 은닉 상태 <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D">를 계산합니다.</p>
+<p>가장 기본적인 형태의 RNN인 <strong>Vanilla RNN (또는 Elman RNN)</strong>은 다음과 같은 점화식(Recurrence formula)으로 표현됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%20=%20f_%7BW%7D(h_%7Bt-1%7D,%20x_%7Bt%7D)"></p>
+<p>이때 중요한 점은 <strong>모든 타임스텝에서 동일한 함수 <img src="https://latex.codecogs.com/png.latex?f_W">와 파라미터 <img src="https://latex.codecogs.com/png.latex?W">가 반복적으로 사용(Parameter Sharing)</strong>된다는 것입니다. 구체적인 수식은 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%20=%20%5Ctanh(W_%7Bhh%7Dh_%7Bt-1%7D%20+%20W_%7Bxh%7Dx_%7Bt%7D%20+%20b_%7Bh%7D)"> <img src="https://latex.codecogs.com/png.latex?y_%7Bt%7D%20=%20W_%7Bhy%7Dh_%7Bt%7D%20+%20b_%7By%7D"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?x_t">: <img src="https://latex.codecogs.com/png.latex?t"> 시점의 입력 벡터</li>
+<li><img src="https://latex.codecogs.com/png.latex?h_t">: <img src="https://latex.codecogs.com/png.latex?t"> 시점의 은닉 상태 (단일 은닉 벡터로 구성됨). 과거의 정보를 요약하여 담고 있습니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?y_t">: <img src="https://latex.codecogs.com/png.latex?t"> 시점의 출력 벡터</li>
+<li><img src="https://latex.codecogs.com/png.latex?W_%7Bhh%7D">: 은닉 상태 간의 전이를 담당하는 가중치 행렬</li>
+<li><img src="https://latex.codecogs.com/png.latex?W_%7Bxh%7D">: 입력값을 은닉 상태로 변환하는 가중치 행렬</li>
+<li><img src="https://latex.codecogs.com/png.latex?W_%7Bhy%7D">: 은닉 상태를 최종 출력으로 변환하는 가중치 행렬</li>
+<li><img src="https://latex.codecogs.com/png.latex?b_h,%20b_y">: 편향(bias) 벡터</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Ctanh">: 비선형 활성화 함수. 값의 범위를 <img src="https://latex.codecogs.com/png.latex?%5B-1,%201%5D">로 제한하여 그래디언트의 안정성을 돕습니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/images/rnn_computation_graph.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Vanilla RNN의 계산 그래프(Computation Graph). 단일 노드가 루프를 도는 형태(좌측)를 시간 축에 따라 펼친(Unrolled) 형태(우측)로 표현. 모든 타임스텝 <img src="https://latex.codecogs.com/png.latex?t">에서 동일한 가중치 행렬 <img src="https://latex.codecogs.com/png.latex?W">가 사용됨을 화살표로 명확히 보여준다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="computation-graphs-unrolling-over-time" class="level1">
+<h1>4. Computation Graphs: Unrolling over Time</h1>
+<p>RNN을 학습하고 이해하기 위해서는 순환 구조를 시간 축(Time-step)에 따라 길게 펼쳐서(Unroll) 생각하는 것이 편리합니다.</p>
+<section id="sequence-to-sequence-many-to-many" class="level3">
+<h3 class="anchored" data-anchor-id="sequence-to-sequence-many-to-many">4.1 Sequence to Sequence (Many to Many)</h3>
+<p>입력 시퀀스 <img src="https://latex.codecogs.com/png.latex?x_1,%20x_2,%20%5Cdots,%20x_T">가 들어올 때, 매 스텝마다 <img src="https://latex.codecogs.com/png.latex?h_t">가 계산되고 그에 대응하는 출력 <img src="https://latex.codecogs.com/png.latex?y_t">와 손실값 <img src="https://latex.codecogs.com/png.latex?L_t">가 산출됩니다. 최종 손실값 <img src="https://latex.codecogs.com/png.latex?L">은 각 스텝의 손실을 모두 합한 값이 됩니다 (<img src="https://latex.codecogs.com/png.latex?L%20=%20%5Csum_%7Bt=1%7D%5ET%20L_t">).</p>
+</section>
+<section id="encoding-decoding-seq-to-seq" class="level3">
+<h3 class="anchored" data-anchor-id="encoding-decoding-seq-to-seq">4.2 Encoding &amp; Decoding (Seq to Seq)</h3>
+<p>기계 번역 등에서 사용되는 <strong>Many to one + One to many</strong> 구조입니다. 1. <strong>Many to one (Encoder)</strong>: 입력 시퀀스를 차례대로 읽어들여, 마지막 은닉 상태 <img src="https://latex.codecogs.com/png.latex?h_T">에 전체 입력 시퀀스의 문맥 정보를 하나의 벡터로 압축(Encode)합니다. 이때 가중치 <img src="https://latex.codecogs.com/png.latex?W_1">이 사용됩니다. 2. <strong>One to many (Decoder)</strong>: 압축된 문맥 벡터를 초기 상태로 삼아, 가중치 <img src="https://latex.codecogs.com/png.latex?W_2">를 사용하여 새로운 출력 시퀀스를 순차적으로 생성(Decode)해 냅니다.</p>
+</section>
+</section>
+<section id="example-character-level-language-modeling" class="level1">
+<h1>5. Example: Character-level Language Modeling</h1>
+<p>RNN이 작동하는 방식을 직관적으로 이해하기 위해, 문자 수준(Character-level) 언어 모델을 살펴보겠습니다. 모델의 목표는 주어진 문자열을 바탕으로 다음에 올 문자를 예측하는 것입니다.</p>
+<ul>
+<li><strong>학습 데이터</strong>: “hello”</li>
+<li><strong>어휘 사전(Vocabulary)</strong>: <img src="https://latex.codecogs.com/png.latex?%5Bh,%20e,%20l,%20o%5D"> (크기 <img src="https://latex.codecogs.com/png.latex?V=4">)</li>
+<li><strong>입력 인코딩</strong>: 각 문자는 원-핫 벡터(One-hot vector)로 인코딩됩니다. 예) ‘h’ = <img src="https://latex.codecogs.com/png.latex?%5B1,%200,%200,%200%5D%5ET"></li>
+</ul>
+<section id="forward-pass-training" class="level3">
+<h3 class="anchored" data-anchor-id="forward-pass-training">5.1 Forward Pass (Training)</h3>
+<p>주어진 시퀀스 “hel”을 입력하여 “ello”를 예측하는 과정입니다.</p>
+<ol type="1">
+<li><strong><img src="https://latex.codecogs.com/png.latex?t=1"></strong>: 입력 ’h’가 들어갑니다. <img src="https://latex.codecogs.com/png.latex?h_1%20=%20%5Ctanh(W_%7Bhh%7Dh_0%20+%20W_%7Bxh%7Dx_1%20+%20b_h)">를 계산합니다. 출력층 <img src="https://latex.codecogs.com/png.latex?y_1">을 통해 다음 문자가 ’e’일 확률을 예측합니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?t=2"></strong>: 입력 ’e’가 들어갑니다. 이전 상태 <img src="https://latex.codecogs.com/png.latex?h_1">과 결합하여 <img src="https://latex.codecogs.com/png.latex?h_2">를 계산하고, 출력층을 통해 ’l’을 예측합니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?t=3"></strong>: 입력 ’l’이 들어갑니다. 동일한 방식으로 <img src="https://latex.codecogs.com/png.latex?h_3">를 업데이트하고, 다음 문자 ’l’을 예측합니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?t=4"></strong>: 입력 ’l’이 들어가고, 다음 문자 ’o’를 예측합니다.</li>
+</ol>
+<p>각 출력 <img src="https://latex.codecogs.com/png.latex?y_t">에 Softmax 함수를 취해 확률 분포를 얻고, 실제 정답 문자와의 Cross-Entropy Loss를 계산하여 네트워크를 학습시킵니다.</p>
+</section>
+<section id="embedding-layer의-도입" class="level3">
+<h3 class="anchored" data-anchor-id="embedding-layer의-도입">5.2 Embedding Layer의 도입</h3>
+<p>입력을 원-핫 벡터로 표현할 때, 입력 가중치 행렬 <img src="https://latex.codecogs.com/png.latex?W_%7Bxh%7D">와 원-핫 벡터 <img src="https://latex.codecogs.com/png.latex?x_t">의 행렬 곱은 단순히 <strong><img src="https://latex.codecogs.com/png.latex?W_%7Bxh%7D">의 특정 열(Column)을 추출</strong>하는 연산과 수학적으로 완전히 동일합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bbmatrix%7D%20w_%7B11%7D%20&amp;%20w_%7B12%7D%20&amp;%20w_%7B13%7D%20&amp;%20w_%7B14%7D%20%5C%5C%20w_%7B21%7D%20&amp;%20w_%7B22%7D%20&amp;%20w_%7B23%7D%20&amp;%20w_%7B24%7D%20%5C%5C%20w_%7B31%7D%20&amp;%20w_%7B32%7D%20&amp;%20w_%7B33%7D%20&amp;%20w_%7B34%7D%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%201%20%5C%5C%200%20%5C%5C%200%20%5C%5C%200%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%20w_%7B11%7D%20%5C%5C%20w_%7B21%7D%20%5C%5C%20w_%7B31%7D%20%5Cend%7Bbmatrix%7D%0A"></p>
+<p>불필요한 행렬 곱 연산을 피하기 위해, 실제 딥러닝 프레임워크에서는 이를 분리하여 <strong>임베딩 계층(Embedding Layer)</strong>으로 구현합니다.</p>
+</section>
+<section id="test-time-generation-inference" class="level3">
+<h3 class="anchored" data-anchor-id="test-time-generation-inference">5.3 Test-time Generation (Inference)</h3>
+<p>학습이 끝난 후 모델이 새로운 텍스트를 생성하는 과정은 다음과 같습니다. 1. 초기 문자(Start token)를 네트워크에 입력합니다. 2. Softmax를 통과한 출력 분포에서 다음 문자를 <strong>샘플링(Sample)</strong>합니다. 3. 샘플링된 문자를 다음 타임스텝의 <strong>입력으로 다시 주입(Feed back)</strong>합니다. 4. 이 과정을 반복하여 전체 문장을 생성합니다.</p>
+</section>
+</section>
+<section id="training-rnns-bptt-and-truncated-bptt" class="level1">
+<h1>6. Training RNNs: BPTT and Truncated BPTT</h1>
+<p>RNN의 가중치를 업데이트하기 위해서는 시간의 역방향으로 그래디언트를 전파해야 합니다. 이를 <strong>BPTT(Backpropagation Through Time)</strong>라고 부릅니다.</p>
+<section id="bptt의-한계" class="level3">
+<h3 class="anchored" data-anchor-id="bptt의-한계">6.1 BPTT의 한계</h3>
+<p>BPTT는 전체 시퀀스에 대해 Forward Pass를 수행하여 손실을 계산한 뒤, 다시 전체 시퀀스를 거슬러 올라가며 Backward Pass를 수행하여 그래디언트를 계산합니다. 만약 시퀀스 길이가 매우 길다면(예: 책 한 권의 텍스트), Forward Pass에서 발생한 모든 은닉 상태를 메모리에 저장해야 하므로 <strong>막대한 메모리가 소모</strong>된다는 치명적인 문제가 발생합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/images/bptt_diagram.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: BPTT의 작동 원리.</figcaption>
+</figure>
+</div>
+</section>
+<section id="truncated-bptt-tbptt" class="level3">
+<h3 class="anchored" data-anchor-id="truncated-bptt-tbptt">6.2 Truncated BPTT (TBPTT)</h3>
+<p>이러한 문제를 해결하기 위해 <strong>Truncated BPTT</strong> 기법이 고안되었습니다. * 긴 시퀀스를 일정한 크기의 <strong>청크(Chunk)</strong>로 나눕니다. * Forward Pass 시에는 이전 청크의 마지막 은닉 상태를 다음 청크의 초기 은닉 상태로 전달합니다. 즉, <strong>은닉 상태는 시간의 흐름에 따라 끊임없이 앞으로 전달(Carry hidden states forward forever)</strong>됩니다. * 그러나 Backward Pass(오차 역전파)는 <strong>해당 청크 내부의 제한된 스텝 수만큼만 수행</strong>합니다. * 예를 들어, 청크 2의 Backward Pass는 청크 1으로 그래디언트를 전달하지 않고 잘라냅니다(Truncate). 이를 통해 긴 문맥 정보를 유지하면서도 메모리 사용량과 연산량을 현실적인 수준으로 제어할 수 있습니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/images/tbptt_diagram.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Truncated BPTT(TBPTT)의 작동 원리. 은닉 상태(초록색 상자 간의 검은 화살표)는 전체 시퀀스를 관통하며 끝없이 전달되지만, 역전파(빨간 화살표)는 일정한 스텝(청크 단위)에서 끊어짐으로써 메모리 부하를 방지하는 모습을 시각화.</figcaption>
+</figure>
+</div>
+</section>
+</section>
+<section id="applications-of-rnn" class="level1">
+<h1>7. Applications of RNN</h1>
+<p>RNN은 시계열 데이터를 다룰 수 있는 특성 덕분에 매우 강력한 생성 능력을 보여줍니다.</p>
+<ul>
+<li><strong>문학 작품 생성</strong>: 셰익스피어의 소네트(Sonnets)나 톨스토이의 소설 텍스트로 RNN을 학습시키면, 처음에는 의미 없는 문자열을 뱉어내다가 학습이 진행될수록 실제 영어 단어, 띄어쓰기, 심지어 문장 구조와 문체까지 모방하여 새로운 텍스트를 생성해냅니다.</li>
+<li><strong>코드 생성</strong>: 리눅스 커널의 C 코드 등을 학습 데이터로 사용하면, 괄호 맞춤, 들여쓰기, 변수 선언 등을 문법에 맞게 생성하는 코드를 작성할 수 있습니다.</li>
+</ul>
+<section id="image-captioning-cnn-rnn" class="level3">
+<h3 class="anchored" data-anchor-id="image-captioning-cnn-rnn">7.1 Image Captioning (CNN + RNN)</h3>
+<p>RNN과 컴퓨터 비전(CNN) 기술을 결합하여, 이미지를 설명하는 자연어 문장을 생성하는 <strong>이미지 캡셔닝(Image Captioning)</strong> 모델을 만들 수 있습니다.</p>
+<ol type="1">
+<li><strong>Feature Extraction</strong>: 먼저, 사전에 학습된 CNN (예: VGG, ResNet)의 마지막 분류 계층(FC layer)을 제거하여 이미지의 핵심 특징이 압축된 <strong>시각적 문맥 벡터(Visual Context Vector) <img src="https://latex.codecogs.com/png.latex?v"></strong>를 추출합니다.</li>
+<li><strong>RNN Modification</strong>: 기존 Vanilla RNN의 점화식에 이 이미지 벡터 <img src="https://latex.codecogs.com/png.latex?v">가 추가적인 조건(Condition)으로 작용하도록 수식을 수정합니다.</li>
+</ol>
+<p><img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%20=%20%5Ctanh(W_%7Bhh%7Dh_%7Bt-1%7D%20+%20W_%7Bxh%7Dx_%7Bt%7D%20+%20%5Cmathbf%7BW_%7Bih%7Dv%7D%20+%20b_%7Bh%7D)"></p>
+<p>새롭게 추가된 <img src="https://latex.codecogs.com/png.latex?W_%7Bih%7D">는 이미지 벡터 <img src="https://latex.codecogs.com/png.latex?v">를 은닉 상태의 차원으로 투영하는 가중치 행렬입니다. 즉, RNN은 매 스텝 단어를 생성할 때마다 “이전까지 생성한 문맥”과 “현재 주어진 이미지 정보”를 동시에 고려하여 다음 단어를 예측하게 됩니다. 모델은 예측된 단어가 <code>&lt;END&gt;</code> 토큰일 때 생성을 종료합니다.</p>
+<p><strong>실행 결과 예시:</strong> * <strong>성공 사례</strong>: “A cat sitting on a suitcase on the floor”, “A dog is running in the grass with a frisbee.” 처럼 이미지 내 객체와 행동을 정확히 파악하여 문장으로 서술합니다. * <strong>실패 사례</strong>: 거미줄 덩어리를 새가 나뭇가지에 앉아 있는 것(“A bird is perched on a tree branch”)으로 오인하거나, 야구 수비 장면의 복잡한 동작을 투수(“A man in a baseball uniform throwing a ball”)로 잘못 예측하기도 합니다. 이는 RNN 자체의 문제라기보다는 시각적 특징 추출의 한계나 데이터셋의 편향성에서 기인하는 경우가 많습니다.</p>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Deep Learning</category>
+  <guid>https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/</guid>
+  <pubDate>Sun, 15 Mar 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 2)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.2/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-vanilla-rnn의-치명적인-약점" class="level1">
+<h1>1. Introduction: Vanilla RNN의 치명적인 약점</h1>
+<p>이전 포스트에서는 시계열 데이터를 처리하기 위한 기본적인 순환 신경망(Vanilla RNN)의 구조와 역전파(BPTT) 과정을 살펴보았습니다. RNN은 과거의 정보를 현재로 전달하는 매력적인 구조를 가졌지만, 실제 학습 과정에서는 시퀀스가 길어질수록 과거의 정보를 제대로 기억하지 못하는 치명적인 한계가 존재합니다.</p>
+<p>이번 포스트에서는 Vanilla RNN의 수학적 한계인 <strong>기울기 소실 및 폭발(Vanishing/Exploding Gradients)</strong> 현상의 원인을 수식적으로 파헤치고, 이를 구조적으로 극복한 <strong>LSTM(Long Short-Term Memory)</strong> 아키텍처의 혁신성에 대해 깊이 있게 다루겠습니다.</p>
+<hr>
+</section>
+<section id="vanilla-rnn의-기울기-흐름gradient-flow-분석" class="level1">
+<h1>2. Vanilla RNN의 기울기 흐름(Gradient Flow) 분석</h1>
+<p>Vanilla RNN의 은닉 상태(Hidden State)를 업데이트하는 점화식은 다음과 같습니다. 가중치 행렬 <img src="https://latex.codecogs.com/png.latex?W_%7Bhh%7D">와 <img src="https://latex.codecogs.com/png.latex?W_%7Bxh%7D">를 하나의 행렬 <img src="https://latex.codecogs.com/png.latex?W">로 묶어 표현하면 수식을 더 직관적으로 볼 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%20=%20%5Ctanh(W_%7Bhh%7Dh_%7Bt-1%7D%20+%20W_%7Bxh%7Dx_%7Bt%7D%20+%20b_%7Bh%7D)"> <img src="https://latex.codecogs.com/png.latex?=%20%5Ctanh%20%5Cleft(%20%5Cbegin%7Bpmatrix%7D%20W_%7Bhh%7D%20&amp;%20W_%7Bhx%7D%20%5Cend%7Bpmatrix%7D%20%5Cbegin%7Bpmatrix%7D%20h_%7Bt-1%7D%20%5C%5C%20x_%7Bt%7D%20%5Cend%7Bpmatrix%7D%20+%20b_%7Bh%7D%20%5Cright)"> <img src="https://latex.codecogs.com/png.latex?=%20%5Ctanh%20%5Cleft(%20W%20%5Cbinom%7Bh_%7Bt-1%7D%7D%7Bx_%7Bt%7D%7D%20+%20b_%7Bh%7D%20%5Cright)"></p>
+<p>문제가 발생하는 지점은 역전파(Backpropagation) 과정입니다. 미래의 시점 <img src="https://latex.codecogs.com/png.latex?t">에서 과거의 시점 <img src="https://latex.codecogs.com/png.latex?t-k">로 손실 함수의 기울기를 전달하기 위해 연쇄 법칙(Chain Rule)을 적용해 보면, 매 스텝마다 <img src="https://latex.codecogs.com/png.latex?h_t">를 <img src="https://latex.codecogs.com/png.latex?h_%7Bt-1%7D">로 미분한 값이 계속해서 곱해집니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.2/images/vanilla_rnn_gradient.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Vanilla RNN의 역전파 과정. 시간 축을 따라 거꾸로 진행될 때(빨간색 화살표), 매 타임스텝마다 가중치 행렬 W(정확히는 <img src="https://latex.codecogs.com/png.latex?W_%7Bhh%7D%5ET">)와의 행렬 곱 연산이 누적적으로 발생함을 시각화한 도식.</figcaption>
+</figure>
+</div>
+<section id="기울기-폭발exploding-gradients과-기울기-클리핑gradient-clipping" class="level2">
+<h2 class="anchored" data-anchor-id="기울기-폭발exploding-gradients과-기울기-클리핑gradient-clipping">2.1 기울기 폭발(Exploding Gradients)과 기울기 클리핑(Gradient Clipping)</h2>
+<p>역전파 시 매 스텝마다 가중치 행렬 <img src="https://latex.codecogs.com/png.latex?W">가 반복적으로 곱해지므로, 만약 행렬 <img src="https://latex.codecogs.com/png.latex?W">의 <strong>가장 큰 특이값(Largest Singular Value)이 1보다 크다면</strong>, 기울기는 시퀀스 길이가 길어짐에 따라 기하급수적으로 커집니다. 이를 <strong>기울기 폭발(Exploding Gradients)</strong>이라고 합니다.</p>
+<p>이 문제는 학습을 극도로 불안정하게 만들며, 실무에서는 기울기의 L2 노름(norm)이 특정 임계값을 넘지 못하도록 강제로 줄이는 <strong>기울기 클리핑(Gradient Clipping)</strong> 기법으로 완화합니다. 강의 자료에서 제시된 간단한 구현 예시는 다음과 같습니다.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1">grad_norm <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">=</span> np.<span class="bu" style="color: null;
+background-color: null;
+font-style: inherit;">sum</span>(grad <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">*</span> grad)</span>
+<span id="cb1-2"><span class="cf" style="color: #003B4F;
+background-color: null;
+font-weight: bold;
+font-style: inherit;">if</span> grad_norm <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">&gt;</span> threshold:</span>
+<span id="cb1-3">    grad <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">*=</span> (threshold <span class="op" style="color: #5E5E5E;
+background-color: null;
+font-style: inherit;">/</span> grad_norm)</span></code></pre></div></div>
+</section>
+<section id="기울기-소실vanishing-gradients" class="level2">
+<h2 class="anchored" data-anchor-id="기울기-소실vanishing-gradients">2.2 기울기 소실(Vanishing Gradients)</h2>
+<p>반대로, 행렬 <img src="https://latex.codecogs.com/png.latex?W">의 <strong>가장 큰 특이값이 1보다 작다면</strong>, 기울기는 시퀀스를 거슬러 올라갈수록 기하급수적으로 작아져 결국 0에 수렴하게 됩니다. 이를 <strong>기울기 소실(Vanishing Gradients)</strong>이라고 합니다. 기울기 폭발은 클리핑으로 어느 정도 억제할 수 있지만, 기울기가 사라지는 현상은 학습 자체를 불가능하게 만들기 때문에 <strong>아키텍처(구조)의 변경</strong> 없이는 근본적인 해결이 어렵습니다.</p>
 <hr>
 </section>
 </section>
-<section id="실전-활용-예시-1-이미지-압축-image-compression" class="level1" data-number="2">
-<h1 data-number="2"><span class="header-section-number">2</span> 2. 실전 활용 예시 1: 이미지 압축 (Image Compression)</h1>
-<p>수학적 계산을 넘어서, 이 특이값(<img src="https://latex.codecogs.com/png.latex?%5CSigma">)이 갖는 <strong>“데이터의 중요도”</strong>라는 직관을 가장 잘 보여주는 예시가 바로 이미지 압축입니다.</p>
+<section id="long-short-term-memory-lstm-아키텍처" class="level1">
+<h1>3. Long Short-Term Memory (LSTM) 아키텍처</h1>
+<p>기울기 소실 문제를 구조적으로 해결하기 위해 도입된 것이 바로 <strong>LSTM</strong>입니다. LSTM은 기존 Vanilla RNN이 단일 은닉 상태 <img src="https://latex.codecogs.com/png.latex?h_t">만을 사용하던 것과 달리, 정보를 오랫동안 보존하기 위한 <strong>셀 상태(Cell State, <img src="https://latex.codecogs.com/png.latex?c_t">)</strong>를 추가로 도입합니다.</p>
+<section id="개의-게이트gates-구조" class="level2">
+<h2 class="anchored" data-anchor-id="개의-게이트gates-구조">3.1 4개의 게이트(Gates) 구조</h2>
+<p>매 타임스텝마다 LSTM은 이전 상태 <img src="https://latex.codecogs.com/png.latex?h_%7Bt-1%7D">과 현재 입력 <img src="https://latex.codecogs.com/png.latex?x_t">를 받아, 셀 상태를 어떻게 제어할지 결정하는 4개의 상호작용 벡터(Gate)를 계산합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%5Cbegin%7Bpmatrix%7D%20i_%7Bt%7D%20%5C%5C%20f_%7Bt%7D%20%5C%5C%20o_%7Bt%7D%20%5C%5C%20g_%7Bt%7D%20%5Cend%7Bpmatrix%7D%20=%20%5Cbegin%7Bpmatrix%7D%20%5Csigma%20%5C%5C%20%5Csigma%20%5C%5C%20%5Csigma%20%5C%5C%20%5Ctanh%20%5Cend%7Bpmatrix%7D%20%5Cleft(%20W%20%5Cbegin%7Bpmatrix%7D%20h_%7Bt-1%7D%20%5C%5C%20x_%7Bt%7D%20%5Cend%7Bpmatrix%7D%20+%20b_%7Bh%7D%20%5Cright)"></p>
+<p>이 수식은 입력값과 이전 은닉 상태를 하나의 가중치 행렬 <img src="https://latex.codecogs.com/png.latex?W">와 곱한 뒤, 그 결과를 4등분하여 각각 다른 활성화 함수(<img src="https://latex.codecogs.com/png.latex?%5Csigma">, <img src="https://latex.codecogs.com/png.latex?%5Ctanh">)를 통과시킴을 의미합니다. 각각의 게이트는 차원이 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5EH">인 벡터입니다.</p>
 <ol type="1">
-<li><strong>상황:</strong> <img src="https://latex.codecogs.com/png.latex?1000%20%5Ctimes%201000"> 픽셀의 흑백 이미지가 있다고 합시다. 이는 100만 개의 숫자로 이루어진 거대한 행렬 <img src="https://latex.codecogs.com/png.latex?A">입니다.</li>
-<li><strong>SVD 적용:</strong> 이 행렬을 <img src="https://latex.codecogs.com/png.latex?A%20=%20U%20%5CSigma%20V%5E%5Ctop">로 분해하면, 대각 행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma">에는 1000개의 특이값(<img src="https://latex.codecogs.com/png.latex?%5Csigma_1%20%5Cge%20%5Csigma_2%20%5Cge%20%5Cdots%20%5Cge%20%5Csigma_%7B1000%7D">)이 존재합니다.</li>
-<li><strong>Truncated SVD (절단된 SVD):</strong> * 앞쪽에 있는 <strong>가장 큰 특이값 몇 개(예: <img src="https://latex.codecogs.com/png.latex?%5Csigma_1%20%5Csim%20%5Csigma_%7B50%7D">)</strong>는 이미지의 <strong>주요한 형태와 뼈대(전역적 특징)</strong>를 담고 있습니다.
+<li><p><strong>Input Gate (<img src="https://latex.codecogs.com/png.latex?i_t">)</strong>: 시그모이드(<img src="https://latex.codecogs.com/png.latex?%5Csigma">)를 통과하여 <img src="https://latex.codecogs.com/png.latex?%5B0,%201%5D"> 값을 가집니다. 새로운 정보를 셀 상태에 <strong>얼마나 쓸 것인지(whether to write to cell)</strong> 결정합니다.</p></li>
+<li><p><strong>Forget Gate (<img src="https://latex.codecogs.com/png.latex?f_t">)</strong>: 시그모이드(<img src="https://latex.codecogs.com/png.latex?%5Csigma">)를 통과합니다. 과거의 셀 상태를 <strong>얼마나 지울 것인지(whether to erase cell)</strong> 결정합니다. 0에 가까우면 잊고, 1에 가까우면 보존합니다.</p></li>
+<li><p><strong>Output Gate (<img src="https://latex.codecogs.com/png.latex?o_t">)</strong>: 시그모이드(<img src="https://latex.codecogs.com/png.latex?%5Csigma">)를 통과합니다. 업데이트된 셀 상태의 정보를 바탕으로 외부(다음 레이어 또는 다음 타임스텝)에 <strong>얼마나 노출시킬 것인지(how much to reveal cell)</strong> 결정합니다.</p></li>
+<li><p><strong>Gate Gate / Candidate (<img src="https://latex.codecogs.com/png.latex?g_t">)</strong>: <img src="https://latex.codecogs.com/png.latex?%5Ctanh">를 통과하여 <img src="https://latex.codecogs.com/png.latex?%5B-1,%201%5D"> 값을 가집니다. 셀 상태에 <strong>더해질 새로운 정보의 후보(how much to write to cell)</strong>를 생성합니다.</p></li>
+</ol>
+</section>
+<section id="셀-상태와-은닉-상태의-업데이트" class="level2">
+<h2 class="anchored" data-anchor-id="셀-상태와-은닉-상태의-업데이트">3.2 셀 상태와 은닉 상태의 업데이트</h2>
+<p>계산된 게이트들을 바탕으로 실제 메모리 업데이트는 다음과 같은 두 단계로 이루어집니다. (<img src="https://latex.codecogs.com/png.latex?%5Codot">는 원소별 곱, Hadamard Product를 의미합니다.)</p>
+<p><strong>1. Cell State 업데이트:</strong> <img src="https://latex.codecogs.com/png.latex?c_%7Bt%7D%20=%20f_%7Bt%7D%20%5Codot%20c_%7Bt-1%7D%20+%20i_%7Bt%7D%20%5Codot%20g_%7Bt%7D"> 이전 셀 상태 <img src="https://latex.codecogs.com/png.latex?c_%7Bt-1%7D">에서 잊을 부분은 <img src="https://latex.codecogs.com/png.latex?f_t">를 곱해 지우고, 새로운 정보 <img src="https://latex.codecogs.com/png.latex?g_t"> 중 <img src="https://latex.codecogs.com/png.latex?i_t">만큼만 허용하여 더해줍니다. 이 <strong>덧셈 연산</strong>이 LSTM의 핵심입니다.</p>
+<p><strong>2. Hidden State 업데이트:</strong> <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%20=%20o_%7Bt%7D%20%5Codot%20%5Ctanh(c_%7Bt%7D)"> 다음 타임스텝으로 넘겨주거나 출력으로 내보낼 은닉 상태는, 업데이트된 셀 상태 <img src="https://latex.codecogs.com/png.latex?c_t">를 <img src="https://latex.codecogs.com/png.latex?%5Ctanh">로 스케일링한 후 <img src="https://latex.codecogs.com/png.latex?o_t">로 필터링하여 생성합니다.</p>
+<hr>
+</section>
+</section>
+<section id="lstm은-어떻게-기울기-소실을-막는가-uninterrupted-gradient-flow" class="level1">
+<h1>4. LSTM은 어떻게 기울기 소실을 막는가? (Uninterrupted Gradient Flow)</h1>
+<p>LSTM이 기울기 소실 문제를 어떻게 극복했는지 역전파 관점에서 살펴보겠습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?c_t">에서 <img src="https://latex.codecogs.com/png.latex?c_%7Bt-1%7D">로 기울기가 전달될 때, 편미분 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20c_t%7D%7B%5Cpartial%20c_%7Bt-1%7D%7D"> 연산의 주요 경로는 단순히 <strong>Forget Gate <img src="https://latex.codecogs.com/png.latex?f_t">와의 원소별 곱셈(Element-wise multiplication)</strong>입니다.</p>
 <ul>
-<li>뒤쪽에 있는 <strong>작은 특이값들</strong>은 노이즈나 아주 <strong>세밀한 디테일</strong>을 담고 있습니다.</li>
+<li><p>Vanilla RNN처럼 행렬 <img src="https://latex.codecogs.com/png.latex?W">를 매번 곱하지 않습니다!</p></li>
+<li><p><img src="https://latex.codecogs.com/png.latex?f_t">가 1에 가까운 값을 유지한다면, 역전파 과정에서 기울기는 손실 없이 수백 스텝 이전까지 흘러갈 수 있습니다.</p></li>
+</ul>
+<p>이러한 특성은 깊은 신경망을 학습할 때 사용되는 <strong>ResNet의 Residual Connection(스킵 커넥션)</strong>과 수학적으로 매우 유사합니다(덧셈을 통한 기울기의 지름길 형성). 더 나아가 강의 자료에서는 <img src="https://latex.codecogs.com/png.latex?g_t">를 활용한 <strong>Highway Networks</strong> 식별자까지 소개하며 정보의 흐름을 능동적으로 제어하는 유사한 방법론들을 연결합니다.</p>
+<hr>
+</section>
+<section id="다층-순환-신경망-multilayer-rnns" class="level1">
+<h1>5. 다층 순환 신경망 (Multilayer RNNs)</h1>
+<p>더 복잡한 패턴을 학습하기 위해 LSTM을 여러 층(Layer)으로 쌓아 올릴 수 있습니다. 이를 Multilayer RNN 또는 Stacked RNN이라고 부릅니다.</p>
+<p>특정 층 <img src="https://latex.codecogs.com/png.latex?l">과 타임스텝 <img src="https://latex.codecogs.com/png.latex?t">에서의 은닉 상태 <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%5E%7Bl%7D">은 두 가지 입력에 의해 결정됩니다.</p>
+<ol type="1">
+<li>같은 층의 이전 타임스텝 은닉 상태: <img src="https://latex.codecogs.com/png.latex?h_%7Bt-1%7D%5E%7Bl%7D"></li>
+<li>이전 층의 같은 타임스텝 은닉 상태 (입력 역할): <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%5E%7Bl-1%7D"></li>
+</ol>
+<p>수식은 기존 LSTM 식에 레이어 인덱스 <img src="https://latex.codecogs.com/png.latex?l">을 추가하여 다음과 같이 일반화됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%5Cbegin%7Bpmatrix%7D%20i_%7Bt%7D%5E%7Bl%7D%20%5C%5C%20f_%7Bt%7D%5E%7Bl%7D%20%5C%5C%20o_%7Bt%7D%5E%7Bl%7D%20%5C%5C%20g_%7Bt%7D%5E%7Bl%7D%20%5Cend%7Bpmatrix%7D%20=%20%5Cbegin%7Bpmatrix%7D%20%5Csigma%20%5C%5C%20%5Csigma%20%5C%5C%20%5Csigma%20%5C%5C%20%5Ctanh%20%5Cend%7Bpmatrix%7D%20%5Cleft(%20W%20%5Cbegin%7Bpmatrix%7D%20h_%7Bt-1%7D%5E%7Bl%7D%20%5C%5C%20h_%7Bt%7D%5E%7Bl-1%7D%20%5Cend%7Bpmatrix%7D%20+%20b_%7Bh%7D%5E%7Bl%7D%20%5Cright)"></p>
+<p><img src="https://latex.codecogs.com/png.latex?c_%7Bt%7D%5E%7Bl%7D%20=%20f_%7Bt%7D%5E%7Bl%7D%20%5Codot%20c_%7Bt-1%7D%5E%7Bl%7D%20+%20i_%7Bt%7D%5E%7Bl%7D%20%5Codot%20g_%7Bt%7D%5E%7Bl%7D"></p>
+<p><img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%5E%7Bl%7D%20=%20o_%7Bt%7D%5E%7Bl%7D%20%5Codot%20%5Ctanh(c_%7Bt%7D%5E%7Bl%7D)"></p>
+<p>이렇게 층을 깊게 쌓으면 모델의 표현력(Capacity)이 증가하여 더 추상적인 시퀀스 특징을 잡아낼 수 있습니다.</p>
+<hr>
+</section>
+<section id="advanced-topics" class="level1">
+<h1>6. Advanced Topics</h1>
+<section id="neural-architecture-search-nas" class="level2">
+<h2 class="anchored" data-anchor-id="neural-architecture-search-nas">6.1 Neural Architecture Search (NAS)</h2>
+<p>최근에는 연구자가 직접 구조를 설계하는 대신, 강화학습(Reinforcement Learning) 등을 이용해 최적의 RNN 아키텍처를 탐색하는 <strong>NAS(Neural Architecture Search)</strong> 기법이 적용되고 있습니다. 이 방법론이 찾아낸 구조는 인간이 설계한 LSTM 구조보다 훨씬 복잡하고 비직관적(수많은 더하기, 곱하기, max, relu 연산의 난해한 결합)이지만 성능이 더 우수하기도 합니다.</p>
+</section>
+<section id="interpretable-hidden-units-해석-가능한-은닉-유닛" class="level2">
+<h2 class="anchored" data-anchor-id="interpretable-hidden-units-해석-가능한-은닉-유닛">6.2 Interpretable Hidden Units (해석 가능한 은닉 유닛)</h2>
+<p>강의의 마지막 부분에서는 “리눅스 커널”이나 “전쟁과 평화” 같은 텍스트로 학습된 LSTM의 내부 셀 상태 <img src="https://latex.codecogs.com/png.latex?%5Ctanh(c_t)">를 시각화한 결과를 다룹니다. 놀랍게도 LSTM 내부에는 특정 구문론적 역할을 전담하는 세포(Cell)들이 자생적으로 발현됩니다.</p>
+<ul>
+<li><strong>줄 길이 추적(Line length tracking cell)</strong>: 텍스트가 길어짐에 따라 활성화 정도가 점진적으로 변하다가 개행 문자가 등장하면 초기화됩니다.</li>
+<li><strong>조건문 감지(If statement cell)</strong>: <code>if ( ... ) {</code> 구조가 시작되면 강하게 활성화되고 조건문 블록이 끝나면 비활성화됩니다.</li>
+<li><strong>인용구/주석 감지(Quote/Comment cell)</strong>: 주석 블록 <code>/* ... */</code> 또는 문자열 따옴표 <code>" ... "</code> 안에서만 활성화됩니다.</li>
+<li><strong>코드 깊이/들여쓰기(Code depth cell)</strong>: 중첩된 구조(Nested structure)에 따라 코드의 들여쓰기 깊이를 추적합니다.</li>
+</ul>
+<p>이는 LSTM이 단순히 단어의 통계적 빈도를 외우는 것이 아니라, 텍스트 데이터 내에 존재하는 근본적이고 장기적인 문맥(Long-range dependency)과 구조를 기억하고 모델링하는 능력이 탁월함을 입증하는 흥미로운 결과입니다.</p>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Deep Learning</category>
+  <guid>https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.2/</guid>
+  <pubDate>Sun, 15 Mar 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 3)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.3/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-attention의-등장-배경" class="level1">
+<h1>1. Introduction: Attention의 등장 배경</h1>
+<p>자연어 처리와 시계열 데이터 모델링에서 RNN과 LSTM은 오랜 기간 표준으로 자리 잡아 왔습니다. 특히 기계 번역과 같은 작업에서는 입력 시퀀스를 읽어들이는 인코더(Encoder)와 출력 시퀀스를 생성하는 디코더(Decoder) 구조인 Seq2Seq(Sequence-to-Sequence) 모델이 주로 사용되었습니다. 그러나 이 전통적인 RNN 기반 인코더-디코더 구조는 시퀀스의 길이가 길어질수록 치명적인 한계를 드러냅니다. 이번 포스트에서는 그 한계가 무엇인지 진단하고, 이를 혁신적으로 극복한 <strong>어텐션(Attention)</strong> 메커니즘, 특히 <strong>Self-Attention</strong>의 원리와 수학적 구조를 집중적으로 살펴보겠습니다.</p>
+</section>
+<section id="sequence-to-sequence의-정보-병목-현상-information-bottleneck" class="level1">
+<h1>2. Sequence-to-Sequence의 정보 병목 현상 (Information Bottleneck)</h1>
+<p>전통적인 RNN 기반 Seq2Seq 모델의 작동 방식은 다음과 같습니다.</p>
+<ul>
+<li><strong>Encoder:</strong> 입력 시퀀스 <img src="https://latex.codecogs.com/png.latex?x_%7B1%7D,%20x_%7B2%7D,%20%5Cdots,%20x_%7BT%7D">를 순차적으로 읽어들입니다. 매 타임스텝마다 은닉 상태는 <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%20=%20f(x_%7Bt%7D,%20h_%7Bt-1%7D)">와 같이 업데이트됩니다. 모든 입력을 읽고 난 후의 최종 은닉 상태 <img src="https://latex.codecogs.com/png.latex?h_%7BT%7D">는 전체 입력의 문맥을 요약하는 단일 컨텍스트 벡터 <img src="https://latex.codecogs.com/png.latex?c">가 됩니다 (<img src="https://latex.codecogs.com/png.latex?c%20=%20h_%7BT%7D">).</li>
+<li><strong>Decoder:</strong> 이 압축된 컨텍스트 벡터 <img src="https://latex.codecogs.com/png.latex?c">를 바탕으로 출력 시퀀스를 생성합니다. 디코더의 상태는 <img src="https://latex.codecogs.com/png.latex?s_%7Bt%7D%20=%20g(y_%7Bt-1%7D,%20s_%7Bt-1%7D,%20c)">로 업데이트됩니다.</li>
+</ul>
+<section id="병목-현상bottleneck의-문제점" class="level3">
+<h3 class="anchored" data-anchor-id="병목-현상bottleneck의-문제점">2.1 병목 현상(Bottleneck)의 문제점</h3>
+<p>이 구조의 근본적인 문제는 <strong>“전체 입력 시퀀스가 단 하나의 벡터 <img src="https://latex.codecogs.com/png.latex?c">로 압축되어야 한다”</strong>는 점입니다. 문장이 짧을 때는 문제가 없지만, 시퀀스가 길어지면 제한된 차원의 벡터 하나에 모든 정보를 담을 수 없게 되는 <strong>정보 병목 현상(Information Bottleneck)</strong>이 발생합니다. 또한, 디코더는 출력 시퀀스를 생성할 때 이전 입력 토큰들에 직접적으로 접근할 수 없고 오직 <img src="https://latex.codecogs.com/png.latex?c">에만 의존해야 합니다.</p>
+</section>
+<section id="attention의-아이디어" class="level3">
+<h3 class="anchored" data-anchor-id="attention의-아이디어">2.2 Attention의 아이디어</h3>
+<p>어텐션 메커니즘은 매우 직관적인 아이디어에서 출발합니다. 디코더가 단일 컨텍스트 벡터에만 의존하는 대신, <strong>출력을 생성할 때마다 인코더의 모든 과거 상태(states)를 다시 되돌아볼 수 있게(look back at all encoder states) 허용</strong>하자는 것입니다.</p>
+</section>
+</section>
+<section id="self-attention-layer의-수학적-구조" class="level1">
+<h1>3. Self-Attention Layer의 수학적 구조</h1>
+<p>Self-Attention은 시퀀스 내의 각 요소가 다른 모든 요소들과 어떻게 연관되어 있는지를 스스로 학습하는 레이어입니다. 하나의 입력 벡터당 하나의 쿼리(Query)를 생성하여, 입력 시퀀스 전체에 대해 병렬적으로 연산을 수행합니다.</p>
+<section id="변수-및-가중치-행렬-정의" class="level3">
+<h3 class="anchored" data-anchor-id="변수-및-가중치-행렬-정의">3.1 변수 및 가중치 행렬 정의</h3>
+<ul>
+<li><strong>Input vectors (<img src="https://latex.codecogs.com/png.latex?X">):</strong> 형태는 <img src="https://latex.codecogs.com/png.latex?N_X%20%5Ctimes%20D_X"> 입니다 (<img src="https://latex.codecogs.com/png.latex?N_X">: 시퀀스 길이, <img src="https://latex.codecogs.com/png.latex?D_X">: 임베딩 차원).</li>
+<li>학습 가능한 세 개의 가중치 행렬이 필요합니다:
+<ul>
+<li><strong>Query matrix (<img src="https://latex.codecogs.com/png.latex?W_Q">):</strong> 차원은 <img src="https://latex.codecogs.com/png.latex?D_X%20%5Ctimes%20D_Q"></li>
+<li><strong>Key matrix (<img src="https://latex.codecogs.com/png.latex?W_K">):</strong> 차원은 <img src="https://latex.codecogs.com/png.latex?D_X%20%5Ctimes%20D_Q"></li>
+<li><strong>Value matrix (<img src="https://latex.codecogs.com/png.latex?W_V">):</strong> 차원은 <img src="https://latex.codecogs.com/png.latex?D_X%20%5Ctimes%20D_V"></li>
 </ul></li>
-<li><strong>압축:</strong> 상위 50개의 특이값과 그에 해당하는 <img src="https://latex.codecogs.com/png.latex?U,%20V">의 열벡터만 남기고 나머지를 모두 0으로 날려버린 후 다시 행렬을 곱합니다(<img src="https://latex.codecogs.com/png.latex?A%20%5Capprox%20U_%7B50%7D%20%5CSigma_%7B50%7D%20V_%7B50%7D%5E%5Ctop">).</li>
-<li><strong>결과:</strong> 100만 개의 숫자를 저장하는 대신, 훨씬 적은 수의 데이터만으로 원래 이미지와 육안으로 거의 구별이 불가능한 이미지를 복원할 수 있습니다. 저장 공간을 90% 이상 절약하면서도 핵심 정보를 보존한 것입니다.</li>
+</ul>
+</section>
+<section id="핵심-연산-과정-computation" class="level3">
+<h3 class="anchored" data-anchor-id="핵심-연산-과정-computation">3.2 핵심 연산 과정 (Computation)</h3>
+<p>Self-Attention의 연산은 다음 단계를 거쳐 이루어집니다.</p>
+<ol type="1">
+<li><strong>Q, K, V 벡터 생성:</strong> 입력 <img src="https://latex.codecogs.com/png.latex?X">를 선형 변환하여 Query, Key, Value 벡터를 만듭니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?Q%20=%20XW_Q"> (형태: <img src="https://latex.codecogs.com/png.latex?N_X%20%5Ctimes%20D_Q">)</li>
+<li><img src="https://latex.codecogs.com/png.latex?K%20=%20XW_K"> (형태: <img src="https://latex.codecogs.com/png.latex?N_X%20%5Ctimes%20D_Q">)</li>
+<li><img src="https://latex.codecogs.com/png.latex?V%20=%20XW_V"> (형태: <img src="https://latex.codecogs.com/png.latex?N_X%20%5Ctimes%20D_V">)</li>
+</ul></li>
+<li><strong>유사도(Similarities) 산출:</strong> 모든 Query와 모든 Key 간의 내적을 통해 각 토큰 간의 연관성을 계산하고, 분산 안정화를 위해 <img src="https://latex.codecogs.com/png.latex?%5Csqrt%7BD_Q%7D">로 나누어 스케일링합니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?E%20=%20QK%5E%5Ctop%20/%20%5Csqrt%7BD_Q%7D"> (형태: <img src="https://latex.codecogs.com/png.latex?N_X%20%5Ctimes%20N_X">)</li>
+</ul></li>
+<li><strong>어텐션 가중치(Attention weights) 계산:</strong> 유사도 행렬의 각 행에 대해 Softmax 함수를 취하여, 합이 1이 되는 확률 분포 형태로 만듭니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?A%20=%20%5Ctext%7Bsoftmax%7D(E,%20%5Cdim=1)"> (형태: <img src="https://latex.codecogs.com/png.latex?N_X%20%5Ctimes%20N_X">)</li>
+</ul></li>
+<li><strong>최종 출력(Output vectors) 생성:</strong> 어텐션 가중치를 Value 벡터에 곱하여 최종 문맥 벡터를 생성합니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?Y%20=%20AV"> (형태: <img src="https://latex.codecogs.com/png.latex?N_X%20%5Ctimes%20D_V">)</li>
+</ul></li>
+</ol>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.3/images/self_attention_computation.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Self-Attention의 계산 그래프. 입력 X가 Query, Key, Value 벡터로 변환된 후, 내적과 Softmax 연산을 거쳐 어텐션 가중치 A가 산출되고 최종 출력 Y가 계산되는 흐름을 보여준다.</figcaption>
+</figure>
+</div>
+</section>
+</section>
+<section id="순열-동변성-permutation-equivariance" class="level1">
+<h1>4. 순열 동변성 (Permutation Equivariance)</h1>
+<p>LSTM이나 Vanilla RNN은 입력 벡터의 ’순서(Order)’에 매우 민감합니다. 입력이 들어오는 순서를 바꾸면(Permuting), 연산이 순차적으로 누적되기 때문에 최종 출력 결과가 완전히 달라집니다.</p>
+<p>하지만 <strong>Self-Attention 레이어는 근본적으로 집합(Sets of vectors)에 대한 연산</strong>으로 작동합니다. 입력 벡터들의 순서를 무작위로 뒤섞는다고 가정해 봅시다. 1. 입력 <img src="https://latex.codecogs.com/png.latex?X">의 순서가 바뀌면 <img src="https://latex.codecogs.com/png.latex?Q,%20K,%20V"> 행렬의 행 순서도 동일하게 뒤섞입니다. 2. 이로 인해 유사도 행렬 <img src="https://latex.codecogs.com/png.latex?E">와 어텐션 가중치 행렬 <img src="https://latex.codecogs.com/png.latex?A">의 원소 위치도 똑같이 뒤섞이게 됩니다. 3. 결과적으로 최종 출력 행렬 <img src="https://latex.codecogs.com/png.latex?Y">를 확인해 보면, 각 출력 벡터가 지닌 고유의 연산 결괏값은 변하지 않으며 단지 출력되는 <strong>순서만 입력이 뒤섞인 것과 동일하게 바뀔 뿐</strong>입니다.</p>
+<p>이러한 특성을 <strong>순열 동변성(Permutation Equivariance)</strong>이라고 합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.3/images/permutation_equivariance.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 입력 벡터 X의 순서가 바뀔 때(Permutation), 생성되는 Query, Key, Value, 그리고 최종 출력 Y의 순서만 동일하게 바뀔 뿐, 연산 결과 자체는 변하지 않는 순열 동변성(Permutation Equivariance)을 설명하는 도식.</figcaption>
+</figure>
+</div>
+</section>
+<section id="위치-인코딩-positional-encoding" class="level1">
+<h1>5. 위치 인코딩 (Positional Encoding)</h1>
+<p>Self-Attention이 순열 동변성을 가진다는 것은 큰 장점이지만, 동시에 자연어처럼 <strong>어순(순서)이 중요한 데이터에서는 치명적인 약점</strong>이 될 수 있습니다. Self-Attention 자체는 처리하고 있는 벡터들이 문장 내에서 몇 번째 위치에 있는지 알지 못하기 때문입니다.</p>
+<p>이를 해결하기 위해 모델이 위치 정보를 인식(Position-aware)할 수 있도록, 기존 입력 벡터에 <strong>위치 인코딩(Positional Encoding, <img src="https://latex.codecogs.com/png.latex?E">)</strong> 벡터를 연결(Concatenate)하거나 더해줍니다. 이 위치 인코딩 함수 <img src="https://latex.codecogs.com/png.latex?E">는 학습 가능한 룩업 테이블(Learned lookup table) 형태일 수도 있고, 사인/코사인 함수와 같이 고정된 수식(Fixed function)으로 구현될 수도 있습니다.</p>
+</section>
+<section id="self-attention의-확장-구조" class="level1">
+<h1>6. Self-Attention의 확장 구조</h1>
+<section id="masked-self-attention-layer" class="level3">
+<h3 class="anchored" data-anchor-id="masked-self-attention-layer">6.1 Masked Self-Attention Layer</h3>
+<p>언어 모델링(Language Modeling)과 같이 다음 단어를 예측해야 하는 작업에서는, 현재 시점의 단어가 <strong>미래(미리 뒤에 나올 단어)의 정보를 참조(Look ahead)해서는 안 됩니다</strong>.</p>
+<p>이를 방지하기 위해 <strong>Masked Self-Attention</strong>을 사용합니다. Softmax 연산을 수행하기 직전에, 유사도 행렬 <img src="https://latex.codecogs.com/png.latex?E">에서 미래 시점에 해당하는 요소(행렬의 우상단 부분)를 음의 무한대(<img src="https://latex.codecogs.com/png.latex?-%5Cinfty">)로 덮어씌웁니다(Masking). 이렇게 하면 Softmax를 통과한 어텐션 가중치가 <img src="https://latex.codecogs.com/png.latex?0">이 되어, 모델이 미래의 단어를 전혀 고려하지 않게 강제할 수 있습니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.3/images/masked_attention.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Masked Self-Attention 구조. 미래의 시점(오른쪽 위 삼각형 영역)을 참조하지 못하도록 유사도 행렬 E에 음의 무한대를 할당하여 어텐션 가중치를 0으로 만드는 과정을 시각화.</figcaption>
+</figure>
+</div>
+</section>
+<section id="multihead-self-attention-layer" class="level3">
+<h3 class="anchored" data-anchor-id="multihead-self-attention-layer">6.2 Multihead Self-Attention Layer</h3>
+<p>하나의 Self-Attention 구조만 사용하면, 단일 문맥 기준에서만 연관성을 학습하게 됩니다. 복잡한 패턴을 학습하기 위해 여러 개의 어텐션 메커니즘을 병렬로 사용하는 것을 <strong>Multihead Attention</strong>이라고 합니다.</p>
+<ol type="1">
+<li>입력 데이터 <img src="https://latex.codecogs.com/png.latex?X">의 차원을 분할(Split)합니다.</li>
+<li>총 <img src="https://latex.codecogs.com/png.latex?H">개의 독립적인 어텐션 헤드(Attention Heads)가 각각 병렬적으로 연산을 수행합니다.</li>
+<li>각 헤드의 결과물인 <img src="https://latex.codecogs.com/png.latex?Y">들을 다시 하나의 텐서로 결합(Concat)하여 모델의 표현력을 풍부하게 만듭니다.</li>
+</ol>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.3/images/multihead_attention.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Multihead Self-Attention 구조. 입력을 분할(Split)하여 여러 개의 독립적인 어텐션 헤드(Head)에서 병렬로 연산을 수행한 뒤, 그 결과를 다시 결합(Concat)하는 구조.</figcaption>
+</figure>
+</div>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Deep Learning</category>
+  <guid>https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.3/</guid>
+  <pubDate>Sun, 15 Mar 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 4)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.4/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-시퀀스-처리-패러다임의-전환" class="level1">
+<h1>1. Introduction: 시퀀스 처리 패러다임의 전환</h1>
+<p>기존의 순차 데이터 처리는 RNN(Recurrent Neural Network)과 1D CNN(Convolutional Neural Network)이 주도해 왔습니다. 그러나 이들은 긴 시퀀스를 처리하거나 병렬 연산을 수행하는 데 있어 각기 다른 근본적인 한계를 지니고 있었습니다. Vaswani et al.&nbsp;(2017)의 “Attention is All You Need” 논문에서 제안된 <strong>Transformer</strong>는, 오직 Attention 메커니즘만을 사용하여 이러한 한계를 극복하고 현재 대규모 언어 모델(LLM)의 핵심 근간이 되었습니다.</p>
+<p>이번 포스트에서는 시퀀스 처리 방식의 비교를 시작으로, Transformer의 기본 구조, 최근 LLM에서 사용되는 다양한 변형(Tweaks) 아키텍처, 그리고 텍스트 생성(Decoding) 전략과 RLHF(인간 피드백 기반 강화학습)에 이르기까지 폭넓게 살펴보겠습니다.</p>
+<hr>
+</section>
+<section id="three-ways-of-processing-sequences" class="level1">
+<h1>2. Three Ways of Processing Sequences</h1>
+<p>시퀀스 데이터를 다루는 세 가지 주요 아키텍처의 특성을 연산량과 병렬화 관점에서 비교해 보겠습니다. 길이가 <img src="https://latex.codecogs.com/png.latex?N">인 시퀀스를 처리할 때의 특징은 다음과 같습니다.</p>
+<ol type="1">
+<li><strong>1D Convolution</strong>: 1차원 격자(Grid) 위에서 작동합니다.
+<ul>
+<li><strong>장점</strong>: 출력값을 병렬로 계산할 수 있으며, 연산량과 메모리 요구량이 <img src="https://latex.codecogs.com/png.latex?O(N)">으로 시퀀스 길이에 선형적으로 비례합니다.</li>
+<li><strong>단점</strong>: 국소적인(Local) 수용 영역(Receptive field)을 가지므로, 시퀀스 전체의 문맥을 파악하려면 합성곱 층(Conv layers)을 아주 깊게 쌓아야 합니다.</li>
+</ul></li>
+<li><strong>Recurrent Neural Network (RNN)</strong>: 1차원적으로 정렬된 순서(Order)에 따라 작동합니다.
+<ul>
+<li><strong>장점</strong>: 이론적으로 긴 시퀀스를 처리하는 데 적합하며, 연산량과 메모리 역시 <img src="https://latex.codecogs.com/png.latex?O(N)">입니다.</li>
+<li><strong>단점</strong>: 이전 시점의 은닉 상태(Hidden state)가 계산되어야만 현재 시점을 계산할 수 있으므로 <strong>병렬 처리가 불가능(Not parallelizable)</strong>합니다.</li>
+</ul></li>
+<li><strong>Self-Attention (Transformer 기반)</strong>: 벡터들의 집합(Sets of vectors) 위에서 작동합니다.
+<ul>
+<li><strong>장점</strong>: 모든 출력 벡터를 동시에 계산할 수 있어 <strong>고도로 병렬화(Highly parallel)</strong>되어 있습니다. 또한 모든 입력 벡터가 서로 직접 상호작용하므로 긴 시퀀스의 문맥을 단번에 포착합니다.</li>
+<li><strong>단점</strong>: 모든 토큰이 서로 내적을 수행하므로 연산량과 메모리 요구량이 <strong><img src="https://latex.codecogs.com/png.latex?O(N%5E2)"></strong>로, 시퀀스 길이가 길어질수록 비용이 기하급수적으로 증가합니다.</li>
+</ul></li>
 </ol>
 <hr>
 </section>
-<section id="실전-활용-예시-2-추천-시스템-recommender-system" class="level1" data-number="3">
-<h1 data-number="3"><span class="header-section-number">3</span> 3. 실전 활용 예시 2: 추천 시스템 (Recommender System)</h1>
-<p>넷플릭스나 유튜브의 알고리즘 기저에도 SVD의 아이디어가 깔려 있습니다.</p>
-<ol type="1">
-<li><strong>행렬 정의:</strong> 행(Row)은 수백만 명의 ‘사용자’, 열(Column)은 수만 개의 ’영화’를 나타내는 거대한 평점 행렬 <img src="https://latex.codecogs.com/png.latex?A">가 있습니다. 대부분의 칸은 비어있습니다 (사용자가 안 본 영화가 대부분이므로 Sparse 행렬).</li>
-<li><strong>잠재 요인(Latent Factor) 도출:</strong> 이 행렬을 SVD로 분해하면,
+<section id="the-transformer-architecture" class="level1">
+<h1>3. The Transformer Architecture</h1>
+<p>전통적인 Transformer 블록은 입력을 받아 동일한 차원의 출력을 반환하는 구조를 가집니다. 각 벡터 간의 상호작용은 오직 Self-Attention을 통해서만 이루어지며, 이후의 연산은 각 벡터마다 독립적으로 수행되므로 확장성(Scalability)이 매우 뛰어납니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.4/images/transformer_block.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 표준 Transformer 블록의 구조. 하단부터 입력 벡터가 Self-Attention을 통과한 후, Residual Connection과 덧셈(+) 연산이 이루어지고 Layer Normalization을 거친다. 이후 각 벡터마다 독립적인 MLP를 통과하고 다시 Residual과 정규화를 거쳐 최종 출력된다.</figcaption>
+</figure>
+</div>
+<section id="구성-요소" class="level3">
+<h3 class="anchored" data-anchor-id="구성-요소">3.1 구성 요소</h3>
 <ul>
-<li><img src="https://latex.codecogs.com/png.latex?U"> 행렬: 사용자가 <strong>어떤 취향(예: 액션 선호, 로맨스 선호 등)</strong>을 가졌는지를 나타내는 잠재 벡터.</li>
-<li><img src="https://latex.codecogs.com/png.latex?V%5E%5Ctop"> 행렬: 영화가 <strong>어떤 속성(예: 블록버스터 지수, 감동 지수 등)</strong>을 가졌는지를 나타내는 잠재 벡터.</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5CSigma"> 행렬: 각 취향/속성의 <strong>중요도(가중치)</strong>.</li>
+<li><strong>Self-Attention</strong>: 시퀀스 내의 모든 단어가 서로의 연관성을 계산하여 문맥을 파악합니다.</li>
+<li><strong>MLP (Feed Forward Network)</strong>: 각 토큰 벡터마다 <strong>독립적으로(independently)</strong> 적용되는 비선형 변환 층입니다.</li>
+<li><strong>Residual Connection &amp; Layer Normalization</strong>: 그래디언트 소실을 방지하고 학습을 안정화합니다.</li>
+</ul>
+<p>주어진 은닉 벡터 <img src="https://latex.codecogs.com/png.latex?h_1,%20%5Cdots,%20h_N%20%5Cin%20%5Cmathbb%7BR%7D%5ED">에 대한 Layer Normalization 수식은 다음과 같습니다. (학습 가능한 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cgamma,%20%5Cbeta%20%5Cin%20%5Cmathbb%7BR%7D%5ED"> 사용) <img src="https://latex.codecogs.com/png.latex?%5Cmu_i%20=%20%5Cfrac%7B%5Csum_%7Bj=1%7D%5ED%20h_%7Bi,j%7D%7D%7BD%7D,%20%5Cquad%20%5Csigma_i%20=%20%5Cleft(%20%5Cfrac%7B%5Csum_%7Bj=1%7D%5ED%20(h_%7Bi,j%7D%20-%20%5Cmu_i)%5E2%7D%7BD%7D%20%5Cright)%5E%7B%5Cfrac%7B1%7D%7B2%7D%7D"> <img src="https://latex.codecogs.com/png.latex?z_i%20=%20%5Cfrac%7Bh_i%20-%20%5Cmu_i%7D%7B%5Csigma_i%7D%20%5Cin%20%5Cmathbb%7BR%7D%5ED"> <img src="https://latex.codecogs.com/png.latex?y_i%20=%20%5Cgamma%20%5Codot%20z_i%20+%20%5Cbeta%20%5Cin%20%5Cmathbb%7BR%7D%5ED"></p>
+</section>
+<section id="transfer-learning-패러다임" class="level3">
+<h3 class="anchored" data-anchor-id="transfer-learning-패러다임">3.2 Transfer Learning 패러다임</h3>
+<p>Transformer 모델은 인터넷상의 방대한 텍스트 데이터를 이용하여 거대한 언어 모델(LM)로 <strong>사전 학습(Pretraining)</strong>된 후, 특정 NLP 태스크에 맞게 <strong>미세 조정(Fine-tuning)</strong>되는 전이 학습 패러다임을 정착시켰습니다.</p>
+<hr>
+</section>
+</section>
+<section id="tweaking-transformers-최신-llm을-위한-구조적-변형" class="level1">
+<h1>4. Tweaking Transformers: 최신 LLM을 위한 구조적 변형</h1>
+<p>초기 Transformer 구조는 매우 안정적이었으나, 모델의 파라미터가 수백억~수천억 개로 커지면서 학습 안정성과 효율성을 극대화하기 위해 다양한 변형 기법들이 도입되었습니다.</p>
+<section id="pre-norm-vs-post-norm" class="level2">
+<h2 class="anchored" data-anchor-id="pre-norm-vs-post-norm">4.1 Pre-Norm vs Post-Norm</h2>
+<p>원래의 Transformer(Post-Norm)는 Residual 덧셈을 수행한 <strong>이후에</strong> 정규화를 수행했습니다. 반면 최근 LLM들은 Residual 분기(Branch) <strong>내부에서</strong> 정규화를 먼저 수행하는 <strong>Pre-Norm</strong> 구조를 선택합니다.</p>
+<ul>
+<li><strong>Post-Norm</strong>: <img src="https://latex.codecogs.com/png.latex?y%20=%20LN(x%20+%20F(x))"></li>
+<li><strong>Pre-Norm</strong>: <img src="https://latex.codecogs.com/png.latex?y%20=%20x%20+%20F(LN(x))"></li>
+</ul>
+<p><strong>도입 동기</strong>: Pre-Norm은 Residual Connection을 통한 항등 매핑(Identity path)을 더 깨끗하게 보존하므로, 신경망이 깊어져도 최적화가 훨씬 안정적으로 이루어집니다.</p>
+</section>
+<section id="rmsnorm-root-mean-square-normalization" class="level2">
+<h2 class="anchored" data-anchor-id="rmsnorm-root-mean-square-normalization">4.2 RMSNorm (Root Mean Square Normalization)</h2>
+<p>Layer Normalization에서 평균을 빼는 연산(Mean-subtraction)을 제거하고, 오직 제곱평균제곱근(RMS)으로만 스케일링을 수행하는 기법입니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?RMS(x)%20=%20%5Csqrt%7B%5Cfrac%7B1%7D%7BD%7D%5Csum_%7Bi=1%7D%5ED%20x_i%5E2%20+%20%5Cepsilon%7D"> <img src="https://latex.codecogs.com/png.latex?y_i%20=%20%5Cfrac%7Bx_i%7D%7BRMS(x)%7D%5Cgamma_i"></p>
+<p><strong>도입 동기</strong>: 기존 LayerNorm보다 연산이 단순하면서도 경험적으로 학습 안정성과 효율성이 비슷하거나 더 우수하여, LLaMA 등 현대의 다수 LLM에서 표준으로 채택하고 있습니다.</p>
+</section>
+<section id="swiglu-활성화-함수" class="level2">
+<h2 class="anchored" data-anchor-id="swiglu-활성화-함수">4.3 SwiGLU 활성화 함수</h2>
+<p>기존 Transformer의 MLP(또는 FFN) 층을 대체하는 변형 구조입니다. 입력 <img src="https://latex.codecogs.com/png.latex?X%20%5Cin%20%5Cmathbb%7BR%7D%5E%7BN%20%5Ctimes%20D%7D">에 대해 다음과 같은 게이트 메커니즘을 사용합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?Y%20=%20(SiLU(XW_1)%20%5Codot%20XW_2)W_3"> (이때, 활성화 함수 <img src="https://latex.codecogs.com/png.latex?SiLU(x)%20=%20x%20%5Ccdot%20%5Csigma(x)"> 이며, <img src="https://latex.codecogs.com/png.latex?%5Codot">는 원소별 곱셈을 의미합니다.)</p>
+<p><strong>도입 동기</strong>: 곱셈 기반의 게이팅(Multiplicative gate)을 도입하여 네트워크의 표현력(Expressivity)을 강화합니다. 파라미터 수를 기존 MLP와 비슷하게 맞추기 위해 은닉층 차원 <img src="https://latex.codecogs.com/png.latex?H">는 일반적으로 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B8D%7D%7B3%7D">로 설정합니다.</p>
+</section>
+<section id="mixture-of-experts-moe" class="level2">
+<h2 class="anchored" data-anchor-id="mixture-of-experts-moe">4.4 Mixture of Experts (MoE)</h2>
+<p>하나의 거대한 밀집(Dense) MLP를 사용하는 대신, 여러 개의 작은 <strong>전문가(Expert) MLP</strong> 모델을 병렬로 배치하는 구조입니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?y%20=%20%5Csum_%7Be%20%5Cin%20Top-A%7D%20%5Calpha_e%20Expert_e(x)"></p>
+<p>라우터(Router) 네트워크가 각 토큰 <img src="https://latex.codecogs.com/png.latex?x">에 대해 점수 <img src="https://latex.codecogs.com/png.latex?r(x)%20%5Cin%20%5Cmathbb%7BR%7D%5EE">를 계산하고, 가장 점수가 높은 소수(<img src="https://latex.codecogs.com/png.latex?Top-A">)의 전문가 모델만을 선택하여 연산을 수행합니다. (일반적으로 <img src="https://latex.codecogs.com/png.latex?A%20%5Cll%20E">)</p>
+<p><strong>도입 동기</strong>: 실제 연산량(Compute)은 <img src="https://latex.codecogs.com/png.latex?A">에 비례하게 유지하면서도, 전체 모델의 파라미터 크기(Capacity)는 <img src="https://latex.codecogs.com/png.latex?E">에 비례하게 대폭 늘릴 수 있는 파라미터 효율성을 달성합니다. 단, 라우팅의 복잡성과 로드 밸런싱(Load balancing) 문제가 동반됩니다.</p>
+<hr>
+</section>
+</section>
+<section id="gpt-3와-autoregressive-language-modeling" class="level1">
+<h1>5. GPT-3와 Autoregressive Language Modeling</h1>
+<p>트랜스포머 아키텍처를 스케일업한 대표적인 모델이 GPT-3 (175B Parameters)입니다. 이 모델은 파인튜닝 없이 Zero-shot, Few-shot 만으로도 뛰어난 성능을 보입니다.</p>
+<p>GPT-3와 같은 <strong>자기회귀(Autoregressive) 모델</strong>은 이전까지의 토큰들이 주어졌을 때 다음 토큰을 예측하는 조건부 확률 <img src="https://latex.codecogs.com/png.latex?p(t%20%7C%20t_1,%20%5Cdots,%20t_%7Bi-1%7D)">을 학습합니다. 학습 과정에서는 모델이 예측한 확률 분포 <img src="https://latex.codecogs.com/png.latex?p_2,%20%5Cdots,%20p_n">과 실제 정답(Ground-truth) 토큰 <img src="https://latex.codecogs.com/png.latex?t_2,%20%5Cdots,%20t_n"> 간의 <strong>교차 엔트로피 손실(Cross-Entropy Loss)</strong>을 계산하여 가중치를 업데이트합니다.</p>
+<hr>
+</section>
+<section id="text-generation-decoding-strategies" class="level1">
+<h1>6. Text Generation (Decoding) Strategies</h1>
+<p>학습된 자기회귀 모델이 실제로 텍스트를 생성(Inference)할 때, 다음 토큰을 선택하는 다양한 디코딩 전략이 존재합니다.</p>
+<ol type="1">
+<li><strong>Greedy Search</strong>: 매 스텝마다 가장 확률이 높은 토큰을 선택합니다. (<img src="https://latex.codecogs.com/png.latex?t_%7Bind%7D%20=%20%5Ctext%7Bargmax%7D_%7Bt%7D%20p(t%20%7C%20t_1,%20%5Cdots,%20t_%7Bind-1%7D)">)
+<ul>
+<li><em>단점</em>: 당장 확률이 높은 것만 쫓아가다 보니, 문장 전체로 보았을 때는 최적이 아닌(Suboptimal) 텍스트가 생성될 위험이 큽니다.</li>
 </ul></li>
-<li><strong>빈칸 예측:</strong> 분해된 두 잠재 벡터를 다시 곱하면, 사용자가 아직 보지 않은 영화에 대해 내릴 평점을 예측할 수 있습니다.</li>
+<li><strong>Beam Search</strong>: 매 스텝마다 모든 가능한 토큰을 확장한 뒤, 전체 시퀀스의 누적 로그 확률(Log-probability)이 가장 높은 상위 <img src="https://latex.codecogs.com/png.latex?B">개의 시퀀스(Beam width)만을 유지합니다.
+<ul>
+<li><em>수식</em>: <img src="https://latex.codecogs.com/png.latex?(s,%20l)%20%5Crightarrow%20(s+t,%20l%20+%20%5Clog%20p(t%7Cs))"></li>
+</ul></li>
+<li><strong>Top-K Sampling</strong>: 다음 토큰의 확률 분포에서 가장 확률이 높은 상위 <img src="https://latex.codecogs.com/png.latex?K">개의 토큰 집합(<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BT%7D_%7Btop-K%7D">)을 찾고, 그 안에서 확률에 비례하여 무작위로 샘플링합니다.</li>
+<li><strong>Nucleus Sampling (Top-p)</strong>: 미리 정해둔 임계값(Threshold) <img src="https://latex.codecogs.com/png.latex?%5Ceta">를 기준으로, 누적 확률의 합이 <img src="https://latex.codecogs.com/png.latex?%5Ceta">를 넘는 최소한의 상위 토큰 집합(<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BT%7D_%7Btop-N%7D">)을 찾습니다.
+<ul>
+<li><em>조건</em>: <img src="https://latex.codecogs.com/png.latex?%5Csum%20p(t_%7Bind%7D%20%5Cin%20%5Cmathbb%7BT%7D_%7Btop-N%7D%20%7C%20t_1,%20%5Cdots)%20%3E%20%5Ceta"></li>
+<li><em>특징</em>: 예측의 확실성에 따라 후보 토큰의 개수 <img src="https://latex.codecogs.com/png.latex?N">이 유동적으로 변하여 자연스러운 텍스트 생성을 돕습니다.</li>
+</ul></li>
 </ol>
-<blockquote class="blockquote">
-<p><strong>💡 최적화와의 연결 고리</strong> 이전 포스트의 <strong>Robust Optimization</strong>이나 최신 기계학습 모델에서 <strong>Nuclear Norm(<img src="https://latex.codecogs.com/png.latex?%7C%7CA%7C%7C_%7Bnuc%7D%20=%20%5Csum%20%5Csigma_i">)</strong>을 최소화한다는 것은, 바로 이 <img src="https://latex.codecogs.com/png.latex?%5CSigma"> 행렬에서 불필요하게 작은 특이값들을 0으로 억눌러 행렬을 단순화(Low-rank 근사)하고 노이즈를 제거하는 강력한 제약(Regularization) 도구로 쓰인다는 것을 의미합니다.</p>
-</blockquote>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.4/images/decoding_strategies_tree.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 디코딩 전략 시각화. The - nice - house로 이어지는 생성 경로에서 각각 확률(0.5, 0.4 등)을 바탕으로 탐색을 확장해 나가는 트리를 보여준다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+<section id="rlhf-reinforcement-learning-from-human-feedback" class="level1">
+<h1>7. RLHF: Reinforcement Learning from Human Feedback</h1>
+<p>언어 모델이 단순히 다음 단어만 잘 맞추는 것을 넘어, ‘인간이 선호하는’ 유익하고 안전한 답변을 생성하도록 교정하는 핵심 기법이 <strong>RLHF</strong>입니다.</p>
+<ol type="1">
+<li><strong>Pretrain a Language Model (LM)</strong>: 대규모 말뭉치로 기본 언어 모델을 사전 학습합니다.</li>
+<li><strong>Train a Reward Model</strong>: 모델이 생성한 여러 응답에 대해 사람이 순위를 매기고(Human Scoring), 이를 바탕으로 주어진 텍스트가 인간의 선호도에 부합하는지 점수 <img src="https://latex.codecogs.com/png.latex?r_%5Ctheta(y%7Cx)">를 예측하는 보상 모델(Preference Model)을 학습합니다.</li>
+<li><strong>RL Finetuning (e.g., PPO)</strong>: 기본 언어 모델의 텍스트 생성 결과를 보상 모델이 평가하고, 이 보상값을 최대화하는 방향으로 PPO 알고리즘을 사용해 언어 모델(RL Policy)을 강화학습시킵니다.
+<ul>
+<li>이때 모델이 기존 언어 체계를 망각하거나 보상 모델을 속이는 형태로 과적합되는 것을 막기 위해, 원래의 기본 모델 분포(<img src="https://latex.codecogs.com/png.latex?%5Cpi%5E%7Bbase%7D">)와 너무 멀어지지 않도록 하는 <strong>KL 발산 페널티 (KL prediction shift penalty)</strong>를 목적 함수에 추가합니다.</li>
+<li>수식적 업데이트 방향: <img src="https://latex.codecogs.com/png.latex?%5Ctheta%20%5Cleftarrow%20%5Ctheta%20+%20%5Cnabla_%5Ctheta%20J(%5Ctheta)"> (여기서 <img src="https://latex.codecogs.com/png.latex?J">는 보상 모델의 보상값에서 <img src="https://latex.codecogs.com/png.latex?%5Clambda%20D_%7BKL%7D(%5Cpi_%5Ctheta%5E%7BRL%7D(y%7Cx)%20%7C%7C%20%5Cpi%5E%7Bbase%7D(y%7Cx))">를 차감한 형태를 취합니다.)</li>
+</ul></li>
+</ol>
 
 
 
 </section>
 
  ]]></description>
-  <category>Linear Algebra</category>
-  <category>Machine Learning</category>
-  <category>Data Science</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/2.Introduction-to-Convex-Optimization/</guid>
-  <pubDate>Thu, 12 Mar 2026 15:00:00 GMT</pubDate>
+  <category>Deep Learning</category>
+  <guid>https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.4/</guid>
+  <pubDate>Sun, 15 Mar 2026 15:00:00 GMT</pubDate>
 </item>
 <item>
   <title>[Data Mining] 4. Frequent Itemsets (Part 1)</title>
@@ -3109,544 +3599,6 @@ font-style: inherit;">+</span> b)</span></code></pre></div></div>
  ]]></description>
   <category>Deep Learning</category>
   <guid>https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.1/</guid>
-  <pubDate>Sun, 08 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Deep Learning] 2. Loss Function and Backpropagation (Part 2)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.2/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>1. Introduction</h1>
-<p>이전 포스트([Lecture 2.1])에서는 이미지 분류 문제의 정의와 주요 데이터셋(CIFAR-10 등)에 대해 다루었다. 이미지는 컴퓨터에게 그저 거대한 숫자 그리드(Tensor)일 뿐이며, 우리는 이를 입력받아 “고양이”, “강아지”와 같은 클래스 라벨을 출력하는 함수가 필요하다.</p>
-<p>이번 포스트에서는 그 첫 번째 단계로, 입력 데이터를 클래스별 점수(Score)로 매핑하는 <strong>스코어 함수(Score Function)</strong>, 그중에서도 가장 기본이 되는 <strong>선형 분류기(Linear Classifier)</strong>에 대해 알아본다.</p>
-</section>
-<section id="score-function" class="level1">
-<h1>2. Score Function</h1>
-<section id="정의-definition" class="level2">
-<h2 class="anchored" data-anchor-id="정의-definition">2.1. 정의 (Definition)</h2>
-<p>스코어 함수는 입력 데이터(이미지)를 받아 각 클래스에 대한 ’확신(confidence)’을 나타내는 점수 벡터를 출력하는 함수이다. 이를 수식으로 정의하면 다음과 같다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Af_%7B%5Ctheta%7D:%20%5Cmathcal%7BX%7D%20%5Crightarrow%20%5Cmathbb%7BR%7D%5E%7BC%7D%0A"></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BX%7D">: 입력 공간 (예: 이미지)</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Ctheta">: 모델의 파라미터(Parameters)</li>
-<li><img src="https://latex.codecogs.com/png.latex?C">: 분류하고자 하는 클래스의 개수 (예: CIFAR-10의 경우 10)</li>
-</ul>
-<p>함수 <img src="https://latex.codecogs.com/png.latex?f">는 입력 <img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathcal%7BX%7D">를 받아 실수 벡터 <img src="https://latex.codecogs.com/png.latex?s">로 매핑한다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0As%20=%20f_%7B%5Ctheta%7D(x)%20=%20(s_%7B1%7D,%20s_%7B2%7D,%20%5Cdots,%20s_%7BC%7D)%0A"></p>
-<p>여기서 <img src="https://latex.codecogs.com/png.latex?s_j">는 <img src="https://latex.codecogs.com/png.latex?j">번째 클래스에 대한 점수이다. 최종적으로 모델은 가장 높은 점수를 가진 클래스를 예측값(<img src="https://latex.codecogs.com/png.latex?%5Chat%7By%7D">)으로 선택한다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Chat%7By%7D%20=%20%5Coperatorname*%7Bargmax%7D_%7Bj%20%5Cin%20%5C%7B1,%20%5Cdots,%20C%5C%7D%7D%20s_%7Bj%7D%0A"></p>
-<blockquote class="blockquote">
-<p><strong>Note</strong>: 여기서 계산된 점수 <img src="https://latex.codecogs.com/png.latex?s_j">는 확률(Probability)이 아니다. 정규화되지 않은 선호도(Unnormalized preference)일 뿐이며, 값의 범위에 제한이 없다(음수일 수도, 매우 큰 양수일 수도 있음).</p>
-</blockquote>
-</section>
-</section>
-<section id="linear-classifier" class="level1">
-<h1>3. Linear Classifier</h1>
-<section id="수식적-표현-parametric-approach" class="level2">
-<h2 class="anchored" data-anchor-id="수식적-표현-parametric-approach">3.1. 수식적 표현 (Parametric Approach)</h2>
-<p>가장 단순하면서도 강력한 기초 모델인 선형 분류기(Linear Classifier)를 살펴보자. 이 모델은 입력 이미지 <img src="https://latex.codecogs.com/png.latex?x">와 파라미터 <img src="https://latex.codecogs.com/png.latex?W">의 선형 결합으로 점수를 계산한다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Af(x,%20W)%20=%20Wx%20+%20b%0A"></p>
-<p>이 수식이 작동하는 방식을 차원(Dimension) 관점에서 분석해보면 다음과 같다. (CIFAR-10 데이터셋 기준: <img src="https://latex.codecogs.com/png.latex?32%20%5Ctimes%2032%20%5Ctimes%203"> 이미지, 10개 클래스)</p>
-<ol type="1">
-<li><strong>입력 <img src="https://latex.codecogs.com/png.latex?x"></strong>: <img src="https://latex.codecogs.com/png.latex?32%20%5Ctimes%2032%20%5Ctimes%203"> 크기의 3차원 배열을 1차원 벡터로 <strong>쭉 펼친다(Stretch/Flatten)</strong>. <img src="https://latex.codecogs.com/png.latex?%0A32%20%5Ctimes%2032%20%5Ctimes%203%20%5Crightarrow%203072%20%5Ctimes%201%20%5Ctext%7B%20vector%7D%0A"></li>
-<li><strong>가중치 <img src="https://latex.codecogs.com/png.latex?W"> (Weights)</strong>: 입력 차원과 클래스 개수를 연결하는 행렬이다. <img src="https://latex.codecogs.com/png.latex?%0AW%20%5Cin%20%5Cmathbb%7BR%7D%5E%7B10%20%5Ctimes%203072%7D%0A"></li>
-<li><strong>편향 <img src="https://latex.codecogs.com/png.latex?b"> (Bias)</strong>: 입력과 무관하게 각 클래스가 가질 수 있는 기본 점수(우선순위)를 보정하는 벡터이다. <img src="https://latex.codecogs.com/png.latex?%0Ab%20%5Cin%20%5Cmathbb%7BR%7D%5E%7B10%20%5Ctimes%201%7D%0A"></li>
-</ol>
-<p>결과적으로 행렬 곱셈을 통해 <img src="https://latex.codecogs.com/png.latex?10%20%5Ctimes%201"> 크기의 점수 벡터를 얻게 된다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5B%5Ctext%7B10%7D%20%5Ctimes%20%5Ctext%7B1%20Score%7D%5D%20=%20%5B%5Ctext%7B10%7D%20%5Ctimes%20%5Ctext%7B3072%7D%5D%20%5Ccdot%20%5B%5Ctext%7B3072%7D%20%5Ctimes%20%5Ctext%7B1%7D%5D%20+%20%5B%5Ctext%7B10%7D%20%5Ctimes%20%5Ctext%7B1%7D%5D%0A"></p>
-</section>
-<section id="계산-예시-example-calculation" class="level2">
-<h2 class="anchored" data-anchor-id="계산-예시-example-calculation">3.2. 계산 예시 (Example Calculation)</h2>
-<p>이해를 돕기 위해 이미지를 4개 픽셀(<img src="https://latex.codecogs.com/png.latex?2%20%5Ctimes%202">)로 단순화하고, 3개의 클래스(Cat, Dog, Ship)를 분류하는 상황을 가정해보자.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.2/images/linear_classifier_calc_example.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: 선형 분류기의 연산 과정. 2x2 이미지를 4x1 벡터로 펼친 후, 가중치 행렬 W와 곱하고 편향 b를 더해 각 클래스의 점수를 산출한다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>위 그림의 수식을 보면:
-<ul>
-<li><strong>Cat Score</strong>: <img src="https://latex.codecogs.com/png.latex?(0.2%20%5Ctimes%2056)%20+%20(-0.5%20%5Ctimes%20231)%20+%20(0.1%20%5Ctimes%2024)%20+%20(2.0%20%5Ctimes%202)%20+%201.1%20=%20-96.8"></li>
-<li><strong>Dog Score</strong>: <img src="https://latex.codecogs.com/png.latex?(1.5%20%5Ctimes%2056)%20+%20(1.3%20%5Ctimes%20231)%20+%20(2.1%20%5Ctimes%2024)%20+%20(0.0%20%5Ctimes%202)%20+%203.2%20=%20437.9"></li>
-</ul></li>
-</ul>
-<p>이 경우, Dog의 점수가 가장 높으므로 모델은 입력 이미지를 “Dog”로 예측하게 된다.</p>
-</section>
-</section>
-<section id="interpretation-of-linear-classifiers" class="level1">
-<h1>4. Interpretation of Linear Classifiers</h1>
-<p>선형 분류기 <img src="https://latex.codecogs.com/png.latex?Wx%20+%20b">는 단순한 행렬 곱셈이지만, 이를 해석하는 방법에는 세 가지 관점이 있다.</p>
-<section id="템플릿-매칭-template-matching" class="level2">
-<h2 class="anchored" data-anchor-id="템플릿-매칭-template-matching">4.1. 템플릿 매칭 (Template Matching)</h2>
-<p>행렬 <img src="https://latex.codecogs.com/png.latex?W">의 각 행(Row)은 해당 클래스에 대한 <strong>템플릿(Template) 또는 프로토타입(Prototype)</strong>으로 볼 수 있다. 입력 이미지 <img src="https://latex.codecogs.com/png.latex?x">와 특정 클래스의 행 벡터 간의 내적(Dot Product)은 두 벡터의 <strong>유사도(Similarity)</strong>를 측정하는 것과 같다.</p>
-<ul>
-<li>즉, 선형 분류기는 <strong>“입력 이미지가 각 클래스의 템플릿과 얼마나 비슷하게 생겼는지”</strong>를 측정하는 과정이다.</li>
-</ul>
-</section>
-<section id="시각적-관점-visual-view" class="level2">
-<h2 class="anchored" data-anchor-id="시각적-관점-visual-view">4.2. 시각적 관점 (Visual View)</h2>
-<p>학습된 가중치 <img src="https://latex.codecogs.com/png.latex?W">를 다시 이미지 형태로 시각화해보면, 모델이 각 클래스를 어떻게 인식하고 있는지 알 수 있다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.2/images/visual_interpretation_weights.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: CIFAR-10으로 학습된 선형 분류기의 가중치(W) 시각화. 각 클래스(Car, Horse 등)의 평균적인 형태와 색상이 템플릿처럼 나타난다. 예를 들어, ’Horse’는 머리가 두 개 달린 것처럼 보이는데(왼쪽과 오른쪽을 모두 학습했기 때문), 이는 선형 모델의 한계를 보여준다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><strong>Car</strong>: 붉은색 스포츠카 형태가 뭉뚱그려져 보인다.</li>
-<li><strong>Frog</strong>: 화면 중앙에 녹색 덩어리가 보인다.</li>
-<li><strong>Horse</strong>: 말의 형상이 보이지만, 다양한 자세의 말이 겹쳐져 머리가 양쪽에 있는 기이한 형태가 되기도 한다. 이는 선형 분류기가 클래스당 <strong>단 하나의 템플릿</strong>만 학습할 수 있기 때문에 발생하는 한계다.</li>
-</ul>
-</section>
-<section id="기하학적-관점-geometric-view" class="level2">
-<h2 class="anchored" data-anchor-id="기하학적-관점-geometric-view">4.3. 기하학적 관점 (Geometric View)</h2>
-<p>이미지를 고차원 공간(예: 3072차원)의 한 점으로 생각할 때, 선형 분류기는 각 클래스를 구분하는 <strong>선형 경계(Linear Decision Boundary)</strong> 또는 <strong>초평면(Hyperplane)</strong>을 긋는 것과 같다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AWx%20+%20b%20=%200%0A"></p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.2/images/geometric_interpretation.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: 선형 분류기의 기하학적 해석. 고차원 공간에서 각 클래스 분류기(화살표 방향)는 데이터를 분할하는 평면으로 작동한다. 입력 이미지가 화살표 방향(양의 영역)에 위치할수록 해당 클래스의 점수가 높아진다.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="the-good-and-bad-parameters" class="level1">
-<h1>5. The “Good” and “Bad” Parameters</h1>
-<p>우리는 <img src="https://latex.codecogs.com/png.latex?f(x,%20W)">를 통해 점수를 계산했다. 하지만 이 점수가 ’좋은지 나쁜지’는 어떻게 판단할 수 있을까?</p>
-<p>아래 표는 임의의 가중치 <img src="https://latex.codecogs.com/png.latex?W">로 계산된 3개 이미지의 점수 예시이다.</p>
-<table class="caption-top table">
-<thead>
-<tr class="header">
-<th style="text-align: left;">Class</th>
-<th style="text-align: center;">Image 1 (Cat)</th>
-<th style="text-align: center;">Image 2 (Car)</th>
-<th style="text-align: center;">Image 3 (Frog)</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;"><strong>Cat</strong></td>
-<td style="text-align: center;"><strong>2.9</strong></td>
-<td style="text-align: center;">-4.22</td>
-<td style="text-align: center;">5.1</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"><strong>Car</strong></td>
-<td style="text-align: center;">-8.87</td>
-<td style="text-align: center;"><strong>6.04</strong></td>
-<td style="text-align: center;">4.64</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;"><strong>Frog</strong></td>
-<td style="text-align: center;">3.78</td>
-<td style="text-align: center;">4.49</td>
-<td style="text-align: center;"><strong>-4.34</strong></td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">…</td>
-<td style="text-align: center;">…</td>
-<td style="text-align: center;">…</td>
-<td style="text-align: center;">…</td>
-</tr>
-</tbody>
-</table>
-<ul>
-<li><strong>Image 1 (실제 정답: Cat)</strong>: Cat 점수(2.9)가 Frog 점수(3.78)보다 낮다. <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Bad Prediction</strong></li>
-<li><strong>Image 2 (실제 정답: Car)</strong>: Car 점수(6.04)가 가장 높다. <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Good Prediction</strong></li>
-<li><strong>Image 3 (실제 정답: Frog)</strong>: Frog 점수(-4.34)가 매우 낮다. <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Terrible Prediction</strong></li>
-</ul>
-<p>단순히 점수를 계산하는 것만으로는 부족하다. 정답 클래스의 점수는 높이고, 오답 클래스의 점수는 낮추도록 가중치 <img src="https://latex.codecogs.com/png.latex?W">를 업데이트해야 한다.</p>
-<p>이를 위해 <strong>“현재 모델의 예측이 얼마나 나쁜지”</strong>를 정량적으로 측정하는 함수가 필요한데, 이것이 바로 다음 포스트에서 다룰 <strong>손실 함수(Loss Function)</strong>이다.</p>
-
-
-
-</section>
-
- ]]></description>
-  <category>Deep Learning</category>
-  <guid>https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.2/</guid>
-  <pubDate>Sun, 08 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Deep Learning] 2. Loss Function and Backpropagation (Part 3)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.3/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>1. Introduction</h1>
-<p>지난 포스트([Lecture 2.2])에서 우리는 입력 이미지를 클래스 점수(Score)로 변환하는 <strong>선형 분류기(Linear Classifier)</strong> <img src="https://latex.codecogs.com/png.latex?f(x,%20W)%20=%20Wx%20+%20b">를 정의했다. 하지만 단순히 점수를 계산하는 것만으로는 충분하지 않다. 모델이 정답 클래스에 대해 더 높은 점수를 부여하도록 학습시키기 위해서는, 현재 파라미터 <img src="https://latex.codecogs.com/png.latex?W">가 “얼마나 나쁜지”를 정량적으로 나타내는 지표가 필요하다.</p>
-<p>이번 포스트에서는 이 지표인 <strong>손실 함수(Loss Function)</strong>의 두 가지 대표적인 형태(Hinge Loss, Logistic Loss)와, 모델의 과적합(Overfitting)을 막기 위한 <strong>규제(Regularization)</strong>에 대해 다룬다.</p>
-</section>
-<section id="loss-functions-a-measure-of-badness" class="level1">
-<h1>2. Loss Functions: A Measure of “Badness”</h1>
-<section id="정의-definition" class="level2">
-<h2 class="anchored" data-anchor-id="정의-definition">2.1. 정의 (Definition)</h2>
-<p>손실 함수(Loss function) <img src="https://latex.codecogs.com/png.latex?d">는 모델의 예측값(Score)과 실제 정답(Label)을 입력받아, 그 불일치 정도를 하나의 실수값(Real number)으로 매핑하는 함수이다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ad:%20%5Cmathbb%7BR%7D%5E%7BC%7D%20%5Ctimes%20%5Cmathcal%7BY%7D%20%5Crightarrow%20%5Cmathbb%7BR%7D%0A"></p>
-<p>데이터셋 <img src="https://latex.codecogs.com/png.latex?%5C%7B(x_%7Bi%7D,%20y_%7Bi%7D)%5C%7D_%7Bi=1%7D%5E%7Bn%7D"> 전체에 대한 총 손실 <img src="https://latex.codecogs.com/png.latex?L(W)">는 개별 데이터 포인트의 손실 <img src="https://latex.codecogs.com/png.latex?l_i(W)">의 평균으로 정의된다(Empirical Risk).</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AL(W)%20=%20%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7D%20l_%7Bi%7D(W)%20=%20%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7D%20d(f(x_%7Bi%7D,%20W),%20y_%7Bi%7D)%0A"></p>
-<p>이제 <img src="https://latex.codecogs.com/png.latex?l_i(W)">를 구체적으로 어떻게 정의하느냐에 따라 서로 다른 성질을 가진 분류기가 만들어진다.</p>
-</section>
-<section id="multiclass-hinge-loss-svm-loss" class="level2">
-<h2 class="anchored" data-anchor-id="multiclass-hinge-loss-svm-loss">2.2. Multiclass Hinge Loss (SVM Loss)</h2>
-<p>첫 번째로 살펴볼 함수는 Support Vector Machine(SVM)에서 사용되는 <strong>Hinge Loss</strong>이다. 이 함수는 정답 클래스의 점수가 오답 클래스의 점수보다 <strong>최소한 마진(Margin) <img src="https://latex.codecogs.com/png.latex?%5CDelta"> 만큼</strong> 더 높아야 한다고 주장한다. (보통 <img src="https://latex.codecogs.com/png.latex?%5CDelta=1">로 설정)</p>
-<p>수식은 다음과 같다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Al_%7Bi%7D(W)%20=%20%5Csum_%7Bj%20%5Cne%20y_%7Bi%7D%7D%20%5Cmax(0,%20s_%7Bj%7D%20-%20s_%7By_%7Bi%7D%7D%20+%201)%0A"></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?s_%7By_i%7D">: 정답 클래스의 점수</li>
-<li><img src="https://latex.codecogs.com/png.latex?s_%7Bj%7D">: 오답 클래스의 점수</li>
-<li><strong>해석</strong>: 만약 정답 점수 <img src="https://latex.codecogs.com/png.latex?s_%7By_i%7D">가 오답 점수 <img src="https://latex.codecogs.com/png.latex?s_j">보다 1 이상 크다면(<img src="https://latex.codecogs.com/png.latex?s_%7By_i%7D%20%3E%20s_j%20+%201">), 손실은 0이다. 그렇지 않다면 그 차이만큼 페널티(손실)가 부과된다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.3/images/hinge_loss_graph.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: Hinge Loss 그래프. x축은 정답 점수와 오답 점수의 차이, y축은 손실 값을 나타낸다. 정답 점수가 충분히 높으면 손실이 0이 되는 ’Flat’한 영역이 존재한다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="multinomial-logistic-loss-softmax-loss" class="level2">
-<h2 class="anchored" data-anchor-id="multinomial-logistic-loss-softmax-loss">2.3. Multinomial Logistic Loss (Softmax Loss)</h2>
-<p>두 번째는 딥러닝에서 가장 흔하게 사용되는 <strong>Logistic Loss</strong>이다. 이 함수는 점수 벡터 <img src="https://latex.codecogs.com/png.latex?s">를 확률 분포로 해석한다.</p>
-<p>먼저, 점수들을 <strong>Softmax</strong> 함수를 통해 확률값으로 변환한다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AP(Y=k%20%7C%20X=x_%7Bi%7D)%20=%20%5Cfrac%7Be%5E%7Bs_%7Bk%7D%7D%7D%7B%5Csum_%7Bj%7D%20e%5E%7Bs_%7Bj%7D%7D%7D%0A"></p>
-<p>그리고 정답 클래스에 대한 <strong>음의 로그 우도(Negative Log Likelihood)</strong>를 최소화하는 방향으로 손실을 정의한다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Al_%7Bi%7D(W)%20=%20-%5Clog%5Cleft(%20%5Cfrac%7Be%5E%7Bs_%7By_%7Bi%7D%7D%7D%7D%7B%5Csum_%7Bj%7D%20e%5E%7Bs_%7Bj%7D%7D%7D%20%5Cright)%0A"></p>
-<ul>
-<li><strong>해석</strong>: 정답 클래스의 확률을 최대화(1에 가깝게)하고자 한다. 로그 함수 특성상 확률이 1이면 손실은 0, 확률이 0에 가까우면 손실은 무한대로 발산한다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.3/images/logistic_loss_graph.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: Logistic Loss 그래프. 정답 클래스의 점수가 높아질수록 손실은 0에 점근적으로 수렴하지만, Hinge Loss와 달리 완전히 0이 되지는 않는다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="comparison-hinge-vs-logistic" class="level2">
-<h2 class="anchored" data-anchor-id="comparison-hinge-vs-logistic">2.4. Comparison: Hinge vs Logistic</h2>
-<p>두 손실 함수는 모델을 학습시키는 방식에서 미묘한 차이를 보인다.</p>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 33%">
-<col style="width: 33%">
-<col style="width: 33%">
-</colgroup>
-<thead>
-<tr class="header">
-<th style="text-align: left;">특징</th>
-<th style="text-align: left;">Hinge Loss (SVM)</th>
-<th style="text-align: left;">Logistic Loss (Softmax)</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;"><strong>목표</strong></td>
-<td style="text-align: left;">정답이 오답보다 <strong>마진만큼만</strong> 높으면 만족</td>
-<td style="text-align: left;">정답 확률을 <strong>계속해서</strong> 높이려고 함</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"><strong>민감도</strong></td>
-<td style="text-align: left;">점수 차이가 충분하면 데이터 변화에 둔감함</td>
-<td style="text-align: left;">데이터의 작은 변화에도 손실 값이 변함</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;"><strong>비유</strong></td>
-<td style="text-align: left;">“1등이 2등보다 1점만 높으면 돼”</td>
-<td style="text-align: left;">“1등이 압도적인 차이로 이겨야 해”</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Example</strong>: 정답 클래스(<img src="https://latex.codecogs.com/png.latex?y_i=0">)의 점수가 10이고, 나머지 오답 점수가 바뀔 때: 1. Scores: <code>[10, 9, 9]</code> <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 두 모델 모두 손실 발생 (나쁨) 2. Scores: <code>[10, -100, -100]</code> * <strong>Hinge</strong>: 이미 마진을 만족했으므로 손실 변화 없음 (0). * <strong>Logistic</strong>: 정답 확률이 더 올라갔으므로 손실이 더 줄어듦.</p>
-</section>
-</section>
-<section id="regularization-beyond-training-error" class="level1">
-<h1>3. Regularization: Beyond Training Error</h1>
-<section id="문제-제기-motivation" class="level2">
-<h2 class="anchored" data-anchor-id="문제-제기-motivation">3.1. 문제 제기 (Motivation)</h2>
-<p>우리가 찾은 최적의 파라미터 <img src="https://latex.codecogs.com/png.latex?W">가 유일(Unique)할까? Hinge Loss의 경우, 만약 <img src="https://latex.codecogs.com/png.latex?W">에서 손실이 0이라면, <img src="https://latex.codecogs.com/png.latex?2W">에서도 손실은 0이다(마진도 2배가 되므로).</p>
-<p>또한, 모델이 학습 데이터에만 지나치게 최적화되면(Overfitting), 새로운 데이터(Test data)에 대한 성능이 떨어질 수 있다. 아래 그림을 보자.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.3/images/overfitting_example.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: 과적합(Overfitting)의 예시. 파란색 곡선(<img src="https://latex.codecogs.com/png.latex?f_1">)은 모든 학습 데이터(초록색 점)를 완벽하게 지나지만 매우 복잡하다. 반면, 붉은색 직선(<img src="https://latex.codecogs.com/png.latex?f_2">)은 일부 오차가 있지만 더 단순하고 일반적인 경향을 보여준다.</figcaption>
-</figure>
-</div>
-<p>우리는 학습 데이터(초록색 점)뿐만 아니라, 보이지 않는 테스트 데이터(회색 점/핑크색 점)에서도 잘 동작하는 <strong>단순한 모델(Simpler Model)</strong>을 선호한다.</p>
-</section>
-<section id="regularization-term" class="level2">
-<h2 class="anchored" data-anchor-id="regularization-term">3.2. Regularization Term</h2>
-<p>이를 위해 전체 손실 함수에 <strong>규제항(Regularization term)</strong> <img src="https://latex.codecogs.com/png.latex?R(W)">를 추가한다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AL(W)%20=%20%5Cunderbrace%7B%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7D%20l_%7Bi%7D(W)%7D_%7B%5Ctext%7BData%20Loss%7D%7D%20+%20%5Cunderbrace%7B%5Clambda%20R(W)%7D_%7B%5Ctext%7BRegularization%7D%7D%0A"></p>
-<ul>
-<li><strong>Data Loss</strong>: 학습 데이터를 얼마나 잘 맞추는가? (Prediction Performance)</li>
-<li><strong>Regularization</strong>: 모델이 얼마나 단순한가? (Model Complexity)</li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Clambda"> (Lambda)</strong>: 두 목표 사이의 균형을 조절하는 하이퍼파라미터.</li>
-</ul>
-</section>
-<section id="common-regularizers" class="level2">
-<h2 class="anchored" data-anchor-id="common-regularizers">3.3. Common Regularizers</h2>
-<p>가장 널리 쓰이는 규제 기법들은 다음과 같다.</p>
-<ol type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?L_2"> Regularization (Weight Decay)</strong> <img src="https://latex.codecogs.com/png.latex?R(W)%20=%20%5Csum_%7Bk%7D%20%5Csum_%7Bl%7D%20W_%7Bk,l%7D%5E%7B2%7D%20=%20%7C%7CW%7C%7C_%7B2%7D%5E%7B2%7D">
-<ul>
-<li>가중치 <img src="https://latex.codecogs.com/png.latex?W">의 원소들이 너무 큰 값을 가지지 않도록 억제한다.</li>
-<li>가중치를 골고루 퍼뜨리는(Diffuse) 효과가 있다. (MAP inference와 Gaussian prior와 연관됨)</li>
-</ul></li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?L_1"> Regularization</strong> <img src="https://latex.codecogs.com/png.latex?R(W)%20=%20%5Csum_%7Bk%7D%20%5Csum_%7Bl%7D%20%7CW_%7Bk,l%7D%7C%20=%20%7C%7CW%7C%7C_%7B1%7D">
-<ul>
-<li>가중치를 희소(Sparse)하게 만든다. 즉, 불필요한 가중치를 0으로 만든다. (Feature Selection 효과)</li>
-</ul></li>
-<li><strong>Other Techniques</strong>
-<ul>
-<li><strong>Nuclear Norm</strong>: <img src="https://latex.codecogs.com/png.latex?R(W)%20=%20%7C%7CW%7C%7C_%7B*%7D%20=%20%5Csum%20%5Csigma_i(W)"> (행렬의 랭크를 낮춤)</li>
-<li><strong>Dropout, Batch Normalization</strong>: (추후 강의에서 다룰 예정)</li>
-</ul></li>
-</ol>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Deep Learning</category>
-  <guid>https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.3/</guid>
-  <pubDate>Sun, 08 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Deep Learning] 2. Loss Function and Backpropagation (Part 4)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.4/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>1. Introduction</h1>
-<p>지난 포스트([Lecture 2.3])까지 우리는 이미지 분류를 위한 모델(Score Function)과 모델의 성능을 평가하는 지표(Loss Function)를 정의했다. 이제 우리의 목표는 <strong>Loss를 최소화하는 파라미터 <img src="https://latex.codecogs.com/png.latex?W">를 찾는 것</strong>이다.</p>
-<p>이를 위해서는 손실 함수 <img src="https://latex.codecogs.com/png.latex?L">에 대한 각 파라미터의 변화율, 즉 <strong>기울기(Gradient, <img src="https://latex.codecogs.com/png.latex?%5Cnabla_W%20L">)</strong>를 계산해야 한다. 하지만 딥러닝 모델은 수많은 연산이 중첩된 매우 복잡한 합성 함수 형태를 띤다.</p>
-<p>이번 포스트에서는 이러한 복잡한 함수의 기울기를 <strong>계산 그래프(Computational Graph)</strong>와 <strong>역전파(Backpropagation)</strong> 알고리즘을 이용해 체계적이고 효율적으로 구하는 방법을 알아본다.</p>
-</section>
-<section id="computational-graphs" class="level1">
-<h1>2. Computational Graphs</h1>
-<section id="정의-definition" class="level2">
-<h2 class="anchored" data-anchor-id="정의-definition">2.1. 정의 (Definition)</h2>
-<p>계산 그래프는 수학적 연산 과정을 표현하는 <strong>방향성 비순환 그래프(Directed Acyclic Graph, DAG)</strong>이다.</p>
-<ul>
-<li><strong>노드(Nodes)</strong>: 입력 데이터, 파라미터, 또는 연산(Operation)을 나타낸다.</li>
-<li><strong>엣지(Edges)</strong>: 데이터의 흐름을 나타낸다. 엣지 <img src="https://latex.codecogs.com/png.latex?(u,%20v)">는 노드 <img src="https://latex.codecogs.com/png.latex?u">의 출력값이 노드 <img src="https://latex.codecogs.com/png.latex?v">의 입력으로 사용됨을 의미한다.</li>
-</ul>
-<p>그래프의 각 노드 <img src="https://latex.codecogs.com/png.latex?v">는 자신의 부모 노드(Predecessors)들의 값을 입력받아 함수 <img src="https://latex.codecogs.com/png.latex?f_v">를 계산한다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ax_v%20=%20f_v(%5C%7Bx_u%20%5Cmid%20u%20%5Cin%20%5Ctext%7Bpred%7D(v)%5C%7D)%0A"></p>
-</section>
-<section id="forward-pass" class="level2">
-<h2 class="anchored" data-anchor-id="forward-pass">2.2. Forward Pass</h2>
-<p>계산 그래프를 이용하면 복잡한 수식을 단순한 연산들의 연속으로 분해할 수 있다. 예를 들어, 선형 분류기에 Hinge Loss와 Regularization이 결합된 전체 식은 다음과 같이 시각화된다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.4/images/computation_graph_full_pipeline.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: 전체 파이프라인의 계산 그래프. 입력 <img src="https://latex.codecogs.com/png.latex?x">와 가중치 <img src="https://latex.codecogs.com/png.latex?W">의 곱셈, Hinge Loss 계산, 그리고 Regularization <img src="https://latex.codecogs.com/png.latex?R(W)"> 합산 과정이 노드와 엣지로 연결되어 있다.</figcaption>
-</figure>
-</div>
-<p>이 구조 덕분에 우리는 입력부터 출력까지 순차적으로 값을 계산하는 <strong>Forward Pass</strong>를 명확하게 정의할 수 있다.</p>
-</section>
-</section>
-<section id="backpropagation-computing-gradients" class="level1">
-<h1>3. Backpropagation: Computing Gradients</h1>
-<p><strong>역전파(Backpropagation)</strong>는 미분의 연쇄 법칙(Chain Rule)을 이용하여 출력(Loss)에서부터 입력 방향으로 거슬러 올라가며 기울기를 계산하는 알고리즘이다.</p>
-<section id="chain-rule과-local-gradient" class="level2">
-<h2 class="anchored" data-anchor-id="chain-rule과-local-gradient">3.1. Chain Rule과 Local Gradient</h2>
-<p>어떤 노드 <img src="https://latex.codecogs.com/png.latex?f">가 입력 <img src="https://latex.codecogs.com/png.latex?x,%20y">를 받아 출력 <img src="https://latex.codecogs.com/png.latex?z">를 내보낸다고 가정하자. 그리고 최종 손실을 <img src="https://latex.codecogs.com/png.latex?L">이라고 하자.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.4/images/backprop_local_gradient.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: 역전파의 핵심 원리. 각 노드는 ’Local Gradient’를 계산하고, 상류(Upstream)에서 넘어온 Gradient와 곱하여 하류(Downstream)로 전달한다.</figcaption>
-</figure>
-</div>
-<p>우리는 최종 목적지인 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20L%7D%7B%5Cpartial%20x%7D,%20%5Cfrac%7B%5Cpartial%20L%7D%7B%5Cpartial%20y%7D">를 구하고 싶다. 이때 노드 내부와 외부에서 일어나는 일은 다음과 같다.</p>
-<ol type="1">
-<li><strong>Upstream Gradient</strong>: 뒤쪽(출력 방향)에서 이미 계산되어 넘어온 기울기 (<img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20L%7D%7B%5Cpartial%20z%7D">)</li>
-<li><strong>Local Gradient</strong>: 현재 노드의 연산에 대한 미분값 (<img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20z%7D%7B%5Cpartial%20x%7D,%20%5Cfrac%7B%5Cpartial%20z%7D%7B%5Cpartial%20y%7D">)</li>
-<li><strong>Downstream Gradient</strong>: <strong>Chain Rule</strong>에 의해 두 값을 곱하여 앞쪽(입력 방향)으로 전달 (<img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20L%7D%7B%5Cpartial%20x%7D%20=%20%5Cfrac%7B%5Cpartial%20L%7D%7B%5Cpartial%20z%7D%20%5Ccdot%20%5Cfrac%7B%5Cpartial%20z%7D%7B%5Cpartial%20x%7D">)</li>
-</ol>
-</section>
-<section id="step-by-step-example" class="level2">
-<h2 class="anchored" data-anchor-id="step-by-step-example">3.2. Step-by-Step Example</h2>
-<p>간단한 함수 <img src="https://latex.codecogs.com/png.latex?f(x,%20y,%20z)%20=%20(x%20+%20y)z">를 예로 들어보자. (초기값: <img src="https://latex.codecogs.com/png.latex?x=-2,%20y=5,%20z=-4">)</p>
-<ol type="1">
-<li><strong>Forward Pass</strong>:
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?q%20=%20x%20+%20y%20=%20-2%20+%205%20=%203"></li>
-<li><img src="https://latex.codecogs.com/png.latex?f%20=%20q%20%5Ccdot%20z%20=%203%20%5Ccdot%20(-4)%20=%20-12"></li>
-</ul></li>
-<li><strong>Backward Pass</strong>:
-<ul>
-<li><strong>Start</strong>: <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20f%7D%7B%5Cpartial%20f%7D%20=%201"></li>
-<li><strong>Node (*)</strong>: <img src="https://latex.codecogs.com/png.latex?f%20=%20qz"> 이므로
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20f%7D%7B%5Cpartial%20z%7D%20=%20q%20=%203"></li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20f%7D%7B%5Cpartial%20q%7D%20=%20z%20=%20-4"></li>
-</ul></li>
-<li><strong>Node (+)</strong>: <img src="https://latex.codecogs.com/png.latex?q%20=%20x%20+%20y"> 이므로
-<ul>
-<li>Local Gradient: <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20q%7D%7B%5Cpartial%20x%7D%20=%201,%20%5Cfrac%7B%5Cpartial%20q%7D%7B%5Cpartial%20y%7D%20=%201"></li>
-<li>Downstream Gradient (Chain Rule):
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20f%7D%7B%5Cpartial%20x%7D%20=%20%5Cfrac%7B%5Cpartial%20f%7D%7B%5Cpartial%20q%7D%20%5Ccdot%20%5Cfrac%7B%5Cpartial%20q%7D%7B%5Cpartial%20x%7D%20=%20-4%20%5Ccdot%201%20=%20-4"></li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20f%7D%7B%5Cpartial%20y%7D%20=%20%5Cfrac%7B%5Cpartial%20f%7D%7B%5Cpartial%20q%7D%20%5Ccdot%20%5Cfrac%7B%5Cpartial%20q%7D%7B%5Cpartial%20y%7D%20=%20-4%20%5Ccdot%201%20=%20-4"></li>
-</ul></li>
-</ul></li>
-</ul></li>
-</ol>
-<p>결과적으로 각 변수에 대한 미분값 <img src="https://latex.codecogs.com/png.latex?%5B-4,%20-4,%203%5D">을 얻게 된다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.4/images/backprop_simple_example.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: (x+y)z 예제에 대한 구체적인 Forward/Backward 계산 과정. 녹색 숫자는 Forward 값, 붉은색 숫자는 Backprop으로 계산된 Gradient를 나타낸다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="sigmoid-example" class="level2">
-<h2 class="anchored" data-anchor-id="sigmoid-example">3.3. Sigmoid Example</h2>
-<p>조금 더 복잡한 <strong>Sigmoid 함수</strong> <img src="https://latex.codecogs.com/png.latex?%5Csigma(x)%20=%20%5Cfrac%7B1%7D%7B1+e%5E%7B-x%7D%7D">가 포함된 경우를 보자. Sigmoid의 미분은 자기 자신을 이용해 표현할 수 있다는 특징이 있다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cfrac%7Bd%5Csigma(x)%7D%7Bdx%7D%20=%20(1%20-%20%5Csigma(x))%5Csigma(x)%0A"></p>
-<p>이러한 성질을 이용하면, 복잡한 지수 연산 그래프를 하나하나 미분할 필요 없이 <strong>Sigmoid Gate</strong> 하나로 묶어서 처리할 수 있다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.4/images/sigmoid_backprop.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 4: Sigmoid 함수가 포함된 복잡한 회로의 역전파. Sigmoid 부분을 하나의 블록(Gate)으로 추상화하면, 입력값(0.73)만으로 Local Gradient(0.2)를 바로 계산할 수 있음을 보여준다.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="patterns-in-gradient-flow" class="level1">
-<h1>4. Patterns in Gradient Flow</h1>
-<p>역전파 과정에서 자주 등장하는 연산 게이트들은 직관적인 “Gradient 흐름 패턴”을 보인다.</p>
-<ol type="1">
-<li><strong>Add Gate (+)</strong>: <strong>Gradient Distributor</strong>
-<ul>
-<li>덧셈은 미분하면 1이 되므로, 상류에서 온 Gradient를 입력 노드들에게 <strong>그대로 복사</strong>해서 분배한다.</li>
-</ul></li>
-<li><strong>Mul Gate (*)</strong>: <strong>Swap Multiplier</strong>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?z%20=%20xy"> 미분 시 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20z%7D%7B%5Cpartial%20x%7D=y">가 되므로, 상류 Gradient에 <strong>상대방의 값</strong>을 곱해서 전달한다.</li>
-</ul></li>
-<li><strong>Max Gate (max)</strong>: <strong>Gradient Router</strong>
-<ul>
-<li>Max 연산은 큰 값으로만 흐르므로, Gradient 역시 <strong>가장 큰 값을 가졌던 입력으로만 전달</strong>되고, 나머지는 0이 된다.</li>
-</ul></li>
-</ol>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.4/images/gradient_patterns.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 5: Add, Mul, Max 게이트의 Gradient 흐름 패턴 도식화. 덧셈은 분배, 곱셈은 값 교환, Max는 경로 선택의 역할을 수행함을 알 수 있다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="vectorized-backpropagation" class="level1">
-<h1>5. Vectorized Backpropagation</h1>
-<p>실제 딥러닝에서는 스칼라(Scalar)가 아닌 벡터(Vector)나 행렬(Matrix) 단위로 연산이 이루어진다. 이 경우에도 기본 원리는 같지만, <strong>Jacobian Matrix</strong>의 개념이 등장한다.</p>
-<p>입력 <img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D%5En">와 출력 <img src="https://latex.codecogs.com/png.latex?z%20%5Cin%20%5Cmathbb%7BR%7D%5Em">에 대해, 미분은 <img src="https://latex.codecogs.com/png.latex?m%20%5Ctimes%20n"> 행렬(Jacobian)이 된다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cleft(%20%5Cfrac%7B%5Cpartial%20z%7D%7B%5Cpartial%20x%7D%20%5Cright)_%7Bij%7D%20=%20%5Cfrac%7B%5Cpartial%20z_i%7D%7B%5Cpartial%20x_j%7D%0A"></p>
-<ul>
-<li><strong>Example</strong>: <img src="https://latex.codecogs.com/png.latex?L_2"> Norm 함수 <img src="https://latex.codecogs.com/png.latex?f(x,%20W)%20=%20%7C%7CWx%7C%7C%5E2">
-<ul>
-<li>Forward: <img src="https://latex.codecogs.com/png.latex?q%20=%20Wx">, <img src="https://latex.codecogs.com/png.latex?f%20=%20%7C%7Cq%7C%7C%5E2"></li>
-<li>Backward:
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20f%7D%7B%5Cpartial%20q%7D%20=%202q"></li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20q%7D%7B%5Cpartial%20x%7D%20=%20W"></li>
-<li>Chain Rule: <img src="https://latex.codecogs.com/png.latex?%5Cnabla_x%20f%20=%202%20W%5ET%20q%20=%202%20W%5ET%20(Wx)"></li>
-</ul></li>
-</ul></li>
-</ul>
-<p>벡터 연산에서는 차원(Dimension)을 항상 체크하는 것이 중요하다. Gradient의 차원은 항상 원본 변수의 차원과 같아야 한다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.4/images/vectorized_backprop.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 6: 벡터화된 연산(행렬 곱)에 대한 역전파 예시. 입력 벡터와 가중치 행렬의 차원에 맞춰 Gradient가 계산되는 과정을 보여준다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="modular-implementation" class="level1">
-<h1>6. Modular Implementation</h1>
-<p>최신 딥러닝 프레임워크(PyTorch, TensorFlow)는 이러한 계산 그래프를 <strong>모듈화</strong>하여 구현한다. 각 연산(Layer)은 <code>forward</code>와 <code>backward</code>라는 두 가지 메서드를 가진 클래스로 정의된다.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1" style="background: #f1f3f5;"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">class</span> Multiply(torch.autograd.Function):</span>
-<span id="cb1-2">    <span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">@staticmethod</span></span>
-<span id="cb1-3">    <span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">def</span> forward(ctx, x, y):</span>
-<span id="cb1-4">        <span class="co" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;"># Forward pass: 값 계산 및 저장</span></span>
-<span id="cb1-5">        ctx.save_for_backward(x, y)</span>
-<span id="cb1-6">        z <span class="op" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;">=</span> x <span class="op" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;">*</span> y</span>
-<span id="cb1-7">        <span class="cf" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">return</span> z</span>
-<span id="cb1-8"></span>
-<span id="cb1-9">    <span class="at" style="color: #657422;
-background-color: null;
-font-style: inherit;">@staticmethod</span></span>
-<span id="cb1-10">    <span class="kw" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">def</span> backward(ctx, grad_z):</span>
-<span id="cb1-11">        <span class="co" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;"># Backward pass: 저장된 값을 꺼내 Gradient 계산</span></span>
-<span id="cb1-12">        x, y <span class="op" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;">=</span> ctx.saved_tensors</span>
-<span id="cb1-13">        grad_x <span class="op" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;">=</span> y <span class="op" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;">*</span> grad_z  <span class="co" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;"># Swap multiplier pattern</span></span>
-<span id="cb1-14">        grad_y <span class="op" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;">=</span> x <span class="op" style="color: #5E5E5E;
-background-color: null;
-font-style: inherit;">*</span> grad_z</span>
-<span id="cb1-15">        <span class="cf" style="color: #003B4F;
-background-color: null;
-font-weight: bold;
-font-style: inherit;">return</span> grad_x, grad_y</span></code></pre></div></div>
-<p>이러한 모듈들이 레고 블록처럼 연결되어 거대한 신경망을 구성하며, 사용자는 복잡한 미분 공식을 직접 유도할 필요 없이 그래프를 구성하기만 하면 된다(AutoGrad).</p>
-
-
-
-</section>
-
- ]]></description>
-  <category>Deep Learning</category>
-  <guid>https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.4/</guid>
   <pubDate>Sun, 08 Mar 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>

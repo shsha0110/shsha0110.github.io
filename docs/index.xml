@@ -12,6 +12,384 @@
 <generator>quarto-1.8.26</generator>
 <lastBuildDate>Mon, 16 Mar 2026 15:00:00 GMT</lastBuildDate>
 <item>
+  <title>[Data Mining] 5. Frequent Itemsets (Part 1)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.1/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-메모리-한계와-새로운-접근" class="level1">
+<h1>1. Introduction: 메모리 한계와 새로운 접근</h1>
+<p>데이터 마이닝에서 빈발 항목 집합(Frequent Itemsets)을 찾는 것은 연관 규칙 학습의 핵심입니다. 앞서 다루었던 기본적인 A-Priori 알고리즘은 후보 크기가 작은 경우에는 훌륭하게 작동하지만, 치명적인 전제 조건이 있습니다. 바로 후보 쌍(Candidate pairs) 집합인 <img src="https://latex.codecogs.com/png.latex?C_2">를 카운팅하는 작업이 반드시 <strong>메인 메모리(Main Memory)</strong> 내에서 이루어져야 한다는 점입니다.</p>
+<p>만약 분석해야 할 데이터의 차원이 매우 커서 메모리가 부족해진다면 어떻게 해야 할까요? 이러한 한계를 극복하기 위해서는 생성되는 <img src="https://latex.codecogs.com/png.latex?C_2">의 크기 자체를 사전에 효과적으로 줄여주는 알고리즘이 필수적입니다. 대표적인 확장 알고리즘으로는 다음 세 가지가 있습니다.</p>
+<ol type="1">
+<li><strong>PCY (Park-Chen-Yu) Algorithm</strong></li>
+<li>Multistage Algorithm</li>
+<li>Multihash Algorithm</li>
+</ol>
+<p>본 포스트에서는 A-Priori의 메모리 비효율성을 개선한 <strong>PCY 알고리즘</strong>의 수학적 원리와 논리적 흐름을 상세히 다룹니다.</p>
+<hr>
+</section>
+<section id="pcy-알고리즘의-핵심-아이디어-motivation" class="level1">
+<h1>2. PCY 알고리즘의 핵심 아이디어 (Motivation)</h1>
+<p>PCY 알고리즘의 출발점은 A-Priori 알고리즘의 <strong>첫 번째 패스(Pass 1)에서 발생하는 메모리의 낭비</strong>를 관찰하는 것에서 시작됩니다.</p>
+<p>A-Priori의 Pass 1에서는 개별 아이템(Item)을 정수로 매핑(Item names to integers)하고, 각 개별 아이템의 빈도수(Item counts)만을 세어 메모리에 저장합니다. 이 과정에서 메인 메모리의 상당 부분은 사용되지 않고 유휴(Idle) 상태로 남게 됩니다. PCY 알고리즘은 모든 아이템 쌍을 메모리에 직접 저장할 수 없다는 점을 인지하고, 이 ’비어있는 메모리 공간’을 Pass 2를 위해 미리 활용하는 전략을 취합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.1/images/memory_pass1_unused.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: 메인 메모리의 활용도 (Pass 1). A-Priori 알고리즘의 첫 번째 패스에서는 개별 아이템의 빈도수(Item counts)와 아이템 이름을 정수로 매핑하는 테이블만 저장하므로 메모리의 하단 대부분(Unused)이 유휴 상태로 남게 됩니다. PCY 알고리즘은 이 빈 공간에 해시 테이블을 구축하여 쌍(Pairs)의 빈도 정보를 미리 요약하고자 합니다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+<section id="알고리즘의-작동-원리-mechanism" class="level1">
+<h1>3. 알고리즘의 작동 원리 (Mechanism)</h1>
+<section id="pass-1-해시-테이블의-생성과-카운팅" class="level2">
+<h2 class="anchored" data-anchor-id="pass-1-해시-테이블의-생성과-카운팅">3.1. Pass 1: 해시 테이블의 생성과 카운팅</h2>
+<p>PCY 알고리즘은 Pass 1 데이터를 스캔할 때, 단일 아이템의 빈도를 세는 동시에 <strong>아이템 쌍(Pairs)에 대한 해시 테이블(Hash table)</strong>을 유휴 메모리에 생성합니다.</p>
+<ol type="1">
+<li><strong>버킷 할당:</strong> 사용 가능한 메모리 크기에 맞춰 최대한 많은 수의 버킷(Bucket)을 만듭니다. 예를 들어, 4KB의 여유 메모리가 있다면 약 1,000개의 버킷을 할당할 수 있습니다.</li>
+<li><strong>해싱 작업:</strong> 장바구니 데이터를 스캔하면서 발생하는 모든 아이템 쌍 <img src="https://latex.codecogs.com/png.latex?%5C%7Bi,%20j%5C%7D">에 대해 해시 함수를 적용하고, 해당 쌍이 매핑되는 버킷의 카운트를 1 증가시킵니다.</li>
+<li><strong>충돌(Collision)의 수용:</strong> 고유한 아이템 쌍의 전체 개수는 할당된 버킷의 수보다 훨씬 많기 때문에, 서로 다른 쌍이 같은 버킷에 할당되는 해시 충돌은 필연적으로 발생합니다. 이는 알고리즘 구조상 자연스러운 현상입니다.</li>
+</ol>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.1/images/memory_hash_mapping.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: 해싱을 통한 쌍 카운팅. 장바구니에 담긴 {bread, milk}와 같은 아이템 쌍이 해시 함수를 거쳐 메모리 상의 특정 버킷(예: 1번 버킷)에 매핑되고 카운트가 올라가는 과정을 보여줍니다. 서로 다른 쌍이 하나의 버킷에 모일 수 있습니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="버킷-관찰과-논리적-추론-observations" class="level2">
+<h2 class="anchored" data-anchor-id="버킷-관찰과-논리적-추론-observations">3.2. 버킷 관찰과 논리적 추론 (Observations)</h2>
+<p>해시 테이블을 만드는 이유는 단 하나, <strong>빈발할 가능성이 전혀 없는 쌍(infrequent pairs)을 사전에 제거</strong>하기 위해서입니다.</p>
+<ul>
+<li>특정 버킷 <img src="https://latex.codecogs.com/png.latex?B">의 카운트는 그 버킷으로 해싱된 ‘모든’ 아이템 쌍의 출현 횟수 총합입니다.</li>
+<li>만약 버킷 <img src="https://latex.codecogs.com/png.latex?B">의 총 카운트가 우리가 설정한 지지도 임계값(Support threshold) <img src="https://latex.codecogs.com/png.latex?s"> 이상이라면, 해당 버킷에 속한 쌍들 중 일부는 빈발 항목 집합일 <em>가능성</em>이 있습니다.</li>
+<li><strong>(결정적 논리)</strong> 반대로, 버킷 <img src="https://latex.codecogs.com/png.latex?B">의 총 카운트가 <img src="https://latex.codecogs.com/png.latex?s"> 미만이라면, 그 버킷으로 해싱된 <strong>그 어떤 아이템 쌍도 절대 지지도 <img src="https://latex.codecogs.com/png.latex?s">를 넘을 수 없습니다</strong>.</li>
+</ul>
+</section>
+<section id="between-passes-비트맵bitmap-압축" class="level2">
+<h2 class="anchored" data-anchor-id="between-passes-비트맵bitmap-압축">3.3. Between Passes: 비트맵(Bitmap) 압축</h2>
+<p>Pass 1이 끝나고 Pass 2로 넘어가기 전, 메모리 효율을 극대화하기 위해 기존의 정수형 해시 테이블을 <strong>비트 벡터(Bit-vector)</strong>로 변환합니다.</p>
+<ul>
+<li>버킷의 카운트 <img src="https://latex.codecogs.com/png.latex?%5Cge%20s"> 이면, 해당 버킷의 비트를 <code>1</code>로 기록합니다.</li>
+<li>버킷의 카운트 <img src="https://latex.codecogs.com/png.latex?%3C%20s"> 이면, 해당 버킷의 비트를 <code>0</code>으로 기록합니다.</li>
+</ul>
+<p>일반적으로 정수형 데이터 하나가 32비트를 차지하므로, 이를 1비트의 참/거짓(1/0) 정보로 압축하면 해시 테이블이 차지하던 메모리 공간을 <strong><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B32%7D"> 수준으로 대폭 축소</strong>할 수 있습니다.</p>
+</section>
+<section id="pass-2-후보-쌍-c_2의-정의" class="level2">
+<h2 class="anchored" data-anchor-id="pass-2-후보-쌍-c_2의-정의">3.4. Pass 2: 후보 쌍 <img src="https://latex.codecogs.com/png.latex?C_2">의 정의</h2>
+<p>비트맵 압축으로 확보한 메모리 공간을 활용하여 Pass 2에서는 후보 쌍을 카운팅합니다. PCY 알고리즘에서 특정 쌍 <img src="https://latex.codecogs.com/png.latex?%5C%7Bi,%20j%5C%7D">가 최종 후보 쌍 집합 <img src="https://latex.codecogs.com/png.latex?C_2">에 포함되기 위해서는 <strong>두 가지 조건</strong>을 모두 만족해야 합니다. 이것이 A-Priori와의 가장 큰 차이점입니다.</p>
+<ol type="1">
+<li><img src="https://latex.codecogs.com/png.latex?i">와 <img src="https://latex.codecogs.com/png.latex?j">가 모두 빈발 아이템(Frequent items)이어야 합니다.</li>
+<li>쌍 <img src="https://latex.codecogs.com/png.latex?%5C%7Bi,%20j%5C%7D">를 해싱했을 때 도달하는 버킷의 비트값이 <code>1</code> (Frequent bucket)이어야 합니다.</li>
+</ol>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.1/images/memory_pass_comparison.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3: PCY 알고리즘의 메모리 구조 변화 (Pass 1 vs Pass 2). Pass 1에서는 빈 공간을 커다란 해시 테이블로 사용합니다. Pass 2로 넘어가면서 이 해시 테이블은 매우 작은 비트맵(Bitmap)으로 압축되며, 그로 인해 확보된 넓은 공간을 실제 후보 쌍(Candidate pairs)의 정확한 카운트를 저장하는 데 사용합니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="구조적-특징-subtlety-triples-method의-강제성" class="level2">
+<h2 class="anchored" data-anchor-id="구조적-특징-subtlety-triples-method의-강제성">3.5. 구조적 특징 (Subtlety): Triples Method의 강제성</h2>
+<p>아이템 쌍을 카운팅할 때, 일반적인 알고리즘들은 삼각 행렬(Triangular-matrix) 구조를 사용하여 공간을 절약합니다. 그러나 <strong>PCY 알고리즘은 삼각 행렬 방식을 사용할 수 없습니다</strong>.</p>
+<p>그 이유는 PCY가 후보 쌍 집합 <img src="https://latex.codecogs.com/png.latex?C_2">의 <strong>희소성(Sparsity)</strong>을 극대화하여 비빈발 쌍을 제거하기 때문입니다. 연속적인 메모리 할당이 필요한 삼각 행렬에서, 중간에 이빨이 빠진 것처럼 비빈발 쌍을 제거하여 ’압축(compact)’하는 것은 구조적으로 불가능합니다. 따라서 PCY는 항상 <code>[아이템1, 아이템2, 카운트]</code> 형태의 <strong>Triples method</strong>를 강제적으로 사용해야 합니다.</p>
+<hr>
+</section>
+</section>
+<section id="실전-예제-pop-quiz-step-by-step" class="level1">
+<h1>4. 실전 예제 (Pop Quiz Step-by-Step)</h1>
+<p>강의에서 제시된 퀴즈를 통해 PCY의 논리적 흐름을 완벽히 이해해 봅시다.</p>
+<section id="문제-상황" class="level2">
+<h2 class="anchored" data-anchor-id="문제-상황"><strong>[문제 상황]</strong></h2>
+<ul>
+<li>전체 장바구니 집합 (Baskets): <img src="https://latex.codecogs.com/png.latex?%5C%7B1,2,3%5C%7D,%20%5C%7B3,4,5%5C%7D,%20%5C%7B2,4,5%5C%7D"></li>
+<li>지지도 임계값 (Support threshold): <img src="https://latex.codecogs.com/png.latex?s%20=%202"></li>
+<li>Pass 1에서 사용하는 버킷 수: 3개</li>
+<li>해시 함수: <img src="https://latex.codecogs.com/png.latex?h(i,%20j)%20=%20(i%20%5Ctimes%20j)%20%5Cpmod%203"></li>
+</ul>
+</section>
+<section id="q-pcy의-pass-2에서-실제로-카운팅되는-후보-쌍은-무엇인가요" class="level2">
+<h2 class="anchored" data-anchor-id="q-pcy의-pass-2에서-실제로-카운팅되는-후보-쌍은-무엇인가요"><strong>Q: PCY의 Pass 2에서 실제로 카운팅되는 후보 쌍은 무엇인가요?</strong></h2>
+</section>
+<section id="단계별-풀이" class="level2">
+<h2 class="anchored" data-anchor-id="단계별-풀이"><strong>[단계별 풀이]</strong></h2>
+<section id="step-1-개별-아이템-카운팅-pass-1" class="level3">
+<h3 class="anchored" data-anchor-id="step-1-개별-아이템-카운팅-pass-1"><strong>Step 1: 개별 아이템 카운팅 (Pass 1)</strong></h3>
+<p>각 장바구니를 스캔하여 개별 아이템의 빈도를 계산합니다. * Item 1: 1번 * Item 2: 2번 * Item 3: 2번 * Item 4: 2번 * Item 5: 2번</p>
+<p>임계값 <img src="https://latex.codecogs.com/png.latex?s=2">이므로, <strong>빈발 아이템(Frequent Items)은 <img src="https://latex.codecogs.com/png.latex?%5C%7B2,%203,%204,%205%5C%7D"></strong> 입니다. (Item 1은 탈락)</p>
+</section>
+<section id="step-2-해시-버킷-카운팅-pass-1" class="level3">
+<h3 class="anchored" data-anchor-id="step-2-해시-버킷-카운팅-pass-1"><strong>Step 2: 해시 버킷 카운팅 (Pass 1)</strong></h3>
+<p>각 장바구니에서 발생 가능한 모든 쌍에 대해 해시 값을 계산하고 버킷 카운트를 늘립니다. * Basket 1 <img src="https://latex.codecogs.com/png.latex?%5C%7B1,2,3%5C%7D">: * <img src="https://latex.codecogs.com/png.latex?%5C%7B1,2%5C%7D%20%5Crightarrow%20(1%5Ctimes2)%20%5Cbmod%203%20=%202"> * <img src="https://latex.codecogs.com/png.latex?%5C%7B1,3%5C%7D%20%5Crightarrow%20(1%5Ctimes3)%20%5Cbmod%203%20=%200"> * <img src="https://latex.codecogs.com/png.latex?%5C%7B2,3%5C%7D%20%5Crightarrow%20(2%5Ctimes3)%20%5Cbmod%203%20=%200"> * Basket 2 <img src="https://latex.codecogs.com/png.latex?%5C%7B3,4,5%5C%7D">: * <img src="https://latex.codecogs.com/png.latex?%5C%7B3,4%5C%7D%20%5Crightarrow%20(3%5Ctimes4)%20%5Cbmod%203%20=%200"> * <img src="https://latex.codecogs.com/png.latex?%5C%7B3,5%5C%7D%20%5Crightarrow%20(3%5Ctimes5)%20%5Cbmod%203%20=%200"> * <img src="https://latex.codecogs.com/png.latex?%5C%7B4,5%5C%7D%20%5Crightarrow%20(4%5Ctimes5)%20%5Cbmod%203%20=%202"> * Basket 3 <img src="https://latex.codecogs.com/png.latex?%5C%7B2,4,5%5C%7D">: * <img src="https://latex.codecogs.com/png.latex?%5C%7B2,4%5C%7D%20%5Crightarrow%20(2%5Ctimes4)%20%5Cbmod%203%20=%202"> * <img src="https://latex.codecogs.com/png.latex?%5C%7B2,5%5C%7D%20%5Crightarrow%20(2%5Ctimes5)%20%5Cbmod%203%20=%201"> * <img src="https://latex.codecogs.com/png.latex?%5C%7B4,5%5C%7D%20%5Crightarrow%20(4%5Ctimes5)%20%5Cbmod%203%20=%202"></p>
+</section>
+<section id="버킷별-누적-카운트-집계" class="level3">
+<h3 class="anchored" data-anchor-id="버킷별-누적-카운트-집계"><strong>버킷별 누적 카운트 집계:</strong></h3>
+<ul>
+<li><strong>Bucket 0:</strong> <img src="https://latex.codecogs.com/png.latex?%5C%7B1,3%5C%7D,%20%5C%7B2,3%5C%7D,%20%5C%7B3,4%5C%7D,%20%5C%7B3,5%5C%7D"> <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Count: 4</strong></li>
+<li><strong>Bucket 1:</strong> <img src="https://latex.codecogs.com/png.latex?%5C%7B2,5%5C%7D"> <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Count: 1</strong></li>
+<li><strong>Bucket 2:</strong> <img src="https://latex.codecogs.com/png.latex?%5C%7B1,2%5C%7D,%20%5C%7B4,5%5C%7D,%20%5C%7B2,4%5C%7D,%20%5C%7B4,5%5C%7D"> <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>Count: 4</strong></li>
+</ul>
+</section>
+<section id="step-3-비트맵-생성-between-passes" class="level3">
+<h3 class="anchored" data-anchor-id="step-3-비트맵-생성-between-passes"><strong>Step 3: 비트맵 생성 (Between Passes)</strong></h3>
+<p>임계값 <img src="https://latex.codecogs.com/png.latex?s=2">를 기준으로 버킷을 참/거짓으로 변환합니다. * Bucket 0 (count=4) <img src="https://latex.codecogs.com/png.latex?%5Cge%202%20%5Crightarrow"> 비트맵 <code>1</code> (Frequent) * Bucket 1 (count=1) <img src="https://latex.codecogs.com/png.latex?%3C%202%20%5Crightarrow"> 비트맵 <code>0</code> (Infrequent) * Bucket 2 (count=4) <img src="https://latex.codecogs.com/png.latex?%5Cge%202%20%5Crightarrow"> 비트맵 <code>1</code> (Frequent)</p>
+</section>
+<section id="step-4-pass-2-후보-쌍-필터링" class="level3">
+<h3 class="anchored" data-anchor-id="step-4-pass-2-후보-쌍-필터링"><strong>Step 4: Pass 2 후보 쌍 필터링</strong></h3>
+<p><img src="https://latex.codecogs.com/png.latex?C_2">의 조건은 (1) 두 아이템 모두 빈발해야 하며, (2) 해싱된 버킷 비트가 <code>1</code>이어야 합니다. Step 1에서 구한 빈발 아이템 <img src="https://latex.codecogs.com/png.latex?%5C%7B2,%203,%204,%205%5C%7D">로 조합 가능한 쌍을 검사합니다. * <img src="https://latex.codecogs.com/png.latex?%5C%7B2,3%5C%7D%20%5Crightarrow"> Bucket 0 (비트 1) <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>선택</strong> * <img src="https://latex.codecogs.com/png.latex?%5C%7B2,4%5C%7D%20%5Crightarrow"> Bucket 2 (비트 1) <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>선택</strong> * <img src="https://latex.codecogs.com/png.latex?%5C%7B2,5%5C%7D%20%5Crightarrow"> Bucket 1 (비트 0) <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 탈락 * <img src="https://latex.codecogs.com/png.latex?%5C%7B3,4%5C%7D%20%5Crightarrow"> Bucket 0 (비트 1) <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>선택</strong> * <img src="https://latex.codecogs.com/png.latex?%5C%7B3,5%5C%7D%20%5Crightarrow"> Bucket 0 (비트 1) <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>선택</strong> * <img src="https://latex.codecogs.com/png.latex?%5C%7B4,5%5C%7D%20%5Crightarrow"> Bucket 2 (비트 1) <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> <strong>선택</strong></p>
+</section>
+</section>
+<section id="최종-정답" class="level2">
+<h2 class="anchored" data-anchor-id="최종-정답"><strong>[최종 정답]</strong></h2>
+<p>따라서 Pass 2에서 카운팅되는 최종 쌍 집합은 <strong><img src="https://latex.codecogs.com/png.latex?%5C%7B2,3%5C%7D,%20%5C%7B2,4%5C%7D,%20%5C%7B3,4%5C%7D,%20%5C%7B3,5%5C%7D,%20%5C%7B4,5%5C%7D"></strong> 입니다. (A-Priori 였다면 <img src="https://latex.codecogs.com/png.latex?%5C%7B2,5%5C%7D">도 검사했겠지만, PCY는 이를 사전에 효율적으로 걸러냈습니다.)</p>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.1/</guid>
+  <pubDate>Mon, 16 Mar 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 5. Frequent Itemsets (Part 2)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.2/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-pcy의-한계와-확장-알고리즘의-등장" class="level1">
+<h1>1. Introduction: PCY의 한계와 확장 알고리즘의 등장</h1>
+<p>이전 포스트에서는 A-Priori 알고리즘의 메모리 비효율성을 극복하기 위해 제안된 PCY 알고리즘의 기본 원리를 살펴보았습니다. PCY 알고리즘은 유휴 메모리에 해시 테이블을 구축하여 빈발할 가능성이 없는 아이템 쌍을 사전에 효과적으로 걸러냈습니다.</p>
+<p>하지만 데이터의 크기가 극단적으로 커진다면 단 하나의 해시 테이블만으로는 충분한 필터링 효과를 얻기 어려울 수 있습니다. 이러한 문제를 해결하기 위해 고안된 것이 <strong>PCY의 확장 알고리즘(Extensions of PCY)</strong> 입니다. 대표적으로 두 가지 모델이 존재합니다.</p>
+<ol type="1">
+<li><strong>The Multistage Algorithm</strong></li>
+<li><strong>The Multihash Algorithm</strong></li>
+</ol>
+<p>두 알고리즘 모두 후보 쌍(Candidate pairs)의 개수를 더욱 줄이기 위해 <strong>여러 개의 해시 테이블을 생성</strong>한다는 핵심 아이디어를 공유합니다. 그러나 다중 테이블을 구축하는 방식에 있어 Multistage는 순차적(successive passes)으로, Multihash는 병렬적(in parallel)으로 접근한다는 근본적인 차이가 있습니다.</p>
+<p>본 포스트에서는 이 두 가지 확장 알고리즘의 작동 원리와 메모리 관리 메커니즘을 심도 있게 분석합니다.</p>
+<hr>
+</section>
+<section id="the-multistage-algorithm" class="level1">
+<h1>2. The Multistage Algorithm</h1>
+<p>Multistage 알고리즘은 패스(Pass)를 여러 번 반복하면서 연속적으로 해시 테이블을 생성하여 필터링의 정밀도를 높이는 방법입니다.</p>
+<section id="단계별-작동-원리" class="level2">
+<h2 class="anchored" data-anchor-id="단계별-작동-원리">2.1. 단계별 작동 원리</h2>
+<ul>
+<li><strong>Pass 1:</strong> 기존 PCY 알고리즘의 첫 번째 패스와 완전히 동일합니다. 단일 아이템의 빈도를 세고, 여유 메모리에 전체 아이템 쌍에 대한 첫 번째 해시 테이블을 만듭니다. 패스가 끝나면 이 테이블은 비트맵(Bitmap 1)으로 압축됩니다.</li>
+<li><strong>Pass 2:</strong> 비트맵 압축을 통해 기존 메모리 공간의 <img src="https://latex.codecogs.com/png.latex?31/32">가 다시 유휴 상태가 됩니다. Multistage는 이 공간에 <strong>두 번째 해시 테이블</strong>을 생성합니다.</li>
+</ul>
+<p>이때 핵심은 Pass 2에서 모든 아이템 쌍을 해싱하는 것이 아니라는 점입니다. 다음 두 조건을 <strong>모두 만족하는 쌍 <img src="https://latex.codecogs.com/png.latex?%5C%7Bi,%20j%5C%7D">만 해싱</strong>합니다. 1. 아이템 <img src="https://latex.codecogs.com/png.latex?i">와 <img src="https://latex.codecogs.com/png.latex?j">가 모두 빈발 아이템(Frequent items)이다. 2. 쌍 <img src="https://latex.codecogs.com/png.latex?%5C%7Bi,%20j%5C%7D">가 첫 번째 비트맵(Bitmap 1)에서 빈발 버킷(Frequent bucket)으로 해싱되었다.</p>
+<p>이러한 사전 필터링 덕분에 두 번째 해시 테이블에 기록되는 쌍의 수는 훨씬 적어지며, 결과적으로 빈발 버킷의 수 자체를 극적으로 줄일 수 있습니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.2/images/multistage_memory.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: Multistage Algorithm의 메모리 구조 변화. Pass 1에서는 전체 공간을 하나의 해시 테이블로 사용합니다. Pass 2에서는 이를 매우 작은 Bitmap 1로 압축하고, 확보된 넓은 공간에 두 번째 해시 테이블을 구축합니다. Pass 3에 도달하면 두 개의 비트맵이 생성되며 남은 공간에 실제 후보 쌍들의 카운트를 저장합니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="후보-쌍-c_2의-정의와-논리적-주의점" class="level2">
+<h2 class="anchored" data-anchor-id="후보-쌍-c_2의-정의와-논리적-주의점">2.2. 후보 쌍 <img src="https://latex.codecogs.com/png.latex?C_2">의 정의와 논리적 주의점</h2>
+<p>Multistage (Pass 3 기준)에서 특정 쌍 <img src="https://latex.codecogs.com/png.latex?%5C%7Bi,%20j%5C%7D">가 최종 후보 쌍 집합 <img src="https://latex.codecogs.com/png.latex?C_2">에 포함되기 위해서는 <strong>세 가지 조건</strong>을 완벽히 충족해야 합니다.</p>
+<ol type="1">
+<li><img src="https://latex.codecogs.com/png.latex?i">와 <img src="https://latex.codecogs.com/png.latex?j">가 모두 빈발 아이템이어야 한다.</li>
+<li>쌍 <img src="https://latex.codecogs.com/png.latex?%5C%7Bi,%20j%5C%7D">가 Bitmap 1에서 빈발 버킷에 해싱되어야 한다.</li>
+<li>쌍 <img src="https://latex.codecogs.com/png.latex?%5C%7Bi,%20j%5C%7D">가 Bitmap 2에서 빈발 버킷에 해싱되어야 한다.</li>
+</ol>
+<p><strong>[중요한 질문] 여기서 Condition 2는 정말 필수적일까요?</strong> <strong>정답은 ‘그렇다(Yes!)’ 입니다 .</strong> 어떤 쌍 <img src="https://latex.codecogs.com/png.latex?%5C%7Bi,%20j%5C%7D">가 Bitmap 1에서는 비빈발 버킷에 배정되었다고 가정해 봅시다. 이 쌍은 Pass 2에서 해싱 작업 자체에서 제외되므로 두 번째 해시 테이블에 카운트되지 않습니다. 하지만 해시 함수의 특성상, 이 쌍을 두 번째 해시 함수에 통과시켰을 때 우연히 ’다른 빈발 쌍들에 의해 카운트가 높아진 빈발 버킷’에 배정될 가능성은 여전히 존재합니다. 만약 Condition 2를 확인하지 않는다면, 이처럼 실제로는 비빈발 쌍이면서 Condition 1과 3만 우연히 만족한 쌍이 후보에 오르는 오류(False Positive)가 발생할 수 있습니다.</p>
+<blockquote class="blockquote">
+<p><strong>💡 Note:</strong> 메모리가 허용하는 한 패스의 수는 계속 늘릴 수 있습니다. 패스가 아무리 많아지더라도 진짜 빈발 쌍(Truly frequent pairs)은 언제나 모든 해시 테이블에서 빈발 버킷에 해싱되므로 정보의 유실은 발생하지 않습니다.</p>
+</blockquote>
+<hr>
+</section>
+</section>
+<section id="the-multihash-algorithm" class="level1">
+<h1>3. The Multihash Algorithm</h1>
+<p>Multistage가 ’시간(Pass)’을 투자해 정밀도를 높였다면, Multihash 알고리즘의 목표는 <strong>여러 번의 패스로 얻는 이점을 단 한 번의 패스(Single pass)로 얻어내는 것</strong>입니다.</p>
+<section id="메커니즘-병렬-해시-테이블" class="level2">
+<h2 class="anchored" data-anchor-id="메커니즘-병렬-해시-테이블">3.1. 메커니즘: 병렬 해시 테이블</h2>
+<p>접근 방식은 직관적입니다. Pass 1에서 사용 가능한 유휴 메모리 공간을 반으로 쪼개어, <strong>서로 다른 해시 함수를 사용하는 두 개의 독립적인 해시 테이블</strong>을 동시에 생성합니다.</p>
+<ul>
+<li><strong>Pass 1:</strong> 장바구니 데이터를 스캔하면서 각 아이템 쌍 <img src="https://latex.codecogs.com/png.latex?%5C%7Bi,%20j%5C%7D">를 두 개의 해시 함수에 각각 통과시키고, 두 해시 테이블의 해당 버킷 카운트를 동시에 올립니다.</li>
+<li><strong>Pass 2:</strong> 두 해시 테이블을 각각 압축하여 Bitmap 1과 Bitmap 2를 생성합니다.</li>
+</ul>
+<p>단, 이 방식은 메모리를 분할하여 버킷의 수가 줄어들기 때문에, 버킷 하나당 할당되는 아이템 쌍의 밀도(density)가 지나치게 높지 않을 때만 유의미한 효과를 발휘합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.2/images/multihash_memory.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: Multihash Algorithm의 메모리 구조. Pass 1에서 메모리를 상하로 분할하여 Hash table 1과 Hash table 2를 동시에 구축합니다. Pass 2에서는 두 해시 테이블이 각각 비트맵으로 변환되며, 하단의 넓은 공간은 최종 조건을 통과한 후보 쌍을 카운팅하는 데 사용됩니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="후보-쌍-c_2의-조건" class="level2">
+<h2 class="anchored" data-anchor-id="후보-쌍-c_2의-조건">3.2. 후보 쌍 <img src="https://latex.codecogs.com/png.latex?C_2">의 조건</h2>
+<p>Multihash 알고리즘에서 쌍 <img src="https://latex.codecogs.com/png.latex?%5C%7Bi,%20j%5C%7D">가 후보 쌍 <img src="https://latex.codecogs.com/png.latex?C_2">로 채택되기 위한 조건은 다음과 같습니다.</p>
+<ol type="1">
+<li><img src="https://latex.codecogs.com/png.latex?i">와 <img src="https://latex.codecogs.com/png.latex?j">가 모두 빈발 아이템이어야 한다.</li>
+<li>해당 쌍이 <strong>두 해시 테이블 모두에서(in both hash tables)</strong> 빈발 버킷에 해싱되어야 한다.</li>
+</ol>
+<hr>
+</section>
+</section>
+<section id="optimization-테이블의-개수-n과-확률적-트레이드오프" class="level1">
+<h1>4. Optimization: 테이블의 개수 <img src="https://latex.codecogs.com/png.latex?n">과 확률적 트레이드오프</h1>
+<p>Multihash 알고리즘에서는 테이블의 개수 <img src="https://latex.codecogs.com/png.latex?n">을 2개 이상으로 얼마든지 늘릴 수 있습니다. 그렇다면 <img src="https://latex.codecogs.com/png.latex?n">이 클수록 무조건 좋을까요? 최적의 <img src="https://latex.codecogs.com/png.latex?n">값을 찾기 위해서는 수학적 트레이드오프를 고려해야 합니다.</p>
+<p>비빈발 쌍이 우연히 모든 비트맵을 통과하여 <img src="https://latex.codecogs.com/png.latex?C_2">에 포함될 확률을 수식으로 정의해 봅시다. 어떤 쌍이 개별 해시 테이블에서 우연히 빈발 버킷에 해싱될 확률을 <img src="https://latex.codecogs.com/png.latex?p">라고 한다면 , 비빈발 쌍이 <img src="https://latex.codecogs.com/png.latex?n">개의 독립적인 테이블 모두에서 빈발 버킷에 해싱될 확률은 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7BProbability%7D%20=%20p%5En"></p>
+<p>제한된 메인 메모리 환경에서 테이블의 수 <img src="https://latex.codecogs.com/png.latex?n">을 늘린다는 것은 필연적으로 각 테이블에 할당되는 메모리 크기(버킷의 수)가 줄어듦을 의미합니다. 버킷의 수가 줄어들면 충돌(Collision)이 잦아져, 각 버킷이 빈발 버킷이 될 확률 <img src="https://latex.codecogs.com/png.latex?p"> 자체가 상승하게 됩니다.</p>
+<p>즉, <img src="https://latex.codecogs.com/png.latex?n">을 늘리면 지수 값은 커지지만, 동시에 밑인 <img src="https://latex.codecogs.com/png.latex?p">의 값도 커지는 상충 관계가 발생합니다. 초기에는 <img src="https://latex.codecogs.com/png.latex?n">의 증가가 필터링 효과를 높이지만, 일정 수준을 넘어서면 <strong><img src="https://latex.codecogs.com/png.latex?p">의 증가폭이 압도하여 오히려 최종 확률 <img src="https://latex.codecogs.com/png.latex?p%5En">이 증가(성능 저하)하는 지점</strong>에 도달하게 됩니다. 따라서 가용 메모리와 데이터의 희소성을 고려하여 적절한 <img src="https://latex.codecogs.com/png.latex?n">을 설정하는 것이 알고리즘 최적화의 핵심입니다.</p>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.2/</guid>
+  <pubDate>Mon, 16 Mar 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 5. Frequent Itemsets (Part 3)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.3/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-다중-패스의-한계와-속도-정확도-트레이드오프" class="level1">
+<h1>1. Introduction: 다중 패스의 한계와 속도-정확도 트레이드오프</h1>
+<p>지금까지 우리가 다룬 A-Priori 알고리즘이나 그 확장판(PCY 등)은 아이템 집합의 크기 <img src="https://latex.codecogs.com/png.latex?k">가 커질 때마다 전체 데이터셋을 새롭게 스캔해야 합니다. 즉, 후보 <img src="https://latex.codecogs.com/png.latex?k">-튜플 집합인 <img src="https://latex.codecogs.com/png.latex?C_k">를 생성하고, 이를 필터링하여 진짜 빈발 집합인 <img src="https://latex.codecogs.com/png.latex?L_k">를 찾는 과정(Pass)이 각 <img src="https://latex.codecogs.com/png.latex?k">마다 반복적으로 요구됩니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.3/images/apriori_generalization.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: A-Priori의 일반화된 흐름. C1에서 L1을, 다시 C2에서 L2를 추출하는 식으로 단계별 필터링을 거치며 매번 새로운 패스가 필요합니다.</figcaption>
+</figure>
+</div>
+<p>하지만 현실의 많은 데이터 마이닝 애플리케이션(예: 슈퍼마켓 장바구니 분석)에서는 약간의 정확도를 희생하더라도 <strong>분석 속도</strong>를 획기적으로 높이는 것이 더 유리할 때가 많습니다. 이러한 맥락에서 전체 데이터 스캔 횟수를 <strong>2회 이하(<img src="https://latex.codecogs.com/png.latex?%5Cle%202"> passes)</strong>로 제한하면서도 모든(혹은 대부분의) 빈발 항목 집합을 찾아내는 <strong>Limited-Pass Algorithms</strong>이 고안되었습니다.</p>
+<p>본 포스트에서는 대표적인 세 가지 접근법인 <strong>Random Sampling</strong>, <strong>Toivonen’s Algorithm</strong>, 그리고 <strong>SON Algorithm</strong>을 차례로 살펴봅니다.</p>
+<hr>
+</section>
+<section id="random-sampling-단순-샘플링" class="level1">
+<h1>2. Random Sampling (단순 샘플링)</h1>
+<p>가장 직관적이고 단순한 방법은 전체 장바구니 데이터(Market baskets) 중 일부만 무작위로 추출하여 메모리 내에서 처리하는 것입니다.</p>
+<section id="수학적-지지도-보정" class="level2">
+<h2 class="anchored" data-anchor-id="수학적-지지도-보정">2.1. 수학적 지지도 보정</h2>
+<p>만약 전체 데이터 중 <img src="https://latex.codecogs.com/png.latex?p">의 비율(<img src="https://latex.codecogs.com/png.latex?p%20%3C%201">)만큼을 샘플링했다면, 우리가 설정했던 원래의 지지도 임계값(Support threshold) <img src="https://latex.codecogs.com/png.latex?s"> 역시 동일한 비율로 줄여주어야 합니다. 즉, 샘플 데이터에 대한 새로운 임계값은 <strong><img src="https://latex.codecogs.com/png.latex?ps"></strong>가 됩니다. 이렇게 스케일을 조정한 뒤, 메모리에 올라간 샘플 데이터를 대상으로 A-Priori나 PCY 알고리즘을 수행합니다.</p>
+</section>
+<section id="샘플링의-오류-false-positives-false-negatives" class="level2">
+<h2 class="anchored" data-anchor-id="샘플링의-오류-false-positives-false-negatives">2.2. 샘플링의 오류: False Positives &amp; False Negatives</h2>
+<p>단일 패스만으로 끝나는 샘플링은 필연적으로 두 가지 유형의 오류를 발생시킵니다.</p>
+<ul>
+<li><strong>False Positives (거짓 양성):</strong> 샘플 내에서는 빈발하다고 판정되었으나, 실제 전체 데이터에서는 빈발하지 않은 항목 집합입니다.
+<ul>
+<li><em>해결책:</em> 전체 데이터에 대해 패스를 한 번 더 수행하여 샘플에서 찾은 후보들의 진짜 빈도를 셈으로써 완벽히 제거할 수 있습니다.</li>
+</ul></li>
+<li><strong>False Negatives (거짓 음성):</strong> 실제 전체 데이터에서는 빈발하지만, 샘플에서는 우연히 적게 뽑혀 누락된 항목 집합입니다.
+<ul>
+<li><em>대응:</em> 임계값을 <img src="https://latex.codecogs.com/png.latex?ps">보다 조금 더 낮춰서(예: <img src="https://latex.codecogs.com/png.latex?0.9ps">) 더 많은 후보를 포함시키면 줄일 수는 있지만, 단순 샘플링 구조상 False Negatives를 완전히 제거할 수 있는 쉬운 방법은 없습니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="toivonens-algorithm" class="level1">
+<h1>3. Toivonen’s Algorithm</h1>
+<p>샘플링의 가장 큰 문제인 <strong>False Negatives를 완벽히 제거할 수 없을까?</strong>라는 질문에서 출발한 것이 Toivonen의 알고리즘입니다. 이 알고리즘은 평균 2회의 패스만으로 어떠한 오류(거짓 양성 및 거짓 음성 모두)도 없는 정확한 결과를 도출합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.3/images/toivonen_negative_border.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: Toivonen의 Negative Border. 샘플에서 발견된 빈발 항목 집합(회색 영역)의 바로 바깥쪽 경계를 형성하는 집합(빨간 선)을 추적하여 안전망(Safety check) 역할을 수행합니다.</figcaption>
+</figure>
+</div>
+<section id="pass-1-샘플링과-negative-border-구축" class="level2">
+<h2 class="anchored" data-anchor-id="pass-1-샘플링과-negative-border-구축">3.1. Pass 1: 샘플링과 Negative Border 구축</h2>
+<ol type="1">
+<li>작은 샘플 데이터를 추출하고, 비례값인 <img src="https://latex.codecogs.com/png.latex?ps">보다 더 낮은 임계값(예: <img src="https://latex.codecogs.com/png.latex?0.9ps">)을 사용하여 후보 집합을 찾습니다.</li>
+<li>이때, <strong>네거티브 보더(Negative Border)</strong>라는 특수한 안전망을 함께 구축합니다.</li>
+</ol>
+<blockquote class="blockquote">
+<p><strong>Definition: Negative Border (경계 집합)</strong> 어떤 항목 집합이 네거티브 보더에 속하기 위한 필요충분조건은 다음과 같습니다. 1. 해당 집합 자체는 샘플 내에서 빈발하지 않다. 2. 해당 집합의 <strong>모든 직속 부분집합(Immediate subsets)</strong>은 샘플 내에서 빈발하다. (※ 직속 부분집합이란 원소를 정확히 하나만 제거하여 만든 부분집합을 의미합니다 ).</p>
+</blockquote>
+<p><strong>[Example]</strong> 집합 <img src="https://latex.codecogs.com/png.latex?%5C%7BA,%20B,%20C,%20D%5C%7D">가 네거티브 보더에 포함되려면, 이 집합 자체는 비빈발이어야 하지만 그 직속 부분집합인 <img src="https://latex.codecogs.com/png.latex?%5C%7BA,%20B,%20C%5C%7D">, <img src="https://latex.codecogs.com/png.latex?%5C%7BB,%20C,%20D%5C%7D">, <img src="https://latex.codecogs.com/png.latex?%5C%7BA,%20C,%20D%5C%7D">, <img src="https://latex.codecogs.com/png.latex?%5C%7BA,%20B,%20D%5C%7D">는 모두 빈발해야 합니다. 단일 아이템(Singleton)인 <img src="https://latex.codecogs.com/png.latex?%5C%7BE%5C%7D">의 경우, 공집합 <img src="https://latex.codecogs.com/png.latex?%5Cemptyset">은 항상 빈발하다고 간주되므로 <img src="https://latex.codecogs.com/png.latex?%5C%7BE%5C%7D">가 비빈발이기만 하면 자동으로 보더에 포함됩니다.</p>
+</section>
+<section id="pass-2-전체-데이터-검증과-종료-조건" class="level2">
+<h2 class="anchored" data-anchor-id="pass-2-전체-데이터-검증과-종료-조건">3.2. Pass 2: 전체 데이터 검증과 종료 조건</h2>
+<p>두 번째 패스에서는 전체 데이터셋을 대상으로 (a) 샘플에서 빈발했던 집합과 (b) 네거티브 보더에 속한 집합의 실제 빈도를 모두 셉니다.</p>
+<ul>
+<li><strong>성공 (종료):</strong> 전체 데이터를 세어본 결과, <strong>네거티브 보더의 원소 중 전체 데이터에서도 빈발한 것이 하나도 없다면</strong> 알고리즘은 즉시 종료됩니다. 샘플에서 찾은 빈발 집합 중 검증을 통과한 것들이 완벽한 정답이 됩니다.</li>
+<li><strong>실패 (재시도):</strong> 만약 네거티브 보더 원소 중 단 하나라도 전체 데이터에서 빈발하다면, 보더 바깥에 우리가 놓친 더 큰 빈발 집합이 존재할 가능성이 있습니다. 이 경우 알고리즘은 결과를 폐기하고 새로운 무작위 샘플을 뽑아 처음부터 다시 시작합니다. 확률은 낮지만 2회 이상의 패스가 발생할 수 있는 이유가 바로 이 지점 때문입니다.</li>
+</ul>
+</section>
+<section id="왜-toivonen의-알고리즘은-false-negatives가-없을까" class="level2">
+<h2 class="anchored" data-anchor-id="왜-toivonen의-알고리즘은-false-negatives가-없을까">3.3. 왜 Toivonen의 알고리즘은 False Negatives가 없을까?</h2>
+<p>결과로 도출된 집합에 거짓 음성이 없다는 것은 수학적 귀류법으로 증명 가능합니다. 만약 전체 데이터에서는 빈발하지만, 샘플에서는 누락된(비빈발로 판정된) 어떤 집합 <img src="https://latex.codecogs.com/png.latex?S">가 존재한다고 가정해 봅시다. 그렇다면 <img src="https://latex.codecogs.com/png.latex?S">가 네거티브 보더에 있거나, 혹은 <img src="https://latex.codecogs.com/png.latex?S">의 직속 부분집합 <img src="https://latex.codecogs.com/png.latex?T">가 전체에서는 빈발하지만 샘플에서는 누락되었을 것입니다. 이 논리를 계속 아래로 전개하다 보면, 결국 네거티브 보더 내부에는 반드시 전체 데이터에서 빈발한 원소가 최소 하나 이상 존재해야만 합니다. (최악의 경우라도 단일 아이템(Singleton)들이 네거티브 보더에 속하기 때문입니다 ). 따라서, 네거티브 보더 내에 빈발 항목이 하나도 없다는 종료 조건을 통과했다면, 놓친 집합 <img src="https://latex.codecogs.com/png.latex?S">는 애초에 존재할 수 없습니다.</p>
+<hr>
+</section>
+</section>
+<section id="son-algorithm-savasere-omiecinski-navathe" class="level1">
+<h1>4. SON Algorithm (Savasere, Omiecinski, Navathe)</h1>
+<p>Toivonen 알고리즘이 ‘확률적으로’ 2번의 패스에 끝난다면, <strong>SON 알고리즘은 어떠한 경우에도 정확히 2번의 전체 패스로 False Positives와 False Negatives를 모두 제거</strong>합니다. 이는 병렬 분산 처리 환경(MapReduce 등)에 매우 적합한 구조를 가집니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.3/images/son_algorithm_chunks.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3: SON Algorithm의 처리 흐름. 전체 데이터를 여러 청크(Chunk)로 나누어 각각 병렬로 로컬 빈발 항목 집합을 찾은 뒤(Pass 1), 이들을 모두 모아 전체 데이터에서 최종 검증(Pass 2)을 수행합니다.</figcaption>
+</figure>
+</div>
+<section id="pass-메커니즘" class="level2">
+<h2 class="anchored" data-anchor-id="pass-메커니즘">4.1. 2-Pass 메커니즘</h2>
+<ul>
+<li><strong>Pass 1 (로컬 빈발 집합 추출):</strong> 전체 데이터를 <img src="https://latex.codecogs.com/png.latex?1/p"> 개의 청크(Chunk)로 분할합니다. 각 청크가 전체의 <img src="https://latex.codecogs.com/png.latex?p"> 비율을 차지하므로, 각 청크 메모리 내부에서 지지도 임계값을 <img src="https://latex.codecogs.com/png.latex?ps">로 설정하고 A-Priori를 돌려 로컬 빈발 항목 집합들을 찾습니다.</li>
+<li><strong>Pass 2 (전체 검증):</strong> 각 청크에서 발견된 로컬 빈발 항목 집합들을 모두 합집합(Union)하여 하나의 후보군을 만듭니다. 이후 두 번째 전체 데이터 패스를 돌면서 이 후보군들의 실제 빈도수가 원래 임계값 <img src="https://latex.codecogs.com/png.latex?s">를 넘는지 최종 확인합니다.</li>
+</ul>
+</section>
+<section id="논리적-증명-왜-누락false-negatives이-발생하지-않는가" class="level2">
+<h2 class="anchored" data-anchor-id="논리적-증명-왜-누락false-negatives이-발생하지-않는가">4.2. 논리적 증명: 왜 누락(False Negatives)이 발생하지 않는가?</h2>
+<p>SON 알고리즘의 핵심 전제는 <strong>“어떤 항목 집합이 전체 데이터에서 빈발하다면, 그것은 반드시 적어도 하나의 청크(Chunk) 내에서도 빈발해야 한다”</strong>는 것입니다.</p>
+<p>이를 수식으로 반증해 보겠습니다. 만약 어떤 집합이 그 어떤 청크에서도 빈발하지 않다고 가정해 봅시다. 그러면 각 청크에서의 지지도(빈도수)는 모두 해당 청크의 임계값인 <img src="https://latex.codecogs.com/png.latex?ps"> 보다 작습니다. 총 <img src="https://latex.codecogs.com/png.latex?1/p"> 개의 청크가 있으므로, 전체 데이터에서의 총 지지도는 아무리 커도 다음을 넘을 수 없습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7BTotal%20Support%7D%20%3C%20%5Cleft(%5Cfrac%7B1%7D%7Bp%7D%5Cright)%20%5Ctimes%20(ps)%20=%20s"></p>
+<p>결과적으로 이 집합의 전체 지지도는 무조건 <img src="https://latex.codecogs.com/png.latex?s"> 미만이 되므로 전체 데이터에서도 절대 빈발할 수 없습니다. 따라서 특정 청크에서 한 번이라도 선발되지 못한 후보는 과감히 버려도 안전합니다.</p>
+</section>
+<section id="mapreduce-구현-구조" class="level2">
+<h2 class="anchored" data-anchor-id="mapreduce-구현-구조">4.3. MapReduce 구현 구조</h2>
+<p>SON 알고리즘은 MapReduce 프레임워크를 이용해 우아하게 구현됩니다.</p>
+<section id="pass-1-후보-집합-찾기" class="level3">
+<h3 class="anchored" data-anchor-id="pass-1-후보-집합-찾기"><strong>[Pass 1: 후보 집합 찾기]</strong></h3>
+<ul>
+<li><strong>Map:</strong> 할당된 데이터 청크를 받아 임계값 <img src="https://latex.codecogs.com/png.latex?ps"> 기준으로 로컬 빈발 집합 <img src="https://latex.codecogs.com/png.latex?F">를 찾고, <code>(F, 1)</code> 형태의 Key-Value 쌍을 반환합니다.</li>
+<li><strong>Reduce:</strong> Map에서 올라온 결과들 중 한 번이라도 등장한 항목 집합을 후보군으로 통과시킵니다 (Value는 무시).</li>
+</ul>
+</section>
+<section id="pass-2-진짜-빈발-집합-찾기" class="level3">
+<h3 class="anchored" data-anchor-id="pass-2-진짜-빈발-집합-찾기"><strong>[Pass 2: 진짜 빈발 집합 찾기]</strong></h3>
+<ul>
+<li><strong>Map:</strong> Pass 1의 결과인 후보 집합군 <img src="https://latex.codecogs.com/png.latex?C">와 자신에게 할당된 전체 데이터의 일부(portion)를 입력받습니다. 해당 portion 내에서 집합 <img src="https://latex.codecogs.com/png.latex?C">의 출현 빈도 <img src="https://latex.codecogs.com/png.latex?v">를 세어 <code>(C, v)</code>를 반환합니다.</li>
+<li><strong>Reduce:</strong> 동일한 후보 <img src="https://latex.codecogs.com/png.latex?C">에 대해 들어온 모든 카운트 <img src="https://latex.codecogs.com/png.latex?v">를 합산하고, 그 합이 최종 임계값 <img src="https://latex.codecogs.com/png.latex?s"> 이상(<img src="https://latex.codecogs.com/png.latex?%5Cge%20s">)인 집합만 정답으로 출력합니다.</li>
+</ul>
+
+
+
+</section>
+</section>
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/5.Frequent-Itemsets-2/5.3/</guid>
+  <pubDate>Mon, 16 Mar 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
   <title>[Machine Learning] 4. Kernel Methods</title>
   <dc:creator>유성현 </dc:creator>
   <link>https://shsha0110.github.io/posts/Machine Learing/4.Kernel-Methods/</link>
@@ -3403,603 +3781,6 @@ font-style: inherit;">+</span> b3</span></code></pre></div></div>
  ]]></description>
   <category>Deep Learning</category>
   <guid>https://shsha0110.github.io/posts/Deep Learning/3.Neural-Networks/3.5/</guid>
-  <pubDate>Tue, 10 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] Lecture 3. Linear Programming</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-볼록-최적화convex-optimization의-계층-구조" class="level1">
-<h1>1. Introduction: 볼록 최적화(Convex Optimization)의 계층 구조</h1>
-<p>머신러닝, 통계학, 계량경제학 등 데이터 과학 전반에서 마주하는 수많은 모델링 문제는 결국 최적화(Optimization) 문제로 귀결됩니다. 그중에서도 <strong>볼록 최적화(Convex Optimization)</strong>는 국소 최적점(Local minimum)이 곧 전역 최적점(Global minimum)이 된다는 강력한 수학적 성질 덕분에 가장 널리 쓰이고 깊이 연구된 분야입니다.</p>
-<p>볼록 최적화 문제들은 그 형태와 제약 조건의 특성에 따라 여러 하위 클래스로 분류될 수 있으며, 일종의 계층(Hierarchy) 구조를 이룹니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/images/convex_hierarchy.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 볼록 최적화 문제의 계층 구조 도식. 가장 바깥쪽의 넓은 범주인 Convex optimization(볼록 최적화)부터 시작하여, 내부에 Conic programming, Semidefinite programming (SDP), Second-order cone programming (SOCP), Convex quadratic programming (QP)이 차례로 포함되어 있으며, 가장 핵심적이고 안쪽에 Linear programming (LP, 선형 계획법)이 위치하고 있음을 보여줍니다. 이는 LP가 가장 특수한 형태이자 모든 볼록 최적화의 기초가 됨을 시각적으로 나타냅니다.</figcaption>
-</figure>
-</div>
-<p>위 그림에서 알 수 있듯, <strong>선형 계획법(Linear Programming, LP)</strong>은 볼록 최적화 피라미드의 가장 안쪽에 위치하는 기초적이고 핵심적인 문제 클래스입니다. 이번 포스트에서는 LP의 수학적 정의부터, 겉보기에는 비선형(Non-linear)인 문제들을 어떻게 LP 형태로 우회하여 풀 수 있는지(Linear Representability)에 대해 깊이 있게 다루어 보겠습니다.</p>
-<hr>
-</section>
-<section id="선형-계획법linear-programming의-정의와-기하학적-의미" class="level1">
-<h1>2. 선형 계획법(Linear Programming)의 정의와 기하학적 의미</h1>
-<p><strong>선형 계획법(LP)</strong>은 목적 함수(Objective function)와 모든 제약 조건(Constraints)이 결정 변수(Decision variables)에 대해 선형(Linear)인 최적화 문제를 말합니다.</p>
-<p>수학적으로 LP는 일반적으로 다음과 같은 형태를 가집니다:</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmin_%7Bx%7D%20%5Cquad%20&amp;%20c%5E%5Ctop%20x%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20a_i%5E%5Ctop%20x%20%5Cge%20b_i,%20%5Cquad%20i%20%5Cin%20%5Bm%5D%20%5C%5C%0A&amp;%20x%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li>여기서 각 변수와 매개변수는 다음과 같습니다:
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">: 결정 변수 벡터</li>
-<li><img src="https://latex.codecogs.com/png.latex?c%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">: 선형 목적 함수를 결정하는 비용(Cost) 벡터</li>
-<li><img src="https://latex.codecogs.com/png.latex?a_1,%20%5Cdots,%20a_m%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">: 각 선형 부등식 제약조건의 계수 벡터</li>
-<li><img src="https://latex.codecogs.com/png.latex?b_1,%20%5Cdots,%20b_m%20%5Cin%20%5Cmathbb%7BR%7D">: 각 제약조건의 상수항</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Bm%5D">은 <img src="https://latex.codecogs.com/png.latex?%5C%7B1,%202,%20%5Cdots,%20m%5C%7D">의 집합을 의미합니다.</li>
-</ul></li>
-</ul>
-<p>이를 <strong>행렬 형태(Matrix form)</strong>로 간결하게 표현하면 다음과 같습니다:</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmin_%7Bx%7D%20%5Cquad%20&amp;%20c%5E%5Ctop%20x%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20Ax%20%5Cge%20b%0A%5Cend%7Baligned%7D%0A"> (단, <img src="https://latex.codecogs.com/png.latex?A">는 행이 <img src="https://latex.codecogs.com/png.latex?a_i%5E%5Ctop">인 <img src="https://latex.codecogs.com/png.latex?m%20%5Ctimes%20d"> 행렬이고, <img src="https://latex.codecogs.com/png.latex?b%20%5Cin%20%5Cmathbb%7BR%7D%5Em">입니다.)</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/images/lp_geometry.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 선형 계획법의 기하학적 표현. <img src="https://latex.codecogs.com/png.latex?A%20x%20%5Cge%20b">를 만족하는 실현 가능 영역(Feasible region) <img src="https://latex.codecogs.com/png.latex?P">는 여러 개의 초평면(Hyperplanes)으로 둘러싸인 다면체(Polyhedron) 형상을 띱니다. 빨간색 평행선들은 목적 함수 <img src="https://latex.codecogs.com/png.latex?c%5E%5Ctop%20x">의 등고선을 나타내며, 벡터 <img src="https://latex.codecogs.com/png.latex?c">의 반대 방향(기울기가 감소하는 방향)으로 이동할 때 다면체의 꼭짓점(파란 점)에서 최솟값을 가지게 됨을 직관적으로 보여줍니다.</figcaption>
-</figure>
-</div>
-<p>위 다면체 <img src="https://latex.codecogs.com/png.latex?P%20=%20%5C%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20:%20Ax%20%5Cge%20b%5C%7D"> 내에서 <img src="https://latex.codecogs.com/png.latex?c%5E%5Ctop%20x">를 최소화하는 점을 찾는 것이 LP의 본질입니다.</p>
-<hr>
-</section>
-<section id="실생활에서의-선형-계획법-활용-예시" class="level1">
-<h1>3. 실생활에서의 선형 계획법 활용 예시</h1>
-<p>LP가 실제 문제에 어떻게 적용되는지 이해하기 위해 두 가지 고전적인 예시를 살펴보겠습니다.</p>
-<section id="생산-계획-production-planning-문제" class="level2">
-<h2 class="anchored" data-anchor-id="생산-계획-production-planning-문제">3.1. 생산 계획 (Production Planning) 문제</h2>
-<ul>
-<li>회사가 <img src="https://latex.codecogs.com/png.latex?d">개의 제품을 생산하며, <img src="https://latex.codecogs.com/png.latex?m">개의 원자재를 사용한다고 가정해 봅시다.
-<ul>
-<li>제품 <img src="https://latex.codecogs.com/png.latex?j">의 1단위당 판매 가격(수익): <img src="https://latex.codecogs.com/png.latex?p_j"></li>
-<li>현재 보유 중인 원자재 <img src="https://latex.codecogs.com/png.latex?i">의 재고량: <img src="https://latex.codecogs.com/png.latex?b_i"></li>
-<li>제품 <img src="https://latex.codecogs.com/png.latex?j">를 1단위 생산하는 데 필요한 원자재 <img src="https://latex.codecogs.com/png.latex?i">의 양: <img src="https://latex.codecogs.com/png.latex?a_%7Bij%7D"></li>
-<li>각 제품은 실수 단위로 분할하여 생산 가능하다고 가정(Divisible).</li>
-</ul></li>
-</ul>
-<p><strong>목표:</strong> 주어진 원자재 재고 한도 내에서 총수익을 극대화하는 각 제품의 생산량 <img src="https://latex.codecogs.com/png.latex?x_j">를 결정하라.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmax_%7Bx%7D%20%5Cquad%20&amp;%20p%5E%5Ctop%20x%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20Ax%20%5Cle%20b%20%5C%5C%0A&amp;%20x%20%5Cge%200%0A%5Cend%7Baligned%7D%0A"></p>
-</section>
-<section id="운송-문제-transportation-problem" class="level2">
-<h2 class="anchored" data-anchor-id="운송-문제-transportation-problem">3.2. 운송 문제 (Transportation Problem)</h2>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?d">개의 공장과 <img src="https://latex.codecogs.com/png.latex?m">개의 물류 창고가 있습니다.
-<ul>
-<li>공장 <img src="https://latex.codecogs.com/png.latex?j">의 최대 생산 용량: <img src="https://latex.codecogs.com/png.latex?S_j"></li>
-<li>창고 <img src="https://latex.codecogs.com/png.latex?i">의 필요 수요량: <img src="https://latex.codecogs.com/png.latex?d_i"></li>
-<li>공장 <img src="https://latex.codecogs.com/png.latex?j">에서 창고 <img src="https://latex.codecogs.com/png.latex?i">로 1단위 제품을 운송하는 비용: <img src="https://latex.codecogs.com/png.latex?c_%7Bij%7D"></li>
-</ul></li>
-</ul>
-<p><strong>목표:</strong> 각 창고의 수요를 충족하고 공장의 생산 한도를 넘지 않으면서 총 운송 비용을 최소화하는 운송량 <img src="https://latex.codecogs.com/png.latex?x_%7Bij%7D">를 결정하라.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmin_%7Bx%7D%20%5Cquad%20&amp;%20%5Csum_%7Bi=1%7D%5Em%20%5Csum_%7Bj=1%7D%5Ed%20c_%7Bij%7D%20x_%7Bij%7D%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20%5Csum_%7Bj=1%7D%5Ed%20x_%7Bij%7D%20%5Cge%20d_i,%20%5Cquad%20i%20%5Cin%20%5Bm%5D%20%5Cquad%20%5Ctext%7B(%EC%88%98%EC%9A%94%20%EC%B6%A9%EC%A1%B1)%7D%20%5C%5C%0A&amp;%20%5Csum_%7Bi=1%7D%5Em%20x_%7Bij%7D%20%5Cle%20S_j,%20%5Cquad%20j%20%5Cin%20%5Bd%5D%20%5Cquad%20%5Ctext%7B(%EC%83%9D%EC%82%B0%20%EC%9A%A9%EB%9F%89%20%ED%95%9C%EB%8F%84)%7D%20%5C%5C%0A&amp;%20x_%7Bij%7D%20%5Cge%200,%20%5Cquad%20(i,j)%20%5Cin%20%5Bm%5D%20%5Ctimes%20%5Bd%5D%0A%5Cend%7Baligned%7D%0A"></p>
-<hr>
-</section>
-</section>
-<section id="선형-표현-가능-함수-linearly-representable-functions" class="level1">
-<h1>4. 선형 표현 가능 함수 (Linearly Representable Functions)</h1>
-<p>LP는 목적 함수와 제약 조건이 모두 ’선형(Linear)’이어야 한다는 제약이 있습니다. 그렇다면 일반적인 비선형 문제들은 LP로 풀 수 없을까요? 놀랍게도, <strong>많은 비선형 함수들이 보조 변수(Auxiliary variables)를 도입함으로써 선형 형태로 재표현</strong>될 수 있습니다.</p>
-<section id="motivation-군집의-중심-찾기-center-of-a-cluster" class="level2">
-<h2 class="anchored" data-anchor-id="motivation-군집의-중심-찾기-center-of-a-cluster">4.1. Motivation: 군집의 중심 찾기 (Center of a Cluster)</h2>
-<p>어떤 데이터 셋에 <img src="https://latex.codecogs.com/png.latex?n">개의 관측치 벡터 <img src="https://latex.codecogs.com/png.latex?V%20=%20%5C%7Bv%5E1,%20%5Cdots,%20v%5En%5C%7D%20%5Csubset%20%5Cmathbb%7BR%7D%5Ed"> 가 있다고 해봅시다. 이 군집을 가장 잘 대표하는 ‘중심(Center)’ 점 <img src="https://latex.codecogs.com/png.latex?x">를 찾고 싶습니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/images/cluster_center.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 2차원 공간 상에 흩어진 여러 개의 데이터 포인트(빨간 원)들과 찾고자 하는 미지의 중심점 <img src="https://latex.codecogs.com/png.latex?x">(회색 사각형). 중심점은 주변 포인트들과의 거리 합을 최소화하는 위치에 놓여야 합니다.</figcaption>
-</figure>
-</div>
-<p>중심점을 정하는 기준은 점 <img src="https://latex.codecogs.com/png.latex?x">와 집합 <img src="https://latex.codecogs.com/png.latex?V"> 사이의 거리 <img src="https://latex.codecogs.com/png.latex?d(x)">를 최소화하는 것입니다. 즉, 최적화 문제는 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bx%7D%20d(x)"></p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/images/distance_concept.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 점 <img src="https://latex.codecogs.com/png.latex?x">에서 집합 <img src="https://latex.codecogs.com/png.latex?V">까지의 거리 함수 <img src="https://latex.codecogs.com/png.latex?d(x)">를 추상화하여 표현한 도식. 선분은 <img src="https://latex.codecogs.com/png.latex?x">에서 집합의 경계 혹은 요소까지의 최소/평균 거리를 계산하는 과정을 암시합니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>거리 함수 <img src="https://latex.codecogs.com/png.latex?d(x)">의 선택지에 따라 최적화의 양상이 달라집니다:
-<ul>
-<li><ol type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cell_1">-거리의 합:</strong> <img src="https://latex.codecogs.com/png.latex?d(x)%20=%20%5Csum_%7Bi=1%7D%5En%20%5C%7Cx%20-%20v%5Ei%5C%7C_1"> (Robust regression의 형태)</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cell_%5Cinfty">-거리의 합:</strong> <img src="https://latex.codecogs.com/png.latex?d(x)%20=%20%5Csum_%7Bi=1%7D%5En%20%5C%7Cx%20-%20v%5Ei%5C%7C_%5Cinfty"></li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cell_1">-거리의 최댓값:</strong> <img src="https://latex.codecogs.com/png.latex?d(x)%20=%20%5Cmax_%7Bi%20%5Cin%20%5Bn%5D%7D%20%5C%7Cx%20-%20v%5Ei%5C%7C_1"></li>
-</ol></li>
-<li><ol start="4" type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cell_%5Cinfty">-거리의 최댓값:</strong> <img src="https://latex.codecogs.com/png.latex?d(x)%20=%20%5Cmax_%7Bi%20%5Cin%20%5Bn%5D%7D%20%5C%7Cx%20-%20v%5Ei%5C%7C_%5Cinfty"></li>
-</ol></li>
-</ul></li>
-</ul>
-<p>여기서 사용된 Norm 연산이나 Max 연산은 엄밀히 말해 <strong>선형이 아닙니다</strong>. 하지만 이러한 거리 함수들을 최소화하는 문제는 모두 <strong>선형 계획법(LP)으로 변환</strong>할 수 있습니다. 어떻게 이것이 가능한지 이해하기 위해 <strong>에피그래프(Epigraph)</strong>의 개념을 도입해야 합니다.</p>
-</section>
-<section id="에피그래프-epigraph" class="level2">
-<h2 class="anchored" data-anchor-id="에피그래프-epigraph">4.2. 에피그래프 (Epigraph)</h2>
-<p>함수 <img src="https://latex.codecogs.com/png.latex?f:%20%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5Cmathbb%7BR%7D">의 <strong>에피그래프(Epigraph)</strong> <img src="https://latex.codecogs.com/png.latex?epi(f)">는 함수의 그래프 ’위쪽’에 있는 점들의 집합으로 정의됩니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Aepi(f)%20=%20%5C%7B(x,%20t)%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20%5Ctimes%20%5Cmathbb%7BR%7D%20:%20f(x)%20%5Cle%20t%5C%7D%20%5Csubseteq%20%5Cmathbb%7BR%7D%5E%7Bd+1%7D%0A"></p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/images/epigraph_example.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 1차원 변수 <img src="https://latex.codecogs.com/png.latex?x">에 대한 볼록 조각적 선형 함수(Convex piecewise linear function)의 에피그래프 도식. 검은색 선은 함수 <img src="https://latex.codecogs.com/png.latex?f(x)">의 그래프를 나타내고, 그 위쪽의 빗금 친 영역이 바로 <img src="https://latex.codecogs.com/png.latex?f(x)%20%5Cle%20t">를 만족하는 <img src="https://latex.codecogs.com/png.latex?(x,%20t)"> 공간의 에피그래프 <img src="https://latex.codecogs.com/png.latex?epi(f)">입니다. 이 영역이 유한 개의 직선(선형 부등식)들로 둘러싸인 다면체임을 알 수 있습니다.</figcaption>
-</figure>
-</div>
-<p>위 그림처럼 에피그래프가 유한 개의 선형 부등식으로 표현되는 다면체(Polyhedron) 형태를 띤다면, 우리는 이 함수를 선형적으로 표현할 수 있다고 말합니다.</p>
-</section>
-<section id="선형-표현-가능성-linear-representability-정의" class="level2">
-<h2 class="anchored" data-anchor-id="선형-표현-가능성-linear-representability-정의">4.3. 선형 표현 가능성 (Linear Representability) 정의</h2>
-<p>함수 <img src="https://latex.codecogs.com/png.latex?f:%20%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5Cmathbb%7BR%7D">가 <strong>선형 표현 가능(Linearly Representable)</strong>하다는 것은, 그 에피그래프 <img src="https://latex.codecogs.com/png.latex?epi(f)">가 다음과 같이 유한 개의 선형 부등식 시스템으로 표현될 수 있음을 의미합니다:</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Aepi(f)%20=%20%5Cleft%5C%7B%20(x,%20t)%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20%5Ctimes%20%5Cmathbb%7BR%7D%20:%20%5Cexists%20y%20%5Cin%20%5Cmathbb%7BR%7D%5Ep%20%5Ctext%7B%20s.t.%20%7D%20Ax%20+%20Dy%20+%20ht%20%5Cle%20r%20%5Cright%5C%7D%0A"></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?A%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bl%20%5Ctimes%20d%7D,%20D%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bl%20%5Ctimes%20p%7D,%20h,%20r%20%5Cin%20%5Cmathbb%7BR%7D%5El"></li>
-<li>여기서 새롭게 도입된 변수 <img src="https://latex.codecogs.com/png.latex?y">를 <strong>보조 변수(Auxiliary variables)</strong>라고 부릅니다.</li>
-</ul>
-</section>
-<section id="lp-재표현-정리-reformulation-theorem" class="level2">
-<h2 class="anchored" data-anchor-id="lp-재표현-정리-reformulation-theorem">4.4. LP 재표현 정리 (Reformulation Theorem)</h2>
-<p>목적 함수와 제약 조건 함수들이 모두 선형 표현 가능하다면, 원래의 비선형 볼록 최적화 문제는 LP로 완벽하게 변환될 수 있습니다.</p>
-<p><strong>정리 (Theorem):</strong> 최적화 문제 <img src="https://latex.codecogs.com/png.latex?%5Cmin%20%5C%7B%20f(x)%20:%20g_i(x)%20%5Cle%200,%20%5Cforall%20i%20%5Cin%20%5Bm%5D%20%5C%7D"> 가 있을 때, <img src="https://latex.codecogs.com/png.latex?f">와 모든 <img src="https://latex.codecogs.com/png.latex?g_i">가 선형 표현 가능하다면 이 문제는 선형 계획법으로 재표현될 수 있다.</p>
-<p><strong>변환 과정:</strong> 원래 문제를 에피그래프를 사용하여 다음과 같이 바꿀 수 있습니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmin_%7Bx,%20t%7D%20%5Cquad%20&amp;%20t%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20f(x)%20%5Cle%20t%20%5Cquad%20%5Ciff%20%5Cquad%20(x,%20t)%20%5Cin%20epi(f)%20%5C%5C%0A&amp;%20g_i(x)%20%5Cle%200%20%5Cquad%20%5Ciff%20%5Cquad%20(x,%200)%20%5Cin%20epi(g_i)%0A%5Cend%7Baligned%7D%0A"></p>
-<p>이제 각 함수의 선형 표현(보조 변수 <img src="https://latex.codecogs.com/png.latex?y,%20z%5E1,%20%5Cdots,%20z%5Em"> 도입)을 대입하면 최종적으로 다음과 같은 거대한 LP 형태가 됩니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmin_%7Bx,%20t,%20y,%20z%5E1%20%5Cdots%20z%5Em%7D%20%5Cquad%20&amp;%20t%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20Ax%20+%20Dy%20+%20ht%20%5Cle%20r%20%5Cquad%20%5Ctext%7B(%EB%AA%A9%EC%A0%81%20%ED%95%A8%EC%88%98%20%EC%97%90%ED%94%BC%EA%B7%B8%EB%9E%98%ED%94%84%20%EC%A1%B0%EA%B1%B4)%7D%20%5C%5C%0A&amp;%20A%5Ei%20x%20+%20D%5Ei%20z%5Ei%20%5Cle%20r%5Ei,%20%5Cquad%20i%20%5Cin%20%5Bm%5D%20%5Cquad%20%5Ctext%7B(%EA%B0%81%20%EC%A0%9C%EC%95%BD%20%EC%A1%B0%EA%B1%B4%20%EC%97%90%ED%94%BC%EA%B7%B8%EB%9E%98%ED%94%84%20%EC%A1%B0%EA%B1%B4)%7D%0A%5Cend%7Baligned%7D%0A"> 이제 목적 함수는 단순히 <img src="https://latex.codecogs.com/png.latex?t">를 최소화하는 선형 함수가 되었고, 모든 제약 조건 역시 선형 부등식이 되었습니다!</p>
-<hr>
-</section>
-</section>
-<section id="보조-변수auxiliary-variables와-사영projection" class="level1">
-<h1>5. 보조 변수(Auxiliary Variables)와 사영(Projection)</h1>
-<p>선형 표현에서 보조 변수 <img src="https://latex.codecogs.com/png.latex?y">를 추가한다는 것은 기하학적으로 어떤 의미일까요? 이를 이해하기 위해 <strong>사영(Projection)</strong>과 <strong>Fourier-Motzkin 소거법</strong>을 살펴보겠습니다.</p>
-<section id="사영projection의-기하학적-의미" class="level2">
-<h2 class="anchored" data-anchor-id="사영projection의-기하학적-의미">5.1. 사영(Projection)의 기하학적 의미</h2>
-<p>어떤 집합 <img src="https://latex.codecogs.com/png.latex?C%20%5Csubseteq%20%5Cmathbb%7BR%7D%5Ed%20%5Ctimes%20%5Cmathbb%7BR%7D%5Ep"> 가 있을 때, 이 집합 안의 점들을 <img src="https://latex.codecogs.com/png.latex?(x,%20y)">로 나타낼 수 있습니다. 이 집합을 <img src="https://latex.codecogs.com/png.latex?x">가 존재하는 공간(<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5Ed">)으로 사영시킨 집합 <img src="https://latex.codecogs.com/png.latex?proj_x(C)">는 다음과 같이 정의됩니다:</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Aproj_x(C)%20=%20%5C%7B%20x%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20:%20%5Cexists%20y%20%5Cin%20%5Cmathbb%7BR%7D%5Ep%20%5Ctext%7B%20s.t.%20%7D%20(x,%20y)%20%5Cin%20C%20%5C%7D%0A"> 이를 두고 “<img src="https://latex.codecogs.com/png.latex?y"> 변수들을 투영하여 없앤다(Projecting out)”고 표현하기도 합니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/images/projection_concept.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 2차원 공간(<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%20%5Ctimes%20%5Cmathbb%7BR%7D">)에 존재하는 붉은색 영역 집합 <img src="https://latex.codecogs.com/png.latex?C">를 <img src="https://latex.codecogs.com/png.latex?x">-축 1차원 공간으로 사영(Projection)시키는 과정을 보여주는 도식. <img src="https://latex.codecogs.com/png.latex?y"> 축의 정보를 무시하고 위에서 아래로 빛을 비추었을 때 <img src="https://latex.codecogs.com/png.latex?x">-축에 생기는 그림자(굵은 빨간 선)가 바로 사영된 집합 <img src="https://latex.codecogs.com/png.latex?proj_x(C)">가 됩니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>에피그래프 <img src="https://latex.codecogs.com/png.latex?epi(f)"> 식을 다시 보면:
-<ul>
-<li><ol type="1">
-<li>먼저 <img src="https://latex.codecogs.com/png.latex?(x,%20y,%20t)"> 차원의 더 높은 공간에서 다면체 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D%20=%20%5C%7B%20(x,%20y,%20t)%20:%20Ax%20+%20Dy%20+%20ht%20%5Cle%20r%20%5C%7D">를 만듭니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li>이 다면체 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BP%7D">를 보조 변수 <img src="https://latex.codecogs.com/png.latex?y">를 무시하고 <img src="https://latex.codecogs.com/png.latex?(x,%20t)"> 공간으로 사영시키면, 우리가 원하던 복잡한 형태의 <img src="https://latex.codecogs.com/png.latex?epi(f)">가 나타나게 되는 것입니다. (<img src="https://latex.codecogs.com/png.latex?proj_%7B(x,t)%7D(%5Cmathcal%7BP%7D)%20=%20epi(f)">)</li>
-</ol></li>
-</ul></li>
-</ul>
-<p><strong>정리:</strong> 다면체의 사영은 여전히 다면체이다. (따라서 에피그래프가 다면체이므로, 선형 표현 가능한 함수는 반드시 <strong>조각적 선형 함수(Piecewise linear function)</strong> 형태를 가집니다.)</p>
-</section>
-<section id="fourier-motzkin-elimination-소거법" class="level2">
-<h2 class="anchored" data-anchor-id="fourier-motzkin-elimination-소거법">5.2. Fourier-Motzkin Elimination (소거법)</h2>
-<p>보조 변수를 기하학적으로 사영시키는 과정을 대수적으로 수행하는 방법이 바로 <strong>Fourier-Motzkin 소거법</strong>입니다. 연립 선형 부등식에서 특정 변수(예: <img src="https://latex.codecogs.com/png.latex?y_1">)를 없애는 과정입니다.</p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?Ax%20+%20Dy%20+%20ht%20%5Cle%20r"> 시스템에서 <img src="https://latex.codecogs.com/png.latex?y_1">의 계수 <img src="https://latex.codecogs.com/png.latex?D_%7Bi1%7D">의 부호에 따라 부등식을 세 그룹으로 나눕니다:
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?I_+%20=%20%5C%7Bi%20:%20D_%7Bi1%7D%20%3E%200%5C%7D"> (<img src="https://latex.codecogs.com/png.latex?y_1">에 대한 하한 제공)</li>
-<li><img src="https://latex.codecogs.com/png.latex?I_-%20=%20%5C%7Bi%20:%20D_%7Bi1%7D%20%3C%200%5C%7D"> (<img src="https://latex.codecogs.com/png.latex?y_1">에 대한 상한 제공)</li>
-<li><img src="https://latex.codecogs.com/png.latex?I_0%20=%20%5C%7Bi%20:%20D_%7Bi1%7D%20=%200%5C%7D"> (<img src="https://latex.codecogs.com/png.latex?y_1">과 무관)</li>
-</ul></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?i%20%5Cin%20I_+">인 식과 <img src="https://latex.codecogs.com/png.latex?j%20%5Cin%20I_-">인 식에서 <img src="https://latex.codecogs.com/png.latex?y_1">에 대해 식을 정리하면 다음을 얻습니다: <img src="https://latex.codecogs.com/png.latex?%0A%5Cfrac%7BA_i%20x%20+%20D_i%20y_%7B-1%7D%20+%20h_i%20t%20-%20r_i%7D%7BD_%7Bi1%7D%7D%20%5Cle%20y_1%20%5Cle%20%5Cfrac%7BA_j%20x%20+%20D_j%20y_%7B-1%7D%20+%20h_j%20t%20-%20r_j%7D%7BD_%7Bj1%7D%7D%0A"> 가운데 <img src="https://latex.codecogs.com/png.latex?y_1">을 매개로 양 끝단을 연결하면 <img src="https://latex.codecogs.com/png.latex?y_1">이 완전히 소거된 새로운 부등식을 얻게 됩니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cfrac%7BA_i%20x%20+%20D_i%20y_%7B-1%7D%20+%20h_i%20t%20-%20r_i%7D%7BD_%7Bi1%7D%7D%20%5Cle%20%5Cfrac%7BA_j%20x%20+%20D_j%20y_%7B-1%7D%20+%20h_j%20t%20-%20r_j%7D%7BD_%7Bj1%7D%7D%0A"> 이 과정을 모든 변수 <img src="https://latex.codecogs.com/png.latex?y">에 대해 반복하면 최종적으로 <img src="https://latex.codecogs.com/png.latex?x,%20t">에 대한 부등식(즉, 에피그래프)만 남게 됩니다. 이를 통해 다면체의 사영이 다면체임을 증명할 수 있습니다.</p>
-<hr>
-</section>
-</section>
-<section id="자주-등장하는-선형-표현-가능-함수들-유도" class="level1">
-<h1>6. 자주 등장하는 선형 표현 가능 함수들 유도</h1>
-<p>실제 머신러닝이나 통계 모델링에서 자주 등장하는 비선형 함수들이 어떻게 선형 표현 가능한지 구체적으로 유도해보겠습니다.</p>
-<section id="절댓값-함수-absolute-value" class="level2">
-<h2 class="anchored" data-anchor-id="절댓값-함수-absolute-value">6.1. 절댓값 함수 (Absolute Value)</h2>
-<p><img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%7Cx%7C"> (<img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D">) <img src="https://latex.codecogs.com/png.latex?f(x)%20%5Cle%20t%20%5Ciff%20%7Cx%7C%20%5Cle%20t"> 이며, 절댓값의 정의에 의해 이는 <img src="https://latex.codecogs.com/png.latex?-t%20%5Cle%20x%20%5Cle%20t"> 와 동치입니다. 따라서 에피그래프는 다음과 같습니다: <img src="https://latex.codecogs.com/png.latex?%0Aepi(f)%20=%20%5C%7B(x,%20t)%20%5Cin%20%5Cmathbb%7BR%7D%20%5Ctimes%20%5Cmathbb%7BR%7D%20:%20x%20%5Cle%20t,%20-x%20%5Cle%20t%5C%7D%0A"> 이는 별도의 보조 변수 없이도 2개의 선형 부등식으로 표현되므로 선형 표현 가능합니다.</p>
-</section>
-<section id="볼록-조각적-선형-함수-convex-piecewise-linear-functions" class="level2">
-<h2 class="anchored" data-anchor-id="볼록-조각적-선형-함수-convex-piecewise-linear-functions">6.2. 볼록 조각적 선형 함수 (Convex Piecewise Linear Functions)</h2>
-<p>여러 선형 함수의 점근적 최댓값으로 정의되는 함수입니다. <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Cmax_%7Bi%20%5Cin%20%5Bn%5D%7D%20%5C%7B%20c_i%5E%5Ctop%20x%20+%20d_i%20%5C%7D"> 최댓값이 <img src="https://latex.codecogs.com/png.latex?t">보다 작거나 같다는 것은, <strong>집합 내의 모든 요소가 <img src="https://latex.codecogs.com/png.latex?t">보다 작거나 같다</strong>는 것과 완벽히 동치입니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cmax_%7Bi%20%5Cin%20%5Bn%5D%7D%20%5C%7B%20c_i%5E%5Ctop%20x%20+%20d_i%20%5C%7D%20%5Cle%20t%20%5Ciff%20c_i%5E%5Ctop%20x%20+%20d_i%20%5Cle%20t,%20%5Cquad%20%5Cforall%20i%20%5Cin%20%5Bn%5D%0A"> 따라서 에피그래프는: <img src="https://latex.codecogs.com/png.latex?%0Aepi(f)%20=%20%5C%7B(x,%20t)%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20%5Ctimes%20%5Cmathbb%7BR%7D%20:%20c_i%5E%5Ctop%20x%20+%20d_i%20%5Cle%20t,%20%5Cforall%20i%20%5Cin%20%5Bn%5D%5C%7D%0A"> 이 역시 <img src="https://latex.codecogs.com/png.latex?n">개의 선형 부등식으로 표현됩니다. (앞서 다룬 강의자료 슬라이드 21의 Example 2 <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Cmax%5C%7Bx_1,%202x_2+x_3,%202x_3-x_1%5C%7D">도 동일한 원리로 표현됩니다.)</p>
-</section>
-<section id="ell_infty-norm-최댓값-노름" class="level2">
-<h2 class="anchored" data-anchor-id="ell_infty-norm-최댓값-노름">6.3. <img src="https://latex.codecogs.com/png.latex?%5Cell_%5Cinfty">-Norm (최댓값 노름)</h2>
-<p><img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5C%7Cx%5C%7C_%5Cinfty%20=%20%5Cmax_%7Bj%20%5Cin%20%5Bd%5D%7D%20%7Cx_j%7C"> 이는 각 차원의 성분 중 절댓값이 가장 큰 값을 반환합니다. 이 역시 최댓값 연산의 성질에 따라 분리 가능합니다. <img src="https://latex.codecogs.com/png.latex?%0A%5C%7Cx%5C%7C_%5Cinfty%20%5Cle%20t%20%5Ciff%20%5Cmax_%7Bj%7D%20%7Cx_j%7C%20%5Cle%20t%20%5Ciff%20%7Cx_j%7C%20%5Cle%20t,%20%5Cquad%20%5Cforall%20j%20%5Cin%20%5Bd%5D%0A"> 절댓값 부등식을 풀면: <img src="https://latex.codecogs.com/png.latex?%0A%5Ciff%20-t%20%5Cle%20x_j%20%5Cle%20t,%20%5Cquad%20%5Cforall%20j%20%5Cin%20%5Bd%5D%0A"> 따라서, <img src="https://latex.codecogs.com/png.latex?%0Aepi(f)%20=%20%5C%7B(x,%20t)%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20%5Ctimes%20%5Cmathbb%7BR%7D%20:%20x_j%20%5Cle%20t,%20-x_j%20%5Cle%20t,%20%5Cforall%20j%20%5Cin%20%5Bd%5D%20%5C%7D%0A"> 총 <img src="https://latex.codecogs.com/png.latex?2d">개의 선형 부등식으로 표현 가능합니다.</p>
-</section>
-<section id="ell_1-norm-맨해튼-노름" class="level2">
-<h2 class="anchored" data-anchor-id="ell_1-norm-맨해튼-노름">6.4. <img src="https://latex.codecogs.com/png.latex?%5Cell_1">-Norm (맨해튼 노름)</h2>
-<p>라소(Lasso) 회귀 등에서 자주 쓰이는 <img src="https://latex.codecogs.com/png.latex?%5Cell_1"> 페널티 형태입니다. <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5C%7Cx%5C%7C_1%20=%20%5Csum_%7Bj%20%5Cin%20%5Bd%5D%7D%20%7Cx_j%7C"> 이 경우는 합 기호 안에 절댓값이 있으므로 단순 전개가 안 됩니다. 여기서 <strong>보조 변수(Auxiliary variables)</strong> <img src="https://latex.codecogs.com/png.latex?s_1,%20%5Cdots,%20s_d%20%5Cin%20%5Cmathbb%7BR%7D"> 를 도입하는 강력한 테크닉이 사용됩니다. 각각의 절댓값 <img src="https://latex.codecogs.com/png.latex?%7Cx_j%7C"> 상한을 대신할 보조 변수 <img src="https://latex.codecogs.com/png.latex?s_j">를 둡니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5C%7Cx%5C%7C_1%20%5Cle%20t%20%5Ciff%20%5Cexists%20s_1,%20%5Cdots,%20s_d%20%5Cin%20%5Cmathbb%7BR%7D%20%5Ctext%7B%20s.t.%20%7D%20%5Csum_%7Bj%20%5Cin%20%5Bd%5D%7D%20s_j%20%5Cle%20t%20%5Ctext%7B%20and%20%7D%20%7Cx_j%7C%20%5Cle%20s_j%20%5Cquad%20%5Cforall%20j%20%5Cin%20%5Bd%5D%0A"> <img src="https://latex.codecogs.com/png.latex?%7Cx_j%7C%20%5Cle%20s_j">는 <img src="https://latex.codecogs.com/png.latex?-s_j%20%5Cle%20x_j%20%5Cle%20s_j">와 같습니다. 따라서, <img src="https://latex.codecogs.com/png.latex?%0Aepi(f)%20=%20%5Cleft%5C%7B%20(x,%20t)%20:%20%5Cexists%20s%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20%5Ctext%7B%20s.t.%20%7D%20%5Csum_%7Bj=1%7D%5Ed%20s_j%20%5Cle%20t,%20x_j%20-%20s_j%20%5Cle%200,%20-x_j%20-%20s_j%20%5Cle%200,%20%5Cforall%20j%20%5Cright%5C%7D%0A"> 보조 변수 <img src="https://latex.codecogs.com/png.latex?s">를 도입함으로써 비선형적이었던 <img src="https://latex.codecogs.com/png.latex?%5Cell_1"> norm 최소화 문제가 완벽한 선형 부등식 시스템으로 재탄생했습니다. 앞서 4.1절에서 고민했던 군집 중심 찾기 문제 중 분수 및 절댓값 조합도 모두 이러한 방식으로 LP 화가 가능합니다.</p>
-</section>
-<section id="선형-표현-가능성을-보존하는-연산들" class="level2">
-<h2 class="anchored" data-anchor-id="선형-표현-가능성을-보존하는-연산들">6.5. 선형 표현 가능성을 보존하는 연산들</h2>
-<ul>
-<li>개별 함수들이 선형 표현 가능하다면, 다음 연산들을 통해 결합된 복잡한 함수 역시 선형 표현 가능함이 수학적으로 보장됩니다:
-<ul>
-<li><ol type="1">
-<li><strong>비음수 가중치 합 (Non-negative linear combination):</strong> <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Csum_%7Bi%20%5Cin%20%5Bn%5D%7D%20%5Calpha_i%20f_i(x)"> (단, <img src="https://latex.codecogs.com/png.latex?%5Calpha_i%20%5Cge%200">)</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>점별 최댓값 (Point-wise maximum):</strong> <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Cmax_%7Bi%20%5Cin%20%5Bn%5D%7D%20f_i(x)"></li>
-</ol></li>
-</ul></li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/</guid>
-  <pubDate>Tue, 10 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] Lecture 3. Linear Programming (Part 1)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/3.1/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-볼록-최적화convex-optimization의-계층-구조" class="level1">
-<h1>1. Introduction: 볼록 최적화(Convex Optimization)의 계층 구조</h1>
-<ul>
-<li><p>최적화(Optimization) 이론, 그중에서도 <strong>볼록 최적화(Convex Optimization)</strong>는 머신러닝, 계량경제학, 그리고 오퍼레이션 리서치(OR) 등 수많은 응용 분야의 뼈대를 이루는 핵심적인 수학적 도구입니다. 우리가 다루고자 하는 다양한 최적화 문제들은 그 특성에 따라 여러 가지 “클래스(Classes)”로 분류될 수 있으며 , 이들은 독립적으로 존재하는 것이 아니라 서로 포함 관계를 가지는 <strong>계층 구조(Hierarchy)</strong>를 이룹니다.</p></li>
-<li><p>주요 볼록 최적화 문제 클래스들은 다음과 같습니다:</p>
-<ul>
-<li><strong>선형 계획법 (Linear Programming, LP)</strong></li>
-<li><strong>볼록 2차 계획법 (Convex Quadratic Programming, QP)</strong></li>
-<li><strong>2차 뿔 계획법 (Second-order Cone Programming, SOCP)</strong></li>
-<li><strong>반정부호 계획법 (Semidefinite Programming, SDP)</strong></li>
-<li><strong>원뿔 계획법 (Conic Programming)</strong></li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/3.1/images/convex_hierarchy.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 볼록 최적화 문제들의 계층 구조를 나타내는 벤 다이어그램. 가장 바깥쪽의 넓은 범주인 ‘Convex optimization’ 내부에 ‘Conic programming’이 있으며, 그 안으로 차례대로 ’Semidefinite programming’, ‘Second-order cone programming’, ’Convex quadratic programming’이 중첩되어 포함되어 있습니다. 그리고 이 모든 구조의 가장 안쪽, 즉 가장 특수하고 기본적인 형태로서 ’Linear programming (선형 계획법)’이 자리 잡고 있음을 시각적으로 보여줍니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>이 계층 구조에서 알 수 있듯, <strong>선형 계획법(LP)은 볼록 최적화의 가장 기본적이고 특수한 형태</strong>입니다. LP를 완벽하게 이해하는 것은 더 복잡한 비선형적 제약이나 목적 함수를 가지는 상위 클래스의 문제(QP, SOCP 등)를 다루기 위한 필수적인 첫걸음이 됩니다.</li>
-</ul>
-<hr>
-</section>
-<section id="선형-계획법-linear-programming의-수학적-정의와-기하학" class="level1">
-<h1>2. 선형 계획법 (Linear Programming)의 수학적 정의와 기하학</h1>
-<section id="수학적-공식화-mathematical-formulation" class="level2">
-<h2 class="anchored" data-anchor-id="수학적-공식화-mathematical-formulation">2.1. 수학적 공식화 (Mathematical Formulation)</h2>
-<ul>
-<li><strong>선형 계획법(LP)</strong>은 목적 함수(Objective function)와 모든 제약 조건(Constraints)이 결정 변수(Decision variables)의 선형 결합으로 이루어진 최적화 문제를 의미합니다.</li>
-<li>표준적인 LP 문제는 다음과 같은 행렬 형태(Matrix form)로 표현됩니다:</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmin_%7Bx%7D%20%5Cquad%20&amp;%20c%5E%5Ctop%20x%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20Ax%20%5Cge%20b%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li>이 수식을 구성하는 요소들의 수학적 의미를 단계별로 분해해 보겠습니다:
-<ul>
-<li><ol type="1">
-<li><strong>결정 변수 벡터 <img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D%5Ed"></strong>: 우리가 최적화 과정을 통해 그 값을 찾아내야 하는 미지수들의 벡터입니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>선형 목적 함수 <img src="https://latex.codecogs.com/png.latex?c%5E%5Ctop%20x"></strong>: 최소화(Minimize)하고자 하는 대상입니다. 여기서 <img src="https://latex.codecogs.com/png.latex?c%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">는 각 결정 변수의 비용(Cost)이나 가중치를 나타내는 벡터이며, <img src="https://latex.codecogs.com/png.latex?c%5E%5Ctop%20x%20=%20c_1%20x_1%20+%20c_2%20x_2%20+%20%5Cdots%20+%20c_d%20x_d">의 선형 결합(내적) 형태를 가집니다.</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><strong>선형 제약 조건 <img src="https://latex.codecogs.com/png.latex?Ax%20%5Cge%20b"></strong>: 결정 변수들이 만족해야 하는 부등식 시스템입니다.</li>
-</ol>
-<ul>
-<li>행렬 <img src="https://latex.codecogs.com/png.latex?A">는 <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20d"> 차원을 가집니다.</li>
-<li>행렬 <img src="https://latex.codecogs.com/png.latex?A">의 각 행(Row)을 <img src="https://latex.codecogs.com/png.latex?a_1%5E%5Ctop,%20a_2%5E%5Ctop,%20%5Cdots,%20a_n%5E%5Ctop">이라고 합시다.</li>
-<li>벡터 <img src="https://latex.codecogs.com/png.latex?b">는 <img src="https://latex.codecogs.com/png.latex?b%20=%20(b_1,%20%5Cdots,%20b_n)%5E%5Ctop%20%5Cin%20%5Cmathbb%7BR%7D%5En">입니다.</li>
-<li>따라서 행렬 부등식 <img src="https://latex.codecogs.com/png.latex?Ax%20%5Cge%20b">는 사실 <img src="https://latex.codecogs.com/png.latex?n">개의 개별적인 선형 부등식 <img src="https://latex.codecogs.com/png.latex?a_i%5E%5Ctop%20x%20%5Cge%20b_i%20%5Cquad%20(i%20=%201,%20%5Cdots,%20n)"> 들의 모음입니다.</li>
-</ul></li>
-</ul></li>
-</ul>
-</section>
-<section id="기하학적-해석-geometric-interpretation" class="level2">
-<h2 class="anchored" data-anchor-id="기하학적-해석-geometric-interpretation">2.2. 기하학적 해석 (Geometric Interpretation)</h2>
-<ul>
-<li>기하학적으로 하나의 선형 부등식 <img src="https://latex.codecogs.com/png.latex?a_i%5E%5Ctop%20x%20%5Cge%20b_i">는 <img src="https://latex.codecogs.com/png.latex?d">-차원 공간을 둘로 나누는 평면(초평면, Hyperplane)을 기준으로 한쪽 공간, 즉 <strong>반공간(Half-space)</strong>을 정의합니다.</li>
-<li>우리의 제약 조건은 이러한 반공간들을 모두 동시에 만족해야 하므로, 실현 가능 영역(Feasible Region) <img src="https://latex.codecogs.com/png.latex?P">는 이 반공간들의 교집합(Intersection)으로 형성됩니다. <img src="https://latex.codecogs.com/png.latex?P%20=%20%5C%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20:%20Ax%20%5Cge%20b%5C%7D"></li>
-<li>이러한 선형 부등식들의 교집합으로 만들어진 다각/다면의 입체 도형을 수학적으로 <strong>다면체(Polyhedron)</strong>라고 부릅니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/3.1/images/lp_geometry.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 2차원 변수 공간에서의 선형 계획법을 기하학적으로 표현한 그림. 검은색 선분들로 둘러싸인 볼록 다각형 영역 P가 행렬 부등식 Ax &gt;= b를 만족하는 실현 가능 영역(Feasible region, Polyhedron)입니다. 붉은색의 평행한 직선들은 목적 함수 c^T x의 등고선(Level sets)을 나타내며, 벡터 c의 반대 방향으로 이동할 때 값이 최소화됩니다. 이 과정에서 최적해는 다각형의 한 꼭짓점(파란색 점)에서 결정됨을 시각적으로 확인할 수 있습니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>결론적으로, 선형 계획법을 푼다는 것은 <strong>다면체 <img src="https://latex.codecogs.com/png.latex?P"> 내부에 존재하는 수많은 점들 중에서, 선형 목적 함수 <img src="https://latex.codecogs.com/png.latex?c%5E%5Ctop%20x">의 값을 가장 작게 만드는 어떤 점(보통 꼭짓점)을 찾는 과정</strong>으로 기하학적으로 해석할 수 있습니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="실생활-응용-문제의-lp-모델링" class="level1">
-<h1>3. 실생활 응용 문제의 LP 모델링</h1>
-<ul>
-<li>이론적인 수식이 실제 문제에 어떻게 적용되는지, 두 가지 고전적인 비즈니스 및 오퍼레이션 문제를 통해 선형 계획법으로 모델링하는 과정을 살펴보겠습니다.</li>
-</ul>
-<section id="생산-계획-문제-production-planning" class="level2">
-<h2 class="anchored" data-anchor-id="생산-계획-문제-production-planning">3.1. 생산 계획 문제 (Production Planning)</h2>
-<ul>
-<li>한 제조 회사에서 <img src="https://latex.codecogs.com/png.latex?d">가지 종류의 제품을 생산하여 이윤을 창출하고자 합니다. 생산을 위해서는 <img src="https://latex.codecogs.com/png.latex?m">가지 종류의 자원(Resource)이 필요합니다.</li>
-</ul>
-<section id="주어진-데이터" class="level3">
-<h3 class="anchored" data-anchor-id="주어진-데이터"><strong>[주어진 데이터]</strong></h3>
-<ul>
-<li><strong>자원 소모량 행렬 <img src="https://latex.codecogs.com/png.latex?A"></strong>: <img src="https://latex.codecogs.com/png.latex?A%20=%20(a_%7Bij%7D)_%7Bi%20%5Cin%20%5Bm%5D,%20j%20%5Cin%20%5Bd%5D%7D">. 즉, 제품 <img src="https://latex.codecogs.com/png.latex?j">를 1단위 생산하는 데 특정 자원 <img src="https://latex.codecogs.com/png.latex?i">가 <img src="https://latex.codecogs.com/png.latex?a_%7Bij%7D"> 만큼 필요합니다.</li>
-<li><strong>자원 가용량 벡터 <img src="https://latex.codecogs.com/png.latex?b"></strong>: <img src="https://latex.codecogs.com/png.latex?b%20=%20(b_1,%20%5Cdots,%20b_m)%5E%5Ctop">. 현재 회사가 보유하고 있는 자원 <img src="https://latex.codecogs.com/png.latex?i">의 총량은 최대 <img src="https://latex.codecogs.com/png.latex?b_i">입니다.</li>
-<li><strong>이윤 벡터 <img src="https://latex.codecogs.com/png.latex?p"></strong>: <img src="https://latex.codecogs.com/png.latex?p%20=%20(p_1,%20%5Cdots,%20p_d)%5E%5Ctop">. 제품 <img src="https://latex.codecogs.com/png.latex?j">를 1단위 생산하여 얻는 이윤은 <img src="https://latex.codecogs.com/png.latex?p_j">입니다.</li>
-</ul>
-</section>
-<section id="결정-변수" class="level3">
-<h3 class="anchored" data-anchor-id="결정-변수"><strong>[결정 변수]</strong></h3>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?x_j">: 제품 <img src="https://latex.codecogs.com/png.latex?j">의 생산 수량 (단, 생산량은 음수가 될 수 없으므로 <img src="https://latex.codecogs.com/png.latex?x_j%20%5Cge%200">).</li>
-</ul>
-</section>
-<section id="목표" class="level3">
-<h3 class="anchored" data-anchor-id="목표"><strong>[목표]</strong></h3>
-<ul>
-<li>회사의 총 이윤을 극대화(Maximize)해야 합니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BTotal%20Profit%7D%20=%20p_1%20x_1%20+%20p_2%20x_2%20+%20%5Cdots%20+%20p_d%20x_d%20=%20p%5E%5Ctop%20x"></li>
-</ul>
-</section>
-<section id="제약-조건" class="level3">
-<h3 class="anchored" data-anchor-id="제약-조건"><strong>[제약 조건]</strong></h3>
-<ul>
-<li>각 자원의 사용량은 가용량을 초과할 수 없습니다. 자원 <img src="https://latex.codecogs.com/png.latex?i">에 대해: <img src="https://latex.codecogs.com/png.latex?a_%7Bi1%7Dx_1%20+%20a_%7Bi2%7Dx_2%20+%20%5Cdots%20+%20a_%7Bid%7Dx_d%20%5Cle%20b_i%20%5Cquad%20%5Cforall%20i%20%5Cin%20%5Bm%5D"></li>
-<li>이는 행렬 형태로 <img src="https://latex.codecogs.com/png.latex?Ax%20%5Cle%20b">가 됩니다.</li>
-</ul>
-</section>
-<section id="최종-lp-수식" class="level3">
-<h3 class="anchored" data-anchor-id="최종-lp-수식"><strong>[최종 LP 수식]</strong></h3>
-<ul>
-<li>이 내용을 종합하면 다음과 같은 형태의 선형 계획법이 도출됩니다: <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmax_%7Bx%7D%20%5Cquad%20&amp;%20p%5E%5Ctop%20x%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20Ax%20%5Cle%20b%20%5C%5C%0A&amp;%20x%20%5Cge%200%0A%5Cend%7Baligned%7D%0A"></li>
-</ul>
-</section>
-</section>
-<section id="운송-문제-transportation-problem" class="level2">
-<h2 class="anchored" data-anchor-id="운송-문제-transportation-problem">3.2. 운송 문제 (Transportation Problem)</h2>
-<ul>
-<li>이번에는 공간적으로 분리된 여러 거점 간의 물류 비용을 최적화하는 문제를 살펴보겠습니다. 회사에 <img src="https://latex.codecogs.com/png.latex?m">개의 공장(Factory)과 <img src="https://latex.codecogs.com/png.latex?d">개의 창고(Warehouse)가 있습니다.</li>
-</ul>
-<section id="주어진-데이터-1" class="level3">
-<h3 class="anchored" data-anchor-id="주어진-데이터-1"><strong>[주어진 데이터]</strong></h3>
-<ul>
-<li><strong>공급량 <img src="https://latex.codecogs.com/png.latex?s_i"></strong>: 공장 <img src="https://latex.codecogs.com/png.latex?i">에서 최대로 공급(생산)할 수 있는 상품의 단위 수입니다 (<img src="https://latex.codecogs.com/png.latex?i%20%5Cin%20%5Bm%5D">).</li>
-<li><strong>수요량 <img src="https://latex.codecogs.com/png.latex?d_j"></strong>: 창고 <img src="https://latex.codecogs.com/png.latex?j">에서 반드시 필요로 하는 상품의 수요 단위 수입니다 (<img src="https://latex.codecogs.com/png.latex?j%20%5Cin%20%5Bd%5D">).</li>
-<li><strong>운송 비용 <img src="https://latex.codecogs.com/png.latex?c_%7Bij%7D"></strong>: 공장 <img src="https://latex.codecogs.com/png.latex?i">에서 창고 <img src="https://latex.codecogs.com/png.latex?j">로 상품을 1단위 운송하는 데 발생하는 비용입니다.</li>
-</ul>
-</section>
-<section id="결정-변수-1" class="level3">
-<h3 class="anchored" data-anchor-id="결정-변수-1"><strong>[결정 변수]</strong></h3>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?x_%7Bij%7D">: 공장 <img src="https://latex.codecogs.com/png.latex?i">에서 창고 <img src="https://latex.codecogs.com/png.latex?j">로 운송할 실제 상품의 양. (마찬가지로 <img src="https://latex.codecogs.com/png.latex?x_%7Bij%7D%20%5Cge%200"> ).</li>
-</ul>
-</section>
-<section id="목표-1" class="level3">
-<h3 class="anchored" data-anchor-id="목표-1"><strong>[목표]</strong></h3>
-<ul>
-<li>수요와 공급 제약을 모두 만족시키면서 <strong>총 운송 비용을 최소화(Minimize)</strong>해야 합니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BTotal%20Cost%7D%20=%20%5Csum_%7Bi=1%7D%5E%7Bm%7D%20%5Csum_%7Bj=1%7D%5E%7Bd%7D%20c_%7Bij%7D%20x_%7Bij%7D"></li>
-</ul>
-</section>
-<section id="제약-조건-1" class="level3">
-<h3 class="anchored" data-anchor-id="제약-조건-1"><strong>[제약 조건]</strong></h3>
-<ul>
-<li><ol type="1">
-<li><strong>공급 제약(Supply constraints):</strong> 각 공장 <img src="https://latex.codecogs.com/png.latex?i">에서 출발하는 상품의 총합은 그 공장의 최대 공급량 <img src="https://latex.codecogs.com/png.latex?s_i">를 초과할 수 없습니다. <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bj=1%7D%5E%7Bd%7D%20x_%7Bij%7D%20%5Cle%20s_i,%20%5Cquad%20%5Ctext%7Bfor%20%7D%20i%20=%201,%20%5Cdots,%20m"></li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>수요 제약(Demand constraints):</strong> 각 창고 <img src="https://latex.codecogs.com/png.latex?j">에 도착하는 상품의 총합은 반드시 그 창고의 수요 <img src="https://latex.codecogs.com/png.latex?d_j">를 충족해야 합니다. <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bi=1%7D%5E%7Bm%7D%20x_%7Bij%7D%20%5Cge%20d_j,%20%5Cquad%20%5Ctext%7Bfor%20%7D%20j%20=%201,%20%5Cdots,%20d"></li>
-</ol></li>
-</ul>
-</section>
-<section id="최종-lp-수식-1" class="level3">
-<h3 class="anchored" data-anchor-id="최종-lp-수식-1"><strong>[최종 LP 수식]</strong></h3>
-<ul>
-<li>물류 운송 문제는 다음과 같은 LP로 완벽하게 표현됩니다: <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmin_%7Bx%7D%20%5Cquad%20&amp;%20%5Csum_%7Bi=1%7D%5E%7Bm%7D%20%5Csum_%7Bj=1%7D%5E%7Bd%7D%20c_%7Bij%7D%20x_%7Bij%7D%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20%5Csum_%7Bj=1%7D%5E%7Bd%7D%20x_%7Bij%7D%20%5Cle%20s_i,%20%5Cquad%20i%20=%201,%20%5Cdots,%20m%20%5C%5C%0A&amp;%20%5Csum_%7Bi=1%7D%5E%7Bm%7D%20x_%7Bij%7D%20%5Cge%20d_j,%20%5Cquad%20j%20=%201,%20%5Cdots,%20d%20%5C%5C%0A&amp;%20x_%7Bij%7D%20%5Cge%200,%20%5Cquad%20i=1,%5Cdots,m,%20%5C;%20j=1,%5Cdots,d%0A%5Cend%7Baligned%7D%0A"></li>
-</ul>
-
-
-
-</section>
-</section>
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/3.1/</guid>
-  <pubDate>Tue, 10 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] Lecture 3. Linear Programming (Part 2)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/3.2/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="motivation-군집의-중심-찾기-center-of-a-cluster" class="level1">
-<h1>1. Motivation: 군집의 중심 찾기 (Center of a Cluster)</h1>
-<ul>
-<li>의사결정 문제에서 어떤 최적화 문제들이 선형 계획법으로 모델링될 수 있을까요? 일반적인 최적화 문제는 다음과 같은 형태를 가집니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmin_%7Bx%7D%20%5Cquad%20&amp;%20f(x)%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20g_i(x)%20%5Cle%200,%20%5Cquad%20i%20%5Cin%20%5Bm%5D%20%5C%5C%0A&amp;%20x%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li>만약 목적 함수 <img src="https://latex.codecogs.com/png.latex?f">와 제약 함수 <img src="https://latex.codecogs.com/png.latex?g_1,%20%5Cdots,%20g_m">이 모두 선형(Linear)이라면 이 문제는 당연히 LP입니다. 하지만 함수가 비선형이더라도, 우리는 종종 이 문제를 LP로 “재표현”할 수 있습니다.</li>
-<li>데이터 포인트 군집 <img src="https://latex.codecogs.com/png.latex?V%20=%20%5C%7Bv%5E1,%20%5Cdots,%20v%5En%5C%7D%20%5Csubseteq%20%5Cmathbb%7BR%7D%5Ed"> 가 있다고 해봅시다. 우리의 목표는 이 <img src="https://latex.codecogs.com/png.latex?n">개의 벡터들로부터의 거리 <img src="https://latex.codecogs.com/png.latex?d(x)">를 최소화하는 <strong>군집의 중심(Center)</strong> <img src="https://latex.codecogs.com/png.latex?x">를 찾는 것입니다.</li>
-<li>거리 함수 <img src="https://latex.codecogs.com/png.latex?d(x)">를 어떻게 정의하느냐에 따라 다음 네 가지 최적화 문제를 생각할 수 있습니다:
-<ul>
-<li><ol type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cell_1">-거리의 합:</strong> <img src="https://latex.codecogs.com/png.latex?d(x)%20=%20%5Csum_%7Bi%20%5Cin%20%5Bn%5D%7D%20%5C%7Cx%20-%20v%5Ei%5C%7C_1"></li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cell_%5Cinfty">-거리의 합:</strong> <img src="https://latex.codecogs.com/png.latex?d(x)%20=%20%5Csum_%7Bi%20%5Cin%20%5Bn%5D%7D%20%5C%7Cx%20-%20v%5Ei%5C%7C_%5Cinfty"></li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cell_1">-거리의 최댓값:</strong> <img src="https://latex.codecogs.com/png.latex?d(x)%20=%20%5Cmax_%7Bi%20%5Cin%20%5Bn%5D%7D%20%5C%7Cx%20-%20v%5Ei%5C%7C_1"></li>
-</ol></li>
-<li><ol start="4" type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cell_%5Cinfty">-거리의 최댓값:</strong> <img src="https://latex.codecogs.com/png.latex?d(x)%20=%20%5Cmax_%7Bi%20%5Cin%20%5Bn%5D%7D%20%5C%7Cx%20-%20v%5Ei%5C%7C_%5Cinfty"></li>
-</ol></li>
-</ul></li>
-<li>벡터의 Norm이나 Max 연산은 명백히 <strong>비선형(Non-linear)</strong> 함수입니다. 그럼에도 불구하고, 이 문제들은 모두 선형 계획법으로 변환할 수 있습니다. 이를 가능하게 하는 핵심 개념이 바로 <strong>선형 표현 가능성(Linear Representability)</strong>입니다.</li>
-</ul>
-<hr>
-</section>
-<section id="선형-표현-가능-함수-linearly-representable-functions" class="level1">
-<h1>2. 선형 표현 가능 함수 (Linearly Representable Functions)</h1>
-<section id="에피그래프epigraph와-선형-표현의-정의" class="level2">
-<h2 class="anchored" data-anchor-id="에피그래프epigraph와-선형-표현의-정의">2.1. 에피그래프(Epigraph)와 선형 표현의 정의</h2>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/3.2/images/epigraph_example.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 1차원 변수 <img src="https://latex.codecogs.com/png.latex?x">에 대한 볼록 조각적 선형 함수(Convex piecewise linear function)의 에피그래프 도식. 검은색 선은 함수 <img src="https://latex.codecogs.com/png.latex?f(x)">의 그래프를 나타내고, 그 위쪽의 빗금 친 영역이 바로 <img src="https://latex.codecogs.com/png.latex?f(x)%20%5Cle%20t">를 만족하는 <img src="https://latex.codecogs.com/png.latex?(x,%20t)"> 공간의 에피그래프 <img src="https://latex.codecogs.com/png.latex?epi(f)">입니다. 이 영역이 유한 개의 직선(선형 부등식)들로 둘러싸인 다면체임을 알 수 있습니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>함수 <img src="https://latex.codecogs.com/png.latex?f:%20%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5Cmathbb%7BR%7D">의 <strong>에피그래프(Epigraph)</strong>는 함수의 그래프 위쪽에 놓인 점들의 집합으로 정의됩니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0Aepi(f)%20=%20%5C%7B(x,%20t)%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20%5Ctimes%20%5Cmathbb%7BR%7D%20:%20f(x)%20%5Cle%20t%5C%7D%20%5Csubseteq%20%5Cmathbb%7BR%7D%5E%7Bd+1%7D%0A"></p>
-<ul>
-<li>어떤 함수 <img src="https://latex.codecogs.com/png.latex?f">가 <strong>선형 표현 가능(Linearly representable)</strong>하다는 것은, 그 에피그래프가 유한 개의 선형 부등식 시스템으로 표현될 수 있음을 의미합니다. <img src="https://latex.codecogs.com/png.latex?%0Aepi(f)%20=%20%5Cleft%5C%7B%20(x,%20t)%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20%5Ctimes%20%5Cmathbb%7BR%7D%20:%20%5Cexists%20y%20%5Cin%20%5Cmathbb%7BR%7D%5Ep%20%5Ctext%7B%20s.t.%20%7D%20Ax%20+%20Dy%20+%20ht%20%5Cle%20r%20%5Cright%5C%7D%0A">
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?A%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bl%20%5Ctimes%20d%7D">, <img src="https://latex.codecogs.com/png.latex?D%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bl%20%5Ctimes%20p%7D">, 그리고 <img src="https://latex.codecogs.com/png.latex?h,%20r%20%5Cin%20%5Cmathbb%7BR%7D%5El"> 입니다.</li>
-<li>이 선형 부등식 시스템을 만들기 위해 새롭게 도입된 변수 <img src="https://latex.codecogs.com/png.latex?y">를 <strong>보조 변수(Auxiliary variables)</strong>라고 부릅니다.</li>
-</ul></li>
-<li>보조 변수 <img src="https://latex.codecogs.com/png.latex?y">를 포함한 고차원 공간에서 <img src="https://latex.codecogs.com/png.latex?Ax%20+%20Dy%20+%20ht%20%5Cle%20r"> 를 만족하는 점들을 모은 뒤 , <img src="https://latex.codecogs.com/png.latex?(x,%20t)"> 부분만 추출해낸 것이 <img src="https://latex.codecogs.com/png.latex?epi(f)">가 됩니다.</li>
-</ul>
-</section>
-<section id="theorem-3.3-lp-재표현-정리와-증명" class="level2">
-<h2 class="anchored" data-anchor-id="theorem-3.3-lp-재표현-정리와-증명">2.2. [Theorem 3.3] LP 재표현 정리와 증명</h2>
-<blockquote class="blockquote">
-<p><strong>정리 (Theorem 3.3):</strong> 목적 함수 <img src="https://latex.codecogs.com/png.latex?f">와 제약 함수 <img src="https://latex.codecogs.com/png.latex?g_i">들이 모두 선형 표현 가능하다면, 원래의 비선형 최적화 문제는 선형 계획법으로 재표현될 수 있다.</p>
-</blockquote>
-<section id="증명-proof" class="level3">
-<h3 class="anchored" data-anchor-id="증명-proof"><strong>증명 (Proof):</strong></h3>
-<ul>
-<li><p>원래의 목표는 <img src="https://latex.codecogs.com/png.latex?f(x)">를 최소화하는 것입니다. 보조 변수 <img src="https://latex.codecogs.com/png.latex?t%20%5Cin%20%5Cmathbb%7BR%7D">를 도입하면, 이 문제는 <img src="https://latex.codecogs.com/png.latex?f(x)%20%5Cle%20t"> 라는 제약 조건 하에서 <img src="https://latex.codecogs.com/png.latex?t">를 최소화하는 문제와 완벽히 동치입니다. <img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bx,%20t%7D%20%5C%7B%20t%20:%20f(x)%20%5Cle%20t,%20g_i(x)%20%5Cle%200,%20%5Cforall%20i%20%5Cin%20%5Bm%5D%20%5C%7D"></p></li>
-<li><p>이를 에피그래프의 정의를 이용해 다시 쓰면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bx,%20t%7D%20%5C%7B%20t%20:%20(x,%20t)%20%5Cin%20epi(f),%20(x,%200)%20%5Cin%20epi(g_i),%20%5Cforall%20i%20%5Cin%20%5Bm%5D%20%5C%7D"></p></li>
-<li><p><img src="https://latex.codecogs.com/png.latex?f">가 선형 표현 가능하므로, 어떤 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Cmathbb%7BR%7D%5Ep">에 대해 <img src="https://latex.codecogs.com/png.latex?Ax%20+%20Dy%20+%20ht%20%5Cle%20r"> 을 만족합니다.</p></li>
-<li><p>마찬가지로, 각 <img src="https://latex.codecogs.com/png.latex?g_i">도 선형 표현 가능하므로 보조 변수 <img src="https://latex.codecogs.com/png.latex?z%5Ei%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bq_i%7D">에 대해 다음을 만족합니다. <img src="https://latex.codecogs.com/png.latex?epi(g_i)%20=%20%5C%7B(x,%20t)%20:%20%5Cexists%20z%5Ei%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bq_i%7D%20%5Ctext%7B%20s.t.%20%7D%20A%5Ei%20x%20+%20D%5Ei%20z%5Ei%20+%20h%5Ei%20t%20%5Cle%20r%5Ei%20%5C%7D"></p></li>
-<li><p>여기서 <img src="https://latex.codecogs.com/png.latex?(x,%200)%20%5Cin%20epi(g_i)"> 이므로 <img src="https://latex.codecogs.com/png.latex?t=0">이 대입되어 <img src="https://latex.codecogs.com/png.latex?h%5Ei%20t"> 항은 사라집니다. 이 모든 조건을 합치면 거대한 선형 계획법이 탄생합니다.</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cmin_%7Bx,%20t,%20y,%20z%5E1%20%5Cdots%20z%5Em%7D%20%5Cquad%20&amp;%20t%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20%5Cquad%20&amp;%20Ax%20+%20Dy%20+%20ht%20%5Cle%20r%20%5C%5C%0A&amp;%20A%5Ei%20x%20+%20D%5Ei%20z%5Ei%20%5Cle%20r%5Ei,%20%5Cquad%20i%20%5Cin%20%5Bm%5D%0A%5Cend%7Baligned%7D%0A"></p>
-</section>
-</section>
-<section id="example-비선형-함수의-선형-표현" class="level2">
-<h2 class="anchored" data-anchor-id="example-비선형-함수의-선형-표현">2.3. Example: 비선형 함수의 선형 표현</h2>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?f(x_1,%20x_2,%20x_3)%20=%20%5Cmax%5C%7Bx_1,%202x_2%20+%20x_3,%202x_3%20-%20x_1%5C%7D"> 이라는 비선형 함수를 봅시다.</li>
-<li>이 함수의 에피그래프는 <img src="https://latex.codecogs.com/png.latex?%5Cmax%5C%7B%5Cdots%5C%7D%20%5Cle%20t"> 인 집합입니다.</li>
-<li>최댓값이 <img src="https://latex.codecogs.com/png.latex?t">보다 작거나 같다는 것은, 괄호 안의 <strong>모든</strong> 요소가 <img src="https://latex.codecogs.com/png.latex?t">보다 작거나 같다는 것과 동치입니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?x_1%20%5Cle%20t,%20%5Cquad%202x_2%20+%20x_3%20%5Cle%20t,%20%5Cquad%202x_3%20-%20x_1%20%5Cle%20t"></p>
-<ul>
-<li>따라서 <img src="https://latex.codecogs.com/png.latex?epi(f)">는 위 세 개의 선형 부등식으로 표현되므로, 이 함수는 선형 표현 가능합니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="보조-변수와-사영-projection" class="level1">
-<h1>3. 보조 변수와 사영 (Projection)</h1>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/3.2/images/projection_concept.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 2차원 공간(<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%20%5Ctimes%20%5Cmathbb%7BR%7D">)에 존재하는 붉은색 영역 집합 <img src="https://latex.codecogs.com/png.latex?C">를 <img src="https://latex.codecogs.com/png.latex?x">-축 1차원 공간으로 사영(Projection)시키는 과정을 보여주는 도식. <img src="https://latex.codecogs.com/png.latex?y"> 축의 정보를 무시하고 위에서 아래로 빛을 비추었을 때 <img src="https://latex.codecogs.com/png.latex?x">-축에 생기는 그림자(굵은 빨간 선)가 바로 사영된 집합 <img src="https://latex.codecogs.com/png.latex?proj_x(C)">가 됩니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>선형 표현식에 등장하는 보조 변수 <img src="https://latex.codecogs.com/png.latex?y">는 기하학적으로 <strong>사영(Projection)</strong>이라는 깊은 의미를 갖습니다.</li>
-<li>공간 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5Ed%20%5Ctimes%20%5Cmathbb%7BR%7D%5Ep"> 에 있는 집합 <img src="https://latex.codecogs.com/png.latex?C">의 <img src="https://latex.codecogs.com/png.latex?x"> 공간(<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5Ed">)으로의 사영은 다음과 같이 정의됩니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?proj_x(C)%20=%20%5C%7B%20x%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20:%20%5Cexists%20y%20%5Cin%20%5Cmathbb%7BR%7D%5Ep%20%5Ctext%7B%20s.t.%20%7D%20(x,%20y)%20%5Cin%20C%20%5C%7D"> * 이를 “<img src="https://latex.codecogs.com/png.latex?y"> 변수들을 투영하여 없앤다(Projecting out)”고 합니다.</p>
-<ul>
-<li><p>다시 에피그래프로 돌아가 보겠습니다. 변수 <img src="https://latex.codecogs.com/png.latex?(x,%20y,%20t)">가 이루는 다면체 <img src="https://latex.codecogs.com/png.latex?P%20=%20%5C%7B(x,%20y,%20t)%20:%20Ax%20+%20Dy%20+%20ht%20%5Cle%20r%5C%7D"> 가 있습니다. <img src="https://latex.codecogs.com/png.latex?epi(f)">는 단순히 이 다면체 <img src="https://latex.codecogs.com/png.latex?P">에서 <img src="https://latex.codecogs.com/png.latex?y"> 변수들을 무시하고 <img src="https://latex.codecogs.com/png.latex?(x,%20t)"> 공간으로 사영시킨 결과입니다. 즉, 에피그래프가 다면체의 사영이라면 그 함수는 선형 표현이 가능합니다.</p></li>
-<li><p>그렇다면 다면체의 사영은 항상 다면체일까요?</p>
-<ul>
-<li>네, 그렇습니다. 이를 대수적으로 증명하는 알고리즘이 바로 <strong>Fourier-Motzkin 소거법</strong>입니다.</li>
-</ul></li>
-</ul>
-<section id="theorem-3.5-fourier-motzkin-elimination" class="level2">
-<h2 class="anchored" data-anchor-id="theorem-3.5-fourier-motzkin-elimination">3.1. [Theorem 3.5] Fourier-Motzkin Elimination</h2>
-<blockquote class="blockquote">
-<p><strong>정리 (Theorem 3.5):</strong> 다면체의 사영은 여전히 다면체이다.</p>
-</blockquote>
-<section id="증명-proof-1" class="level3">
-<h3 class="anchored" data-anchor-id="증명-proof-1"><strong>증명 (Proof):</strong></h3>
-<ul>
-<li><p>다면체 <img src="https://latex.codecogs.com/png.latex?P%20=%20%5C%7B(x,%20y)%20:%20Ax%20+%20Dy%20%5Cle%20r%5C%7D"> 에서 변수 <img src="https://latex.codecogs.com/png.latex?y_1">을 소거해 보겠습니다. 부등식 시스템 <img src="https://latex.codecogs.com/png.latex?Ax%20+%20Dy%20%5Cle%20r">을 <img src="https://latex.codecogs.com/png.latex?y_1">의 계수 <img src="https://latex.codecogs.com/png.latex?d_%7Bi1%7D">의 부호에 따라 세 그룹으로 나눕니다:</p>
-<ul>
-<li><strong>Group 1 (<img src="https://latex.codecogs.com/png.latex?I_1">):</strong> <img src="https://latex.codecogs.com/png.latex?d_%7Bi1%7D%20%3E%200"></li>
-<li><strong>Group 2 (<img src="https://latex.codecogs.com/png.latex?I_2">):</strong> <img src="https://latex.codecogs.com/png.latex?d_%7Bi1%7D%20%3C%200"></li>
-<li><strong>Group 3 (<img src="https://latex.codecogs.com/png.latex?I_3">):</strong> <img src="https://latex.codecogs.com/png.latex?d_%7Bi1%7D%20=%200"></li>
-</ul></li>
-<li><p>이제 <img src="https://latex.codecogs.com/png.latex?I_1">에 속하는 임의의 식 <img src="https://latex.codecogs.com/png.latex?i">와 <img src="https://latex.codecogs.com/png.latex?I_2">에 속하는 임의의 식 <img src="https://latex.codecogs.com/png.latex?j">를 짝지어(Pairing) 결합합니다.</p></li>
-<li><p><img src="https://latex.codecogs.com/png.latex?y_1">을 소거하기 위해, <img src="https://latex.codecogs.com/png.latex?I_1">의 부등식 양변에 양수인 <img src="https://latex.codecogs.com/png.latex?-d_%7Bj1%7D">을 곱하고, <img src="https://latex.codecogs.com/png.latex?I_2">의 부등식 양변에 양수인 <img src="https://latex.codecogs.com/png.latex?d_%7Bi1%7D">을 곱하여 두 식을 더합니다.</p></li>
-<li><p>이렇게 되면 기적처럼 <img src="https://latex.codecogs.com/png.latex?y_1"> 항의 계수가 <img src="https://latex.codecogs.com/png.latex?0">이 되어 <img src="https://latex.codecogs.com/png.latex?y_1">이 완벽히 사라진 새로운 선형 부등식이 도출됩니다.</p></li>
-<li><p>이 과정을 <img src="https://latex.codecogs.com/png.latex?I_1">과 <img src="https://latex.codecogs.com/png.latex?I_2">의 모든 조합에 대해 수행하고, <img src="https://latex.codecogs.com/png.latex?y_1">이 아예 없던 <img src="https://latex.codecogs.com/png.latex?I_3"> 그룹의 식들과 합치면 <img src="https://latex.codecogs.com/png.latex?y_1">이 투영되어 없어진 새로운 연립 부등식(다면체)을 얻습니다. 이 과정을 <img src="https://latex.codecogs.com/png.latex?y_2,%20%5Cdots,%20y_p">에 대해 반복하면, 최종적으로 남는 식들의 집합 <img src="https://latex.codecogs.com/png.latex?proj_x(P)"> 역시 유한 개의 선형 부등식으로 정의되므로 다면체가 됨이 증명됩니다.</p></li>
-</ul>
-<hr>
-</section>
-</section>
-</section>
-<section id="자주-쓰이는-선형-표현-가능-함수와-보존-연산" class="level1">
-<h1>4. 자주 쓰이는 선형 표현 가능 함수와 보존 연산</h1>
-<ul>
-<li><strong>절댓값 (Absolute value):</strong> <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%7Cx%7C">. <img src="https://latex.codecogs.com/png.latex?%7Cx%7C%20%5Cle%20t%20%5Ciff%20-t%20%5Cle%20x%20%5Cle%20t">. <img src="https://latex.codecogs.com/png.latex?epi(f)%20=%20%5C%7B(x,%20t)%20:%20-t%20%5Cle%20x%20%5Cle%20t%5C%7D"></li>
-<li><strong>볼록 조각적 선형 함수 (Convex piecewise linear):</strong> <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Cmax_%7Bi%20%5Cin%20%5Bn%5D%7D%20%5C%7B%20c_i%5E%5Ctop%20x%20+%20d_i%20%5C%7D">. <img src="https://latex.codecogs.com/png.latex?epi(f)%20=%20%5C%7B(x,%20t)%20:%20c_i%5E%5Ctop%20x%20+%20d_i%20%5Cle%20t,%20%5Cforall%20i%20%5Cin%20%5Bn%5D%5C%7D"></li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cell_%5Cinfty">-norm:</strong> <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5C%7Cx%5C%7C_%5Cinfty%20=%20%5Cmax_%7Bj%20%5Cin%20%5Bd%5D%7D%20%7Cx_j%7C">. <img src="https://latex.codecogs.com/png.latex?%7Cx_j%7C%20%5Cle%20t%20%5Ciff%20-t%20%5Cle%20x_j%20%5Cle%20t%20%5Cquad%20%5Cforall%20j%20%5Cin%20%5Bd%5D">.</li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cell_1">-norm:</strong> <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5C%7Cx%5C%7C_1%20=%20%5Csum_%7Bj%20%5Cin%20%5Bd%5D%7D%20%7Cx_j%7C">. 이 경우 보조 변수 <img src="https://latex.codecogs.com/png.latex?s_1,%20%5Cdots,%20s_d%20%5Cin%20%5Cmathbb%7BR%7D"> 이 필요합니다. 각 절댓값의 상한을 <img src="https://latex.codecogs.com/png.latex?s_j">로 둡니다. <img src="https://latex.codecogs.com/png.latex?-s_j%20%5Cle%20x_j%20%5Cle%20s_j%20%5Cquad%20%5Cforall%20j%20%5Cin%20%5Bd%5D">, 그리고 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bj%20%5Cin%20%5Bd%5D%7D%20s_j%20%5Cle%20t">.</li>
-</ul>
-<section id="theorem-3.6-선형-표현-가능성을-보존하는-연산" class="level2">
-<h2 class="anchored" data-anchor-id="theorem-3.6-선형-표현-가능성을-보존하는-연산">4.1. [Theorem 3.6] 선형 표현 가능성을 보존하는 연산</h2>
-<ul>
-<li>선형 표현 가능한 함수들을 블록처럼 조립하여 더 복잡한 함수를 만들어도, 그 성질이 그대로 보존되는 마법 같은 연산들이 있습니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>정리 (Theorem 3.6):</strong> <img src="https://latex.codecogs.com/png.latex?f_1(x),%20%5Cdots,%20f_n(x)"> 가 선형 표현 가능하다면 다음이 성립한다. 1. 비음수 가중치 합 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bi%20%5Cin%20%5Bn%5D%7D%20%5Calpha_i%20f_i(x)"> (<img src="https://latex.codecogs.com/png.latex?%5Calpha_i%20%5Cge%200">) 은 선형 표현 가능하다. 2. 점별 최댓값(Point-wise max) <img src="https://latex.codecogs.com/png.latex?%5Cmax_%7Bi%20%5Cin%20%5Bn%5D%7D%20f_i(x)"> 은 선형 표현 가능하다.</p>
-</blockquote>
-<section id="증명-proof-2" class="level3">
-<h3 class="anchored" data-anchor-id="증명-proof-2"><strong>증명 (Proof):</strong></h3>
-<ul>
-<li><ol type="1">
-<li><strong>가중치 합:</strong></li>
-</ol>
-<ul>
-<li>합을 선형화하기 위해 보조 변수 <img src="https://latex.codecogs.com/png.latex?s%20%5Cin%20%5Cmathbb%7BR%7D%5En">을 도입합니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Csum%20%5Calpha_i%20f_i(x)%20%5Cle%20t"> 는 “어떤 <img src="https://latex.codecogs.com/png.latex?s_i">들이 존재하여 <img src="https://latex.codecogs.com/png.latex?%5Csum%20%5Calpha_i%20s_i%20%5Cle%20t"> 이고, 각 <img src="https://latex.codecogs.com/png.latex?f_i(x)%20%5Cle%20s_i"> 이다” 로 바꿀 수 있습니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?f_i(x)%20%5Cle%20s_i"> 는 곧 <img src="https://latex.codecogs.com/png.latex?(x,%20s_i)%20%5Cin%20epi(f_i)"> 를 의미하며, <img src="https://latex.codecogs.com/png.latex?epi(f_i)">가 선형 부등식 시스템이므로 이를 결합한 전체 에피그래프 역시 선형 시스템이 됩니다.</li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>최댓값:</strong></li>
-</ol>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cmax%20f_i(x)%20%5Cle%20t"> 는 모든 <img src="https://latex.codecogs.com/png.latex?i">에 대해 <img src="https://latex.codecogs.com/png.latex?f_i(x)%20%5Cle%20t"> 와 완벽히 동치입니다.</li>
-<li>즉, <img src="https://latex.codecogs.com/png.latex?(x,%20t)%20%5Cin%20epi(f_i)"> 가 모든 <img src="https://latex.codecogs.com/png.latex?i">에 대해 성립하므로, 개별 에피그래프들의 교집합(선형 부등식들의 단순 나열)이 되어 선형 표현 가능합니다.</li>
-</ul></li>
-</ul>
-
-
-
-</section>
-</section>
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/3.Linear-Programming/3.2/</guid>
   <pubDate>Tue, 10 Mar 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>

@@ -749,6 +749,122 @@ font-style: inherit;">/</span> grad_norm)</span></code></pre></div></div>
   <pubDate>Sun, 15 Mar 2026 15:00:00 GMT</pubDate>
 </item>
 <item>
+  <title>[Optimization] Lecture 4. Simplex Method for Linear Programming</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Optimization/4.Simplex-Method-for-Linear-Programming/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-선형-계획법과-심플렉스-알고리즘의-역사" class="level1">
+<h1>1. Introduction: 선형 계획법과 심플렉스 알고리즘의 역사</h1>
+<p>선형 계획법(Linear Programming, LP)은 제약 조건 하에서 선형 목적 함수를 최적화하는 문제로, 최적화 이론의 가장 핵심적인 기초 중 하나입니다. 선형 계획법의 역사는 제2차 세계대전 전후의 생산 계획 및 군사 작전 연구와 깊은 관련이 있습니다.</p>
+<ul>
+<li><strong>탄생과 초기 발전:</strong> 1939년, Kantorovich는 생산 계획을 위해 처음으로 선형 계획법을 고안했습니다. 이후 제2차 세계대전 동안 군사 작전 연구(Operations Research) 모델링에 널리 사용되었습니다.</li>
+<li><strong>Simplex 알고리즘의 등장:</strong> 1947년, 미 국방부(Pentagon)의 Project SCOOP(Scientific Computation of Optimum Programs)에 참여하던 George B. Dantzig는 선형 계획법을 풀기 위한 혁신적인 방법인 <strong>심플렉스 알고리즘(Simplex Method)</strong>을 개발했습니다. 초기 Dantzig는 다면체(polyhedral set)의 모서리(edge)를 따라 꼭짓점(vertex)에서 다음 꼭짓점으로 이동하는 방식이 고차원에서는 비효율적일 것이라 직관적으로 판단하고 기각했으나, ’열의 기하학(geometry of columns)’을 연구하는 과정에서 이 방법이 실제로는 매우 효율적임을 깨닫게 되었습니다.</li>
+<li><strong>이론적 한계와 새로운 알고리즘:</strong> 심플렉스 알고리즘은 실제 문제에서 매우 잘 작동하지만, 1972년 Klee와 Minty에 의해 최악의 경우 지수 시간(exponential time)이 소요되는 병적(pathological) 사례가 존재함이 밝혀졌습니다.</li>
+<li><strong>다항 시간 알고리즘의 등장:</strong> 이후 선형 계획법을 (약한) 다항 시간에 풀 수 있는 <strong>타원체 방법(Ellipsoid method)</strong>이 Shor (1977) 및 Yudin &amp; Nemirovski (1976)에 의해 제안되었고, Khachiyan (1979)이 이를 증명했습니다. 다만 타원체 방법은 이론적 돌파구였음에도 실용적이지 못하다는 한계가 있었습니다. 이를 극복하기 위해 1984년 Karmarkar는 타원체 방법보다 훨씬 빠르면서도 다항 시간 실행이 보장되는 <strong>내부점 방법(Interior-point method)</strong>을 제안했습니다.</li>
+<li><strong>현대 알고리즘의 복잡도:</strong> 오늘날 최적화 솔버들은 주로 심플렉스 방법과 내부점 방법의 일종인 장벽(barrier) 방법을 함께 사용합니다. 선형 계획법의 시간 복잡도는 Khachiyan의 <img src="https://latex.codecogs.com/png.latex?O(n%5E6)">에서 시작하여, 행렬 곱셈 알고리즘의 발전에 힘입어 최근 Cohen et al.&nbsp;(2019)의 <img src="https://latex.codecogs.com/png.latex?O%5E*(n%5E%5Comega%20+%20n%5E%7B2.5-%5Calpha/2%7D%20+%20n%5E%7B2+1/6%7D)">, Jiang et al.&nbsp;(2021)의 <img src="https://latex.codecogs.com/png.latex?O%5E*(n%5E%5Comega%20+%20n%5E%7B2.5-%5Calpha/2%7D%20+%20n%5E%7B2+1/18%7D)"> 수준까지 단축되었습니다 (여기서 <img src="https://latex.codecogs.com/png.latex?n">은 변수의 수, <img src="https://latex.codecogs.com/png.latex?%5Comega">는 행렬 곱셈 지수, <img src="https://latex.codecogs.com/png.latex?%5Calpha">는 행렬 곱셈의 쌍대 지수입니다).</li>
+</ul>
+<hr>
+</section>
+<section id="선형-계획법의-표준형-standard-form" class="level1">
+<h1>2. 선형 계획법의 표준형 (Standard Form)</h1>
+<p>심플렉스 알고리즘을 적용하기 위해서는 먼저 선형 계획 문제를 <strong>표준형(Standard Form)</strong>으로 변환해야 합니다. 표준형 선형 계획법은 다음과 같이 정의됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bmatrix%7D%0A%5Cmin%20&amp;%20c%5E%5Ctop%20x%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20&amp;%20Ax%20=%20b%20%5C%5C%0A&amp;%20x%20%5Cge%200%0A%5Cend%7Bmatrix%7D%0A"></p>
+<p>일반적인 선형 계획 문제는 부등식 제약조건이나 부호 제약이 없는 자유 변수(free variables)를 포함할 수 있습니다. 이를 표준형으로 변환하는 두 가지 핵심 기법은 다음과 같습니다.</p>
+<section id="부등식을-등식으로-변환-inequalities-to-equalities" class="level2">
+<h2 class="anchored" data-anchor-id="부등식을-등식으로-변환-inequalities-to-equalities">2.1. 부등식을 등식으로 변환 (Inequalities to Equalities)</h2>
+<p>부등식 제약조건 <img src="https://latex.codecogs.com/png.latex?Ax%20%5Cle%20b">가 주어졌을 때, 이를 등식으로 바꾸기 위해 음이 아닌 <strong>여유 변수(slack variable)</strong> <img src="https://latex.codecogs.com/png.latex?s">를 도입합니다.</p>
+<p><strong>Lemma:</strong> 벡터 <img src="https://latex.codecogs.com/png.latex?a_i%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">와 스칼라 <img src="https://latex.codecogs.com/png.latex?b_i%20%5Cin%20%5Cmathbb%7BR%7D">에 대하여, <img src="https://latex.codecogs.com/png.latex?a_i%5E%5Ctop%20x%20%5Cle%20b_i">가 성립할 필요충분조건은 <img src="https://latex.codecogs.com/png.latex?s_i%20%5Cge%200">이고 <img src="https://latex.codecogs.com/png.latex?a_i%5E%5Ctop%20x%20+%20s_i%20=%20b_i">를 만족하는 <img src="https://latex.codecogs.com/png.latex?s_i%20%5Cin%20%5Cmathbb%7BR%7D">가 존재하는 것입니다.</p>
+<p>이에 따라 <img src="https://latex.codecogs.com/png.latex?Ax%20%5Cle%20b">는 <img src="https://latex.codecogs.com/png.latex?s%20%5Cge%200">인 여유 변수 벡터 <img src="https://latex.codecogs.com/png.latex?s%20%5Cin%20%5Cmathbb%7BR%7D%5Em">에 대해 <img src="https://latex.codecogs.com/png.latex?Ax%20+%20s%20=%20b">와 동치이며, 최적화 문제는 다음과 같이 등식 제약조건 문제로 변환됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bmatrix%7D%0A%5Cmin%20&amp;%20c%5E%5Ctop%20x%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20&amp;%20Ax%20+%20s%20=%20b,%20%5C%5C%0A&amp;%20s%20%5Cge%200%0A%5Cend%7Bmatrix%7D%0A"></p>
+</section>
+<section id="자유-변수를-음이-아닌-변수로-변환-free-variables-to-nonnegative-variables" class="level2">
+<h2 class="anchored" data-anchor-id="자유-변수를-음이-아닌-변수로-변환-free-variables-to-nonnegative-variables">2.2. 자유 변수를 음이 아닌 변수로 변환 (Free variables to nonnegative variables)</h2>
+<p>모든 변수 <img src="https://latex.codecogs.com/png.latex?x">가 <img src="https://latex.codecogs.com/png.latex?x%20%5Cge%200">의 제약을 갖지 않는 경우, 이를 자유 변수라고 합니다. 알고리즘 전개를 위해 이 역시 음이 아닌 변수들의 조합으로 표현해야 합니다.</p>
+<p><strong>Lemma:</strong> 임의의 실수 <img src="https://latex.codecogs.com/png.latex?x_j%20%5Cin%20%5Cmathbb%7BR%7D">는 두 개의 음이 아닌 실수 <img src="https://latex.codecogs.com/png.latex?x_j%5E+,%20x_j%5E-%20%5Cge%200">의 차이인 <img src="https://latex.codecogs.com/png.latex?x_j%20=%20x_j%5E+%20-%20x_j%5E-">로 표현할 수 있습니다.</p>
+<p>이를 전체 시스템에 적용하면, 기존 문제 <img src="https://latex.codecogs.com/png.latex?%5Cmin%20c%5E%5Ctop%20x%20%5Ctext%7B%20s.t.%20%7D%20Ax=b">는 새로운 변수 <img src="https://latex.codecogs.com/png.latex?x%5E+,%20x%5E-%20%5Cge%200">를 사용하여 다음과 같이 완벽한 표준형으로 재작성할 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bmatrix%7D%0A%5Cmin%20&amp;%20c%5E%5Ctop%20x%5E+%20-%20c%5E%5Ctop%20x%5E-%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20&amp;%20Ax%5E+%20-%20Ax%5E-%20=%20b,%20%5C%5C%0A&amp;%20x%5E+,%20x%5E-%20%5Cge%200%0A%5Cend%7Bmatrix%7D%0A"></p>
+<hr>
+</section>
+</section>
+<section id="simplex-알고리즘-단계별-수학적-도출" class="level1">
+<h1>3. Simplex 알고리즘: 단계별 수학적 도출</h1>
+<p>조지 댄치그(George B. Dantzig)가 고안한 심플렉스 알고리즘은 현대 최적화 소프트웨어의 근간입니다. 여기서는 Vašek Chvátal의 방식을 차용하여 2변수 선형 계획법 예제로 알고리즘의 동작 과정을 구체적으로 살펴봅니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Optimization/4.Simplex-Method-for-Linear-Programming/images/dantzig_chvatal.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 조지 댄치그(George B. Dantzig, Left)와 알고리즘 설명 방식을 고안한 바세크 크바탈(Vašek Chvátal, Right)의 초상화 사진</figcaption>
+</figure>
+</div>
+<p><strong>[예제 문제]</strong> <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bmatrix%7D%0A%5Cmax%20&amp;%20z%20=%205x%20+%204y%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20&amp;%202x%20+%203y%20%5Cle%20150%20%5C%5C%0A&amp;%202x%20+%20y%20%5Cle%2070,%20%5C%5C%0A&amp;%20x,%20y%20%5Cge%200%0A%5Cend%7Bmatrix%7D%0A"> (목적 함수를 나타내기 위해 추가 변수 <img src="https://latex.codecogs.com/png.latex?z">를 도입합니다.)</p>
+<section id="step-1-표준형-표현-여유-변수-도입" class="level2">
+<h2 class="anchored" data-anchor-id="step-1-표준형-표현-여유-변수-도입">Step 1: 표준형 표현 (여유 변수 도입)</h2>
+<p>각 부등식 제약조건을 등식으로 바꾸기 위해 여유 변수 <img src="https://latex.codecogs.com/png.latex?s_1,%20s_2">를 도입합니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bmatrix%7D%0A%5Cmax%20&amp;%20z%20=%205x%20+%204y%20%5C%5C%0A%5Ctext%7Bs.t.%7D%20&amp;%202x%20+%203y%20+%20s_1%20=%20150%20%5C%5C%0A&amp;%202x%20+%20y%20+%20s_2%20=%2070%20%5C%5C%0A&amp;%20x,%20y,%20s_1,%20s_2%20%5Cge%200%0A%5Cend%7Bmatrix%7D%0A"></p>
+</section>
+<section id="step-2-초기-사전-initial-dictionary-tableau-구성" class="level2">
+<h2 class="anchored" data-anchor-id="step-2-초기-사전-initial-dictionary-tableau-구성">Step 2: 초기 사전 (Initial Dictionary / Tableau) 구성</h2>
+<p>등식 제약조건의 개수인 <img src="https://latex.codecogs.com/png.latex?m=2">개만큼 변수를 선택하여 좌변에 남기고(기본 변수, basic variables), 나머지 변수는 우변으로 넘깁니다(비기본 변수, non-basic variables).</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0Az%20&amp;=%200%20+%205x%20+%204y%20%5C%5C%0As_1%20&amp;=%20150%20-%202x%20-%203y%20%5C%5C%0As_2%20&amp;=%2070%20-%202x%20-%20y%0A%5Cend%7Baligned%7D%0A"></p>
+<p>초기 해는 비기본 변수 <img src="https://latex.codecogs.com/png.latex?(x,y)">를 0으로 설정함으로써 얻어집니다. 그러면 기본 변수 값은 자동으로 좌변의 상수로 결정되어 <img src="https://latex.codecogs.com/png.latex?(x,y)=(0,0)">, <img src="https://latex.codecogs.com/png.latex?(s_1,s_2)=(150,70)">이 되며, 이때 목적 함수 값은 <img src="https://latex.codecogs.com/png.latex?z=0">입니다.</p>
+</section>
+<section id="step-3-더-나은-사전-선택-iterative-improvement" class="level2">
+<h2 class="anchored" data-anchor-id="step-3-더-나은-사전-선택-iterative-improvement">Step 3: 더 나은 사전 선택 (Iterative Improvement)</h2>
+<p>현재 목적 함수 식 <img src="https://latex.codecogs.com/png.latex?z%20=%205x%20+%204y">에서, 변수 <img src="https://latex.codecogs.com/png.latex?x,%20y">의 계수가 모두 양수(5, 4)이므로 두 변수 중 하나를 증가시키면 <img src="https://latex.codecogs.com/png.latex?z"> 값도 증가합니다. 가장 계수가 큰 변수 <img src="https://latex.codecogs.com/png.latex?x">를 증가시키는 방향으로 선택합시다 (이 변수를 <strong>진입 변수, entering variable</strong>라 합니다).</p>
+<p><img src="https://latex.codecogs.com/png.latex?y=0">을 유지한 채 <img src="https://latex.codecogs.com/png.latex?x">를 증가시킬 때, 현재 기본 변수 <img src="https://latex.codecogs.com/png.latex?s_1,%20s_2">가 음수가 되지 않아야 한다는 조건이 제약으로 작용합니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0As_1%20&amp;=%20150%20-%202x%20%5Cge%200%20%5Cimplies%20x%20%5Cle%2075%20%5C%5C%0As_2%20&amp;=%2070%20-%202x%20%5Cge%200%20%5Cimplies%20x%20%5Cle%2035%0A%5Cend%7Baligned%7D%0A"> <img src="https://latex.codecogs.com/png.latex?s_1,%20s_2">를 모두 음이 아니게 유지하면서 <img src="https://latex.codecogs.com/png.latex?x">를 늘릴 수 있는 최댓값은 <img src="https://latex.codecogs.com/png.latex?%5Cmin%5C%7B150/2,%2070/2%5C%7D%20=%2035">입니다. <img src="https://latex.codecogs.com/png.latex?x=35">가 되는 순간 <img src="https://latex.codecogs.com/png.latex?s_2=0">이 되므로, <img src="https://latex.codecogs.com/png.latex?s_2">는 기본 변수 지위를 잃고 우변으로 이동하게 됩니다 (이 변수를 <strong>퇴출 변수, leaving variable</strong>라 합니다).</p>
+<p>행렬 행 연산(matrix row operations)을 통해 새로운 사전을 도출합니다. <img src="https://latex.codecogs.com/png.latex?s_2"> 수식에서 <img src="https://latex.codecogs.com/png.latex?x">를 좌변으로 정리하면: <img src="https://latex.codecogs.com/png.latex?x%20=%2035%20-%200.5s_2%20-%200.5y"> 이 <img src="https://latex.codecogs.com/png.latex?x"> 값을 <img src="https://latex.codecogs.com/png.latex?z">와 <img src="https://latex.codecogs.com/png.latex?s_1"> 식에 대입하여 정리합니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0Az%20&amp;=%20175%20-%202.5s_2%20+%201.5y%20%5C%5C%0As_1%20&amp;=%2080%20+%20s_2%20-%202y%0A%5Cend%7Baligned%7D%0A"> 이제 새로운 해는 <img src="https://latex.codecogs.com/png.latex?(x,y)=(35,0)">, <img src="https://latex.codecogs.com/png.latex?(s_1,s_2)=(80,0)">이며, <img src="https://latex.codecogs.com/png.latex?z=175">로 개선되었습니다.</p>
+</section>
+<section id="step-4-step-3의-반복" class="level2">
+<h2 class="anchored" data-anchor-id="step-4-step-3의-반복">Step 4: Step 3의 반복</h2>
+<p>여전히 목적 함수 식 <img src="https://latex.codecogs.com/png.latex?z%20=%20175%20-%202.5s_2%20+%201.5y">에서 <img src="https://latex.codecogs.com/png.latex?y">의 계수가 1.5로 양수입니다. 따라서 <img src="https://latex.codecogs.com/png.latex?y">를 증가시키면 <img src="https://latex.codecogs.com/png.latex?z">를 더 키울 수 있습니다. <img src="https://latex.codecogs.com/png.latex?s_2=0">을 유지한 채 <img src="https://latex.codecogs.com/png.latex?y">를 증가시킵니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0As_1%20&amp;=%2080%20-%202y%20%5Cge%200%20%5Cimplies%20y%20%5Cle%2040%20%5C%5C%0Ax%20&amp;=%2035%20-%200.5y%20%5Cge%200%20%5Cimplies%20y%20%5Cle%2070%0A%5Cend%7Baligned%7D%0A"> 최대로 증가시킬 수 있는 <img src="https://latex.codecogs.com/png.latex?y">의 한계는 40입니다. 이때 <img src="https://latex.codecogs.com/png.latex?s_1=0">, <img src="https://latex.codecogs.com/png.latex?x=15">가 되며 <img src="https://latex.codecogs.com/png.latex?s_1">이 퇴출 변수가 됩니다. 다시 수식을 정리하면: <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0Ay%20&amp;=%2040%20-%200.5s_1%20+%200.5s_2%20%5C%5C%0Ax%20&amp;=%2015%20-%200.75s_2%20+%200.25s_1%20%5C%5C%0Az%20&amp;=%20235%20-%201.75s_2%20-%200.75s_1%0A%5Cend%7Baligned%7D%0A"> 새로운 해는 <img src="https://latex.codecogs.com/png.latex?(x,y)=(15,40)">, <img src="https://latex.codecogs.com/png.latex?(s_1,s_2)=(0,0)">이며, 목적값은 <img src="https://latex.codecogs.com/png.latex?z=235">로 더욱 개선되었습니다.</p>
+</section>
+<section id="step-5-최적해-도출-optimality-condition" class="level2">
+<h2 class="anchored" data-anchor-id="step-5-최적해-도출-optimality-condition">Step 5: 최적해 도출 (Optimality Condition)</h2>
+<p>최종 도출된 목적 함수 식은 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?z%20=%20235%20-%201.75s_2%20-%200.75s_1"> 현재 비기본 변수는 <img src="https://latex.codecogs.com/png.latex?s_1">과 <img src="https://latex.codecogs.com/png.latex?s_2">이며, 두 변수의 계수가 모두 음수(-0.75, -1.75)입니다. 즉, <img src="https://latex.codecogs.com/png.latex?s_1">이나 <img src="https://latex.codecogs.com/png.latex?s_2">의 값을 0보다 크게 증가시키면 오히려 <img src="https://latex.codecogs.com/png.latex?z"> 값이 감소(악화)하게 됩니다. 이는 현재의 상태에서 목적 함수를 더 이상 개선할 수 없음을 의미하며, 이 해가 바로 <strong>전역 최적해(Optimal solution)</strong>임을 증명합니다!</p>
+<hr>
+</section>
+</section>
+<section id="심플렉스-알고리즘의-기하학적-의미" class="level1">
+<h1>4. 심플렉스 알고리즘의 기하학적 의미</h1>
+<p>위 과정에서 확인했듯, 심플렉스 알고리즘은 대수적으로 사전을 교체하는 작업이지만, 기하학적으로는 가능 영역(Feasible Region, Polyhedron)의 꼭짓점(vertex)을 탐색하며 최적값으로 이동하는 과정과 완벽히 일치합니다. 예제 문제를 통해 3개의 해(꼭짓점)를 지나는 궤적을 시각적으로 확인할 수 있습니다.</p>
+<p><strong>1. 첫 번째 꼭짓점: 원점 (0,0)</strong></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Optimization/4.Simplex-Method-for-Linear-Programming/images/simplex_geom_step1.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 2차원 평면 위의 X, Y 축. 두 제약조건 2x+3y=150 (빨간선)과 2x+y=70 (파란선)이 그려져 있으며, 심플렉스 알고리즘의 초기 해인 꼭짓점 (0,0) 위치에 사각형 포커스가 맞춰져 있습니다. 현재 점은 어느 제약조건 선상에도 위치하지 않아 여유변수 s1, s2가 모두 양수 상태입니다.</figcaption>
+</figure>
+</div>
+<p>초기 해 <img src="https://latex.codecogs.com/png.latex?(x,y)=(0,0)">에서는 <img src="https://latex.codecogs.com/png.latex?s_1,%20s_2">가 모두 양수이므로 두 부등식 제약조건의 경계면에 도달하지 않은 상태(<img src="https://latex.codecogs.com/png.latex?2x+3y%20%3C%20150">, <img src="https://latex.codecogs.com/png.latex?2x+y%20%3C%2070">)이며, 제약조건 <img src="https://latex.codecogs.com/png.latex?x%20%5Cge%200,%20y%20%5Cge%200">의 등식 조건을 만족하여 선 <img src="https://latex.codecogs.com/png.latex?x=0">과 <img src="https://latex.codecogs.com/png.latex?y=0">의 교점에 위치합니다.</p>
+<p><strong>2. 두 번째 꼭짓점: 이동 (35,0)</strong></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Optimization/4.Simplex-Method-for-Linear-Programming/images/simplex_geom_step2.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: X축을 따라 x가 35가 될 때까지 오른쪽으로 이동한 모습. (35,0) 위치에 사각형 포커스가 있으며, 이 위치는 제약조건 2x+y=70 선(파란선)과 X축이 교차하는 꼭짓점입니다.</figcaption>
+</figure>
+</div>
+<p><img src="https://latex.codecogs.com/png.latex?y=0">을 유지하며 <img src="https://latex.codecogs.com/png.latex?x">를 최대한 늘리는 과정은 그래프에서 X축을 따라 우측으로 이동하는 것과 같습니다. 이동 중 제약조건 <img src="https://latex.codecogs.com/png.latex?2x+y%20%5Cle%2070">의 경계선과 맞닿는 점 <img src="https://latex.codecogs.com/png.latex?(35,0)">에 도달하며, 이때 여유 변수 <img src="https://latex.codecogs.com/png.latex?s_2=0">이 됩니다.</p>
+<p><strong>3. 세 번째 꼭짓점: 최적해 도달 (15,40)</strong></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Optimization/4.Simplex-Method-for-Linear-Programming/images/simplex_geom_step3.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 제약조건 선을 따라 위로 이동하여, 두 제약조건 선(빨간선과 파란선)이 교차하는 점 (15,40)에 위치한 모습. 목적 함수가 최대화되는 최적해 위치를 보여줍니다.</figcaption>
+</figure>
+</div>
+<p>다음으로 <img src="https://latex.codecogs.com/png.latex?s_2=0">(파란 선 위에 위치함)을 유지하면서 <img src="https://latex.codecogs.com/png.latex?y">를 증가시키면, 다른 제약조건인 <img src="https://latex.codecogs.com/png.latex?2x+3y=150">의 경계선(빨간 선)에 닿을 때까지 이동하게 됩니다. 두 선의 교차점 <img src="https://latex.codecogs.com/png.latex?(15,40)">이 바로 최적해가 되며 여기서 여유 변수 <img src="https://latex.codecogs.com/png.latex?s_1,%20s_2">는 모두 0이 됩니다.</p>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Optimization</category>
+  <guid>https://shsha0110.github.io/posts/Optimization/4.Simplex-Method-for-Linear-Programming/</guid>
+  <pubDate>Sun, 15 Mar 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
   <title>[Data Mining] 4. Frequent Itemsets (Part 1)</title>
   <dc:creator>유성현 </dc:creator>
   <link>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.1/</link>
@@ -3955,183 +4071,6 @@ font-style: inherit;">+</span> b)</span></code></pre></div></div>
   <category>Data Mining</category>
   <guid>https://shsha0110.github.io/posts/Data Mining/3.Spark/3.3/</guid>
   <pubDate>Mon, 09 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Deep Learning] 2. Loss Function and Backpropagation (Part 1)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.1/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>1. Introduction</h1>
-<ul>
-<li><p>본 포스트는 서울대학교 “Basics of Deep Learning” 강의(M2177.0043)의 Lecture 2 내용 중 앞부분인 <strong>이미지 분류(Image Classification)</strong>의 기초 개념과 주요 데이터셋에 대해 정리한 것이다.</p></li>
-<li><p>딥러닝, 특히 컴퓨터 비전(Computer Vision) 분야에서 가장 기본이 되는 태스크(Task)는 바로 <strong>분류(Classification)</strong>이다. 본 강의에서는 기계가 이미지를 어떻게 인식하는지, 그리고 인간의 인식 체계와 어떤 차이(Gap)가 있는지 살펴보고, 이를 평가하기 위한 표준 데이터셋들의 발전 과정을 다룬다.</p></li>
-</ul>
-</section>
-<section id="image-classification-problem" class="level1">
-<h1>2. Image Classification Problem</h1>
-<section id="문제-정의-problem-definition" class="level2">
-<h2 class="anchored" data-anchor-id="문제-정의-problem-definition">2.1. 문제 정의 (Problem Definition)</h2>
-<ul>
-<li>이미지 분류란 입력된 이미지에 대해 미리 정의된 이산적인(discrete) 라벨 집합에서 하나의 정답 라벨을 할당하는 작업을 말한다.</li>
-<li>이를 수식적으로 표현하면 다음과 같다.</li>
-<li>입력 이미지 <img src="https://latex.codecogs.com/png.latex?X">가 주어졌을 때, 분류 모델 <img src="https://latex.codecogs.com/png.latex?f">는 정의된 라벨 집합 <img src="https://latex.codecogs.com/png.latex?Y%20=%20%5C%7By_1,%20y_2,%20%5Cdots,%20y_K%5C%7D"> 중 하나를 출력해야 한다.</li>
-<li>예를 들어, 아래의 고양이 사진을 입력받았을 때, 컴퓨터는 이를 ’cat’이라는 라벨로 분류해내야 한다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.1/images/cat_classification_example.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: 이미지 분류의 예시. 사람에게는 명확한 ‘고양이’ 사진이지만, 컴퓨터는 이를 픽셀 값들의 집합으로 받아들인다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="컴퓨터가-보는-세상-what-the-computer-sees" class="level2">
-<h2 class="anchored" data-anchor-id="컴퓨터가-보는-세상-what-the-computer-sees">2.2. 컴퓨터가 보는 세상 (What the computer sees)</h2>
-<ul>
-<li><p>사람은 직관적으로 이미지를 객체(Object) 단위로 인식하지만, 컴퓨터에게 이미지는 거대한 <strong>숫자들의 그리드(Grid of numbers)</strong>일 뿐이다.</p></li>
-<li><p>디지털 이미지는 일반적으로 다음과 같은 3차원 텐서(Tensor)로 표현된다. <img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7BImage%7D%20%5Cin%20%5Cmathbb%7BR%7D%5E%7BH%20%5Ctimes%20W%20%5Ctimes%20C%7D%0A"></p>
-<ul>
-<li>여기서 각 차원은 다음을 의미한다.
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?H">: 높이(Height)</li>
-<li><img src="https://latex.codecogs.com/png.latex?W">: 너비(Width)</li>
-<li><img src="https://latex.codecogs.com/png.latex?C">: 채널(Channel, RGB의 경우 3)</li>
-</ul></li>
-</ul></li>
-<li><p>각 픽셀(Pixel)은 정수 값을 가지며, 보통 8-bit 이미지의 경우 <img src="https://latex.codecogs.com/png.latex?%5B0,%20255%5D"> 사이의 값을 가진다. <img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7BPixel%20Value%7D%20%5Cin%20%5C%7B0,%201,%20%5Cdots,%20255%5C%7D%0A"></p></li>
-<li><p>예를 들어, <img src="https://latex.codecogs.com/png.latex?800%20%5Ctimes%20600"> 해상도의 컬러 이미지는 컴퓨터 내부에서 다음과 같은 크기의 배열로 처리된다. <img src="https://latex.codecogs.com/png.latex?%0A800%20%5Ctimes%20600%20%5Ctimes%203%20=%201,440,000%20%5Ctext%7B%20numbers%7D%0A"></p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.1/images/pixel_grid_representation.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: 컴퓨터 시각에서의 이미지 처리. 고양이 사진의 특정 영역(박스)을 확대하면, 컴퓨터는 이를 의미론적 정보가 아닌 [0, 255] 범위의 3채널(RGB) 정수 행렬로 인식함을 보여준다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="semantic-gap-및-도전-과제" class="level2">
-<h2 class="anchored" data-anchor-id="semantic-gap-및-도전-과제">2.3. Semantic Gap 및 도전 과제</h2>
-<ul>
-<li><p>이미지 분류가 어려운 핵심적인 이유는 <strong>Semantic Gap</strong> 때문이다.</p></li>
-<li><p><strong>Semantic Gap</strong>: 픽셀 값들의 변화와 인간이 인지하는 의미(Semantic meaning) 사이의 괴리.</p></li>
-<li><p>고양이 사진의 픽셀 값을 조금만 바꾸거나, 카메라 각도를 살짝만 틀어도 픽셀 데이터의 분포는 완전히 달라진다. 하지만 인간은 여전히 이를 ’고양이’로 인식한다.</p></li>
-<li><p>컴퓨터 비전 알고리즘은 이러한 격차를 극복하고 다음과 같은 다양한 변형(Variation)에 강건(Robust)해야 한다.</p>
-<ul>
-<li><strong>Viewpoint variation</strong>: 카메라의 시점에 따라 객체가 다르게 보임</li>
-<li><strong>Illumination</strong>: 조명 조건에 따른 픽셀 값 변화</li>
-<li><strong>Deformation</strong>: 객체의 형태 변형 (예: 앉아있는 고양이 vs 누워있는 고양이)</li>
-<li><strong>Occlusion</strong>: 객체의 일부가 가려짐</li>
-<li><strong>Background clutter</strong>: 배경과 객체의 색상이나 패턴이 유사하여 구분이 어려움</li>
-<li><strong>Intraclass variation</strong>: 같은 클래스(예: 의자) 내에서도 다양한 생김새가 존재</li>
-</ul></li>
-</ul>
-</section>
-</section>
-<section id="standard-datasets-benchmarks" class="level1">
-<h1>3. Standard Datasets (Benchmarks)</h1>
-<ul>
-<li>머신러닝 알고리즘의 성능을 객관적으로 비교 평가하기 위해서는 표준화된 데이터셋이 필수적이다. 딥러닝의 발전사는 데이터셋의 발전사와 궤를 같이한다.</li>
-</ul>
-<section id="mnist" class="level2">
-<h2 class="anchored" data-anchor-id="mnist">3.1. MNIST</h2>
-<ul>
-<li>가장 고전적인 데이터셋으로, 손글씨 숫자 분류를 위해 사용된다.
-<ul>
-<li><strong>Content</strong>: 0부터 9까지의 필기체 숫자 (10 Classes)</li>
-<li><strong>Dimension</strong>: <img src="https://latex.codecogs.com/png.latex?28%20%5Ctimes%2028"> Grayscale (흑백)</li>
-<li><strong>Size</strong>: Training 50,000장 / Test 10,000장</li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.1/images/mnist_grid.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: MNIST 데이터셋 예시. 0부터 9까지의 흑백 손글씨 이미지가 그리드 형태로 나열되어 있다. 딥러닝의 ’Hello World’에 해당하는 데이터셋이다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="cifar-10" class="level2">
-<h2 class="anchored" data-anchor-id="cifar-10">3.2. CIFAR-10</h2>
-<ul>
-<li>작은 크기의 컬러 이미지 데이터셋으로, 일반적인 객체 인식을 위해 널리 사용된다.
-<ul>
-<li><strong>Content</strong>: 비행기, 자동차, 새, 고양이, 사슴, 개, 개구리, 말, 배, 트럭 (10 Classes)</li>
-<li><strong>Dimension</strong>: <img src="https://latex.codecogs.com/png.latex?32%20%5Ctimes%2032%20%5Ctimes%203"> Color (RGB)</li>
-<li><strong>Size</strong>: Training 50,000장 / Test 10,000장</li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.1/images/cifar10_samples.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 4: CIFAR-10 데이터셋의 10개 클래스별 샘플 이미지. 각 행은 비행기, 자동차, 새 등의 클래스를 나타내며, 32x32 픽셀의 낮은 해상도임에도 불구하고 객체의 특징이 드러난다.</figcaption>
-</figure>
-</div>
-<section id="cifar-10에서의-성능-발전" class="level3">
-<h3 class="anchored" data-anchor-id="cifar-10에서의-성능-발전">CIFAR-10에서의 성능 발전</h3>
-<ul>
-<li>CIFAR-10 데이터셋에 대한 분류 정확도는 딥러닝 모델의 발전과 함께 급격히 상승했다.
-<ul>
-<li>2013~2015년: Maxout Network, Fractional MP 등의 모델들이 등장하며 정확도 90% 돌파</li>
-<li>2017년 이후: DenseNet, GPIPE 등을 거치며 인간의 인식 능력을 상회</li>
-<li>최신(ViT-H/14 등): 99% 이상의 정확도에 도달하며 사실상 포화 상태(Saturated)에 이름</li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.1/images/cifar10_accuracy_trend.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 5: CIFAR-10 데이터셋에 대한 Top-1 테스트 정확도 추이 (2013-2021). 초기 90% 수준에서 시작하여 ViT-H/14 모델에 이르러 거의 100%에 근접하는 우상향 곡선을 보여준다.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="imagenet-ilsvrc" class="level2">
-<h2 class="anchored" data-anchor-id="imagenet-ilsvrc">3.3. ImageNet (ILSVRC)</h2>
-<ul>
-<li>현대 딥러닝, 특히 Convolutional Neural Network(CNN)의 붐을 일으킨 대규모 데이터셋이다.
-<ul>
-<li><strong>Content</strong>: 매우 다양한 실제 사물 및 동물 사진</li>
-<li><strong>Classes</strong>: 1,000개 (WordNet 계층 구조 기반)</li>
-<li><strong>Size</strong>: Training ~1.2 Million장 / Test 100,000장</li>
-<li><strong>Resolution</strong>: 고해상도 (모델 입력 시 보통 <img src="https://latex.codecogs.com/png.latex?224%20%5Ctimes%20224"> 등으로 리사이징하여 사용)</li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.1/images/imagenet_collage.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 6: ImageNet 데이터셋 샘플. 수많은 종류의 객체가 포함된 대규모 사진 집합으로, 딥러닝 모델의 일반화 성능을 평가하는 척도로 사용된다.</figcaption>
-</figure>
-</div>
-<section id="imagenet-challenge의-의미" class="level3">
-<h3 class="anchored" data-anchor-id="imagenet-challenge의-의미">ImageNet Challenge의 의미</h3>
-<ul>
-<li>ImageNet Large Scale Visual Recognition Challenge (ILSVRC)의 Top-5 Error Rate(상위 5개 예측 중 정답이 없을 확률) 변화는 딥러닝 역사의 이정표와 같다.
-<ul>
-<li><strong>Human Performance</strong>: 훈련된 인간 전문가의 오차율은 약 <strong>5.1%</strong>로 알려져 있다.</li>
-<li><strong>AlexNet (2012)</strong>: 딥러닝 기반 모델의 가능성을 증명하며 오차율을 획기적으로 낮춤.</li>
-<li><strong>ResNet (2015)</strong>: 인간의 성능(5.1%)을 처음으로 넘어섬 (Super-human performance).</li>
-<li><strong>Current SOTA</strong>: Top-5 Accuracy가 99% 이상(Error &lt; 1%)에 도달함 (Florence, CoSwin 등).</li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.1/images/imagenet_accuracy_trend.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 7: ImageNet Top-5 정확도 발전 추이 (2011-2022). 2012년 AlexNet의 등장으로 급격한 성능 향상이 시작되었으며, 2015년 이후 인간의 인지 능력을 넘어선 후에도 계속해서 최고 성능을 갱신하고 있음을 보여준다.</figcaption>
-</figure>
-</div>
-
-
-
-</section>
-</section>
-</section>
-
- ]]></description>
-  <category>Deep Learning</category>
-  <guid>https://shsha0110.github.io/posts/Deep Learning/2.Loss-Function-and-Backpropagation/2.1/</guid>
-  <pubDate>Sun, 08 Mar 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>
 </rss>

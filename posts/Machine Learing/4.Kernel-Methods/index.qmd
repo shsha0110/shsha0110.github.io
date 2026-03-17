@@ -20,7 +20,7 @@ format:
 
 # 2. Core Concepts: 특징 사상(Feature Maps)
 
-비선형 문제를 해결하기 위한 직관적인 방법은 원래의 입력 데이터를 더 높은 차원의 공간으로 변환하는 것입니다. 우리는 이를 '다른 특징 변수들의 집합에 대한 선형 함수'로 간주하여 문제를 풀 수 있습니다.
+비선형 문제를 해결하기 위한 직관적인 방법은 원래의 입력 데이터를 더 높은 차원의 공간으로 변환하는 것입니다. 우리는 이를 "다른 특징 변수들의 집합에 대한 선형 함수"로 간주하여 문제를 풀 수 있습니다.
 
 이를 수학적으로 정의하기 위해 매핑 함수 $\phi$를 도입합니다. 1차원 실수 공간 $\mathbb{R}$에서 4차원 실수 공간 $\mathbb{R}^4$로 변환하는 함수를 다음과 같이 정의해 봅시다:
 
@@ -39,13 +39,43 @@ $$
 # 3. Mathematical Formulation: 고차원 매핑의 한계
 
 ## 3.1. 최소 평균 제곱(LMS)과 특징 사상의 결합
-특징 사상을 실제 학습 알고리즘에 어떻게 적용할 수 있을까요? 기본 형태인 최소 제곱치 배치 경사 하강법(Least-Square Batch Gradient Descent)의 업데이트 규칙을 살펴봅시다. 원래 공간에서의 파라미터 업데이트 식은 다음과 같습니다:
 
+특징 사상을 실제 학습 알고리즘에 어떻게 적용할 수 있을까요? 기본 형태인 최소 제곱치 배치 경사 하강법(Least-Square Batch Gradient Descent)의 업데이트 규칙을 살펴보며 그 수학적 배경을 짚어보겠습니다. 
+
+* 원래 공간에서의 파라미터 업데이트 식은 다음과 같습니다:
 $$
 \theta = \theta + \alpha \sum_{i=1}^{n} (y^{(i)} - \theta^\top x^{(i)})x^{(i)}
 $$
+  * $n$은 학습 데이터의 개수를 의미합니다. 
+  * $x^{(i)}$는 $i$번째 데이터를 의미합니다. 
 
-여기서 $n$은 학습 데이터의 개수를 의미합니다. 이제 특징 사상 $\phi: \mathbb{R}^d \rightarrow \mathbb{R}^p$를 도입하여 파라미터 벡터를 $\theta \in \mathbb{R}^p$로 확장하면, 업데이트 식은 자연스럽게 다음과 같이 변형됩니다:
+### **[원래 공간($x$)에서의 유도 과정]**
+
+1. **비용 함수(Cost Function) 정의**: 
+   선형 회귀에서 예측 함수는 $h_\theta(x^{(i)}) = \theta^\top x^{(i)}$입니다. 전체 $n$개의 데이터에 대한 오차 제곱합을 비용 함수 $J(\theta)$로 정의합니다. 미분의 편의를 위해 앞에 상수를 곱해줍니다.
+   $$
+   J(\theta) = \frac{1}{2} \sum_{i=1}^{n} \left( \theta^\top x^{(i)} - y^{(i)} \right)^2
+   $$
+
+2. **그래디언트(Gradient) 계산**: 
+   비용 함수를 최소화하기 위해 $J(\theta)$를 $\theta$에 대해 편미분합니다. 연쇄 법칙(Chain Rule)에 의해 다음과 같이 정리됩니다.
+   $$
+   \nabla_\theta J(\theta) = \sum_{i=1}^{n} \left( \theta^\top x^{(i)} - y^{(i)} \right) x^{(i)}
+   $$
+
+3. **경사 하강법(Gradient Descent) 업데이트**: 
+   기울기의 반대 방향으로 학습률(Learning rate) $\alpha$만큼 이동하여 파라미터를 업데이트합니다. 식을 전개하고 부호를 정리하면 위에서 제시한 기본 업데이트 식이 완성됩니다.
+   $$
+   \theta = \theta - \alpha \nabla_\theta J(\theta) = \theta + \alpha \sum_{i=1}^{n} \left( y^{(i)} - \theta^\top x^{(i)} \right) x^{(i)}
+   $$
+
+### **[특징 공간($\phi(x)$)으로의 확장]**
+
+이제 원래의 데이터 $x$ 대신, 특징 사상 $\phi: \mathbb{R}^d \rightarrow \mathbb{R}^p$를 도입하여 파라미터 벡터를 $\theta \in \mathbb{R}^p$로 확장해 봅시다. 
+
+구조적으로 예측 함수에 들어가는 입력값만 $x^{(i)}$에서 $\phi(x^{(i)})$로 바뀌었을 뿐, 선형 결합이라는 본질은 완전히 동일합니다. 따라서 비용 함수를 미분할 때 연쇄 법칙의 속미분 결과로 $x^{(i)}$ 대신 $\phi(x^{(i)})$가 도출됩니다.
+
+결과적으로 기존 알고리즘의 구조를 전혀 바꾸지 않고, 데이터가 들어가는 자리에 $x$ 대신 $\phi(x)$를 치환함으로써 업데이트 식은 자연스럽게 다음과 같이 변형됩니다:
 
 $$
 \theta = \theta + \alpha \sum_{i=1}^{n} (y^{(i)} - \theta^\top \phi(x^{(i)}))\phi(x^{(i)})
@@ -94,6 +124,9 @@ $$
 = \sum_{i=1}^{n} \left( \beta_i + \alpha (y^{(i)} - \theta^\top \phi(x^{(i)})) \right) \phi(x^{(i)})
 $$
 괄호 안의 값이 새로운 계수 $\beta_i^{new}$가 됩니다. 즉, 업데이트 이후의 $\theta$ 역시 여전히 $\phi(x^{(1)}), \dots, \phi(x^{(n)})$의 선형 결합 형태를 유지함을 알 수 있습니다.
+$$
+= \sum_{i=1}^{n} \beta_i^{new} \phi(x^{(i)})
+$$
 
 ## 4.2. 커널(Kernel)의 정의와 업데이트 규칙의 재구성
 보조정리가 참이므로, 우리는 이제 고차원 벡터 $\theta$를 직접 업데이트하는 대신, $n$개의 스칼라 계수 $\beta_1, \dots, \beta_n$만을 업데이트하는 문제로 변환할 수 있습니다.
@@ -155,7 +188,7 @@ K(x, z) = \sum_{i,j=1}^{d} (x_i x_j)(z_i z_j) + \sum_{i=1}^{d} (\sqrt{2c} x_i)(\
 $$
 여기에 대응하는 $\phi(x)$ 벡터는 기존 2차항들에 $\sqrt{2c}x_1, \sqrt{2c}x_2, \sqrt{2c}x_3$ 와 상수 $c$가 추가된 형태가 됩니다 .
 
-# 6. Properties of Kernels (Mercer's Theorem)
+# 6. Properties of Kernels (Mercer"s Theorem)
 
 그렇다면 우리가 임의로 만든 함수 $K(x, z)$가 유효한 커널(어떤 특징 사상 $\phi$에 대응되는 커널)인지 어떻게 확인할 수 있을까요?  특징 사상을 해석적으로 접근하지 않고 커널 함수만 단독으로 사용하기 위해서는 특정 수학적 조건을 만족해야 합니다.
 
@@ -163,31 +196,40 @@ $$
 
 여기서 필요조건(Necessary condition) 측면을 수학적으로 증명해 보겠습니다. $K$가 어떤 $\phi$에 대응하는 유효한 커널이라고 가정하고 , 유한한 $n$개의 데이터 포인트로 구성된 정방 행렬 $K \in \mathbb{R}^{n \times n}$ (이때 $(i, j)$ 성분은 $K_{ij} = K(x^{(i)}, x^{(j)})$)을 정의합시다.
 
-**1. 대칭성 (Symmetry) 증명** 
+## **1. 대칭성 (Symmetry) 증명** 
 내적의 교환 법칙에 의해 커널 행렬은 대칭성을 가집니다.
+
 $$
-K_{ij} = K(x^{(i)}, x^{(j)}) = \phi(x^{(i)})^\top \phi(x^{(j)}) = \phi(x^{(j)})^\top \phi(x^{(i)}) = K(x^{(j)}, x^{(i)}) = K_{ji} \quad \text{}
+\begin{aligned}
+  K_{ij} = K(x^{(i)}, x^{(j)}) &= \phi(x^{(i)})^\top \phi(x^{(j)}) \\
+  &= \phi(x^{(j)})^\top \phi(x^{(i)}) \\
+  &= K(x^{(j)}, x^{(i)}) = K_{ji} \quad \text{}
+\end{aligned}
 $$
 
-**2. 양의 준정부호 (Positive Semidefinite) 증명** 
+## **2. 양의 준정부호 (Positive Semidefinite) 증명** 
 임의의 열 벡터 $z$에 대하여 이차 형식(Quadratic form) $z^\top K z \ge 0$이 성립해야 합니다.
 $$
 z^\top K z = \sum_{i} \sum_{j} z_i K_{ij} z_j = \sum_{i} \sum_{j} z_i \phi(x^{(i)})^\top \phi(x^{(j)}) z_j \quad \text{}
 $$
+
 이를 전개하여 원소별로 다시 묶어보겠습니다. $\phi_k$를 벡터 $\phi$의 $k$번째 성분이라고 하면:
+
 $$
-= \sum_{i} \sum_{j} z_i \sum_{k} \phi_k(x^{(i)}) \phi_k(x^{(j)}) z_j = \sum_{k} \sum_{i} \sum_{j} z_i \phi_k(x^{(i)}) \phi_k(x^{(j)}) z_j
+\begin{aligned}
+&= \sum_{i} \sum_{j} z_i \sum_{k} \phi_k(x^{(i)}) \phi_k(x^{(j)}) z_j \\
+&= \sum_{k} \sum_{i} \sum_{j} z_i \phi_k(x^{(i)}) \phi_k(x^{(j)}) z_j \\
+&= \sum_{k} \left( \sum_{i} z_i \phi_k(x^{(i)}) \right)^2 \ge 0 \quad \text{}
+\end{aligned}
 $$
-$$
-= \sum_{k} \left( \sum_{i} z_i \phi_k(x^{(i)}) \right)^2 \ge 0 \quad \text{}
-$$
+
 어떤 실수의 제곱의 합은 항상 0보다 크거나 같으므로, 증명이 완료됩니다.
 
 # 7. Interpretation and Intuition: 유사도 지표로서의 커널
 
-커널 함수 $K(x, z) = \phi(x)^\top \phi(z)$의 기하학적 의미는 본질적으로 '내적'입니다. 
-* 특징 공간에서 두 벡터 $\phi(x)$와 $\phi(z)$가 **가까울수록**, 내적(커널) 값은 **커집니다**.
-* 반대로 $\phi(x)$와 $\phi(z)$가 **멀리 떨어져 있거나(거의 직교할 경우)**, 내적 값은 **작아집니다**.
+* 커널 함수 $K(x, z) = \phi(x)^\top \phi(z)$의 기하학적 의미는 본질적으로 "내적"입니다. 
+  * 특징 공간에서 두 벡터 $\phi(x)$와 $\phi(z)$가 **가까울수록**, 내적(커널) 값은 **커집니다**.
+  * 반대로 $\phi(x)$와 $\phi(z)$가 **멀리 떨어져 있거나(거의 직교할 경우)**, 내적 값은 **작아집니다**.
 
 따라서 커널 함수 $K(x, z)$는 두 데이터 $x$와 $z$가 **얼마나 유사한지를 나타내는 직관적인 측정 지표(Similarity measure)**로 해석될 수 있습니다. 
 

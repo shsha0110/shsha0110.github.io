@@ -1436,7 +1436,13 @@ window.Quarto = {
   <li><a href="#mixture-of-experts-moe" id="toc-mixture-of-experts-moe" class="nav-link" data-scroll-target="#mixture-of-experts-moe">4.4 Mixture of Experts (MoE)</a></li>
   </ul></li>
   <li><a href="#gpt-3와-autoregressive-language-modeling" id="toc-gpt-3와-autoregressive-language-modeling" class="nav-link" data-scroll-target="#gpt-3와-autoregressive-language-modeling">5. GPT-3와 Autoregressive Language Modeling</a></li>
-  <li><a href="#text-generation-decoding-strategies" id="toc-text-generation-decoding-strategies" class="nav-link" data-scroll-target="#text-generation-decoding-strategies">6. Text Generation (Decoding) Strategies</a></li>
+  <li><a href="#text-generation-decoding-strategies" id="toc-text-generation-decoding-strategies" class="nav-link" data-scroll-target="#text-generation-decoding-strategies">6. Text Generation (Decoding) Strategies</a>
+  <ul class="collapse">
+  <li><a href="#greedy-search" id="toc-greedy-search" class="nav-link" data-scroll-target="#greedy-search">6.1 Greedy Search</a></li>
+  <li><a href="#beam-search" id="toc-beam-search" class="nav-link" data-scroll-target="#beam-search">6.2 Beam Search</a></li>
+  <li><a href="#top-k-sampling" id="toc-top-k-sampling" class="nav-link" data-scroll-target="#top-k-sampling">6.3 Top-K Sampling</a></li>
+  <li><a href="#nucleus-sampling-top-p" id="toc-nucleus-sampling-top-p" class="nav-link" data-scroll-target="#nucleus-sampling-top-p">6.4 Nucleus Sampling (Top-p)</a></li>
+  </ul></li>
   <li><a href="#rlhf-reinforcement-learning-from-human-feedback" id="toc-rlhf-reinforcement-learning-from-human-feedback" class="nav-link" data-scroll-target="#rlhf-reinforcement-learning-from-human-feedback">7. RLHF: Reinforcement Learning from Human Feedback</a></li>
   </ul>
 </nav>
@@ -1542,29 +1548,96 @@ window.Quarto = {
 <section id="text-generation-decoding-strategies" class="level1">
 <h1>6. Text Generation (Decoding) Strategies</h1>
 <p>학습된 자기회귀 모델이 실제로 텍스트를 생성(Inference)할 때, 다음 토큰을 선택하는 다양한 디코딩 전략이 존재합니다.</p>
+<section id="greedy-search" class="level3">
+<h3 class="anchored" data-anchor-id="greedy-search">6.1 Greedy Search</h3>
+<p>매 스텝마다 가장 확률이 높은 토큰을 선택하는 가장 직관적인 방법입니다.</p>
+<section id="algorithm-greedy-search" class="level4">
+<h4 class="anchored" data-anchor-id="algorithm-greedy-search"><strong>[Algorithm: Greedy Search]</strong></h4>
+<ul>
+<li><p><strong>Input</strong>: 주어진 토큰 시퀀스 <span class="math inline">\([t_1, \dots, t_n]\)</span>, 최대 길이 제한 <span class="math inline">\(L\)</span></p></li>
+<li><p><strong>Initialize</strong>: <span class="math inline">\(ind = n\)</span></p></li>
+<li><p><strong>Repeat</strong></p>
 <ol type="1">
-<li><strong>Greedy Search</strong>: 매 스텝마다 가장 확률이 높은 토큰을 선택합니다. (<span class="math inline">\(t_{ind} = \text{argmax}_{t} p(t | t_1, \dots, t_{ind-1})\)</span>)
-<ul>
-<li><em>단점</em>: 당장 확률이 높은 것만 쫓아가다 보니, 문장 전체로 보았을 때는 최적이 아닌(Suboptimal) 텍스트가 생성될 위험이 큽니다.</li>
-</ul></li>
-<li><strong>Beam Search</strong>: 매 스텝마다 모든 가능한 토큰을 확장한 뒤, 전체 시퀀스의 누적 로그 확률(Log-probability)이 가장 높은 상위 <span class="math inline">\(B\)</span>개의 시퀀스(Beam width)만을 유지합니다.
-<ul>
-<li><em>수식</em>: <span class="math inline">\((s, l) \rightarrow (s+t, l + \log p(t|s))\)</span></li>
-</ul></li>
-<li><strong>Top-K Sampling</strong>: 다음 토큰의 확률 분포에서 가장 확률이 높은 상위 <span class="math inline">\(K\)</span>개의 토큰 집합(<span class="math inline">\(\mathbb{T}_{top-K}\)</span>)을 찾고, 그 안에서 확률에 비례하여 무작위로 샘플링합니다.</li>
-<li><strong>Nucleus Sampling (Top-p)</strong>: 미리 정해둔 임계값(Threshold) <span class="math inline">\(\eta\)</span>를 기준으로, 누적 확률의 합이 <span class="math inline">\(\eta\)</span>를 넘는 최소한의 상위 토큰 집합(<span class="math inline">\(\mathbb{T}_{top-N}\)</span>)을 찾습니다.
-<ul>
-<li><em>조건</em>: <span class="math inline">\(\sum p(t_{ind} \in \mathbb{T}_{top-N} | t_1, \dots) &gt; \eta\)</span></li>
-<li><em>특징</em>: 예측의 확실성에 따라 후보 토큰의 개수 <span class="math inline">\(N\)</span>이 유동적으로 변하여 자연스러운 텍스트 생성을 돕습니다.</li>
-</ul></li>
-</ol>
+<li><strong>Update index</strong>: <span class="math inline">\(ind \leftarrow ind + 1\)</span></li>
+<li><strong>Greedy generation</strong>: <span class="math inline">\(t_{ind} = \text{argmax}_{t \in \mathbb{T}} p(t | t_1, \dots, t_{ind-1})\)</span></li>
+</ol></li>
+<li><p><strong>Until</strong> 문장 종료 토큰(EOS)이 생성되거나 <span class="math inline">\(ind\)</span>가 <span class="math inline">\(L\)</span>에 도달할 때까지 반복</p></li>
+<li><p><strong>Output</strong>: <span class="math inline">\([t_1, \dots, t_{ind}]\)</span></p></li>
+<li><p><em>단점</em>: 당장 확률이 높은 것만 쫓아가다 보니, 문장 전체로 보았을 때는 최적이 아닌(Suboptimal) 텍스트가 생성될 위험이 큽니다.</p></li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/decoding_strategies_tree.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 디코딩 전략 시각화. The - nice - house로 이어지는 생성 경로에서 각각 확률(0.5, 0.4 등)을 바탕으로 탐색을 확장해 나가는 트리를 보여준다.</figcaption>
+<p><img src="./images/greedy_search.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Greedy search 전략 시각화.</figcaption>
 </figure>
 </div>
+</section>
+</section>
+<section id="beam-search" class="level3">
+<h3 class="anchored" data-anchor-id="beam-search">6.2 Beam Search</h3>
+<p>매 스텝마다 모든 가능한 토큰을 확장한 뒤, 전체 시퀀스의 누적 로그 확률(Log-probability)이 가장 높은 상위 <span class="math inline">\(B\)</span>개의 시퀀스(Beam width)만을 유지하는 방법입니다.</p>
+<section id="algorithm-beam-search" class="level4">
+<h4 class="anchored" data-anchor-id="algorithm-beam-search"><strong>[Algorithm: Beam Search]</strong></h4>
+<ul>
+<li><strong>Input</strong>: 접두사 토큰(prefix tokens) <span class="math inline">\([t_1, \dots, t_n]\)</span>, Beam width <span class="math inline">\(B\)</span>, 최대 길이 제한 <span class="math inline">\(L\)</span></li>
+<li><strong>Initialize</strong>: <span class="math inline">\(Beam = \{([t_1, \dots, t_n], 0)\}\)</span> (형태: 시퀀스, 로그 확률)</li>
+<li><strong>Repeat</strong>
+<ol type="1">
+<li>Beam 내의 각 시퀀스 <span class="math inline">\(s\)</span>에 대해 모든 토큰 <span class="math inline">\(t \in \mathbb{T}\)</span>의 조건부 확률 <span class="math inline">\(p(t|s)\)</span>를 계산합니다.</li>
+<li>모든 후보를 확장(Expand)합니다: <span class="math inline">\((s, l) \rightarrow (s+t, l + \log p(t|s))\)</span></li>
+<li>확장된 모든 시퀀스를 풀(pool)에 수집합니다.</li>
+<li>누적 로그 확률이 가장 높은 상위 <span class="math inline">\(B\)</span>개의 시퀀스만 유지합니다.</li>
+</ol></li>
+<li><strong>Stop</strong> 모든 시퀀스가 EOS로 끝나거나 길이 <span class="math inline">\(L\)</span>에 도달하면 종료합니다.</li>
+<li><strong>Output</strong>: 가장 확률이 높은 시퀀스를 반환합니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/beam_search.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Beam search 전략 시각화.</figcaption>
+</figure>
+</div>
+</section>
+</section>
+<section id="top-k-sampling" class="level3">
+<h3 class="anchored" data-anchor-id="top-k-sampling">6.3 Top-K Sampling</h3>
+<p>다음 토큰의 확률 분포에서 가장 확률이 높은 상위 <span class="math inline">\(K\)</span>개의 토큰 집합을 찾고, 그 안에서 확률에 비례하여 무작위로 샘플링합니다.</p>
+<section id="algorithm-top-k-sampling" class="level4">
+<h4 class="anchored" data-anchor-id="algorithm-top-k-sampling"><strong>[Algorithm: Top-K Sampling]</strong></h4>
+<ul>
+<li><strong>Input</strong>: 정수 <span class="math inline">\(K\)</span>, 주어진 토큰 시퀀스 <span class="math inline">\([t_1, \dots, t_n]\)</span>, 최대 길이 제한 <span class="math inline">\(L\)</span></li>
+<li><strong>Initialize</strong>: <span class="math inline">\(ind = n\)</span></li>
+<li><strong>Repeat</strong>
+<ol type="1">
+<li><strong>Update index</strong>: <span class="math inline">\(ind \leftarrow ind + 1\)</span></li>
+<li><strong>Find top-K tokens</strong>: <span class="math inline">\(t_{ind}\)</span>에 대해 가장 확률이 높은 상위 <span class="math inline">\(K\)</span>개의 토큰 집합 <span class="math inline">\(\mathbb{T}_{top-K}\)</span>를 찾습니다.</li>
+<li><strong>Sample the next token</strong>: 예측된 확률에 비례하여 <span class="math inline">\(\mathbb{T}_{top-K}\)</span> 안에서 <span class="math inline">\(t_{ind}\)</span>를 샘플링하여 생성합니다.</li>
+</ol></li>
+<li><strong>Until</strong> 문장 종료 토큰(EOS)이 생성되거나 <span class="math inline">\(ind\)</span>가 <span class="math inline">\(L\)</span>에 도달할 때까지 반복</li>
+<li><strong>Output</strong>: <span class="math inline">\([t_1, \dots, t_{ind}]\)</span></li>
+</ul>
+</section>
+</section>
+<section id="nucleus-sampling-top-p" class="level3">
+<h3 class="anchored" data-anchor-id="nucleus-sampling-top-p">6.4 Nucleus Sampling (Top-p)</h3>
+<p>미리 정해둔 임계값(Threshold) <span class="math inline">\(\eta\)</span>를 기준으로, 누적 확률의 합이 <span class="math inline">\(\eta\)</span>를 넘는 최소한의 상위 토큰 집합(<span class="math inline">\(\mathbb{T}_{top-N}\)</span>)을 찾아 샘플링합니다. 예측의 확실성에 따라 후보 토큰의 개수 <span class="math inline">\(N\)</span>이 유동적으로 변하여 더욱 자연스러운 텍스트 생성을 돕습니다.</p>
+<section id="algorithm-nucleus-sampling" class="level4">
+<h4 class="anchored" data-anchor-id="algorithm-nucleus-sampling"><strong>[Algorithm: Nucleus Sampling]</strong></h4>
+<ul>
+<li><strong>Input</strong>: 임계값 <span class="math inline">\(\eta\)</span>, 주어진 토큰 시퀀스 <span class="math inline">\([t_1, \dots, t_n]\)</span>, 최대 길이 제한 <span class="math inline">\(L\)</span></li>
+<li><strong>Initialize</strong>: <span class="math inline">\(ind = n\)</span></li>
+<li><strong>Repeat</strong>
+<ol type="1">
+<li><strong>Update index</strong>: <span class="math inline">\(ind \leftarrow ind + 1\)</span></li>
+<li><strong>Find <span class="math inline">\(N\)</span></strong>: 상위 <span class="math inline">\(N\)</span>개 토큰의 확률 합이 <span class="math inline">\(\eta\)</span>보다 커지는 가장 작은 자연수 <span class="math inline">\(N \in \mathbb{N}\)</span>을 찾습니다. <span class="math display">\[\sum p(t_{ind} \in \mathbb{T}_{top-N} | t_1, \dots, t_{ind-1}) &gt; \eta\]</span></li>
+<li><strong>Sample the next token</strong>: 예측된 확률에 비례하여 <span class="math inline">\(\mathbb{T}_{top-N}\)</span> 안에서 <span class="math inline">\(t_{ind}\)</span>를 샘플링하여 생성합니다.</li>
+</ol></li>
+<li><strong>Until</strong> 문장 종료 토큰(EOS)이 생성되거나 <span class="math inline">\(ind\)</span>가 <span class="math inline">\(L\)</span>에 도달할 때까지 반복</li>
+<li><strong>Output</strong>: <span class="math inline">\([t_1, \dots, t_{ind}]\)</span></li>
+</ul>
 <hr>
+</section>
+</section>
 </section>
 <section id="rlhf-reinforcement-learning-from-human-feedback" class="level1">
 <h1>7. RLHF: Reinforcement Learning from Human Feedback</h1>
@@ -1572,12 +1645,26 @@ window.Quarto = {
 <ol type="1">
 <li><strong>Pretrain a Language Model (LM)</strong>: 대규모 말뭉치로 기본 언어 모델을 사전 학습합니다.</li>
 <li><strong>Train a Reward Model</strong>: 모델이 생성한 여러 응답에 대해 사람이 순위를 매기고(Human Scoring), 이를 바탕으로 주어진 텍스트가 인간의 선호도에 부합하는지 점수 <span class="math inline">\(r_\theta(y|x)\)</span>를 예측하는 보상 모델(Preference Model)을 학습합니다.</li>
+</ol>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/rlhf_training.jpg" class="img-fluid figure-img"></p>
+<figcaption>Figure: 보상 모델(Reward Model) 학습 과정. 프롬프트 데이터셋을 초기 언어 모델(Initial Language Model)에 통과시켜 여러 텍스트를 생성한 뒤, 사람이 직접 응답의 질을 평가하여 순위(Human Scoring)를 매깁니다. 이렇게 구축된 텍스트-보상 점수(sample, reward) 쌍을 바탕으로, 주어진 텍스트의 인간 선호도를 예측하는 보상 모델을 학습하는 흐름을 화살표로 보여줍니다.</figcaption>
+</figure>
+</div>
+<ol start="3" type="1">
 <li><strong>RL Finetuning (e.g., PPO)</strong>: 기본 언어 모델의 텍스트 생성 결과를 보상 모델이 평가하고, 이 보상값을 최대화하는 방향으로 PPO 알고리즘을 사용해 언어 모델(RL Policy)을 강화학습시킵니다.
 <ul>
 <li>이때 모델이 기존 언어 체계를 망각하거나 보상 모델을 속이는 형태로 과적합되는 것을 막기 위해, 원래의 기본 모델 분포(<span class="math inline">\(\pi^{base}\)</span>)와 너무 멀어지지 않도록 하는 <strong>KL 발산 페널티 (KL prediction shift penalty)</strong>를 목적 함수에 추가합니다.</li>
 <li>수식적 업데이트 방향: <span class="math inline">\(\theta \leftarrow \theta + \nabla_\theta J(\theta)\)</span> (여기서 <span class="math inline">\(J\)</span>는 보상 모델의 보상값에서 <span class="math inline">\(\lambda D_{KL}(\pi_\theta^{RL}(y|x) || \pi^{base}(y|x))\)</span>를 차감한 형태를 취합니다.)</li>
 </ul></li>
 </ol>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/rlhf_fine_tuning.jpg" class="img-fluid figure-img"></p>
+<figcaption>Figure: 보상 모델을 활용한 강화학습 파인튜닝(RLHF) 과정. 프롬프트가 주어졌을 때 학습 중인 언어 모델(Tuned Language Model)이 생성한 텍스트를 보상 모델이 평가합니다. 동시에 파라미터가 고정된 초기 언어 모델(Initial Language Model)이 생성한 기준 텍스트(Base Text)와의 차이를 KL 발산(KL prediction shift penalty)으로 계산하여 패널티를 부여합니다. 이 두 값을 합산한 최종 보상을 바탕으로 PPO(Proximal Policy Optimization) 알고리즘을 통해 튜닝 중인 언어 모델의 파라미터를 업데이트하는 순환 구조를 상세히 도식화한 그림입니다.</figcaption>
+</figure>
+</div>
 
 
 

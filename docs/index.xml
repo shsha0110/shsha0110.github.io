@@ -1193,29 +1193,96 @@ font-style: inherit;">/</span> grad_norm)</span></code></pre></div></div>
 <section id="text-generation-decoding-strategies" class="level1">
 <h1>6. Text Generation (Decoding) Strategies</h1>
 <p>학습된 자기회귀 모델이 실제로 텍스트를 생성(Inference)할 때, 다음 토큰을 선택하는 다양한 디코딩 전략이 존재합니다.</p>
+<section id="greedy-search" class="level3">
+<h3 class="anchored" data-anchor-id="greedy-search">6.1 Greedy Search</h3>
+<p>매 스텝마다 가장 확률이 높은 토큰을 선택하는 가장 직관적인 방법입니다.</p>
+<section id="algorithm-greedy-search" class="level4">
+<h4 class="anchored" data-anchor-id="algorithm-greedy-search"><strong>[Algorithm: Greedy Search]</strong></h4>
+<ul>
+<li><p><strong>Input</strong>: 주어진 토큰 시퀀스 <img src="https://latex.codecogs.com/png.latex?%5Bt_1,%20%5Cdots,%20t_n%5D">, 최대 길이 제한 <img src="https://latex.codecogs.com/png.latex?L"></p></li>
+<li><p><strong>Initialize</strong>: <img src="https://latex.codecogs.com/png.latex?ind%20=%20n"></p></li>
+<li><p><strong>Repeat</strong></p>
 <ol type="1">
-<li><strong>Greedy Search</strong>: 매 스텝마다 가장 확률이 높은 토큰을 선택합니다. (<img src="https://latex.codecogs.com/png.latex?t_%7Bind%7D%20=%20%5Ctext%7Bargmax%7D_%7Bt%7D%20p(t%20%7C%20t_1,%20%5Cdots,%20t_%7Bind-1%7D)">)
-<ul>
-<li><em>단점</em>: 당장 확률이 높은 것만 쫓아가다 보니, 문장 전체로 보았을 때는 최적이 아닌(Suboptimal) 텍스트가 생성될 위험이 큽니다.</li>
-</ul></li>
-<li><strong>Beam Search</strong>: 매 스텝마다 모든 가능한 토큰을 확장한 뒤, 전체 시퀀스의 누적 로그 확률(Log-probability)이 가장 높은 상위 <img src="https://latex.codecogs.com/png.latex?B">개의 시퀀스(Beam width)만을 유지합니다.
-<ul>
-<li><em>수식</em>: <img src="https://latex.codecogs.com/png.latex?(s,%20l)%20%5Crightarrow%20(s+t,%20l%20+%20%5Clog%20p(t%7Cs))"></li>
-</ul></li>
-<li><strong>Top-K Sampling</strong>: 다음 토큰의 확률 분포에서 가장 확률이 높은 상위 <img src="https://latex.codecogs.com/png.latex?K">개의 토큰 집합(<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BT%7D_%7Btop-K%7D">)을 찾고, 그 안에서 확률에 비례하여 무작위로 샘플링합니다.</li>
-<li><strong>Nucleus Sampling (Top-p)</strong>: 미리 정해둔 임계값(Threshold) <img src="https://latex.codecogs.com/png.latex?%5Ceta">를 기준으로, 누적 확률의 합이 <img src="https://latex.codecogs.com/png.latex?%5Ceta">를 넘는 최소한의 상위 토큰 집합(<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BT%7D_%7Btop-N%7D">)을 찾습니다.
-<ul>
-<li><em>조건</em>: <img src="https://latex.codecogs.com/png.latex?%5Csum%20p(t_%7Bind%7D%20%5Cin%20%5Cmathbb%7BT%7D_%7Btop-N%7D%20%7C%20t_1,%20%5Cdots)%20%3E%20%5Ceta"></li>
-<li><em>특징</em>: 예측의 확실성에 따라 후보 토큰의 개수 <img src="https://latex.codecogs.com/png.latex?N">이 유동적으로 변하여 자연스러운 텍스트 생성을 돕습니다.</li>
-</ul></li>
-</ol>
+<li><strong>Update index</strong>: <img src="https://latex.codecogs.com/png.latex?ind%20%5Cleftarrow%20ind%20+%201"></li>
+<li><strong>Greedy generation</strong>: <img src="https://latex.codecogs.com/png.latex?t_%7Bind%7D%20=%20%5Ctext%7Bargmax%7D_%7Bt%20%5Cin%20%5Cmathbb%7BT%7D%7D%20p(t%20%7C%20t_1,%20%5Cdots,%20t_%7Bind-1%7D)"></li>
+</ol></li>
+<li><p><strong>Until</strong> 문장 종료 토큰(EOS)이 생성되거나 <img src="https://latex.codecogs.com/png.latex?ind">가 <img src="https://latex.codecogs.com/png.latex?L">에 도달할 때까지 반복</p></li>
+<li><p><strong>Output</strong>: <img src="https://latex.codecogs.com/png.latex?%5Bt_1,%20%5Cdots,%20t_%7Bind%7D%5D"></p></li>
+<li><p><em>단점</em>: 당장 확률이 높은 것만 쫓아가다 보니, 문장 전체로 보았을 때는 최적이 아닌(Suboptimal) 텍스트가 생성될 위험이 큽니다.</p></li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.4/images/decoding_strategies_tree.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 디코딩 전략 시각화. The - nice - house로 이어지는 생성 경로에서 각각 확률(0.5, 0.4 등)을 바탕으로 탐색을 확장해 나가는 트리를 보여준다.</figcaption>
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.4/images/greedy_search.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Greedy search 전략 시각화.</figcaption>
 </figure>
 </div>
+</section>
+</section>
+<section id="beam-search" class="level3">
+<h3 class="anchored" data-anchor-id="beam-search">6.2 Beam Search</h3>
+<p>매 스텝마다 모든 가능한 토큰을 확장한 뒤, 전체 시퀀스의 누적 로그 확률(Log-probability)이 가장 높은 상위 <img src="https://latex.codecogs.com/png.latex?B">개의 시퀀스(Beam width)만을 유지하는 방법입니다.</p>
+<section id="algorithm-beam-search" class="level4">
+<h4 class="anchored" data-anchor-id="algorithm-beam-search"><strong>[Algorithm: Beam Search]</strong></h4>
+<ul>
+<li><strong>Input</strong>: 접두사 토큰(prefix tokens) <img src="https://latex.codecogs.com/png.latex?%5Bt_1,%20%5Cdots,%20t_n%5D">, Beam width <img src="https://latex.codecogs.com/png.latex?B">, 최대 길이 제한 <img src="https://latex.codecogs.com/png.latex?L"></li>
+<li><strong>Initialize</strong>: <img src="https://latex.codecogs.com/png.latex?Beam%20=%20%5C%7B(%5Bt_1,%20%5Cdots,%20t_n%5D,%200)%5C%7D"> (형태: 시퀀스, 로그 확률)</li>
+<li><strong>Repeat</strong>
+<ol type="1">
+<li>Beam 내의 각 시퀀스 <img src="https://latex.codecogs.com/png.latex?s">에 대해 모든 토큰 <img src="https://latex.codecogs.com/png.latex?t%20%5Cin%20%5Cmathbb%7BT%7D">의 조건부 확률 <img src="https://latex.codecogs.com/png.latex?p(t%7Cs)">를 계산합니다.</li>
+<li>모든 후보를 확장(Expand)합니다: <img src="https://latex.codecogs.com/png.latex?(s,%20l)%20%5Crightarrow%20(s+t,%20l%20+%20%5Clog%20p(t%7Cs))"></li>
+<li>확장된 모든 시퀀스를 풀(pool)에 수집합니다.</li>
+<li>누적 로그 확률이 가장 높은 상위 <img src="https://latex.codecogs.com/png.latex?B">개의 시퀀스만 유지합니다.</li>
+</ol></li>
+<li><strong>Stop</strong> 모든 시퀀스가 EOS로 끝나거나 길이 <img src="https://latex.codecogs.com/png.latex?L">에 도달하면 종료합니다.</li>
+<li><strong>Output</strong>: 가장 확률이 높은 시퀀스를 반환합니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.4/images/beam_search.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Beam search 전략 시각화.</figcaption>
+</figure>
+</div>
+</section>
+</section>
+<section id="top-k-sampling" class="level3">
+<h3 class="anchored" data-anchor-id="top-k-sampling">6.3 Top-K Sampling</h3>
+<p>다음 토큰의 확률 분포에서 가장 확률이 높은 상위 <img src="https://latex.codecogs.com/png.latex?K">개의 토큰 집합을 찾고, 그 안에서 확률에 비례하여 무작위로 샘플링합니다.</p>
+<section id="algorithm-top-k-sampling" class="level4">
+<h4 class="anchored" data-anchor-id="algorithm-top-k-sampling"><strong>[Algorithm: Top-K Sampling]</strong></h4>
+<ul>
+<li><strong>Input</strong>: 정수 <img src="https://latex.codecogs.com/png.latex?K">, 주어진 토큰 시퀀스 <img src="https://latex.codecogs.com/png.latex?%5Bt_1,%20%5Cdots,%20t_n%5D">, 최대 길이 제한 <img src="https://latex.codecogs.com/png.latex?L"></li>
+<li><strong>Initialize</strong>: <img src="https://latex.codecogs.com/png.latex?ind%20=%20n"></li>
+<li><strong>Repeat</strong>
+<ol type="1">
+<li><strong>Update index</strong>: <img src="https://latex.codecogs.com/png.latex?ind%20%5Cleftarrow%20ind%20+%201"></li>
+<li><strong>Find top-K tokens</strong>: <img src="https://latex.codecogs.com/png.latex?t_%7Bind%7D">에 대해 가장 확률이 높은 상위 <img src="https://latex.codecogs.com/png.latex?K">개의 토큰 집합 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BT%7D_%7Btop-K%7D">를 찾습니다.</li>
+<li><strong>Sample the next token</strong>: 예측된 확률에 비례하여 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BT%7D_%7Btop-K%7D"> 안에서 <img src="https://latex.codecogs.com/png.latex?t_%7Bind%7D">를 샘플링하여 생성합니다.</li>
+</ol></li>
+<li><strong>Until</strong> 문장 종료 토큰(EOS)이 생성되거나 <img src="https://latex.codecogs.com/png.latex?ind">가 <img src="https://latex.codecogs.com/png.latex?L">에 도달할 때까지 반복</li>
+<li><strong>Output</strong>: <img src="https://latex.codecogs.com/png.latex?%5Bt_1,%20%5Cdots,%20t_%7Bind%7D%5D"></li>
+</ul>
+</section>
+</section>
+<section id="nucleus-sampling-top-p" class="level3">
+<h3 class="anchored" data-anchor-id="nucleus-sampling-top-p">6.4 Nucleus Sampling (Top-p)</h3>
+<p>미리 정해둔 임계값(Threshold) <img src="https://latex.codecogs.com/png.latex?%5Ceta">를 기준으로, 누적 확률의 합이 <img src="https://latex.codecogs.com/png.latex?%5Ceta">를 넘는 최소한의 상위 토큰 집합(<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BT%7D_%7Btop-N%7D">)을 찾아 샘플링합니다. 예측의 확실성에 따라 후보 토큰의 개수 <img src="https://latex.codecogs.com/png.latex?N">이 유동적으로 변하여 더욱 자연스러운 텍스트 생성을 돕습니다.</p>
+<section id="algorithm-nucleus-sampling" class="level4">
+<h4 class="anchored" data-anchor-id="algorithm-nucleus-sampling"><strong>[Algorithm: Nucleus Sampling]</strong></h4>
+<ul>
+<li><strong>Input</strong>: 임계값 <img src="https://latex.codecogs.com/png.latex?%5Ceta">, 주어진 토큰 시퀀스 <img src="https://latex.codecogs.com/png.latex?%5Bt_1,%20%5Cdots,%20t_n%5D">, 최대 길이 제한 <img src="https://latex.codecogs.com/png.latex?L"></li>
+<li><strong>Initialize</strong>: <img src="https://latex.codecogs.com/png.latex?ind%20=%20n"></li>
+<li><strong>Repeat</strong>
+<ol type="1">
+<li><strong>Update index</strong>: <img src="https://latex.codecogs.com/png.latex?ind%20%5Cleftarrow%20ind%20+%201"></li>
+<li><strong>Find <img src="https://latex.codecogs.com/png.latex?N"></strong>: 상위 <img src="https://latex.codecogs.com/png.latex?N">개 토큰의 확률 합이 <img src="https://latex.codecogs.com/png.latex?%5Ceta">보다 커지는 가장 작은 자연수 <img src="https://latex.codecogs.com/png.latex?N%20%5Cin%20%5Cmathbb%7BN%7D">을 찾습니다. <img src="https://latex.codecogs.com/png.latex?%5Csum%20p(t_%7Bind%7D%20%5Cin%20%5Cmathbb%7BT%7D_%7Btop-N%7D%20%7C%20t_1,%20%5Cdots,%20t_%7Bind-1%7D)%20%3E%20%5Ceta"></li>
+<li><strong>Sample the next token</strong>: 예측된 확률에 비례하여 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BT%7D_%7Btop-N%7D"> 안에서 <img src="https://latex.codecogs.com/png.latex?t_%7Bind%7D">를 샘플링하여 생성합니다.</li>
+</ol></li>
+<li><strong>Until</strong> 문장 종료 토큰(EOS)이 생성되거나 <img src="https://latex.codecogs.com/png.latex?ind">가 <img src="https://latex.codecogs.com/png.latex?L">에 도달할 때까지 반복</li>
+<li><strong>Output</strong>: <img src="https://latex.codecogs.com/png.latex?%5Bt_1,%20%5Cdots,%20t_%7Bind%7D%5D"></li>
+</ul>
 <hr>
+</section>
+</section>
 </section>
 <section id="rlhf-reinforcement-learning-from-human-feedback" class="level1">
 <h1>7. RLHF: Reinforcement Learning from Human Feedback</h1>
@@ -1223,12 +1290,26 @@ font-style: inherit;">/</span> grad_norm)</span></code></pre></div></div>
 <ol type="1">
 <li><strong>Pretrain a Language Model (LM)</strong>: 대규모 말뭉치로 기본 언어 모델을 사전 학습합니다.</li>
 <li><strong>Train a Reward Model</strong>: 모델이 생성한 여러 응답에 대해 사람이 순위를 매기고(Human Scoring), 이를 바탕으로 주어진 텍스트가 인간의 선호도에 부합하는지 점수 <img src="https://latex.codecogs.com/png.latex?r_%5Ctheta(y%7Cx)">를 예측하는 보상 모델(Preference Model)을 학습합니다.</li>
+</ol>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.4/images/rlhf_training.jpg" class="img-fluid figure-img"></p>
+<figcaption>Figure: 보상 모델(Reward Model) 학습 과정. 프롬프트 데이터셋을 초기 언어 모델(Initial Language Model)에 통과시켜 여러 텍스트를 생성한 뒤, 사람이 직접 응답의 질을 평가하여 순위(Human Scoring)를 매깁니다. 이렇게 구축된 텍스트-보상 점수(sample, reward) 쌍을 바탕으로, 주어진 텍스트의 인간 선호도를 예측하는 보상 모델을 학습하는 흐름을 화살표로 보여줍니다.</figcaption>
+</figure>
+</div>
+<ol start="3" type="1">
 <li><strong>RL Finetuning (e.g., PPO)</strong>: 기본 언어 모델의 텍스트 생성 결과를 보상 모델이 평가하고, 이 보상값을 최대화하는 방향으로 PPO 알고리즘을 사용해 언어 모델(RL Policy)을 강화학습시킵니다.
 <ul>
 <li>이때 모델이 기존 언어 체계를 망각하거나 보상 모델을 속이는 형태로 과적합되는 것을 막기 위해, 원래의 기본 모델 분포(<img src="https://latex.codecogs.com/png.latex?%5Cpi%5E%7Bbase%7D">)와 너무 멀어지지 않도록 하는 <strong>KL 발산 페널티 (KL prediction shift penalty)</strong>를 목적 함수에 추가합니다.</li>
 <li>수식적 업데이트 방향: <img src="https://latex.codecogs.com/png.latex?%5Ctheta%20%5Cleftarrow%20%5Ctheta%20+%20%5Cnabla_%5Ctheta%20J(%5Ctheta)"> (여기서 <img src="https://latex.codecogs.com/png.latex?J">는 보상 모델의 보상값에서 <img src="https://latex.codecogs.com/png.latex?%5Clambda%20D_%7BKL%7D(%5Cpi_%5Ctheta%5E%7BRL%7D(y%7Cx)%20%7C%7C%20%5Cpi%5E%7Bbase%7D(y%7Cx))">를 차감한 형태를 취합니다.)</li>
 </ul></li>
 </ol>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.4/images/rlhf_fine_tuning.jpg" class="img-fluid figure-img"></p>
+<figcaption>Figure: 보상 모델을 활용한 강화학습 파인튜닝(RLHF) 과정. 프롬프트가 주어졌을 때 학습 중인 언어 모델(Tuned Language Model)이 생성한 텍스트를 보상 모델이 평가합니다. 동시에 파라미터가 고정된 초기 언어 모델(Initial Language Model)이 생성한 기준 텍스트(Base Text)와의 차이를 KL 발산(KL prediction shift penalty)으로 계산하여 패널티를 부여합니다. 이 두 값을 합산한 최종 보상을 바탕으로 PPO(Proximal Policy Optimization) 알고리즘을 통해 튜닝 중인 언어 모델의 파라미터를 업데이트하는 순환 구조를 상세히 도식화한 그림입니다.</figcaption>
+</figure>
+</div>
 
 
 

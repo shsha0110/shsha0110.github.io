@@ -10,7 +10,114 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>스흐의 공부 블로그</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Wed, 18 Mar 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Mon, 23 Mar 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>[Machine Learning] 5. Support Vector Machines</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Machine Learing/5.Support-Vector-Machines/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-서포트-벡터-머신svm의-개요" class="level1">
+<h1>1. Introduction: 서포트 벡터 머신(SVM)의 개요</h1>
+<p>서포트 벡터 머신(Support Vector Machines, 이하 SVM)은 기계학습 분야에서 현존하는 최고의 “Off-the-shelf(사전 훈련 없이 즉시 사용할 수 있는)” 지도 학습 알고리즘 중 하나로 평가받습니다. 복잡한 데이터 분포에서도 강력한 일반화 성능을 보여주며, 다양한 산업 및 연구 분야에서 널리 활용되고 있습니다.</p>
+<p>SVM의 동작 원리를 온전히 이해하기 위해서는 다음과 같은 핵심 주제들을 순차적으로 파악해야 합니다: * <strong>마진(Margins)</strong>: 데이터를 분리할 때 단순히 나누는 것을 넘어, 가능한 한 큰 “여백(gap)”을 두고 분리하려는 직관. * <strong>최적 마진 분류기(The optimal margin classifier)와 라그랑주 쌍대성(Lagrange duality)</strong>: 마진을 최대화하는 최적화 문제를 수학적으로 정의하고 푸는 과정. * <strong>커널 기법(Kernels)</strong>: 무한 차원과 같은 매우 높은 고차원 특성 공간(feature space)에서 SVM을 효율적으로 적용할 수 있게 해주는 수학적 트릭. * <strong>SMO 알고리즘</strong>: SVM의 최적화 문제를 실제로 빠르게 연산하고 구현할 수 있게 해주는 알고리즘.</p>
+<p>이번 포스트에서는 SVM의 가장 기초가 되는 <strong>마진의 직관적 의미</strong>와 이를 수학적으로 공식화한 <strong>최적 마진 분류기</strong>의 도출 과정에 집중하여 정리해 보겠습니다.</p>
+<hr>
+</section>
+<section id="margins-마진에-대한-직관" class="level1">
+<h1>2. Margins: 마진에 대한 직관</h1>
+<p>SVM의 철학을 이해하기 위해, 우리가 이미 잘 알고 있는 <strong>로지스틱 회귀(Logistic Regression)</strong> 모델부터 시작해 보겠습니다. 로지스틱 회귀에서 데이터 <img src="https://latex.codecogs.com/png.latex?x">가 주어졌을 때 클래스 <img src="https://latex.codecogs.com/png.latex?y=1">일 확률 <img src="https://latex.codecogs.com/png.latex?p(y=1%7Cx;%5Ctheta)">는 시그모이드 함수 <img src="https://latex.codecogs.com/png.latex?g(%5Ccdot)">를 사용하여 다음과 같이 모델링됩니다:</p>
+<p><img src="https://latex.codecogs.com/png.latex?h_%5Ctheta(x)%20=%20g(%5Ctheta%5E%5Ctop%20x)"></p>
+<p>이때 모델은 <img src="https://latex.codecogs.com/png.latex?h_%5Ctheta(x)%20%5Cge%200.5">일 때 (즉, <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x%20%5Cge%200">일 때) 클래스 “1”로 예측합니다.</p>
+<section id="분류의-자신감confidence" class="level2">
+<h2 class="anchored" data-anchor-id="분류의-자신감confidence">2.1. 분류의 “자신감(Confidence)”</h2>
+<p>긍정적 훈련 예제(Positive training example, <img src="https://latex.codecogs.com/png.latex?y=1">)를 가정해 봅시다. <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x">의 값이 커질수록 <img src="https://latex.codecogs.com/png.latex?h_%5Ctheta(x)">의 값(확률) 역시 커지며, 이는 모델이 해당 데이터의 레이블을 1로 예측하는 데 있어 <strong>“자신감(degree of confidence)”</strong>이 높다는 것을 의미합니다. 즉, <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x%20%5Cgg%200">일 때 우리는 모델이 <img src="https://latex.codecogs.com/png.latex?y=1">이라는 예측에 대해 매우 확신하고 있다고 생각할 수 있습니다. 반대로 부정적 예제(<img src="https://latex.codecogs.com/png.latex?y=0">)에 대해서는 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x%20%5Cll%200">일 때 <img src="https://latex.codecogs.com/png.latex?y=0">이라는 예측에 강한 확신을 가집니다.</p>
+<p>결과적으로, 훈련 데이터에 대한 <strong>“좋은 적합(Good fit)”</strong>이란 단순히 예측을 맞추는 것을 넘어 다음과 같은 조건을 만족하는 상태입니다: * <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=1">일 때마다 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x%5E%7B(i)%7D%20%5Cgg%200"> * <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=0">일 때마다 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x%5E%7B(i)%7D%20%5Cll%200"></p>
+<p>우리는 이러한 “분류의 자신감”을 수학적으로 엄밀하게 다루기 위해 <strong>함수적 마진(Functional margins)</strong>이라는 개념을 도입하게 됩니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Machine Learing/5.Support-Vector-Machines/images/decision_boundary_confidence.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 결정 경계와 데이터 포인트들의 위치 관계. X는 긍정적 예제(y=1), O는 부정적 예제(y=0)를 나타내며, 실선은 결정 경계(Separating hyperplane)인 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x=0">을 의미합니다. 점 A는 결정 경계로부터 매우 멀리 떨어져 있어 예측에 대한 확신이 가장 높으며, 점 C는 경계에 아슬아슬하게 위치하여 예측의 불확실성이 큽니다. 즉, 예측의 확신도 측면에서 A &gt; B &gt; C의 관계가 성립함을 보여주는 도식입니다.</figcaption>
+</figure>
+</div>
+<p>위 그림에서 보듯, 점 A는 결정 경계에서 멀리 떨어져 있어 모델이 예측을 매우 확신할 수 있는 반면, 점 C는 경계와 매우 가까워 모델의 예측이 상대적으로 불안정합니다. 우리의 목표는 모든 훈련 예제에 대해 정확하면서도 <strong>“확신에 찬(confident)”</strong> 예측을 할 수 있는, 즉 모든 데이터를 결정 경계로부터 최대한 멀리 떨어뜨리는(마진을 최대화하는) 결정 경계를 찾는 것입니다.</p>
+<hr>
+</section>
+</section>
+<section id="notation-새로운-표기법의-도입" class="level1">
+<h1>3. Notation: 새로운 표기법의 도입</h1>
+<p>본격적으로 마진을 수학적으로 정의하기 전에, SVM에서 널리 사용되는 표기법(Notation)으로 전환하겠습니다.</p>
+<ol type="1">
+<li><strong>클래스 레이블의 변경</strong>: 기존의 <img src="https://latex.codecogs.com/png.latex?%5C%7B0,%201%5C%7D"> 대신 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5C%7B-1,%201%5C%7D">을 사용합니다. 이는 수식 전개를 훨씬 깔끔하게 만들어줍니다.</li>
+<li><strong>파라미터의 분리</strong>: 파라미터 벡터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 가중치 벡터 <img src="https://latex.codecogs.com/png.latex?w">와 편향(절편) <img src="https://latex.codecogs.com/png.latex?b">로 분리합니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?b">는 기존의 <img src="https://latex.codecogs.com/png.latex?%5Ctheta_0"> (Intercept term) 역할을 명시적으로 분리하여 담당합니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?w">는 기존의 <img src="https://latex.codecogs.com/png.latex?%5B%5Ctheta_1%20...%20%5Ctheta_d%5D%5E%5Ctop"> 역할을 담당합니다.</li>
+</ul></li>
+<li><strong>예측 함수의 정의</strong>: 로지스틱 회귀처럼 <img src="https://latex.codecogs.com/png.latex?p(y=1)">의 확률값을 추정하는 중간 단계를 거치지 않고, 퍼셉트론(Perceptron) 알고리즘과 같이 직접적으로 1 또는 -1을 예측합니다. 모델의 가설 함수는 다음과 같이 정의됩니다:</li>
+</ol>
+<p><img src="https://latex.codecogs.com/png.latex?h_%7Bw,b%7D(x)%20=%20g(w%5E%5Ctop%20x%20+%20b)"> <img src="https://latex.codecogs.com/png.latex?g(z)%20=%20%5Cbegin%7Bcases%7D%201%20&amp;%20%5Ctext%7Bif%20%7D%20z%20%5Cge%200,%20%5C%5C%20-1%20&amp;%20%5Ctext%7Botherwise%7D%20%5Cend%7Bcases%7D"></p>
+<hr>
+</section>
+<section id="functional-and-geometric-margins" class="level1">
+<h1>4. Functional and Geometric Margins</h1>
+<p>데이터 포인트가 결정 경계로부터 얼마나 안전하게(확신을 가지고) 분류되었는지를 측정하는 두 가지 지표를 정의합니다.</p>
+<section id="함수적-마진-functional-margin" class="level2">
+<h2 class="anchored" data-anchor-id="함수적-마진-functional-margin">4.1. 함수적 마진 (Functional Margin)</h2>
+<p>주어진 훈련 예제 <img src="https://latex.codecogs.com/png.latex?(x%5E%7B(i)%7D,%20y%5E%7B(i)%7D)">에 대한 파라미터 <img src="https://latex.codecogs.com/png.latex?(w,%20b)">의 <strong>함수적 마진(Functional margin)</strong> <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D%5E%7B(i)%7D">는 다음과 같이 정의됩니다:</p>
+<p><img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D%5E%7B(i)%7D%20=%20y%5E%7B(i)%7D(w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b)"></p>
+<p>함수적 마진이 크다는 것은 우리의 예측이 올바르고 그 확신도 크다는 것을 의미합니다. * 만약 실제 레이블이 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=1">이라면, 예측이 정확하고 확신이 크기 위해서는 <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b">가 매우 큰 양수여야 합니다. * 만약 실제 레이블이 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=-1">이라면, <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b">가 매우 큰 음수여야 두 값을 곱했을 때 큰 양수가 도출됩니다. * 따라서, <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D(w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b)%20%3E%200"> 이라는 조건은 모델이 해당 데이터를 정확하게 분류했음을 나타냅니다.</p>
+<p><strong>전체 데이터셋에 대한 함수적 마진</strong> <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D">는 개별 데이터들의 마진 중 가장 작은 값(최악의 경우)으로 정의합니다: <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D%20=%20%5Cmin_%7Bi=1,...,n%7D%20%5Chat%7B%5Cgamma%7D%5E%7B(i)%7D"></p>
+<section id="함수적-마진의-한계-정규화의-필요성" class="level3">
+<h3 class="anchored" data-anchor-id="함수적-마진의-한계-정규화의-필요성">함수적 마진의 한계: 정규화의 필요성</h3>
+<p>함수적 마진만으로는 최적화에 문제가 발생할 수 있습니다. 만약 파라미터 <img src="https://latex.codecogs.com/png.latex?(w,%20b)">를 2배씩 스케일링하여 <img src="https://latex.codecogs.com/png.latex?(2w,%202b)">로 바꾼다고 가정해 봅시다. 가설 함수 <img src="https://latex.codecogs.com/png.latex?h_%7Bw,b%7D(x)%20=%20g(w%5E%5Ctop%20x%20+%20b)">는 단순히 부호(sign)만 확인하므로 결정 경계의 기하학적 위치나 모델의 실제 예측 결과는 전혀 변하지 않습니다. 하지만 계산된 함수적 마진 값은 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D(2w%5E%5Ctop%20x%5E%7B(i)%7D%20+%202b)%20=%202%5Chat%7B%5Cgamma%7D%5E%7B(i)%7D">가 되어 원래보다 2배 커지게 됩니다. 즉, 파라미터의 스케일만 키워도(실제 분류 성능은 그대로인데) 함수적 마진을 무한대로 키울 수 있는 문제가 발생합니다. 이를 해결하기 위해 파라미터에 대한 <strong>정규화(Normalization)</strong>가 필요해지며, 통상적으로 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C_2%20=%201">이 되도록 <img src="https://latex.codecogs.com/png.latex?%5Cleft(%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C_2%7D,%20%5Cfrac%7Bb%7D%7B%7C%7Cw%7C%7C_2%7D%5Cright)"> 형태로 크기를 강제하는 방식을 고려할 수 있습니다.</p>
+</section>
+</section>
+<section id="기하학적-마진-geometric-margin" class="level2">
+<h2 class="anchored" data-anchor-id="기하학적-마진-geometric-margin">4.2. 기하학적 마진 (Geometric Margin)</h2>
+<p>이러한 스케일 의존성 문제를 해결하고, 실제 공간상에서 데이터 포인트가 결정 경계(<img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%20+%20b%20=%200">)로부터 떨어진 <strong>유클리디안 거리(Euclidean distance)</strong>를 측정하는 것이 바로 <strong>기하학적 마진</strong>입니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Machine Learing/5.Support-Vector-Machines/images/geometric_margin_derivation.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 기하학적 마진의 기하학적 도출 과정. 벡터 w는 결정 경계와 직교(orthogonal)하는 법선 벡터입니다. 공간상의 한 점 A(<img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">)에서 결정 경계로 수선의 발을 내린 점을 B라고 할 때, 선분 AB의 길이가 기하학적 마진 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D">가 됩니다. 점 A에서 벡터 w의 반대 방향으로 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D">만큼 이동하면 점 B에 도달하게 되는 관계를 보여줍니다.</figcaption>
+</figure>
+</div>
+<p>위 그림을 참고하여, 클래스가 양성(<img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=1">)인 데이터 포인트 A(좌표 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">)가 결정 경계로부터 떨어진 거리를 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D">라고 합시다. 벡터 <img src="https://latex.codecogs.com/png.latex?w">는 결정 경계 <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%20+%20b%20=%200">에 수직인 법선 벡터입니다. 법선 벡터의 방향을 나타내는 단위 벡터는 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D">가 됩니다. 따라서 점 A에서 결정 경계를 향해 수선의 발을 내린 점 B의 좌표는 원래 위치 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">에서 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D"> 길이만큼 단위 벡터 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D">의 반대 방향으로 이동한 것이므로 다음과 같습니다: <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BPoint%20B%7D%20=%20x%5E%7B(i)%7D%20-%20%5Cgamma%5E%7B(i)%7D%20%5Ccdot%20%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D"></p>
+<p>점 B는 정확히 결정 경계 위에 존재하므로, 결정 경계 방정식에 대입하면 등식이 성립해야 합니다: <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20%5Cleft(%20x%5E%7B(i)%7D%20-%20%5Cgamma%5E%7B(i)%7D%20%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D%20%5Cright)%20+%20b%20=%200%20%5Cquad%20%5Ctext%7B%5BEq.1%5D%7D"></p>
+<p>이제 [Eq.1]을 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D">에 대해 정리해 보겠습니다. 전개 과정을 살펴보면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%5E%7B(i)%7D%20-%20%5Cgamma%5E%7B(i)%7D%20%5Cfrac%7Bw%5E%5Ctop%20w%7D%7B%7C%7Cw%7C%7C%7D%20+%20b%20=%200"> 여기서 <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20w%20=%20%7C%7Cw%7C%7C%5E2"> 이므로 식은 다음과 같이 간소화됩니다. <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%5E%7B(i)%7D%20-%20%5Cgamma%5E%7B(i)%7D%20%7C%7Cw%7C%7C%20+%20b%20=%200"> <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D%20%7C%7Cw%7C%7C%20=%20w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b"> <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D%20=%20%5Cfrac%7Bw%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b%7D%7B%7C%7Cw%7C%7C%7D%20=%20%5Cleft(%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D%5Cright)%5E%5Ctop%20x%5E%7B(i)%7D%20+%20%5Cfrac%7Bb%7D%7B%7C%7Cw%7C%7C%7D"></p>
+<p>위 도출은 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=1">일 때를 가정한 것입니다. 만약 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=-1">인 경우 거리는 양수여야 하므로 앞에 음수 기호가 붙어야 합니다. 이를 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D">를 곱해줌으로써 모든 훈련 예제 <img src="https://latex.codecogs.com/png.latex?(x%5E%7B(i)%7D,%20y%5E%7B(i)%7D)">에 대해 일반화된 <strong>기하학적 마진</strong> 공식을 얻게 됩니다:</p>
+<p><img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D%20=%20y%5E%7B(i)%7D%20%5Cleft(%20%5Cleft(%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D%5Cright)%5E%5Ctop%20x%5E%7B(i)%7D%20+%20%5Cfrac%7Bb%7D%7B%7C%7Cw%7C%7C%7D%20%5Cright)"></p>
+<p><strong>기하학적 마진의 중요한 특징</strong> * <strong>Scale Invariance (스케일 불변성)</strong>: 파라미터 <img src="https://latex.codecogs.com/png.latex?w">와 <img src="https://latex.codecogs.com/png.latex?b">를 어떤 상수배로 리스케일링하더라도, 분모의 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C"> 역시 동일하게 스케일링되므로 기하학적 마진 값 자체는 변하지 않습니다. * <strong>함수적 마진과의 관계</strong>: 만약 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C%20=%201">로 정규화된다면, 식의 분모가 1이 되므로 기하학적 마진과 함수적 마진은 정확히 일치하게 됩니다.</p>
+<hr>
+</section>
+</section>
+<section id="the-optimal-margin-classifier-최적-마진-분류기-공식화" class="level1">
+<h1>5. The Optimal Margin Classifier: 최적 마진 분류기 공식화</h1>
+<p>우리의 최종 목표는 훈련 데이터와 결정 경계 사이의 기하학적 마진 중 최솟값(가장 가까운 거리)을 <strong>최대화(maximize)</strong>하는 결정 경계를 찾는 것입니다. 이를 “최적 마진 분류기”라고 부릅니다.</p>
+<p>초기 최적화 문제는 다음과 같이 공식화할 수 있습니다: <img src="https://latex.codecogs.com/png.latex?%5Cmax_%7B%5Cgamma,%20w,%20b%7D%20%5Cgamma"> <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bs.t.%7D%20%5Cquad%20y%5E%7B(i)%7D(w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b)%20%5Cge%20%5Cgamma,%20%5Cquad%20i=1,...,n"> <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C%20=%201"> (조건 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C=1">은 기하학적 마진과 함수적 마진을 동일하게 만들어주기 위함입니다.)</p>
+<p>하지만 제약조건 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C%20=%201">은 원이나 구의 표면을 나타내며, 이는 수학적으로 <strong>비볼록(non-convex)</strong> 제약이므로 최적화 해를 구하기가 매우 까다롭습니다.</p>
+<section id="최적화-문제의-변환-convex-transformation" class="level2">
+<h2 class="anchored" data-anchor-id="최적화-문제의-변환-convex-transformation">5.1. 최적화 문제의 변환 (Convex Transformation)</h2>
+<p>이를 해결하기 위해 문제를 변형합니다. 기하학적 마진 <img src="https://latex.codecogs.com/png.latex?%5Cgamma">를 함수적 마진 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D">와 노름 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C">의 관계인 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Chat%7B%5Cgamma%7D%7D%7B%7C%7Cw%7C%7C%7D">로 치환합니다. 그러면 최적화 문제는 다음과 같이 바뀝니다: <img src="https://latex.codecogs.com/png.latex?%5Cmax_%7B%5Chat%7B%5Cgamma%7D,%20w,%20b%7D%20%5Cfrac%7B%5Chat%7B%5Cgamma%7D%7D%7B%7C%7Cw%7C%7C%7D"> <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bs.t.%7D%20%5Cquad%20y%5E%7B(i)%7D(w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b)%20%5Cge%20%5Chat%7B%5Cgamma%7D,%20%5Cquad%20i=1,...,n"> 이제 성가신 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C=1"> 제약조건이 사라졌습니다.</p>
+<p>여기에 앞서 다룬 기하학적 마진의 <strong>스케일 불변성(Scale Invariance)</strong>을 기가 막히게 활용합니다. <img src="https://latex.codecogs.com/png.latex?w">와 <img src="https://latex.codecogs.com/png.latex?b">를 스케일링하더라도 목적함수나 제약조건의 본질은 변하지 않으므로, 우리는 편의상 함수적 마진의 최솟값이 정확히 1이 되도록(<img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D%20=%201">) 파라미터의 스케일을 조정할 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D%20=%201">을 대입하면 목적함수는 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B%7C%7Cw%7C%7C%7D">을 최대화하는 문제가 됩니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B%7C%7Cw%7C%7C%7D">을 최대화하는 것은 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C%5E2">을 최소화하는 것과 수학적으로 완전히 동일합니다. 미분 계산의 편의를 위해 앞에 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B2%7D">을 붙여주면, 최종적인 SVM의 최적화 문제는 다음과 같은 깔끔한 형태로 완성됩니다:</p>
+<p><img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bw,b%7D%20%5Cfrac%7B1%7D%7B2%7D%20%7C%7Cw%7C%7C%5E2"> <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bs.t.%7D%20%5Cquad%20y%5E%7B(i)%7D(w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b)%20%5Cge%201,%20%5Cquad%20i=1,...,n"></p>
+<p>이 형태가 바로 SVM 최적 마진 분류기의 표준형(Primal form)입니다. 이 식은 볼록 목적 함수(Convex objective function)와 선형 제약 조건(Linear constraints)을 가지는 전형적인 <strong>이차 계획법(Quadratic Programming, QP)</strong> 문제로 변환되었으며, 널리 사용되는 상용 QP Solver를 통해 글로벌 최적해(Global optimum)를 매우 효율적이고 안정적으로 찾아낼 수 있습니다.</p>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Machine Learning</category>
+  <guid>https://shsha0110.github.io/posts/Machine Learing/5.Support-Vector-Machines/</guid>
+  <pubDate>Mon, 23 Mar 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>[Data Mining] 6. Finding Similar Items (Part 1)</title>
   <dc:creator>유성현 </dc:creator>
@@ -3017,145 +3124,6 @@ font-style: inherit;">/</span> grad_norm)</span></code></pre></div></div>
  ]]></description>
   <category>Data Mining</category>
   <guid>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.2/</guid>
-  <pubDate>Wed, 11 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Data Mining] 4. Frequent Itemsets (Part 3)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.3/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-현실의-데이터는-너무-크다" class="level1">
-<h1>1. Introduction: 현실의 데이터는 너무 크다</h1>
-<ul>
-<li><p>지난 포스트들에서는 빈발 항목 집합(Frequent Itemsets)과 연관 규칙(Association Rules)의 개념, 그리고 결과를 유의미하게 압축하는 방법론을 다루었습니다. 이론적으로는 모든 항목 조합을 다 세어보면 될 것 같지만, 현실의 데이터 마이닝 환경에서는 <strong>“어떻게 세어야 하는가(How to count)?”</strong>가 가장 치명적인 문제가 됩니다.</p></li>
-<li><p>이번 포스트에서는 장바구니 모델 데이터가 실제 디스크에 어떻게 저장되는지, 그리고 빈발 쌍(Frequent Pairs)을 찾기 위해 메모리 상에서 카운팅을 수행할 때 마주하게 되는 <strong>메인 메모리 병목(Main-Memory Bottleneck)</strong> 현상에 대해 깊이 있게 살펴보겠습니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="market-basket-data의-표현과-연산-비용" class="level1">
-<h1>2. Market-Basket Data의 표현과 연산 비용</h1>
-<ul>
-<li><p>대형 마트나 웹 로그와 같은 장바구니 데이터(Market-Basket Data)는 그 크기가 메인 메모리 용량을 아득히 초과할 정도로 거대합니다. 따라서 이러한 데이터는 일반적으로 분산 파일 시스템(DFS)이나 대용량 파일의 형태로 <strong>장바구니 단위(Basket-by-basket)</strong>로 디스크에 저장됩니다.</p></li>
-<li><p>장바구니 하나하나의 크기는 작을 수 있지만, 장바구니의 총 개수와 항목(Items)의 총 가짓수는 천문학적입니다.</p></li>
-<li><p>메인 메모리에 전체 데이터를 한 번에 올릴 수 없기 때문에, 알고리즘은 디스크에서 데이터를 읽어오며 연산을 수행해야 합니다.</p></li>
-<li><p><strong>Computational Cost (연산 비용의 척도)</strong></p>
-<ul>
-<li>대규모 데이터를 마이닝할 때 진정한 병목 현상은 CPU 연산 속도가 아니라 <strong>디스크 I/O 횟수</strong>에서 발생합니다. 따라서 연관 규칙 탐색 알고리즘의 효율성은 <strong>데이터를 처음부터 끝까지 몇 번 스캔(Pass)하는가</strong>에 의해 결정됩니다. 디스크 접근을 최소화하고, 한 번의 Pass에서 최대한 많은 정보를 메모리에서 처리하는 것이 핵심입니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="main-memory-bottleneck-메인-메모리-병목" class="level1">
-<h1>3. Main-Memory Bottleneck (메인 메모리 병목)</h1>
-<ul>
-<li><p>장바구니 데이터를 스캔하면서 특정 항목이나 조합이 몇 번 등장했는지 카운팅(Counting)하려면, 그 결과값을 저장할 공간이 메인 메모리에 있어야 합니다. 즉, 우리가 추적하고 셀 수 있는 대상의 가짓수는 <strong>메인 메모리의 크기</strong>에 의해 물리적인 한계를 맞이합니다.</p></li>
-<li><p>메모리가 부족하다고 해서 가상 메모리로 디스크 스와핑(Swapping in/out)을 시도하는 것은 성능 측면에서 “재앙(Disaster)”에 가깝습니다. 빈번한 디스크 I/O가 발생하여 알고리즘이 사실상 멈춰버리기 때문입니다.</p></li>
-<li><p><strong>최적화 기법: 정수 매핑(Integer Mapping)</strong></p>
-<ul>
-<li>메모리를 아끼기 위한 기초적이고 필수적인 테크닉은 항목(Item)의 이름을 문자열 그대로 쓰지 않는 것입니다.</li>
-<li>해시 테이블(Hash table)을 구축하여, 식별된 <img src="https://latex.codecogs.com/png.latex?n">개의 서로 다른 고유 항목들을 <img src="https://latex.codecogs.com/png.latex?1">부터 <img src="https://latex.codecogs.com/png.latex?n">까지의 연속된 <strong>정수(Integers)로 변환</strong>합니다. 이를 통해 각 항목은 단 4바이트(int)로 표현될 수 있습니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="왜-쌍pairs을-찾는-것이-가장-어려운가" class="level1">
-<h1>4. 왜 ’쌍(Pairs)’을 찾는 것이 가장 어려운가?</h1>
-<ul>
-<li>빈발 항목 집합을 탐색할 때, 가장 연산이 까다롭고 메모리를 많이 잡아먹는 단계는 바로 <strong>빈발 쌍(Frequent pairs, 크기가 2인 부분집합)</strong>을 찾는 과정입니다.
-<ul>
-<li>단일 항목(1-Itemset)은 항목의 총 개수(<img src="https://latex.codecogs.com/png.latex?n">)만큼만 세면 되므로 메모리 부담이 적습니다.</li>
-<li>3개 이상의 묶음(Triples, Quadruples…)은 크기가 커질수록 해당 묶음이 특정 장바구니에 온전히 포함될 <strong>확률이 기하급수적으로(Exponentially) 감소</strong>합니다. 즉, 빈발할 확률이 매우 낮기 때문에 고려해야 할 후보군 자체가 적습니다.</li>
-<li>반면, 2개짜리 쌍(Pairs)은 조합의 수도 <img src="https://latex.codecogs.com/png.latex?O(n%5E2)">으로 매우 많으면서, 동시에 빈발하게 등장할 가능성도 높습니다.</li>
-</ul></li>
-<li>이러한 이유로 데이터 마이닝 알고리즘들은 우선 빈발 쌍(Pairs)을 효율적으로 찾는 문제에 집중한 뒤, 이를 확장하여 더 큰 집합을 찾도록 설계됩니다.</li>
-</ul>
-<hr>
-</section>
-<section id="메모리-상에서-pairs를-카운팅하는-두-가지-접근법" class="level1">
-<h1>5. 메모리 상에서 Pairs를 카운팅하는 두 가지 접근법</h1>
-<ul>
-<li>모든 가능한 쌍 <img src="https://latex.codecogs.com/png.latex?(i,%20j)">의 등장 횟수(Count)를 메인 메모리에 저장해야 한다고 할 때, 다음과 같은 두 가지 대표적인 자료구조 기법이 존재합니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.3/images/counting_pairs_methods.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 메모리 상에서 Item pair의 빈도를 저장하는 두 가지 방식. 왼쪽은 모든 가능한 조합에 대해 4바이트씩 할당하는 Triangular Matrix 방식이며, 오른쪽은 실제 데이터에 등장한(occurring) 조합에 대해서만 12바이트씩 할당하는 Triples 방식을 나타냅니다.</figcaption>
-</figure>
-</div>
-<section id="삼각-행렬-방법-triangular-matrix-method" class="level2">
-<h2 class="anchored" data-anchor-id="삼각-행렬-방법-triangular-matrix-method">5.1 삼각 행렬 방법 (Triangular-Matrix Method)</h2>
-<ul>
-<li><p><strong>원리</strong>: <img src="https://latex.codecogs.com/png.latex?i%20%3C%20j"> 인 모든 쌍 <img src="https://latex.codecogs.com/png.latex?(i,%20j)">에 대해 고정된 1차원 배열(Matrix)을 만들어 카운트를 저장합니다.</p></li>
-<li><p><strong>구조</strong>: 쌍들은 사전식 순서(Lexicographic order)로 저장됩니다.</p>
-<blockquote class="blockquote">
-<p><img src="https://latex.codecogs.com/png.latex?%5C%7B1,2%5C%7D,%20%5C%7B1,3%5C%7D,%20%5Cdots,%20%5C%7B1,n%5C%7D,%20%5C%7B2,3%5C%7D,%20%5C%7B2,4%5C%7D,%20%5Cdots,%20%5C%7Bn-1,%20n%5C%7D"></p>
-</blockquote></li>
-<li><p><strong>비용</strong>: 각 쌍의 등장 횟수를 저장하는 데 <strong>4바이트(정수 1개)</strong>가 필요합니다. 배열의 인덱스 자체가 <img src="https://latex.codecogs.com/png.latex?i">와 <img src="https://latex.codecogs.com/png.latex?j">의 정보를 내포하므로 <img src="https://latex.codecogs.com/png.latex?(i,%20j)"> 자체를 저장할 필요가 없습니다.</p></li>
-</ul>
-</section>
-<section id="트리플-방법-triples-method" class="level2">
-<h2 class="anchored" data-anchor-id="트리플-방법-triples-method">5.2 트리플 방법 (Triples Method)</h2>
-<ul>
-<li><strong>원리</strong>: 실제로 장바구니에 한 번이라도 등장한 쌍에 대해서만 카운트를 저장합니다. 해시 테이블을 이용합니다.</li>
-<li><strong>구조</strong>: <img src="https://latex.codecogs.com/png.latex?(i,%20j,%20count)"> 형태의 트리플(튜플) 구조로 저장합니다.</li>
-<li><strong>비용</strong>: 항목 <img src="https://latex.codecogs.com/png.latex?i"> (4바이트) + 항목 <img src="https://latex.codecogs.com/png.latex?j"> (4바이트) + 등장 횟수 <img src="https://latex.codecogs.com/png.latex?c"> (4바이트) = <strong>1쌍당 12바이트</strong>가 필요합니다. (해시 테이블 관리를 위한 약간의 오버헤드는 별도로 존재합니다.)</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="수학적-비교-언제-어떤-방법이-더-유리한가" class="level1">
-<h1>6. 수학적 비교: 언제 어떤 방법이 더 유리한가?</h1>
-<ul>
-<li><p>두 방식의 메모리 점유율을 수식으로 비교해 보겠습니다. 전체 항목의 개수를 <img src="https://latex.codecogs.com/png.latex?n">이라고 합시다. 가능한 모든 쌍의 개수는 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bn(n-1)%7D%7B2%7D"> 개입니다.</p></li>
-<li><ol type="1">
-<li><strong>Triangular-Matrix의 총 메모리</strong>: <img src="https://latex.codecogs.com/png.latex?Total%20Bytes%20=%204%20%5Ctimes%20%5Cfrac%7Bn(n-1)%7D%7B2%7D"></li>
-</ol>
-<ul>
-<li>이 방식은 실제 쌍의 등장 여부와 관계없이 <strong>항상 고정된 메모리</strong>를 차지합니다.</li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>Triples Method의 총 메모리</strong>:</li>
-</ol>
-<ul>
-<li>전체 가능한 쌍 중에서 실제 장바구니 데이터에 한 번이라도 등장하여 <img src="https://latex.codecogs.com/png.latex?count%20%3E%200"> 인 쌍의 비율을 <img src="https://latex.codecogs.com/png.latex?p">라고 합시다. <img src="https://latex.codecogs.com/png.latex?Total%20Bytes%20=%2012%20%5Ctimes%20p%20%5Ctimes%20%5Cfrac%7Bn(n-1)%7D%7B2%7D"></li>
-</ul></li>
-<li><p><strong>결론 (The <img src="https://latex.codecogs.com/png.latex?1/3"> Rule)</strong>:</p>
-<ul>
-<li>Triples 방법이 Triangular-Matrix 방법보다 메모리 측면에서 우수하려면 다음 부등식을 만족해야 합니다. <img src="https://latex.codecogs.com/png.latex?12%20%5Ctimes%20p%20%5Ctimes%20%5Cfrac%7Bn(n-1)%7D%7B2%7D%20%3C%204%20%5Ctimes%20%5Cfrac%7Bn(n-1)%7D%7B2%7D"> <img src="https://latex.codecogs.com/png.latex?12p%20%3C%204%20%5Cimplies%20p%20%3C%20%5Cfrac%7B1%7D%7B3%7D"></li>
-<li>즉, <strong>실제 데이터에 등장하는 항목 쌍의 비율(<img src="https://latex.codecogs.com/png.latex?p">)이 전체 가능한 조합의 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B3%7D"> 미만일 경우</strong>, 희소성(Sparsity)을 띠게 되므로 <strong>Triples 방법(해시 테이블 방식)을 사용하는 것이 유리</strong>합니다. 반대로 데이터가 빽빽하여 대부분의 조합이 한 번 이상 등장한다면 행렬 방식이 유리합니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="naïve-algorithm의-한계와-과제" class="level1">
-<h1>7. Naïve Algorithm의 한계와 과제</h1>
-<ul>
-<li><p>가장 단순한 접근법(Naïve Algorithm)은 메모리 위에 위에서 언급한 구조(Matrix나 Hash Table)를 통째로 올려두고, 데이터를 한 번 스캔(1-Pass)하면서 발견되는 모든 쌍의 카운트를 1씩 올리는 것입니다.</p></li>
-<li><p>만약 장바구니 <img src="https://latex.codecogs.com/png.latex?b">가 <img src="https://latex.codecogs.com/png.latex?n_b">개의 항목을 담고 있다면, 이 장바구니 하나에서만 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bn_b(n_b-1)%7D%7B2%7D"> 개의 쌍이 생성되어 카운팅을 요구합니다.</p></li>
-<li><p>이 방법은 <img src="https://latex.codecogs.com/png.latex?n"> (전체 항목의 수)이 커지면 메모리가 <img src="https://latex.codecogs.com/png.latex?n%5E2"> 에 비례하여 폭발적으로 증가하기 때문에 곧바로 한계에 부딪힙니다.</p>
-<ul>
-<li><strong>월마트(Wal-Mart)</strong>: 항목 약 <img src="https://latex.codecogs.com/png.latex?100,000">개</li>
-<li><strong>웹 페이지 분석</strong>: 항목 약 <img src="https://latex.codecogs.com/png.latex?10,000,000,000"> (10B) 개</li>
-</ul></li>
-<li><p>만약 아이템이 <img src="https://latex.codecogs.com/png.latex?1,000,000"> (1M) 개라고 가정해 봅시다. 쌍의 개수는 약 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B10%5E%7B12%7D%7D%7B2%7D"> 개이며, Triangular Matrix 방식을 적용하여 4바이트씩만 곱해도 무려 <strong>2 Terabytes</strong>의 메인 메모리가 필요합니다. 10억(1B) 개라면 상상할 수도 없는 메모리가 요구됩니다.</p></li>
-<li><p><strong>“Q: 이렇게 항목이 너무 많을 때 우리는 어떻게 더 나은 탐색을 할 수 있을까요?”</strong></p>
-<ul>
-<li>메모리에 모든 조합을 올려두고 세는 Naïve 방식은 현실에서 불가능합니다. 이를 영리하게 극복하기 위해 등장한 개념이 바로 다음 포스트에서 다룰 <strong>A-Priori 알고리즘</strong>입니다.</li>
-</ul></li>
-</ul>
-
-
-
-</section>
-
- ]]></description>
-  <category>Data Mining</category>
-  <guid>https://shsha0110.github.io/posts/Data Mining/4.Frequent-Itemsets-1/4.3/</guid>
   <pubDate>Wed, 11 Mar 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>

@@ -1,0 +1,120 @@
+---
+title: "[Optimization] Lecture 5. Simplex Method for Linear Programming (Part 4)"
+description: "Phase II Technical Details"
+author: "유성현"
+date: "2026-03-18"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. Introduction: 일반화된 2단계 심플렉스 알고리즘
+
+지금까지는 스칼라 형태의 연립방정식을 통해 심플렉스 알고리즘의 작동 원리를 직관적으로 이해해 보았습니다. 앞선 포스트(Phase I)에서 실현 가능한 사전(feasible dictionary)을 찾는 과정을 행렬로 일반화했던 것처럼, 이번에는 **2단계(Phase II) 알고리즘의 세부 기술적 사항(Technical Details)**을 선형대수학의 행렬(Matrix) 표현을 사용하여 엄밀하게 유도해 보겠습니다. 
+
+Phase I을 성공적으로 마쳤다면, 우리는 이미 실현 가능한 사전을 확보한 상태입니다. 이를 바탕으로 최적해를 찾아가는 심플렉스 알고리즘의 코어 로직을 행렬식으로 분해해 봅시다.
+
+---
+
+# 2. 문제 설정 및 변수의 분할 (Matrix Partitioning)
+
+먼저, 다음과 같은 표준형(Standard form)의 일반적인 선형계획문제를 고려합니다.
+
+$$
+\begin{aligned}
+\max \quad & z = c^\top x \\
+\text{s.t.} \quad & Ax = b \\
+& x \ge 0
+\end{aligned}
+$$
+
+
+## 2.1 기저(Basic) 변수와 비기저(Non-basic) 변수 분리
+심플렉스 알고리즘의 핵심은 전체 변수 벡터 $x$를 **기저 변수(Basic variables, $x_B$)**와 **비기저 변수(Non-basic variables, $x_N$)**로 나누는 것입니다. 이를 벡터 형태로 표현하면 다음과 같이 분할(partition)할 수 있습니다.
+
+$$x = \begin{bmatrix} x_B \\ x_N \end{bmatrix}$$
+
+
+이에 맞추어 목적함수의 계수 벡터 $c$와 제약조건의 계수 행렬 $A$ 역시 기저 및 비기저 변수에 대응되도록 분해합니다.
+
+$$c = \begin{bmatrix} c_B \\ c_N \end{bmatrix}, \quad A = \begin{bmatrix} B & N \end{bmatrix}$$
+
+
+여기서 행렬 $B$는 기저 변수 $x_B$에 대응하는 열(columns)들로 이루어진 행렬이며, 이를 **기저(basis)**라고 부릅니다.
+
+
+## 2.2 행렬 분할에 따른 가정 (Assumptions)
+이러한 분할이 수학적으로 성립하고 알고리즘이 동작하기 위해 두 가지 중요한 가정이 필요합니다.
+
+* **Assumption 1 (기저 행렬의 가역성):** $x_B$를 기저 변수로 설정하기 위해서는, 대응하는 제약 행렬 $B$가 정칙 행렬(nonsingular matrix)이어야 합니다. 즉, 역행렬 $B^{-1}$이 존재해야만 연립방정식을 풀 수 있습니다.
+
+이 분할을 적용하여 원래의 선형계획문제를 다시 쓰면 다음과 같습니다.
+
+$$
+\begin{aligned}
+\max \quad & z = c_B^\top x_B + c_N^\top x_N \\
+\text{s.t.} \quad & B x_B + N x_N = b \\
+& x_B \ge 0, \quad x_N \ge 0
+\end{aligned}
+$$
+
+
+---
+
+# 3. 실현 가능한 사전의 유도 (Deriving the Dictionary)
+
+이제 기저 변수 $x_B$에 대한 사전을 얻기 위해, 제약식 $B x_B + N x_N = b$에 적절한 행 연산(row operations)을 적용해야 합니다. 수학적으로 이 행 연산을 수행하는 것은 양변의 좌측에 기저 행렬의 역행렬인 $B^{-1}$을 곱하는 것과 정확히 같습니다. 
+
+제약식 양변에 $B^{-1}$을 곱하여 $x_B$에 대해 정리해 봅시다.
+
+$$x_B = B^{-1}b - B^{-1}Nx_N$$
+
+
+* **Assumption 2 (사전의 실현 가능성):** 기저 변수 $x_B$가 구성하는 사전이 실현 가능(feasible)하려면, 우변의 상수 벡터인 $B^{-1}b$의 모든 성분이 0 이상($\ge 0$)이어야 합니다. (이는 Phase I을 거치며 보장됩니다.)
+
+---
+
+# 4. 목적함수 복원과 축소 비용 (Reduced Costs)
+
+제약식에서 $x_B$를 비기저 변수 $x_N$에 대해 표현하는 데 성공했으므로, 이제 목적함수 $z$의 식에서 기본 변수 $x_B$를 소거할 차례입니다. 앞서 구한 $x_B$를 목적함수에 대입하기 위해 $c_B^\top x_B$를 전개합니다.
+
+$$c_B^\top x_B = c_B^\top B^{-1}b - c_B^\top B^{-1}Nx_N$$
+
+
+이를 목적함수 행(objective row)에 대입하여 정리하면 다음과 같습니다.
+
+$$
+\begin{aligned}
+z &= c_B^\top x_B + c_N^\top x_N \\
+  &= c_B^\top B^{-1}b - c_B^\top B^{-1}Nx_N + c_N^\top x_N \\
+  &= c_B^\top B^{-1}b + \left( c_N - N^\top (B^{-1})^\top c_B \right)^\top x_N
+\end{aligned}
+$$
+
+
+*(참고: $c_B^\top B^{-1}N x_N$ 항을 묶기 위해 선형대수의 전치 행렬 성질 $(XY)^\top = Y^\top X^\top$을 활용하여 형태를 맞춘 것입니다.)*
+
+## 4.1 최종 사전 (The Dictionary) 및 최적해 도출
+도출된 제약식과 목적함수를 모으면 심플렉스 알고리즘의 **행렬 형태 사전(Matrix Dictionary)**이 완성됩니다.
+
+$$
+\begin{aligned}
+z &= c_B^\top B^{-1}b + \left( c_N - N^\top (B^{-1})^\top c_B \right)^\top x_N \\
+x_B &= B^{-1}b - B^{-1}Nx_N
+\end{aligned}
+$$
+
+
+이 사전이 제공하는 정보는 다음과 같습니다.
+* **현재의 기저해 (Corresponding solution):** 비기저 변수 $x_N$을 모두 0으로 두면, 해는 $(x_B, x_N) = (B^{-1}b, 0)$가 됩니다.
+* **현재의 목적함수 값 (Objective value):** 이 기저해에서의 목적함수 값은 $z = c_B^\top B^{-1}b$ 입니다.
+
+## 4.2 축소 비용과 최적성 조건 (Optimality Condition)
+목적함수 식에서 비기저 변수 $x_N$ 앞에 곱해진 계수 벡터, 즉 $c_N - N^\top (B^{-1})^\top c_B$를 가리켜 **축소 비용(Reduced Costs)**이라고 부릅니다.
+
+심플렉스 알고리즘에서 피벗(Pivot)을 계속할지, 멈출지 결정하는 기준은 바로 이 축소 비용에 달려 있습니다. 극대화(Maximization) 문제의 경우, **이 축소 비용 벡터의 모든 성분이 0 이하(non-positive)가 되면 더 이상 목적함수를 증가시킬 수 없으므로 현재의 사전이 최적(Optimal)**임을 의미합니다.

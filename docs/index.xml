@@ -10,7 +10,185 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>스흐의 공부 블로그</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Mon, 23 Mar 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Tue, 24 Mar 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>[Logic Design] 3. Working with Combinational Logic</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Logic Design/3.Working-with-Combinational-Logic/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction" class="level1">
+<h1>1. Introduction</h1>
+<ul>
+<li>이번 포스트에서는 디지털 논리 회로 설계의 핵심인 <strong>조합 논리(Combinational Logic)</strong>를 다룹니다. 단순히 진리표를 작성하는 것을 넘어, 부울 대수를 체계적으로 간소화하는 알고리즘과 이를 실제 하드웨어 게이트(NAND, NOR, 다단 논리)로 구현하는 방법론을 살펴봅니다. 또한, 실제 물리적 회로에서 발생하는 시간 지연(Time behavior) 현상과 이를 코드로 설계하기 위한 하드웨어 기술 언어(HDL)의 기초 개념까지 짚어보겠습니다.</li>
+</ul>
+</section>
+<section id="core-concepts-boolean-minimization" class="level1">
+<h1>2. Core Concepts: Boolean Minimization</h1>
+<ul>
+<li><p>조합 논리를 최적화하기 위해서는 Karnaugh map(K-map)을 이용한 체계적인 논리 최소화(Boolean minimization) 알고리즘을 이해해야 합니다. 이 과정을 위해 필요한 핵심 용어들은 다음과 같습니다.</p></li>
+<li><p><strong>Implicant (내포항):</strong> ON-set(결과가 1이 되는 조건) 또는 DC-set(Don’t Care, 결과가 0이든 1이든 상관없는 조건)의 단일 원소이거나, 이들이 인접하여 서브큐브(subcube)를 형성할 수 있는 그룹을 의미합니다.</p></li>
+<li><p><strong>Prime Implicant (PI, 주내포항):</strong> 다른 implicant와 결합하여 더 큰 서브큐브를 만들 수 없는 최대한으로 확장된 implicant를 뜻합니다.</p></li>
+<li><p><strong>Essential Prime Implicant (EPI, 필수 주내포항):</strong> 특정 ON-set 원소가 오직 단 하나의 PI에 의해서만 포함될 때, 해당 PI를 EPI라고 부릅니다. EPI는 논리 함수의 최종 커버(최소화된 수식)에 반드시 포함되어야 합니다.</p></li>
+<li><p>우리의 궁극적인 목표는 각 항당 리터럴(literal) 수를 최소화하기 위해 implicant를 최대한 큰 PI로 성장시키고, 그 PI들을 최소한으로 사용하여 전체 ON-set을 덮는(cover) 것입니다.</p></li>
+</ul>
+</section>
+<section id="mathematical-formulation-algorithm" class="level1">
+<h1>3. Mathematical Formulation &amp; Algorithm</h1>
+<section id="단계-논리-최소화-알고리즘-algorithm-for-two-level-simplification" class="level2">
+<h2 class="anchored" data-anchor-id="단계-논리-최소화-알고리즘-algorithm-for-two-level-simplification">3.1 2단계 논리 최소화 알고리즘 (Algorithm for two-level simplification)</h2>
+<ul>
+<li>K-map으로부터 최소 곱의 합(minimum sum-of-products, 최소 SOP) 표현을 도출하는 체계적인 알고리즘은 다음과 같습니다.
+<ul>
+<li><ol type="1">
+<li><strong>Step 1:</strong> ON-set의 원소 중 하나를 선택합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Step 2:</strong> 해당 원소와 인접한 1과 X(Don’t care)들을 묶어 “최대한 큰” 그룹(항상 2의 거듭제곱 개수)을 찾습니다. 코너나 양끝 행/열의 인접성도 고려해야 하며, 이를 통해 Prime Implicant가 형성됩니다. 모든 PI를 찾을 때까지 Step 1과 2를 반복합니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><strong>Step 3:</strong> K-map의 1들을 다시 검토합니다. 만약 어떤 1이 오직 하나의 PI에 의해서만 덮인다면, 그 PI는 Essential Prime Implicant(EPI)가 되며 최종 식에 무조건 포함됩니다. EPI에 의해 덮인 1들은 이후 다시 고려할 필요가 없습니다.</li>
+</ol></li>
+<li><ol start="4" type="1">
+<li><strong>Step 4:</strong> EPI로 덮이지 않은 1들이 남아있다면, 이를 덮을 수 있는 <strong>가장 적은 수의 PI(Minimum Cover)</strong>를 선택합니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+</section>
+<section id="design-examples" class="level2">
+<h2 class="anchored" data-anchor-id="design-examples">3.2 Design Examples</h2>
+<ul>
+<li>이 알고리즘이 실제 회로에서 어떻게 적용되는지 살펴보겠습니다.</li>
+</ul>
+<section id="example-1-2-bit-comparator-2비트-비교기" class="level3">
+<h3 class="anchored" data-anchor-id="example-1-2-bit-comparator-2비트-비교기">Example 1: 2-bit Comparator (2비트 비교기)</h3>
+<ul>
+<li>두 개의 2비트 숫자 N1(A, B)과 N2(C, D)를 비교하는 회로입니다. A와 C가 MSB(최상위 비트), B와 D가 LSB(최하위 비트)입니다. 출력 함수는 <code>LT (Less Than)</code>, <code>EQ (Equal)</code>, <code>GT (Greater Than)</code> 세 가지입니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Logic Design/3.Working-with-Combinational-Logic/images/comparator_kmap.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 2비트 비교기의 4변수 K-map. N1(A,B)와 N2(C,D)의 조합에 대해 출력 LT, EQ, GT가 1이 되는 영역을 나타냄. 최적화된 PI를 직사각형 그룹으로 묶어 보여준다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><p>K-map을 통해 도출한 각 논리식은 다음과 같습니다: <img src="https://latex.codecogs.com/png.latex?LT%20=%20A'B'D%20+%20A'C%20+%20B'CD"> <img src="https://latex.codecogs.com/png.latex?GT%20=%20BC'D'%20+%20AC'%20+%20ABD'"> <img src="https://latex.codecogs.com/png.latex?EQ%20=%20A'B'C'D'%20+%20A'BC'D%20+%20ABCD%20+%20AB'CD'"></p></li>
+<li><p>특히 <code>EQ</code>의 경우 대수적 조작을 통해 식을 간소화할 수 있습니다: <img src="https://latex.codecogs.com/png.latex?EQ%20=%20(AC%20+%20A'C')BD%20+%20(AC%20+%20A'C')B'D'%20=%20(AC%20+%20A'C')(BD%20+%20B'D')"> <img src="https://latex.codecogs.com/png.latex?EQ%20=%20(A%20%5Ctext%7B%20xnor%20%7D%20C)%20%5Ccdot%20(B%20%5Ctext%7B%20xnor%20%7D%20D)"></p></li>
+<li><p>이 수식은 A와 C가 같고, 동시에 B와 D가 같아야만 EQ가 1이 됨을 논리적으로 완벽히 설명합니다.</p></li>
+</ul>
+</section>
+<section id="example-2-bcd-increment-by-1-dont-cares-활용" class="level3">
+<h3 class="anchored" data-anchor-id="example-2-bcd-increment-by-1-dont-cares-활용">Example 2: BCD Increment by 1 (Don’t Cares 활용)</h3>
+<ul>
+<li>BCD 코드에 1을 더하는 회로입니다. 입력(I8, I4, I2, I1)은 0~9까지만 유효하므로, 10~15에 해당하는 입력 조건은 <strong>Don’t Care(X)</strong>로 처리됩니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Logic Design/3.Working-with-Combinational-Logic/images/bcd_incrementer_kmap.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: BCD Incrementer의 K-map. Don’t Care(X) 항을 1로 취급하여 최적의 서브큐브(subcube) 크기를 키움으로써, 필요한 리터럴 수를 줄이는 원리를 시각화함.</figcaption>
+</figure>
+</div>
+<ul>
+<li>예를 들어 O8(출력 MSB)의 수식을 구출할 때, ON-set에 도움이 되는 Don’t Care 항은 1로 간주하여 최대한 큰 서브큐브를 만들고, 도움이 되지 않는 X는 0으로 처리합니다. 그 결과 O8은 다음과 같이 도출됩니다: <img src="https://latex.codecogs.com/png.latex?O8%20=%20I4%20%5Ccdot%20I2%20%5Ccdot%20I1%20+%20I8%20%5Ccdot%20I1'"></li>
+</ul>
+</section>
+</section>
+</section>
+<section id="logic-realization" class="level1">
+<h1>4. Logic Realization</h1>
+<section id="two-level-logic-with-nandnor" class="level2">
+<h2 class="anchored" data-anchor-id="two-level-logic-with-nandnor">4.1 Two-level Logic with NAND/NOR</h2>
+<ul>
+<li><p>CMOS 트랜지스터 레벨에서는 AND/OR 게이트보다 NAND/NOR 게이트가 더 적은 개수의 트랜지스터를 사용하므로 면적과 지연 측면에서 유리합니다. 따라서 표준 Sum-of-Products (SOP) 형태나 Product-of-Sums (POS) 형태를 NAND 또는 NOR만으로 구성된 회로로 변환하는 기법이 필요합니다.</p></li>
+<li><p>이 변환의 핵심 이론적 배경은 <strong>De Morgan’s Law (드모르간의 법칙)</strong>입니다. <img src="https://latex.codecogs.com/png.latex?(A%20+%20B)'%20=%20A'%20%5Ccdot%20B'"> <img src="https://latex.codecogs.com/png.latex?(A%20%5Ccdot%20B)'%20=%20A'%20+%20B'"></p></li>
+<li><p>변환 과정에서는 게이트 사이에 두 개의 인버터(이중 버블, double bubbles)를 삽입한 뒤, 드모르간의 법칙을 적용해 이를 이동시킵니다.</p>
+<ul>
+<li><strong>SOP to NAND-NAND:</strong> AND 게이트 출력과 OR 게이트 입력 사이에 버블을 넣습니다. OR 게이트의 모든 입력이 반전되면 이는 NAND 게이트와 동일해집니다.</li>
+<li><strong>POS to NOR-NOR:</strong> OR 게이트 출력과 AND 게이트 입력 사이에 버블을 넣습니다. AND 게이트의 모든 입력이 반전되면 이는 NOR 게이트와 동일해집니다.</li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Logic Design/3.Working-with-Combinational-Logic/images/nand_nand_conversion.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: AND-OR 회로를 NAND-NAND 회로로 변환하는 도식. 연결선 사이에 이중 인버터(버블)를 추가하고 뒤쪽 버블을 병합하여 OR 게이트를 NAND 기호로 바꾸는 과정을 보여준다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="multi-level-logic-aoi-gates" class="level2">
+<h2 class="anchored" data-anchor-id="multi-level-logic-aoi-gates">4.2 Multi-level Logic &amp; AOI Gates</h2>
+<ul>
+<li>2단계 논리(SOP/POS)를 다단(Multi-level) 논리로 구성하면, 공통항을 묶어내는 방식(Factored form)을 통해 필요한 게이트 수와 각 게이트의 입력(fan-in) 수를 줄일 수 있습니다. 하지만 신호가 거쳐야 하는 게이트 단수가 늘어나므로 회로의 속도는 느려지며, 최적화가 까다롭다는 단점이 있습니다.</li>
+</ul>
+<section id="aoi-and-or-invert-gate" class="level3">
+<h3 class="anchored" data-anchor-id="aoi-and-or-invert-gate"><strong>AOI (AND-OR-Invert) Gate:</strong></h3>
+<ul>
+<li>AOI 게이트는 여러 게이트 기능을 하나의 회로 블록으로 패키징한 형태입니다. 이는 단일 CMOS 복합 게이트로 구현할 때 매우 면적 효율적입니다.</li>
+<li>일반적으로 논리식을 AOI 구조로 설계하려면, K-map에서 0들을 묶어 식을 도출한 후, 그 전체의 여집합(complement)을 취해 구현합니다.</li>
+<li>예를 들어 XOR 함수 <img src="https://latex.codecogs.com/png.latex?F%20=%20A%20%5Ctext%7B%20xor%20%7D%20B">의 경우: <img src="https://latex.codecogs.com/png.latex?F'%20=%20AB%20+%20A'B'"> 이므로, <img src="https://latex.codecogs.com/png.latex?F%20=%20(A'B'%20+%20AB)'"> 형태의 AOI 폼으로 구현할 수 있습니다.</li>
+</ul>
+</section>
+</section>
+</section>
+<section id="time-behavior" class="level1">
+<h1>5. Time Behavior</h1>
+<ul>
+<li><p>논리 게이트는 입력이 바뀌었을 때 출력이 변하기까지 물리적인 시간 지연(Gate delay)이 발생합니다. 이로 인해 실제 회로에서는 이상적인 부울 대수에서는 예측할 수 없는 현상들이 발생합니다.</p></li>
+<li><p><strong>Pulse Shaping (펄스 생성 회로):</strong></p>
+<ul>
+<li>수식상 <img src="https://latex.codecogs.com/png.latex?A'%20%5Ccdot%20A%20=%200"> 이지만, <img src="https://latex.codecogs.com/png.latex?A"> 신호가 인버터를 통과하여 <img src="https://latex.codecogs.com/png.latex?A'">가 되기까지 지연 시간이 발생한다면, <img src="https://latex.codecogs.com/png.latex?A">가 0에서 1로 변하는 짧은 찰나에 <img src="https://latex.codecogs.com/png.latex?A">와 <img src="https://latex.codecogs.com/png.latex?A'">가 모두 1이 되는 순간이 생깁니다. 이를 이용해 특정 폭을 가진 펄스를 의도적으로 생성할 수 있습니다.</li>
+</ul></li>
+<li><p><strong>Oscillatory Behavior (발진):</strong></p>
+<ul>
+<li>피드백 루프를 가진 회로에서 시간 지연이 누적되면, 출력이 0과 1 사이를 끊임없이 진동(oscillate)하는 현상이 나타날 수 있습니다.</li>
+</ul></li>
+<li><p><strong>Hazards / Glitches:</strong></p>
+<ul>
+<li>서로 다른 경로를 거쳐 온 신호들의 도착 시간 차이로 인해, 올바른 값으로 수렴하기 전 원치 않는 짧은 펄스가 발생하는 현상입니다.</li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Logic Design/3.Working-with-Combinational-Logic/images/pulse_shaping_waveform.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Pulse shaping 회로의 타이밍 다이어그램. 변수 A가 High로 전환될 때 딜레이 차이로 인해 AND 게이트의 출력이 일시적으로 High가 되는 현상(글리치 또는 펄스)을 시각화함.</figcaption>
+</figure>
+</div>
+</section>
+<section id="hardware-description-languages-hdls" class="level1">
+<h1>6. Hardware Description Languages (HDLs)</h1>
+<ul>
+<li>논리 회로가 복잡해지면 수식이나 회로도로 모든 것을 그리는 것이 불가능해집니다. 이를 해결하기 위해 소프트웨어 프로그래밍과 유사한 형태의 HDL(VHDL, Verilog 등)을 사용합니다. HDL은 다양한 추상화 수준(Levels of Abstraction)에서 하드웨어를 기술할 수 있습니다.
+<ul>
+<li><ol type="1">
+<li><strong>Structural description (구조적 기술):</strong> 회로도를 텍스트로 그대로 옮겨 놓은 형태입니다. 컴포넌트들을 호출하고 와이어로 연결합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Data-flow description (데이터플로우 기술):</strong> 진리표나 부울 수식을 텍스트로 기술합니다. <code>A &lt;= B and C;</code>와 같은 형태입니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><strong>Behavioral description (동작적/기능적 기술):</strong> 내부 회로망(how)보다는 모듈이 어떤 동작을 해야 하는지(what) 알고리즘적으로 기술합니다. 프로그래밍 언어의 <code>if-then-else</code>나 <code>case</code> 문 등을 활용하며, 합성 툴이 이를 회로로 변환합니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+<section id="일반-프로그래밍-언어pl와의-차이점" class="level2">
+<h2 class="anchored" data-anchor-id="일반-프로그래밍-언어pl와의-차이점"><strong>※ 일반 프로그래밍 언어(PL)와의 차이점:</strong></h2>
+<ul>
+<li>HDL은 근본적으로 ’병렬성(Parallelism)’과 ’시간(Time/Delay)’의 개념을 다룹니다. 논리 게이트는 항상 켜져 있으므로(continuous assignment), 명령어가 순차적으로 실행되는 PL과는 접근 방식이 다릅니다.</li>
+</ul>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Logic Design</category>
+  <guid>https://shsha0110.github.io/posts/Logic Design/3.Working-with-Combinational-Logic/</guid>
+  <pubDate>Tue, 24 Mar 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>[Data Mining] 7. Finding Similar Items (Part 1)</title>
   <dc:creator>유성현 </dc:creator>
@@ -2998,194 +3176,6 @@
   <category>Machine Learning</category>
   <guid>https://shsha0110.github.io/posts/Machine Learing/4.Kernel-Methods/</guid>
   <pubDate>Mon, 16 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 1)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-순차-데이터sequence-data-처리를-향하여" class="level1">
-<h1>1. Introduction: 순차 데이터(Sequence Data) 처리를 향하여</h1>
-<p>기존의 Feedforward Neural Networks(예: CNN, MLP)는 고정된 크기의 입력값을 받아 고정된 크기의 출력값을 반환하는 구조를 가집니다. 그러나 자연어 처리(NLP), 음성 인식, 비디오 분석과 같은 도메인에서는 입력 데이터의 길이가 가변적이며, 이전 시점의 데이터가 현재 시점에 영향을 미치는 <strong>순차적 특성(Sequential nature)</strong>을 지닙니다.</p>
-<p>이러한 순차 데이터를 효과적으로 모델링하기 위해 등장한 개념이 바로 <strong>순환 신경망(Recurrent Neural Networks, RNN)</strong>입니다. RNN은 내부에 ’상태(State)’를 저장할 수 있는 메모리 구조를 도입하여, 시계열 데이터를 처리할 수 있도록 설계되었습니다.</p>
-</section>
-<section id="architectures-of-neural-networks" class="level1">
-<h1>2. Architectures of Neural Networks</h1>
-<p>네트워크가 입력(Input)과 출력(Output)을 어떻게 매핑하느냐에 따라 다양한 아키텍처로 분류할 수 있습니다. RNN은 구조적 유연성을 바탕으로 다양한 형태의 매핑을 지원합니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/images/network_architectures.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 다양한 신경망 아키텍처 비교. 빨간색은 입력, 초록색은 은닉층, 파란색은 출력을 나타낸다. 좌측부터 One-to-one, One-to-many, Many-to-one, Many-to-many 구조를 시각화한 도식.</figcaption>
-</figure>
-</div>
-<ul>
-<li><strong>One to one</strong>: 단일 입력 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 단일 출력. 전통적인 Feedforward Network의 형태입니다.
-<ul>
-<li><em>Example</em>: 이미지 분류 (Image <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> Label)</li>
-</ul></li>
-<li><strong>One to many</strong>: 단일 입력 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 순차 출력. 하나의 정보를 바탕으로 일련의 시퀀스를 생성합니다.
-<ul>
-<li><em>Example</em>: 이미지 캡셔닝 (Image <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> Sequence of words)</li>
-</ul></li>
-<li><strong>Many to one</strong>: 순차 입력 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 단일 출력. 시계열 데이터를 모두 읽은 후 하나의 결론을 도출합니다.
-<ul>
-<li><em>Example</em>: 비디오 행동 분류, 감성 분석 (Sequence of words/images <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> Label)</li>
-</ul></li>
-<li><strong>Many to many</strong>: 순차 입력 <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> 순차 출력. 입력 시퀀스와 출력 시퀀스의 길이가 같거나 다를 수 있습니다.
-<ul>
-<li><em>Example 1</em>: 기계 번역 (Sequence of words in English <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> Sequence of words in Korean)</li>
-<li><em>Example 2</em>: 프레임 단위 비디오 분류 (Sequence of images <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> Sequence of labels)</li>
-</ul></li>
-</ul>
-</section>
-<section id="mathematical-formulation-of-vanilla-rnn" class="level1">
-<h1>3. Mathematical Formulation of Vanilla RNN</h1>
-<p>RNN의 가장 핵심적인 아이디어는 <strong>시퀀스가 처리됨에 따라 업데이트되는 ‘내부 상태(Internal State)’</strong>를 가진다는 것입니다. 매 타임스텝(time step) <img src="https://latex.codecogs.com/png.latex?t">마다, 네트워크는 이전 시점의 은닉 상태(hidden state) <img src="https://latex.codecogs.com/png.latex?h_%7Bt-1%7D">과 현재 시점의 입력 <img src="https://latex.codecogs.com/png.latex?x_%7Bt%7D">를 받아 새로운 은닉 상태 <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D">를 계산합니다.</p>
-<p>가장 기본적인 형태의 RNN인 <strong>Vanilla RNN (또는 Elman RNN)</strong>은 다음과 같은 점화식(Recurrence formula)으로 표현됩니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%20=%20f_%7BW%7D(h_%7Bt-1%7D,%20x_%7Bt%7D)"></p>
-<p>이때 중요한 점은 <strong>모든 타임스텝에서 동일한 함수 <img src="https://latex.codecogs.com/png.latex?f_W">와 파라미터 <img src="https://latex.codecogs.com/png.latex?W">가 반복적으로 사용(Parameter Sharing)</strong>된다는 것입니다. 구체적인 수식은 다음과 같습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%20=%20%5Ctanh(W_%7Bhh%7Dh_%7Bt-1%7D%20+%20W_%7Bxh%7Dx_%7Bt%7D%20+%20b_%7Bh%7D)"> <img src="https://latex.codecogs.com/png.latex?y_%7Bt%7D%20=%20W_%7Bhy%7Dh_%7Bt%7D%20+%20b_%7By%7D"></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?x_t">: <img src="https://latex.codecogs.com/png.latex?t"> 시점의 입력 벡터</li>
-<li><img src="https://latex.codecogs.com/png.latex?h_t">: <img src="https://latex.codecogs.com/png.latex?t"> 시점의 은닉 상태 (단일 은닉 벡터로 구성됨). 과거의 정보를 요약하여 담고 있습니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?y_t">: <img src="https://latex.codecogs.com/png.latex?t"> 시점의 출력 벡터</li>
-<li><img src="https://latex.codecogs.com/png.latex?W_%7Bhh%7D">: 은닉 상태 간의 전이를 담당하는 가중치 행렬</li>
-<li><img src="https://latex.codecogs.com/png.latex?W_%7Bxh%7D">: 입력값을 은닉 상태로 변환하는 가중치 행렬</li>
-<li><img src="https://latex.codecogs.com/png.latex?W_%7Bhy%7D">: 은닉 상태를 최종 출력으로 변환하는 가중치 행렬</li>
-<li><img src="https://latex.codecogs.com/png.latex?b_h,%20b_y">: 편향(bias) 벡터</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Ctanh">: 비선형 활성화 함수. 값의 범위를 <img src="https://latex.codecogs.com/png.latex?%5B-1,%201%5D">로 제한하여 그래디언트의 안정성을 돕습니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/images/rnn_computation_graph.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: Vanilla RNN의 계산 그래프(Computation Graph). 단일 노드가 루프를 도는 형태(좌측)를 시간 축에 따라 펼친(Unrolled) 형태(우측)로 표현. 모든 타임스텝 <img src="https://latex.codecogs.com/png.latex?t">에서 동일한 가중치 행렬 <img src="https://latex.codecogs.com/png.latex?W">가 사용됨을 화살표로 명확히 보여준다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="computation-graphs-unrolling-over-time" class="level1">
-<h1>4. Computation Graphs: Unrolling over Time</h1>
-<p>RNN을 학습하고 이해하기 위해서는 순환 구조를 시간 축(Time-step)에 따라 길게 펼쳐서(Unroll) 생각하는 것이 편리합니다.</p>
-<section id="sequence-to-sequence-many-to-many" class="level3">
-<h3 class="anchored" data-anchor-id="sequence-to-sequence-many-to-many">4.1 Sequence to Sequence (Many to Many)</h3>
-<p>입력 시퀀스 <img src="https://latex.codecogs.com/png.latex?x_1,%20x_2,%20%5Cdots,%20x_T">가 들어올 때, 매 스텝마다 <img src="https://latex.codecogs.com/png.latex?h_t">가 계산되고 그에 대응하는 출력 <img src="https://latex.codecogs.com/png.latex?y_t">와 손실값 <img src="https://latex.codecogs.com/png.latex?L_t">가 산출됩니다. 최종 손실값 <img src="https://latex.codecogs.com/png.latex?L">은 각 스텝의 손실을 모두 합한 값이 됩니다 (<img src="https://latex.codecogs.com/png.latex?L%20=%20%5Csum_%7Bt=1%7D%5ET%20L_t">).</p>
-</section>
-<section id="encoding-decoding-seq-to-seq" class="level3">
-<h3 class="anchored" data-anchor-id="encoding-decoding-seq-to-seq">4.2 Encoding &amp; Decoding (Seq to Seq)</h3>
-<p>기계 번역 등에서 사용되는 <strong>Many to one + One to many</strong> 구조입니다. 1. <strong>Many to one (Encoder)</strong>: 입력 시퀀스를 차례대로 읽어들여, 마지막 은닉 상태 <img src="https://latex.codecogs.com/png.latex?h_T">에 전체 입력 시퀀스의 문맥 정보를 하나의 벡터로 압축(Encode)합니다. 이때 가중치 <img src="https://latex.codecogs.com/png.latex?W_1">이 사용됩니다. 2. <strong>One to many (Decoder)</strong>: 압축된 문맥 벡터를 초기 상태로 삼아, 가중치 <img src="https://latex.codecogs.com/png.latex?W_2">를 사용하여 새로운 출력 시퀀스를 순차적으로 생성(Decode)해 냅니다.</p>
-</section>
-</section>
-<section id="example-character-level-language-modeling" class="level1">
-<h1>5. Example: Character-level Language Modeling</h1>
-<p>RNN이 작동하는 방식을 직관적으로 이해하기 위해, 문자 수준(Character-level) 언어 모델을 살펴보겠습니다. 모델의 목표는 주어진 문자열을 바탕으로 다음에 올 문자를 예측하는 것입니다.</p>
-<ul>
-<li><strong>학습 데이터</strong>: “hello”</li>
-<li><strong>어휘 사전(Vocabulary)</strong>: <img src="https://latex.codecogs.com/png.latex?%5Bh,%20e,%20l,%20o%5D"> (크기 <img src="https://latex.codecogs.com/png.latex?V=4">)</li>
-<li><strong>입력 인코딩</strong>: 각 문자는 원-핫 벡터(One-hot vector)로 인코딩됩니다. 예) ‘h’ = <img src="https://latex.codecogs.com/png.latex?%5B1,%200,%200,%200%5D%5ET"></li>
-</ul>
-<section id="forward-pass-training" class="level3">
-<h3 class="anchored" data-anchor-id="forward-pass-training">5.1 Forward Pass (Training)</h3>
-<p>주어진 시퀀스 “hel”을 입력하여 “ello”를 예측하는 과정입니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/images/rnn_forward_path_train.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 학습과정에서 RNN의 순전파 경로.</figcaption>
-</figure>
-</div>
-<ol type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?t=1"></strong>: 입력 ’h’가 들어갑니다. <img src="https://latex.codecogs.com/png.latex?h_1%20=%20%5Ctanh(W_%7Bhh%7Dh_0%20+%20W_%7Bxh%7Dx_1%20+%20b_h)">를 계산합니다. 출력층 <img src="https://latex.codecogs.com/png.latex?y_1">을 통해 다음 문자가 ’e’일 확률을 예측합니다.</li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?t=2"></strong>: 입력 ’e’가 들어갑니다. 이전 상태 <img src="https://latex.codecogs.com/png.latex?h_1">과 결합하여 <img src="https://latex.codecogs.com/png.latex?h_2">를 계산하고, 출력층을 통해 ’l’을 예측합니다.</li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?t=3"></strong>: 입력 ’l’이 들어갑니다. 동일한 방식으로 <img src="https://latex.codecogs.com/png.latex?h_3">를 업데이트하고, 다음 문자 ’l’을 예측합니다.</li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?t=4"></strong>: 입력 ’l’이 들어가고, 다음 문자 ’o’를 예측합니다.</li>
-</ol>
-<p>각 출력 <img src="https://latex.codecogs.com/png.latex?y_t">에 Softmax 함수를 취해 확률 분포를 얻고, 실제 정답 문자와의 Cross-Entropy Loss를 계산하여 네트워크를 학습시킵니다.</p>
-</section>
-<section id="embedding-layer의-도입" class="level3">
-<h3 class="anchored" data-anchor-id="embedding-layer의-도입">5.2 Embedding Layer의 도입</h3>
-<p>입력을 원-핫 벡터로 표현할 때, 입력 가중치 행렬 <img src="https://latex.codecogs.com/png.latex?W_%7Bxh%7D">와 원-핫 벡터 <img src="https://latex.codecogs.com/png.latex?x_t">의 행렬 곱은 단순히 <strong><img src="https://latex.codecogs.com/png.latex?W_%7Bxh%7D">의 특정 열(Column)을 추출</strong>하는 연산과 수학적으로 완전히 동일합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bbmatrix%7D%20w_%7B11%7D%20&amp;%20w_%7B12%7D%20&amp;%20w_%7B13%7D%20&amp;%20w_%7B14%7D%20%5C%5C%20w_%7B21%7D%20&amp;%20w_%7B22%7D%20&amp;%20w_%7B23%7D%20&amp;%20w_%7B24%7D%20%5C%5C%20w_%7B31%7D%20&amp;%20w_%7B32%7D%20&amp;%20w_%7B33%7D%20&amp;%20w_%7B34%7D%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%201%20%5C%5C%200%20%5C%5C%200%20%5C%5C%200%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%20w_%7B11%7D%20%5C%5C%20w_%7B21%7D%20%5C%5C%20w_%7B31%7D%20%5Cend%7Bbmatrix%7D%0A"></p>
-<p>불필요한 행렬 곱 연산을 피하기 위해, 실제 딥러닝 프레임워크에서는 이를 분리하여 <strong>임베딩 계층(Embedding Layer)</strong>으로 구현합니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/images/rnn_embedding_layer.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: RNN의 임베딩 레이어.</figcaption>
-</figure>
-</div>
-</section>
-<section id="test-time-generation-inference" class="level3">
-<h3 class="anchored" data-anchor-id="test-time-generation-inference">5.3 Test-time Generation (Inference)</h3>
-<p>학습이 끝난 후 모델이 새로운 텍스트를 생성하는 과정은 다음과 같습니다. 1. 초기 문자(Start token)를 네트워크에 입력합니다. 2. Softmax를 통과한 출력 분포에서 다음 문자를 <strong>샘플링(Sample)</strong>합니다. 3. 샘플링된 문자를 다음 타임스텝의 <strong>입력으로 다시 주입(Feed back)</strong>합니다. 4. 이 과정을 반복하여 전체 문장을 생성합니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/images/rnn_forward_path_test.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 추론과정에서 RNN의 순전파 경로.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="training-rnns-bptt-and-truncated-bptt" class="level1">
-<h1>6. Training RNNs: BPTT and Truncated BPTT</h1>
-<p>RNN의 가중치를 업데이트하기 위해서는 시간의 역방향으로 그래디언트를 전파해야 합니다. 이를 <strong>BPTT(Backpropagation Through Time)</strong>라고 부릅니다.</p>
-<section id="bptt의-한계" class="level3">
-<h3 class="anchored" data-anchor-id="bptt의-한계">6.1 BPTT의 한계</h3>
-<p>BPTT는 전체 시퀀스에 대해 Forward Pass를 수행하여 손실을 계산한 뒤, 다시 전체 시퀀스를 거슬러 올라가며 Backward Pass를 수행하여 그래디언트를 계산합니다. 만약 시퀀스 길이가 매우 길다면(예: 책 한 권의 텍스트), Forward Pass에서 발생한 모든 은닉 상태를 메모리에 저장해야 하므로 <strong>막대한 메모리가 소모</strong>된다는 치명적인 문제가 발생합니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/images/bptt_diagram.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: BPTT의 작동 원리.</figcaption>
-</figure>
-</div>
-</section>
-<section id="truncated-bptt-tbptt" class="level3">
-<h3 class="anchored" data-anchor-id="truncated-bptt-tbptt">6.2 Truncated BPTT (TBPTT)</h3>
-<ul>
-<li>이러한 문제를 해결하기 위해 <strong>Truncated BPTT</strong> 기법이 고안되었습니다.
-<ul>
-<li>긴 시퀀스를 일정한 크기의 <strong>청크(Chunk)</strong>로 나눕니다.</li>
-<li>Forward Pass 시에는 이전 청크의 마지막 은닉 상태를 다음 청크의 초기 은닉 상태로 전달합니다. 즉, <strong>은닉 상태는 시간의 흐름에 따라 끊임없이 앞으로 전달(Carry hidden states forward forever)</strong>됩니다.</li>
-<li>그러나 Backward Pass(오차 역전파)는 <strong>해당 청크 내부의 제한된 스텝 수만큼만 수행</strong>합니다.</li>
-<li>예를 들어, 청크 2의 Backward Pass는 청크 1으로 그래디언트를 전달하지 않고 잘라냅니다(Truncate). 이를 통해 긴 문맥 정보를 유지하면서도 메모리 사용량과 연산량을 현실적인 수준으로 제어할 수 있습니다.</li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/images/tbptt_diagram.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: Truncated BPTT(TBPTT)의 작동 원리. 은닉 상태(초록색 상자 간의 검은 화살표)는 전체 시퀀스를 관통하며 끝없이 전달되지만, 역전파(빨간 화살표)는 일정한 스텝(청크 단위)에서 끊어짐으로써 메모리 부하를 방지하는 모습을 시각화.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="applications-of-rnn" class="level1">
-<h1>7. Applications of RNN</h1>
-<p>RNN은 시계열 데이터를 다룰 수 있는 특성 덕분에 매우 강력한 생성 능력을 보여줍니다.</p>
-<ul>
-<li><strong>문학 작품 생성</strong>: 셰익스피어의 소네트(Sonnets)나 톨스토이의 소설 텍스트로 RNN을 학습시키면, 처음에는 의미 없는 문자열을 뱉어내다가 학습이 진행될수록 실제 영어 단어, 띄어쓰기, 심지어 문장 구조와 문체까지 모방하여 새로운 텍스트를 생성해냅니다.</li>
-<li><strong>코드 생성</strong>: 리눅스 커널의 C 코드 등을 학습 데이터로 사용하면, 괄호 맞춤, 들여쓰기, 변수 선언 등을 문법에 맞게 생성하는 코드를 작성할 수 있습니다.</li>
-</ul>
-<section id="image-captioning-cnn-rnn" class="level3">
-<h3 class="anchored" data-anchor-id="image-captioning-cnn-rnn">7.1 Image Captioning (CNN + RNN)</h3>
-<p>RNN과 컴퓨터 비전(CNN) 기술을 결합하여, 이미지를 설명하는 자연어 문장을 생성하는 <strong>이미지 캡셔닝(Image Captioning)</strong> 모델을 만들 수 있습니다.</p>
-<ol type="1">
-<li><strong>Feature Extraction</strong>: 먼저, 사전에 학습된 CNN (예: VGG, ResNet)의 마지막 분류 계층(FC layer)을 제거하여 이미지의 핵심 특징이 압축된 <strong>시각적 문맥 벡터(Visual Context Vector) <img src="https://latex.codecogs.com/png.latex?v"></strong>를 추출합니다.</li>
-<li><strong>RNN Modification</strong>: 기존 Vanilla RNN의 점화식에 이 이미지 벡터 <img src="https://latex.codecogs.com/png.latex?v">가 추가적인 조건(Condition)으로 작용하도록 수식을 수정합니다.</li>
-</ol>
-<p><img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%20=%20%5Ctanh(W_%7Bhh%7Dh_%7Bt-1%7D%20+%20W_%7Bxh%7Dx_%7Bt%7D%20+%20%5Cmathbf%7BW_%7Bih%7Dv%7D%20+%20b_%7Bh%7D)"></p>
-<p>새롭게 추가된 <img src="https://latex.codecogs.com/png.latex?W_%7Bih%7D">는 이미지 벡터 <img src="https://latex.codecogs.com/png.latex?v">를 은닉 상태의 차원으로 투영하는 가중치 행렬입니다. 즉, RNN은 매 스텝 단어를 생성할 때마다 “이전까지 생성한 문맥”과 “현재 주어진 이미지 정보”를 동시에 고려하여 다음 단어를 예측하게 됩니다. 모델은 예측된 단어가 <code>&lt;END&gt;</code> 토큰일 때 생성을 종료합니다.</p>
-<p><strong>실행 결과 예시:</strong> * <strong>성공 사례</strong>: “A cat sitting on a suitcase on the floor”, “A dog is running in the grass with a frisbee.” 처럼 이미지 내 객체와 행동을 정확히 파악하여 문장으로 서술합니다. * <strong>실패 사례</strong>: 거미줄 덩어리를 새가 나뭇가지에 앉아 있는 것(“A bird is perched on a tree branch”)으로 오인하거나, 야구 수비 장면의 복잡한 동작을 투수(“A man in a baseball uniform throwing a ball”)로 잘못 예측하기도 합니다. 이는 RNN 자체의 문제라기보다는 시각적 특징 추출의 한계나 데이터셋의 편향성에서 기인하는 경우가 많습니다.</p>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Deep Learning</category>
-  <guid>https://shsha0110.github.io/posts/Deep Learning/4.RNN,LSTM,Attention,Transformers/4.1/</guid>
-  <pubDate>Sun, 15 Mar 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>
 </rss>

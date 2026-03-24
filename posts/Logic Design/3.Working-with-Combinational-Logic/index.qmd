@@ -1,0 +1,114 @@
+---
+title: "[Logic Design] 3. Working with Combinational Logic"
+description: "Working with Combinational Logic"
+author: "유성현"
+date: "2026-03-25"
+categories: [Logic Design]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction
+
+* 이번 포스트에서는 디지털 논리 회로 설계의 핵심인 **조합 논리(Combinational Logic)**를 다룹니다. 단순히 진리표를 작성하는 것을 넘어, 부울 대수를 체계적으로 간소화하는 알고리즘과 이를 실제 하드웨어 게이트(NAND, NOR, 다단 논리)로 구현하는 방법론을 살펴봅니다. 또한, 실제 물리적 회로에서 발생하는 시간 지연(Time behavior) 현상과 이를 코드로 설계하기 위한 하드웨어 기술 언어(HDL)의 기초 개념까지 짚어보겠습니다.
+
+# 2. Core Concepts: Boolean Minimization
+
+* 조합 논리를 최적화하기 위해서는 Karnaugh map(K-map)을 이용한 체계적인 논리 최소화(Boolean minimization) 알고리즘을 이해해야 합니다. 이 과정을 위해 필요한 핵심 용어들은 다음과 같습니다.
+
+* **Implicant (내포항):** ON-set(결과가 1이 되는 조건) 또는 DC-set(Don't Care, 결과가 0이든 1이든 상관없는 조건)의 단일 원소이거나, 이들이 인접하여 서브큐브(subcube)를 형성할 수 있는 그룹을 의미합니다.
+* **Prime Implicant (PI, 주내포항):** 다른 implicant와 결합하여 더 큰 서브큐브를 만들 수 없는 최대한으로 확장된 implicant를 뜻합니다.
+* **Essential Prime Implicant (EPI, 필수 주내포항):** 특정 ON-set 원소가 오직 단 하나의 PI에 의해서만 포함될 때, 해당 PI를 EPI라고 부릅니다. EPI는 논리 함수의 최종 커버(최소화된 수식)에 반드시 포함되어야 합니다.
+
+* 우리의 궁극적인 목표는 각 항당 리터럴(literal) 수를 최소화하기 위해 implicant를 최대한 큰 PI로 성장시키고, 그 PI들을 최소한으로 사용하여 전체 ON-set을 덮는(cover) 것입니다.
+
+# 3. Mathematical Formulation & Algorithm
+
+## 3.1 2단계 논리 최소화 알고리즘 (Algorithm for two-level simplification)
+
+* K-map으로부터 최소 곱의 합(minimum sum-of-products, 최소 SOP) 표현을 도출하는 체계적인 알고리즘은 다음과 같습니다.
+  * 1.  **Step 1:** ON-set의 원소 중 하나를 선택합니다.
+  * 2.  **Step 2:** 해당 원소와 인접한 1과 X(Don't care)들을 묶어 "최대한 큰" 그룹(항상 2의 거듭제곱 개수)을 찾습니다. 코너나 양끝 행/열의 인접성도 고려해야 하며, 이를 통해 Prime Implicant가 형성됩니다. 모든 PI를 찾을 때까지 Step 1과 2를 반복합니다.
+  * 3.  **Step 3:** K-map의 1들을 다시 검토합니다. 만약 어떤 1이 오직 하나의 PI에 의해서만 덮인다면, 그 PI는 Essential Prime Implicant(EPI)가 되며 최종 식에 무조건 포함됩니다. EPI에 의해 덮인 1들은 이후 다시 고려할 필요가 없습니다.
+  * 4.  **Step 4:** EPI로 덮이지 않은 1들이 남아있다면, 이를 덮을 수 있는 **가장 적은 수의 PI(Minimum Cover)**를 선택합니다.
+
+## 3.2 Design Examples
+
+* 이 알고리즘이 실제 회로에서 어떻게 적용되는지 살펴보겠습니다.
+
+### Example 1: 2-bit Comparator (2비트 비교기)
+* 두 개의 2비트 숫자 N1(A, B)과 N2(C, D)를 비교하는 회로입니다. A와 C가 MSB(최상위 비트), B와 D가 LSB(최하위 비트)입니다. 출력 함수는 `LT (Less Than)`, `EQ (Equal)`, `GT (Greater Than)` 세 가지입니다.
+
+![Figure: 2비트 비교기의 4변수 K-map. N1(A,B)와 N2(C,D)의 조합에 대해 출력 LT, EQ, GT가 1이 되는 영역을 나타냄. 최적화된 PI를 직사각형 그룹으로 묶어 보여준다.](./images/comparator_kmap.png)
+
+* K-map을 통해 도출한 각 논리식은 다음과 같습니다:
+$$LT = A'B'D + A'C + B'CD$$
+$$GT = BC'D' + AC' + ABD'$$
+$$EQ = A'B'C'D' + A'BC'D + ABCD + AB'CD'$$
+
+* 특히 `EQ`의 경우 대수적 조작을 통해 식을 간소화할 수 있습니다:
+$$EQ = (AC + A'C')BD + (AC + A'C')B'D' = (AC + A'C')(BD + B'D')$$
+$$EQ = (A \text{ xnor } C) \cdot (B \text{ xnor } D)$$
+* 이 수식은 A와 C가 같고, 동시에 B와 D가 같아야만 EQ가 1이 됨을 논리적으로 완벽히 설명합니다.
+
+### Example 2: BCD Increment by 1 (Don't Cares 활용)
+* BCD 코드에 1을 더하는 회로입니다. 입력(I8, I4, I2, I1)은 0~9까지만 유효하므로, 10~15에 해당하는 입력 조건은 **Don't Care(X)**로 처리됩니다.
+
+![Figure: BCD Incrementer의 K-map. Don't Care(X) 항을 1로 취급하여 최적의 서브큐브(subcube) 크기를 키움으로써, 필요한 리터럴 수를 줄이는 원리를 시각화함.](./images/bcd_incrementer_kmap.png)
+
+* 예를 들어 O8(출력 MSB)의 수식을 구출할 때, ON-set에 도움이 되는 Don't Care 항은 1로 간주하여 최대한 큰 서브큐브를 만들고, 도움이 되지 않는 X는 0으로 처리합니다. 그 결과 O8은 다음과 같이 도출됩니다:
+$$O8 = I4 \cdot I2 \cdot I1 + I8 \cdot I1'$$ 
+
+# 4. Logic Realization
+
+## 4.1 Two-level Logic with NAND/NOR
+
+* CMOS 트랜지스터 레벨에서는 AND/OR 게이트보다 NAND/NOR 게이트가 더 적은 개수의 트랜지스터를 사용하므로 면적과 지연 측면에서 유리합니다. 따라서 표준 Sum-of-Products (SOP) 형태나 Product-of-Sums (POS) 형태를 NAND 또는 NOR만으로 구성된 회로로 변환하는 기법이 필요합니다.
+
+* 이 변환의 핵심 이론적 배경은 **De Morgan's Law (드모르간의 법칙)**입니다.
+$$(A + B)' = A' \cdot B'$$ 
+$$(A \cdot B)' = A' + B'$$ 
+
+* 변환 과정에서는 게이트 사이에 두 개의 인버터(이중 버블, double bubbles)를 삽입한 뒤, 드모르간의 법칙을 적용해 이를 이동시킵니다.
+  * **SOP to NAND-NAND:** AND 게이트 출력과 OR 게이트 입력 사이에 버블을 넣습니다. OR 게이트의 모든 입력이 반전되면 이는 NAND 게이트와 동일해집니다.
+  * **POS to NOR-NOR:** OR 게이트 출력과 AND 게이트 입력 사이에 버블을 넣습니다. AND 게이트의 모든 입력이 반전되면 이는 NOR 게이트와 동일해집니다.
+
+![Figure: AND-OR 회로를 NAND-NAND 회로로 변환하는 도식. 연결선 사이에 이중 인버터(버블)를 추가하고 뒤쪽 버블을 병합하여 OR 게이트를 NAND 기호로 바꾸는 과정을 보여준다.](./images/nand_nand_conversion.png)
+
+## 4.2 Multi-level Logic & AOI Gates
+
+* 2단계 논리(SOP/POS)를 다단(Multi-level) 논리로 구성하면, 공통항을 묶어내는 방식(Factored form)을 통해 필요한 게이트 수와 각 게이트의 입력(fan-in) 수를 줄일 수 있습니다. 하지만 신호가 거쳐야 하는 게이트 단수가 늘어나므로 회로의 속도는 느려지며, 최적화가 까다롭다는 단점이 있습니다.
+
+### **AOI (AND-OR-Invert) Gate:**
+* AOI 게이트는 여러 게이트 기능을 하나의 회로 블록으로 패키징한 형태입니다. 이는 단일 CMOS 복합 게이트로 구현할 때 매우 면적 효율적입니다.
+* 일반적으로 논리식을 AOI 구조로 설계하려면, K-map에서 0들을 묶어 식을 도출한 후, 그 전체의 여집합(complement)을 취해 구현합니다.
+* 예를 들어 XOR 함수 $F = A \text{ xor } B$의 경우:
+$$F' = AB + A'B'$$ 이므로, 
+$$F = (A'B' + AB)'$$ 형태의 AOI 폼으로 구현할 수 있습니다.
+
+# 5. Time Behavior
+
+* 논리 게이트는 입력이 바뀌었을 때 출력이 변하기까지 물리적인 시간 지연(Gate delay)이 발생합니다. 이로 인해 실제 회로에서는 이상적인 부울 대수에서는 예측할 수 없는 현상들이 발생합니다.
+
+* **Pulse Shaping (펄스 생성 회로):**
+    * 수식상 $A' \cdot A = 0$ 이지만, $A$ 신호가 인버터를 통과하여 $A'$가 되기까지 지연 시간이 발생한다면, $A$가 0에서 1로 변하는 짧은 찰나에 $A$와 $A'$가 모두 1이 되는 순간이 생깁니다. 이를 이용해 특정 폭을 가진 펄스를 의도적으로 생성할 수 있습니다.
+* **Oscillatory Behavior (발진):**
+    * 피드백 루프를 가진 회로에서 시간 지연이 누적되면, 출력이 0과 1 사이를 끊임없이 진동(oscillate)하는 현상이 나타날 수 있습니다.
+* **Hazards / Glitches:**
+    * 서로 다른 경로를 거쳐 온 신호들의 도착 시간 차이로 인해, 올바른 값으로 수렴하기 전 원치 않는 짧은 펄스가 발생하는 현상입니다.
+
+![Figure: Pulse shaping 회로의 타이밍 다이어그램. 변수 A가 High로 전환될 때 딜레이 차이로 인해 AND 게이트의 출력이 일시적으로 High가 되는 현상(글리치 또는 펄스)을 시각화함.](./images/pulse_shaping_waveform.png)
+
+# 6. Hardware Description Languages (HDLs)
+
+* 논리 회로가 복잡해지면 수식이나 회로도로 모든 것을 그리는 것이 불가능해집니다. 이를 해결하기 위해 소프트웨어 프로그래밍과 유사한 형태의 HDL(VHDL, Verilog 등)을 사용합니다. HDL은 다양한 추상화 수준(Levels of Abstraction)에서 하드웨어를 기술할 수 있습니다.
+  * 1.  **Structural description (구조적 기술):** 회로도를 텍스트로 그대로 옮겨 놓은 형태입니다. 컴포넌트들을 호출하고 와이어로 연결합니다.
+  * 2.  **Data-flow description (데이터플로우 기술):** 진리표나 부울 수식을 텍스트로 기술합니다. `A <= B and C;`와 같은 형태입니다.
+  * 3.  **Behavioral description (동작적/기능적 기술):** 내부 회로망(how)보다는 모듈이 어떤 동작을 해야 하는지(what) 알고리즘적으로 기술합니다. 프로그래밍 언어의 `if-then-else`나 `case` 문 등을 활용하며, 합성 툴이 이를 회로로 변환합니다.
+
+## **※ 일반 프로그래밍 언어(PL)와의 차이점:**
+* HDL은 근본적으로 '병렬성(Parallelism)'과 '시간(Time/Delay)'의 개념을 다룹니다. 논리 게이트는 항상 켜져 있으므로(continuous assignment), 명령어가 순차적으로 실행되는 PL과는 접근 방식이 다릅니다.

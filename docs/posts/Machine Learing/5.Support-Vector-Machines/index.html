@@ -1602,90 +1602,159 @@ window.Quarto = {
 
 <section id="introduction-서포트-벡터-머신svm의-개요" class="level1">
 <h1>1. Introduction: 서포트 벡터 머신(SVM)의 개요</h1>
-<p>서포트 벡터 머신(Support Vector Machines, 이하 SVM)은 기계학습 분야에서 현존하는 최고의 “Off-the-shelf(사전 훈련 없이 즉시 사용할 수 있는)” 지도 학습 알고리즘 중 하나로 평가받습니다. 복잡한 데이터 분포에서도 강력한 일반화 성능을 보여주며, 다양한 산업 및 연구 분야에서 널리 활용되고 있습니다.</p>
-<p>SVM의 동작 원리를 온전히 이해하기 위해서는 다음과 같은 핵심 주제들을 순차적으로 파악해야 합니다: * <strong>마진(Margins)</strong>: 데이터를 분리할 때 단순히 나누는 것을 넘어, 가능한 한 큰 “여백(gap)”을 두고 분리하려는 직관. * <strong>최적 마진 분류기(The optimal margin classifier)와 라그랑주 쌍대성(Lagrange duality)</strong>: 마진을 최대화하는 최적화 문제를 수학적으로 정의하고 푸는 과정. * <strong>커널 기법(Kernels)</strong>: 무한 차원과 같은 매우 높은 고차원 특성 공간(feature space)에서 SVM을 효율적으로 적용할 수 있게 해주는 수학적 트릭. * <strong>SMO 알고리즘</strong>: SVM의 최적화 문제를 실제로 빠르게 연산하고 구현할 수 있게 해주는 알고리즘.</p>
-<p>이번 포스트에서는 SVM의 가장 기초가 되는 <strong>마진의 직관적 의미</strong>와 이를 수학적으로 공식화한 <strong>최적 마진 분류기</strong>의 도출 과정에 집중하여 정리해 보겠습니다.</p>
+<ul>
+<li><p>서포트 벡터 머신(Support Vector Machines, 이하 SVM)은 기계학습 분야에서 현존하는 최고의 “Off-the-shelf(사전 훈련 없이 즉시 사용할 수 있는)” 지도 학습 알고리즘 중 하나로 평가받습니다. 복잡한 데이터 분포에서도 강력한 일반화 성능을 보여주며, 다양한 산업 및 연구 분야에서 널리 활용되고 있습니다.</p></li>
+<li><p>SVM의 동작 원리를 온전히 이해하기 위해서는 다음과 같은 핵심 주제들을 순차적으로 파악해야 합니다:</p>
+<ul>
+<li><strong>마진(Margins)</strong>: 데이터를 분리할 때 단순히 나누는 것을 넘어, 가능한 한 큰 “여백(gap)”을 두고 분리하려는 직관.</li>
+<li><strong>최적 마진 분류기(The optimal margin classifier)와 라그랑주 쌍대성(Lagrange duality)</strong>: 마진을 최대화하는 최적화 문제를 수학적으로 정의하고 푸는 과정.</li>
+<li><strong>커널 기법(Kernels)</strong>: 무한 차원과 같은 매우 높은 고차원 특성 공간(feature space)에서 SVM을 효율적으로 적용할 수 있게 해주는 수학적 트릭.</li>
+<li><strong>SMO 알고리즘</strong>: SVM의 최적화 문제를 실제로 빠르게 연산하고 구현할 수 있게 해주는 알고리즘.</li>
+</ul></li>
+<li><p>이번 포스트에서는 SVM의 가장 기초가 되는 <strong>마진의 직관적 의미</strong>와 이를 수학적으로 공식화한 <strong>최적 마진 분류기</strong>의 도출 과정에 집중하여 정리해 보겠습니다.</p></li>
+</ul>
 <hr>
 </section>
 <section id="margins-마진에-대한-직관" class="level1">
 <h1>2. Margins: 마진에 대한 직관</h1>
-<p>SVM의 철학을 이해하기 위해, 우리가 이미 잘 알고 있는 <strong>로지스틱 회귀(Logistic Regression)</strong> 모델부터 시작해 보겠습니다. 로지스틱 회귀에서 데이터 <span class="math inline">\(x\)</span>가 주어졌을 때 클래스 <span class="math inline">\(y=1\)</span>일 확률 <span class="math inline">\(p(y=1|x;\theta)\)</span>는 시그모이드 함수 <span class="math inline">\(g(\cdot)\)</span>를 사용하여 다음과 같이 모델링됩니다:</p>
+<ul>
+<li>SVM의 철학을 이해하기 위해, 우리가 이미 잘 알고 있는 <strong>로지스틱 회귀(Logistic Regression)</strong> 모델부터 시작해 보겠습니다.</li>
+<li>로지스틱 회귀에서 데이터 <span class="math inline">\(x\)</span>가 주어졌을 때 클래스 <span class="math inline">\(y=1\)</span>일 확률 <span class="math inline">\(p(y=1|x;\theta)\)</span>는 시그모이드 함수 <span class="math inline">\(g(\cdot)\)</span>를 사용하여 다음과 같이 모델링됩니다:</li>
+</ul>
 <p><span class="math display">\[h_\theta(x) = g(\theta^\top x)\]</span></p>
-<p>이때 모델은 <span class="math inline">\(h_\theta(x) \ge 0.5\)</span>일 때 (즉, <span class="math inline">\(\theta^\top x \ge 0\)</span>일 때) 클래스 “1”로 예측합니다.</p>
+<ul>
+<li>이때 모델은 <span class="math inline">\(h_\theta(x) \ge 0.5\)</span>일 때 (즉, <span class="math inline">\(\theta^\top x \ge 0\)</span>일 때) 클래스 “1”로 예측합니다.</li>
+</ul>
 <section id="분류의-자신감confidence" class="level2">
 <h2 class="anchored" data-anchor-id="분류의-자신감confidence">2.1. 분류의 “자신감(Confidence)”</h2>
-<p>긍정적 훈련 예제(Positive training example, <span class="math inline">\(y=1\)</span>)를 가정해 봅시다. <span class="math inline">\(\theta^\top x\)</span>의 값이 커질수록 <span class="math inline">\(h_\theta(x)\)</span>의 값(확률) 역시 커지며, 이는 모델이 해당 데이터의 레이블을 1로 예측하는 데 있어 <strong>“자신감(degree of confidence)”</strong>이 높다는 것을 의미합니다. 즉, <span class="math inline">\(\theta^\top x \gg 0\)</span>일 때 우리는 모델이 <span class="math inline">\(y=1\)</span>이라는 예측에 대해 매우 확신하고 있다고 생각할 수 있습니다. 반대로 부정적 예제(<span class="math inline">\(y=0\)</span>)에 대해서는 <span class="math inline">\(\theta^\top x \ll 0\)</span>일 때 <span class="math inline">\(y=0\)</span>이라는 예측에 강한 확신을 가집니다.</p>
-<p>결과적으로, 훈련 데이터에 대한 <strong>“좋은 적합(Good fit)”</strong>이란 단순히 예측을 맞추는 것을 넘어 다음과 같은 조건을 만족하는 상태입니다: * <span class="math inline">\(y^{(i)}=1\)</span>일 때마다 <span class="math inline">\(\theta^\top x^{(i)} \gg 0\)</span> * <span class="math inline">\(y^{(i)}=0\)</span>일 때마다 <span class="math inline">\(\theta^\top x^{(i)} \ll 0\)</span></p>
-<p>우리는 이러한 “분류의 자신감”을 수학적으로 엄밀하게 다루기 위해 <strong>함수적 마진(Functional margins)</strong>이라는 개념을 도입하게 됩니다.</p>
+<ul>
+<li><p>긍정적 훈련 예제(Positive training example, <span class="math inline">\(y=1\)</span>)를 가정해 봅시다.</p></li>
+<li><p><span class="math inline">\(\theta^\top x\)</span>의 값이 커질수록 <span class="math inline">\(h_\theta(x)\)</span>의 값(확률) 역시 커지며, 이는 모델이 해당 데이터의 레이블을 1로 예측하는 데 있어 <strong>“자신감(degree of confidence)”</strong>이 높다는 것을 의미합니다. 즉, <span class="math inline">\(\theta^\top x \gg 0\)</span>일 때 우리는 모델이 <span class="math inline">\(y=1\)</span>이라는 예측에 대해 매우 확신하고 있다고 생각할 수 있습니다.</p></li>
+<li><p>반대로 부정적 예제(<span class="math inline">\(y=0\)</span>)에 대해서는 <span class="math inline">\(\theta^\top x \ll 0\)</span>일 때 <span class="math inline">\(y=0\)</span>이라는 예측에 강한 확신을 가집니다.</p></li>
+<li><p>결과적으로, 훈련 데이터에 대한 <strong>“좋은 적합(Good fit)”</strong>이란 단순히 예측을 맞추는 것을 넘어 다음과 같은 조건을 만족하는 상태입니다:</p>
+<ul>
+<li><span class="math inline">\(y^{(i)}=1\)</span>일 때마다 <span class="math inline">\(\theta^\top x^{(i)} \gg 0\)</span></li>
+<li><span class="math inline">\(y^{(i)}=0\)</span>일 때마다 <span class="math inline">\(\theta^\top x^{(i)} \ll 0\)</span></li>
+</ul></li>
+<li><p>우리는 이러한 “분류의 자신감”을 수학적으로 엄밀하게 다루기 위해 <strong>함수적 마진(Functional margins)</strong>이라는 개념을 도입하게 됩니다.</p></li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/decision_boundary_confidence.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 결정 경계와 데이터 포인트들의 위치 관계. X는 긍정적 예제(y=1), O는 부정적 예제(y=0)를 나타내며, 실선은 결정 경계(Separating hyperplane)인 <span class="math inline">\(\theta^\top x=0\)</span>을 의미합니다. 점 A는 결정 경계로부터 매우 멀리 떨어져 있어 예측에 대한 확신이 가장 높으며, 점 C는 경계에 아슬아슬하게 위치하여 예측의 불확실성이 큽니다. 즉, 예측의 확신도 측면에서 A &gt; B &gt; C의 관계가 성립함을 보여주는 도식입니다.</figcaption>
 </figure>
 </div>
-<p>위 그림에서 보듯, 점 A는 결정 경계에서 멀리 떨어져 있어 모델이 예측을 매우 확신할 수 있는 반면, 점 C는 경계와 매우 가까워 모델의 예측이 상대적으로 불안정합니다. 우리의 목표는 모든 훈련 예제에 대해 정확하면서도 <strong>“확신에 찬(confident)”</strong> 예측을 할 수 있는, 즉 모든 데이터를 결정 경계로부터 최대한 멀리 떨어뜨리는(마진을 최대화하는) 결정 경계를 찾는 것입니다.</p>
+<ul>
+<li>위 그림에서 보듯, 점 A는 결정 경계에서 멀리 떨어져 있어 모델이 예측을 매우 확신할 수 있는 반면, 점 C는 경계와 매우 가까워 모델의 예측이 상대적으로 불안정합니다. 우리의 목표는 모든 훈련 예제에 대해 정확하면서도 <strong>“확신에 찬(confident)”</strong> 예측을 할 수 있는, 즉 모든 데이터를 결정 경계로부터 최대한 멀리 떨어뜨리는(마진을 최대화하는) 결정 경계를 찾는 것입니다.</li>
+</ul>
 <hr>
 </section>
 </section>
 <section id="notation-새로운-표기법의-도입" class="level1">
 <h1>3. Notation: 새로운 표기법의 도입</h1>
-<p>본격적으로 마진을 수학적으로 정의하기 전에, SVM에서 널리 사용되는 표기법(Notation)으로 전환하겠습니다.</p>
-<ol type="1">
+<ul>
+<li>본격적으로 마진을 수학적으로 정의하기 전에, SVM에서 널리 사용되는 표기법(Notation)으로 전환하겠습니다.
+<ul>
+<li><ol type="1">
 <li><strong>클래스 레이블의 변경</strong>: 기존의 <span class="math inline">\(\{0, 1\}\)</span> 대신 <span class="math inline">\(y \in \{-1, 1\}\)</span>을 사용합니다. 이는 수식 전개를 훨씬 깔끔하게 만들어줍니다.</li>
-<li><strong>파라미터의 분리</strong>: 파라미터 벡터 <span class="math inline">\(\theta\)</span>를 가중치 벡터 <span class="math inline">\(w\)</span>와 편향(절편) <span class="math inline">\(b\)</span>로 분리합니다.
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>파라미터의 분리</strong>: 파라미터 벡터 <span class="math inline">\(\theta\)</span>를 가중치 벡터 <span class="math inline">\(w\)</span>와 편향(절편) <span class="math inline">\(b\)</span>로 분리합니다.</li>
+</ol>
 <ul>
 <li><span class="math inline">\(b\)</span>는 기존의 <span class="math inline">\(\theta_0\)</span> (Intercept term) 역할을 명시적으로 분리하여 담당합니다.</li>
 <li><span class="math inline">\(w\)</span>는 기존의 <span class="math inline">\([\theta_1 ... \theta_d]^\top\)</span> 역할을 담당합니다.</li>
 </ul></li>
+<li><ol start="3" type="1">
 <li><strong>예측 함수의 정의</strong>: 로지스틱 회귀처럼 <span class="math inline">\(p(y=1)\)</span>의 확률값을 추정하는 중간 단계를 거치지 않고, 퍼셉트론(Perceptron) 알고리즘과 같이 직접적으로 1 또는 -1을 예측합니다. 모델의 가설 함수는 다음과 같이 정의됩니다:</li>
-</ol>
+</ol></li>
+</ul></li>
+</ul>
 <p><span class="math display">\[h_{w,b}(x) = g(w^\top x + b)\]</span> <span class="math display">\[g(z) = \begin{cases} 1 &amp; \text{if } z \ge 0, \\ -1 &amp; \text{otherwise} \end{cases}\]</span></p>
 <hr>
 </section>
 <section id="functional-and-geometric-margins" class="level1">
 <h1>4. Functional and Geometric Margins</h1>
-<p>데이터 포인트가 결정 경계로부터 얼마나 안전하게(확신을 가지고) 분류되었는지를 측정하는 두 가지 지표를 정의합니다.</p>
+<ul>
+<li>데이터 포인트가 결정 경계로부터 얼마나 안전하게(확신을 가지고) 분류되었는지를 측정하는 두 가지 지표를 정의합니다.</li>
+</ul>
 <section id="함수적-마진-functional-margin" class="level2">
 <h2 class="anchored" data-anchor-id="함수적-마진-functional-margin">4.1. 함수적 마진 (Functional Margin)</h2>
-<p>주어진 훈련 예제 <span class="math inline">\((x^{(i)}, y^{(i)})\)</span>에 대한 파라미터 <span class="math inline">\((w, b)\)</span>의 <strong>함수적 마진(Functional margin)</strong> <span class="math inline">\(\hat{\gamma}^{(i)}\)</span>는 다음과 같이 정의됩니다:</p>
+<ul>
+<li>주어진 훈련 예제 <span class="math inline">\((x^{(i)}, y^{(i)})\)</span>에 대한 파라미터 <span class="math inline">\((w, b)\)</span>의 <strong>함수적 마진(Functional margin)</strong> <span class="math inline">\(\hat{\gamma}^{(i)}\)</span>는 다음과 같이 정의됩니다:</li>
+</ul>
 <p><span class="math display">\[\hat{\gamma}^{(i)} = y^{(i)}(w^\top x^{(i)} + b)\]</span></p>
-<p>함수적 마진이 크다는 것은 우리의 예측이 올바르고 그 확신도 크다는 것을 의미합니다. * 만약 실제 레이블이 <span class="math inline">\(y^{(i)}=1\)</span>이라면, 예측이 정확하고 확신이 크기 위해서는 <span class="math inline">\(w^\top x^{(i)} + b\)</span>가 매우 큰 양수여야 합니다. * 만약 실제 레이블이 <span class="math inline">\(y^{(i)}=-1\)</span>이라면, <span class="math inline">\(w^\top x^{(i)} + b\)</span>가 매우 큰 음수여야 두 값을 곱했을 때 큰 양수가 도출됩니다. * 따라서, <span class="math inline">\(y^{(i)}(w^\top x^{(i)} + b) &gt; 0\)</span> 이라는 조건은 모델이 해당 데이터를 정확하게 분류했음을 나타냅니다.</p>
-<p><strong>전체 데이터셋에 대한 함수적 마진</strong> <span class="math inline">\(\hat{\gamma}\)</span>는 개별 데이터들의 마진 중 가장 작은 값(최악의 경우)으로 정의합니다: <span class="math display">\[\hat{\gamma} = \min_{i=1,...,n} \hat{\gamma}^{(i)}\]</span></p>
+<ul>
+<li><p>함수적 마진이 크다는 것은 우리의 예측이 올바르고 그 확신도 크다는 것을 의미합니다.</p>
+<ul>
+<li>만약 실제 레이블이 <span class="math inline">\(y^{(i)}=1\)</span>이라면, 예측이 정확하고 확신이 크기 위해서는 <span class="math inline">\(w^\top x^{(i)} + b\)</span>가 매우 큰 양수여야 합니다.</li>
+<li>만약 실제 레이블이 <span class="math inline">\(y^{(i)}=-1\)</span>이라면, <span class="math inline">\(w^\top x^{(i)} + b\)</span>가 매우 큰 음수여야 두 값을 곱했을 때 큰 양수가 도출됩니다.</li>
+</ul></li>
+<li><p>따라서, <span class="math inline">\(y^{(i)}(w^\top x^{(i)} + b) &gt; 0\)</span> 이라는 조건은 모델이 해당 데이터를 정확하게 분류했음을 나타냅니다.</p></li>
+<li><p><strong>전체 데이터셋에 대한 함수적 마진</strong> <span class="math inline">\(\hat{\gamma}\)</span>는 개별 데이터들의 마진 중 가장 작은 값(최악의 경우)으로 정의합니다: <span class="math display">\[\hat{\gamma} = \min_{i=1,...,n} \hat{\gamma}^{(i)}\]</span></p></li>
+</ul>
 <section id="함수적-마진의-한계-정규화의-필요성" class="level3">
 <h3 class="anchored" data-anchor-id="함수적-마진의-한계-정규화의-필요성">함수적 마진의 한계: 정규화의 필요성</h3>
-<p>함수적 마진만으로는 최적화에 문제가 발생할 수 있습니다. 만약 파라미터 <span class="math inline">\((w, b)\)</span>를 2배씩 스케일링하여 <span class="math inline">\((2w, 2b)\)</span>로 바꾼다고 가정해 봅시다. 가설 함수 <span class="math inline">\(h_{w,b}(x) = g(w^\top x + b)\)</span>는 단순히 부호(sign)만 확인하므로 결정 경계의 기하학적 위치나 모델의 실제 예측 결과는 전혀 변하지 않습니다. 하지만 계산된 함수적 마진 값은 <span class="math inline">\(y^{(i)}(2w^\top x^{(i)} + 2b) = 2\hat{\gamma}^{(i)}\)</span>가 되어 원래보다 2배 커지게 됩니다. 즉, 파라미터의 스케일만 키워도(실제 분류 성능은 그대로인데) 함수적 마진을 무한대로 키울 수 있는 문제가 발생합니다. 이를 해결하기 위해 파라미터에 대한 <strong>정규화(Normalization)</strong>가 필요해지며, 통상적으로 <span class="math inline">\(||w||_2 = 1\)</span>이 되도록 <span class="math inline">\(\left(\frac{w}{||w||_2}, \frac{b}{||w||_2}\right)\)</span> 형태로 크기를 강제하는 방식을 고려할 수 있습니다.</p>
+<ul>
+<li>함수적 마진만으로는 최적화에 문제가 발생할 수 있습니다. 만약 파라미터 <span class="math inline">\((w, b)\)</span>를 2배씩 스케일링하여 <span class="math inline">\((2w, 2b)\)</span>로 바꾼다고 가정해 봅시다.</li>
+<li>가설 함수 <span class="math inline">\(h_{w,b}(x) = g(w^\top x + b)\)</span>는 단순히 부호(sign)만 확인하므로 결정 경계의 기하학적 위치나 모델의 실제 예측 결과는 전혀 변하지 않습니다.</li>
+<li>하지만 계산된 함수적 마진 값은 <span class="math inline">\(y^{(i)}(2w^\top x^{(i)} + 2b) = 2\hat{\gamma}^{(i)}\)</span>가 되어 원래보다 2배 커지게 됩니다. 즉, 파라미터의 스케일만 키워도(실제 분류 성능은 그대로인데) 함수적 마진을 무한대로 키울 수 있는 문제가 발생합니다. 이를 해결하기 위해 파라미터에 대한 <strong>정규화(Normalization)</strong>가 필요해지며, 통상적으로 <span class="math inline">\(||w||_2 = 1\)</span>이 되도록 <span class="math inline">\(\left(\frac{w}{||w||_2}, \frac{b}{||w||_2}\right)\)</span> 형태로 크기를 강제하는 방식을 고려할 수 있습니다.</li>
+</ul>
 </section>
 </section>
 <section id="기하학적-마진-geometric-margin" class="level2">
 <h2 class="anchored" data-anchor-id="기하학적-마진-geometric-margin">4.2. 기하학적 마진 (Geometric Margin)</h2>
-<p>이러한 스케일 의존성 문제를 해결하고, 실제 공간상에서 데이터 포인트가 결정 경계(<span class="math inline">\(w^\top x + b = 0\)</span>)로부터 떨어진 <strong>유클리디안 거리(Euclidean distance)</strong>를 측정하는 것이 바로 <strong>기하학적 마진</strong>입니다.</p>
+<ul>
+<li>이러한 스케일 의존성 문제를 해결하고, 실제 공간상에서 데이터 포인트가 결정 경계(<span class="math inline">\(w^\top x + b = 0\)</span>)로부터 떨어진 <strong>유클리디안 거리(Euclidean distance)</strong>를 측정하는 것이 바로 <strong>기하학적 마진</strong>입니다.</li>
+</ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/geometric_margin_derivation.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 기하학적 마진의 기하학적 도출 과정. 벡터 w는 결정 경계와 직교(orthogonal)하는 법선 벡터입니다. 공간상의 한 점 A(<span class="math inline">\(x^{(i)}\)</span>)에서 결정 경계로 수선의 발을 내린 점을 B라고 할 때, 선분 AB의 길이가 기하학적 마진 <span class="math inline">\(\gamma^{(i)}\)</span>가 됩니다. 점 A에서 벡터 w의 반대 방향으로 <span class="math inline">\(\gamma^{(i)}\)</span>만큼 이동하면 점 B에 도달하게 되는 관계를 보여줍니다.</figcaption>
 </figure>
 </div>
-<p>위 그림을 참고하여, 클래스가 양성(<span class="math inline">\(y^{(i)}=1\)</span>)인 데이터 포인트 A(좌표 <span class="math inline">\(x^{(i)}\)</span>)가 결정 경계로부터 떨어진 거리를 <span class="math inline">\(\gamma^{(i)}\)</span>라고 합시다. 벡터 <span class="math inline">\(w\)</span>는 결정 경계 <span class="math inline">\(w^\top x + b = 0\)</span>에 수직인 법선 벡터입니다. 법선 벡터의 방향을 나타내는 단위 벡터는 <span class="math inline">\(\frac{w}{||w||}\)</span>가 됩니다. 따라서 점 A에서 결정 경계를 향해 수선의 발을 내린 점 B의 좌표는 원래 위치 <span class="math inline">\(x^{(i)}\)</span>에서 <span class="math inline">\(\gamma^{(i)}\)</span> 길이만큼 단위 벡터 <span class="math inline">\(\frac{w}{||w||}\)</span>의 반대 방향으로 이동한 것이므로 다음과 같습니다: <span class="math display">\[\text{Point B} = x^{(i)} - \gamma^{(i)} \cdot \frac{w}{||w||}\]</span></p>
-<p>점 B는 정확히 결정 경계 위에 존재하므로, 결정 경계 방정식에 대입하면 등식이 성립해야 합니다: <span class="math display">\[w^\top \left( x^{(i)} - \gamma^{(i)} \frac{w}{||w||} \right) + b = 0 \quad \text{[Eq.1]}\]</span></p>
-<p>이제 [Eq.1]을 <span class="math inline">\(\gamma^{(i)}\)</span>에 대해 정리해 보겠습니다. 전개 과정을 살펴보면 다음과 같습니다. <span class="math display">\[w^\top x^{(i)} - \gamma^{(i)} \frac{w^\top w}{||w||} + b = 0\]</span> 여기서 <span class="math inline">\(w^\top w = ||w||^2\)</span> 이므로 식은 다음과 같이 간소화됩니다. <span class="math display">\[w^\top x^{(i)} - \gamma^{(i)} ||w|| + b = 0\]</span> <span class="math display">\[\gamma^{(i)} ||w|| = w^\top x^{(i)} + b\]</span> <span class="math display">\[\gamma^{(i)} = \frac{w^\top x^{(i)} + b}{||w||} = \left(\frac{w}{||w||}\right)^\top x^{(i)} + \frac{b}{||w||}\]</span></p>
-<p>위 도출은 <span class="math inline">\(y^{(i)}=1\)</span>일 때를 가정한 것입니다. 만약 <span class="math inline">\(y^{(i)}=-1\)</span>인 경우 거리는 양수여야 하므로 앞에 음수 기호가 붙어야 합니다. 이를 <span class="math inline">\(y^{(i)}\)</span>를 곱해줌으로써 모든 훈련 예제 <span class="math inline">\((x^{(i)}, y^{(i)})\)</span>에 대해 일반화된 <strong>기하학적 마진</strong> 공식을 얻게 됩니다:</p>
+<ul>
+<li><p>위 그림을 참고하여, 클래스가 양성(<span class="math inline">\(y^{(i)}=1\)</span>)인 데이터 포인트 A(좌표 <span class="math inline">\(x^{(i)}\)</span>)가 결정 경계로부터 떨어진 거리를 <span class="math inline">\(\gamma^{(i)}\)</span>라고 합시다.</p></li>
+<li><p>벡터 <span class="math inline">\(w\)</span>는 결정 경계 <span class="math inline">\(w^\top x + b = 0\)</span>에 수직인 법선 벡터입니다. 법선 벡터의 방향을 나타내는 단위 벡터는 <span class="math inline">\(\frac{w}{||w||}\)</span>가 됩니다.</p></li>
+<li><p>따라서 점 A에서 결정 경계를 향해 수선의 발을 내린 점 B의 좌표는 원래 위치 <span class="math inline">\(x^{(i)}\)</span>에서 <span class="math inline">\(\gamma^{(i)}\)</span> 길이만큼 단위 벡터 <span class="math inline">\(\frac{w}{||w||}\)</span>의 반대 방향으로 이동한 것이므로 다음과 같습니다: <span class="math display">\[\text{Point B} = x^{(i)} - \gamma^{(i)} \cdot \frac{w}{||w||}\]</span></p></li>
+<li><p>점 B는 정확히 결정 경계 위에 존재하므로, 결정 경계 방정식에 대입하면 등식이 성립해야 합니다: <span class="math display">\[w^\top \left( x^{(i)} - \gamma^{(i)} \frac{w}{||w||} \right) + b = 0 \quad \text{[Eq.1]}\]</span></p></li>
+<li><p>이제 [Eq.1]을 <span class="math inline">\(\gamma^{(i)}\)</span>에 대해 정리해 보겠습니다. 전개 과정을 살펴보면 다음과 같습니다. <span class="math display">\[w^\top x^{(i)} - \gamma^{(i)} \frac{w^\top w}{||w||} + b = 0\]</span></p></li>
+<li><p>여기서 <span class="math inline">\(w^\top w = ||w||^2\)</span> 이므로 식은 다음과 같이 간소화됩니다. <span class="math display">\[w^\top x^{(i)} - \gamma^{(i)} ||w|| + b = 0\]</span> <span class="math display">\[\gamma^{(i)} ||w|| = w^\top x^{(i)} + b\]</span> <span class="math display">\[\gamma^{(i)} = \frac{w^\top x^{(i)} + b}{||w||} = \left(\frac{w}{||w||}\right)^\top x^{(i)} + \frac{b}{||w||}\]</span></p></li>
+<li><p>위 도출은 <span class="math inline">\(y^{(i)}=1\)</span>일 때를 가정한 것입니다. 만약 <span class="math inline">\(y^{(i)}=-1\)</span>인 경우 거리는 양수여야 하므로 앞에 음수 기호가 붙어야 합니다. 이를 <span class="math inline">\(y^{(i)}\)</span>를 곱해줌으로써 모든 훈련 예제 <span class="math inline">\((x^{(i)}, y^{(i)})\)</span>에 대해 일반화된 <strong>기하학적 마진</strong> 공식을 얻게 됩니다:</p></li>
+</ul>
 <p><span class="math display">\[\gamma^{(i)} = y^{(i)} \left( \left(\frac{w}{||w||}\right)^\top x^{(i)} + \frac{b}{||w||} \right)\]</span></p>
-<p><strong>기하학적 마진의 중요한 특징</strong> * <strong>Scale Invariance (스케일 불변성)</strong>: 파라미터 <span class="math inline">\(w\)</span>와 <span class="math inline">\(b\)</span>를 어떤 상수배로 리스케일링하더라도, 분모의 <span class="math inline">\(||w||\)</span> 역시 동일하게 스케일링되므로 기하학적 마진 값 자체는 변하지 않습니다. * <strong>함수적 마진과의 관계</strong>: 만약 <span class="math inline">\(||w|| = 1\)</span>로 정규화된다면, 식의 분모가 1이 되므로 기하학적 마진과 함수적 마진은 정확히 일치하게 됩니다.</p>
+<ul>
+<li><strong>기하학적 마진의 중요한 특징</strong>
+<ul>
+<li><strong>Scale Invariance (스케일 불변성)</strong>: 파라미터 <span class="math inline">\(w\)</span>와 <span class="math inline">\(b\)</span>를 어떤 상수배로 리스케일링하더라도, 분모의 <span class="math inline">\(||w||\)</span> 역시 동일하게 스케일링되므로 기하학적 마진 값 자체는 변하지 않습니다.</li>
+<li><strong>함수적 마진과의 관계</strong>: 만약 <span class="math inline">\(||w|| = 1\)</span>로 정규화된다면, 식의 분모가 1이 되므로 기하학적 마진과 함수적 마진은 정확히 일치하게 됩니다.</li>
+</ul></li>
+</ul>
 <hr>
 </section>
 </section>
 <section id="the-optimal-margin-classifier-최적-마진-분류기-공식화" class="level1">
 <h1>5. The Optimal Margin Classifier: 최적 마진 분류기 공식화</h1>
-<p>우리의 최종 목표는 훈련 데이터와 결정 경계 사이의 기하학적 마진 중 최솟값(가장 가까운 거리)을 <strong>최대화(maximize)</strong>하는 결정 경계를 찾는 것입니다. 이를 “최적 마진 분류기”라고 부릅니다.</p>
-<p>초기 최적화 문제는 다음과 같이 공식화할 수 있습니다: <span class="math display">\[\max_{\gamma, w, b} \gamma\]</span> <span class="math display">\[\text{s.t.} \quad y^{(i)}(w^\top x^{(i)} + b) \ge \gamma, \quad i=1,...,n\]</span> <span class="math display">\[||w|| = 1\]</span> (조건 <span class="math inline">\(||w||=1\)</span>은 기하학적 마진과 함수적 마진을 동일하게 만들어주기 위함입니다.)</p>
-<p>하지만 제약조건 <span class="math inline">\(||w|| = 1\)</span>은 원이나 구의 표면을 나타내며, 이는 수학적으로 <strong>비볼록(non-convex)</strong> 제약이므로 최적화 해를 구하기가 매우 까다롭습니다.</p>
+<ul>
+<li><p>우리의 최종 목표는 훈련 데이터와 결정 경계 사이의 기하학적 마진 중 최솟값(가장 가까운 거리)을 <strong>최대화(maximize)</strong>하는 결정 경계를 찾는 것입니다. 이를 “최적 마진 분류기”라고 부릅니다.</p></li>
+<li><p>초기 최적화 문제는 다음과 같이 공식화할 수 있습니다: <span class="math display">\[\max_{\gamma, w, b} \gamma\]</span> <span class="math display">\[\text{s.t.} \quad y^{(i)}(w^\top x^{(i)} + b) \ge \gamma, \quad i=1,...,n\]</span> <span class="math display">\[||w|| = 1\]</span></p>
+<ul>
+<li>조건 <span class="math inline">\(||w||=1\)</span>은 기하학적 마진과 함수적 마진을 동일하게 만들어주기 위함입니다.</li>
+</ul></li>
+<li><p>하지만 제약조건 <span class="math inline">\(||w|| = 1\)</span>은 원이나 구의 표면을 나타내며, 이는 수학적으로 <strong>비볼록(non-convex)</strong> 제약이므로 최적화 해를 구하기가 매우 까다롭습니다.</p></li>
+</ul>
 <section id="최적화-문제의-변환-convex-transformation" class="level2">
 <h2 class="anchored" data-anchor-id="최적화-문제의-변환-convex-transformation">5.1. 최적화 문제의 변환 (Convex Transformation)</h2>
-<p>이를 해결하기 위해 문제를 변형합니다. 기하학적 마진 <span class="math inline">\(\gamma\)</span>를 함수적 마진 <span class="math inline">\(\hat{\gamma}\)</span>와 노름 <span class="math inline">\(||w||\)</span>의 관계인 <span class="math inline">\(\frac{\hat{\gamma}}{||w||}\)</span>로 치환합니다. 그러면 최적화 문제는 다음과 같이 바뀝니다: <span class="math display">\[\max_{\hat{\gamma}, w, b} \frac{\hat{\gamma}}{||w||}\]</span> <span class="math display">\[\text{s.t.} \quad y^{(i)}(w^\top x^{(i)} + b) \ge \hat{\gamma}, \quad i=1,...,n\]</span> 이제 성가신 <span class="math inline">\(||w||=1\)</span> 제약조건이 사라졌습니다.</p>
-<p>여기에 앞서 다룬 기하학적 마진의 <strong>스케일 불변성(Scale Invariance)</strong>을 기가 막히게 활용합니다. <span class="math inline">\(w\)</span>와 <span class="math inline">\(b\)</span>를 스케일링하더라도 목적함수나 제약조건의 본질은 변하지 않으므로, 우리는 편의상 함수적 마진의 최솟값이 정확히 1이 되도록(<span class="math inline">\(\hat{\gamma} = 1\)</span>) 파라미터의 스케일을 조정할 수 있습니다.</p>
-<p><span class="math inline">\(\hat{\gamma} = 1\)</span>을 대입하면 목적함수는 <span class="math inline">\(\frac{1}{||w||}\)</span>을 최대화하는 문제가 됩니다. <span class="math inline">\(\frac{1}{||w||}\)</span>을 최대화하는 것은 <span class="math inline">\(||w||^2\)</span>을 최소화하는 것과 수학적으로 완전히 동일합니다. 미분 계산의 편의를 위해 앞에 <span class="math inline">\(\frac{1}{2}\)</span>을 붙여주면, 최종적인 SVM의 최적화 문제는 다음과 같은 깔끔한 형태로 완성됩니다:</p>
+<ul>
+<li><p>이를 해결하기 위해 문제를 변형합니다. 기하학적 마진 <span class="math inline">\(\gamma\)</span>를 함수적 마진 <span class="math inline">\(\hat{\gamma}\)</span>와 노름 <span class="math inline">\(||w||\)</span>의 관계인 <span class="math inline">\(\frac{\hat{\gamma}}{||w||}\)</span>로 치환합니다. 그러면 최적화 문제는 다음과 같이 바뀝니다: <span class="math display">\[\max_{\hat{\gamma}, w, b} \frac{\hat{\gamma}}{||w||}\]</span> <span class="math display">\[\text{s.t.} \quad y^{(i)}(w^\top x^{(i)} + b) \ge \hat{\gamma}, \quad i=1,...,n\]</span></p></li>
+<li><p>이제 성가신 <span class="math inline">\(||w||=1\)</span> 제약조건이 사라졌습니다.</p></li>
+<li><p>여기에 앞서 다룬 기하학적 마진의 <strong>스케일 불변성(Scale Invariance)</strong>을 기가 막히게 활용합니다. <span class="math inline">\(w\)</span>와 <span class="math inline">\(b\)</span>를 스케일링하더라도 목적함수나 제약조건의 본질은 변하지 않으므로, 우리는 편의상 함수적 마진의 최솟값이 정확히 1이 되도록(<span class="math inline">\(\hat{\gamma} = 1\)</span>) 파라미터의 스케일을 조정할 수 있습니다.</p></li>
+<li><p><span class="math inline">\(\hat{\gamma} = 1\)</span>을 대입하면 목적함수는 <span class="math inline">\(\frac{1}{||w||}\)</span>을 최대화하는 문제가 됩니다. <span class="math inline">\(\frac{1}{||w||}\)</span>을 최대화하는 것은 <span class="math inline">\(||w||^2\)</span>을 최소화하는 것과 수학적으로 완전히 동일합니다. 미분 계산의 편의를 위해 앞에 <span class="math inline">\(\frac{1}{2}\)</span>을 붙여주면, 최종적인 SVM의 최적화 문제는 다음과 같은 깔끔한 형태로 완성됩니다:</p></li>
+</ul>
 <p><span class="math display">\[\min_{w,b} \frac{1}{2} ||w||^2\]</span> <span class="math display">\[\text{s.t.} \quad y^{(i)}(w^\top x^{(i)} + b) \ge 1, \quad i=1,...,n\]</span></p>
-<p>이 형태가 바로 SVM 최적 마진 분류기의 표준형(Primal form)입니다. 이 식은 볼록 목적 함수(Convex objective function)와 선형 제약 조건(Linear constraints)을 가지는 전형적인 <strong>이차 계획법(Quadratic Programming, QP)</strong> 문제로 변환되었으며, 널리 사용되는 상용 QP Solver를 통해 글로벌 최적해(Global optimum)를 매우 효율적이고 안정적으로 찾아낼 수 있습니다.</p>
+<ul>
+<li>이 형태가 바로 SVM 최적 마진 분류기의 표준형(Primal form)입니다. 이 식은 볼록 목적 함수(Convex objective function)와 선형 제약 조건(Linear constraints)을 가지는 전형적인 <strong>이차 계획법(Quadratic Programming, QP)</strong> 문제로 변환되었으며, 널리 사용되는 상용 QP Solver를 통해 글로벌 최적해(Global optimum)를 매우 효율적이고 안정적으로 찾아낼 수 있습니다.</li>
+</ul>
 
 
 

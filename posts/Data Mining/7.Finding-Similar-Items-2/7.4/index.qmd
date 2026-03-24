@@ -1,0 +1,64 @@
+---
+title: "[Data Mining] 7. Finding Similar Items (Part 4)"
+description: "LSH with Other Distance Measures"
+author: "유성현"
+date: "2026-03-24"
+categories: [Data Mining]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: 다양한 거리 척도의 필요성
+
+이전 포스트까지 우리는 집합(Set) 데이터 간의 유사도를 측정하는 자카드 유사도(Jaccard Similarity)와 이를 위한 미니해싱(Minhashing) 기법을 중점적으로 다루었습니다. 하지만 실제 머신러닝 문제에서는 텍스트뿐만 아니라 실수형(Real-valued) 벡터로 표현되는 데이터가 훨씬 많습니다. 
+
+텍스트북이나 여러 연구를 살펴보면 유클리디안(Euclidean), 맨해튼(Manhattan), 체비셰프(Chebyshev), 민코프스키(Minkowski), 해밍(Hamming), 하버사인(Haversine) 등 다양한 거리 척도(Distance measures)가 존재합니다. 이번 포스트에서는 그중에서도 딥러닝 임베딩 공간 등에서 널리 쓰이는 **코사인 유사도(Cosine Similarity)**와 **각도 거리(Angular Distance)**에 특화된 LSH 기법을 알아보겠습니다.
+
+
+# 2. Mathematical Formulation: 코사인 유사도와 각도 거리
+
+데이터 포인트를 원점에서 해당 위치로 뻗어 나가는 벡터(Vector)로 상상해 봅시다. 두 데이터 포인트 $x$와 $y$가 주어졌을 때, 두 벡터가 이루는 각도(Angle)를 $\theta$라고 합니다.
+
+일반적으로 두 벡터 사이의 **코사인 유사도(Cosine Similarity)**는 벡터의 내적을 각 벡터의 크기(Norm)의 곱으로 나눈 값으로 정의됩니다:
+$$cos(\theta) = \frac{x \cdot y}{||x|| \cdot ||y||}$$
+
+하지만 앞선 포스트에서 배웠듯, 유사도 자체는 거리(Distance) 척도 공리를 만족하지 않습니다. 따라서 각도 $\theta$를 기반으로 한 **각도 거리(Angular Distance)**를 다음과 같이 정의합니다:
+$$\text{Angular Distance} = \frac{\theta}{\pi}$$
+
+각도 거리는 0에서 1 사이의 값을 가지며, 두 벡터가 완전히 같은 방향일 때 0, 정반대 방향일 때 1이 되는 완벽한 거리 척도로 기능합니다.
+
+
+# 3. Core Concepts: 랜덤 하이퍼플레인 (Random Hyperplanes)
+
+그렇다면 이 각도 거리를 위한 LSH 해시 함수는 어떻게 설계할까요? 자카드 거리에 미니해싱(Minhashing)이 있다면, 각도 거리에는 **랜덤 하이퍼플레인(Random Hyperplanes)** 기법이 있습니다. 
+어떤 두 벡터 $x$와 $y$가 각도 $\theta$를 이루고 있다면, 이 두 벡터는 하나의 평면(Plane)을 정의합니다. 원점을 지나는 무수히 많은 초평면(Hyperplanes)을 랜덤하게 그어보면, 이 초평면들은 크게 두 가지 유형으로 분류될 수 있습니다:
+
+1. **Red Hyperplane (적색 초평면):** 벡터 $x$와 $y$가 초평면을 기준으로 **같은 면(Same side)**에 존재하는 경우.
+2. **Blue Hyperplane (청색 초평면):** 벡터 $x$와 $y$가 초평면을 기준으로 **서로 다른 면(Different sides)**에 존재하는 경우 (즉, 초평면이 두 벡터 사이를 가로지름).
+
+### 법선 벡터(Normal Vector)를 통한 수학적 판별
+어떤 초평면이 주어졌을 때, 그 초평면에 수직인 **법선 벡터(Normal vector) $v$**를 정의할 수 있습니다. 랜덤 하이퍼플레인을 선택한다는 것은 곧 랜덤한 법선 벡터 $v$를 선택하는 것과 동일합니다.
+
+* **청색 초평면(서로 다른 면)인 경우:** 초평면이 두 벡터를 가로지르므로, 내적값 $v \cdot x$ 와 $v \cdot y$ 는 **서로 다른 부호(Different signs)**를 가집니다. $v$가 어느 방향으로 뻗어있든 부호가 다르다는 사실은 변하지 않습니다.
+* **적색 초평면(같은 면)인 경우:** 초평면이 두 벡터를 가로지르지 않으므로, 내적값 $v \cdot x$ 와 $v \cdot y$ 는 **같은 부호(Same sign)**를 가집니다.
+
+# 4. Probabilities & LSH Families
+
+이제 무작위로 $v$를 선택했을 때, 그 초평면이 두 벡터를 가로지르지 않고 같은 쪽에 남겨둘(즉, 적색 초평면이 될) 확률을 계산해 봅시다.
+
+두 벡터가 이루는 전체 2차원 평면의 각도는 $2\pi$입니다. 초평면의 법선 벡터 $v$가 두 벡터 사이를 가로지르는(청색) 영역의 각도는 정확히 두 벡터의 사잇각 $\theta$의 양방향인 $2\theta$가 됩니다. 따라서 청색 초평면이 될 확률은 $\frac{2\theta}{2\pi} = \frac{\theta}{\pi}$ 입니다.
+반대로, **두 벡터가 같은 면에 위치할(적색 초평면) 확률**은 전체에서 이를 뺀 값이 됩니다:
+$$P(\text{Red-type}) = 1 - \frac{\theta}{\pi}$$
+
+### 각도 거리를 위한 LSH Family 정의
+이 원리를 이용해 해시 함수 $f \in F$를 "랜덤하게 선택된 벡터 $v$와의 내적 부호"로 정의합니다.
+즉, $f(x) = f(y)$ 가 성립하기 위한 필요충분조건은 $v \cdot x$ 와 $v \cdot y$ 가 같은 부호를 가지는 것(적색 초평면)입니다.
+
+앞서 Part 3에서 배운 LSH 패밀리 공식 $(d_1, d_2, p_1, p_2)$에 대입해보면, 각도 거리 $d = \theta / \pi$ 이므로, 이 랜덤 하이퍼플레인 패밀리 $F$는 다음과 같이 정의됩니다:
+$$\left(d_1, d_2, 1 - \frac{d_1}{\pi}, 1 - \frac{d_2}{\pi}\right)\text{-sensitive}$$
+
+이 형태는 놀랍게도 자카드 거리의 미니해싱 패밀리인 $(d_1, d_2, 1 - d_1, 1 - d_2)$와 거의 유사한 선형적 구조를 가집니다. 따라서 미니해싱에서 사용했던 대역(Bands) 기반의 **AND-OR 증폭(Amplification) 기법을 이 랜덤 하이퍼플레인 패밀리에도 똑같이 적용하여 완벽한 S-Curve를 만들어낼 수 있습니다**.

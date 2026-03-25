@@ -1,0 +1,116 @@
+---
+title: "[Optimization] Lecture 6. Convex Optimization Beyond Linear Programming (Part 4)"
+description: "Second-order Cone Programming"
+author: "유성현"
+date: "2026-03-23"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. Introduction
+
+* 볼록 최적화의 확장 시리즈 마지막 포스트에서는 **이차 원뿔 계획법(Second-order Cone Programming, SOCP)**에 대해 알아봅니다. SOCP는 앞서 다룬 선형 계획법(LP)과 이차 계획법(QP)을 포괄하면서도, 준정부호 계획법(SDP)보다는 계산적으로 더 효율적인 중요한 최적화 클래스입니다. 
+
+* 이번 글에서는 SOCP의 표준 형태를 정의하고, 실무에서 자주 등장하는 확률적 제약 선형 계획법(Chance-constrained LP)이 어떻게 SOCP로 변환되는지 살펴봅니다. 나아가 QP가 SOCP의 특수한 형태이며, SOCP는 다시 SDP의 특수한 형태임을 수학적으로 엄밀하게 증명하겠습니다.
+
+---
+
+# 2. Second-order Cone Programming (SOCP)
+
+## 2.1. 표준 형태 (Standard Form)
+* 이차 원뿔 계획법(SOCP)은 목적 함수가 선형이며, 제약 조건으로 등식과 L2-노름(norm) 기반의 부등식을 가지는 최적화 문제입니다. 수식으로는 다음과 같이 정의됩니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & f^\top x \\
+\text{subject to} \quad & ||A_i x + b_i||_2 \le c_i^\top x + d_i \quad \text{for } i=1,...,m, \\
+& Ex = g
+\end{aligned}
+$$
+
+* 위 식에서 $||A_i x + b_i||_2 \le c_i^\top x + d_i$ 제약 조건은 이전 포스트에서 살펴본 로렌츠 원뿔(Lorentz cone) 제약 조건의 일반화된 형태입니다. 
+* *참고 (Exercise 6.4)*: 이 형태를 바탕으로 SOCP가 원뿔 계획법(Conic program)의 일종임을 증명할 수 있습니다.
+
+---
+
+# 3. Example: Chance-Constrained Linear Programming
+
+* SOCP의 강력함을 보여주는 대표적인 응용 사례는 **확률적 제약 선형 계획법(Chance-constrained program, CCP)**입니다. 현실 세계에서는 제약 조건의 계수가 불확실성을 가질 때가 많습니다.
+
+## 3.1. 문제 정의
+* 계수 벡터 $a$가 확률 변수(random vector)일 때, 제약 조건이 적어도 $1-\epsilon$의 높은 확률로 성립하도록 요구하는 문제는 다음과 같이 공식화됩니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & c^\top x \\
+\text{subject to} \quad & \mathbb{P}(a^\top x \le b) \ge 1 - \epsilon
+\end{aligned}
+$$
+
+![Figure: 가우시안 분포 하에서 확률적 제약 조건(Chance Constraint)이 성립할 꼬리 확률(Tail Probability) 영역을 나타내는 도식. $\Phi^{-1}(1-\epsilon)$ 값에 따라 제약 조건이 이차 원뿔 형태로 변환됩니다.](./images/gaussian_chance_constraint.png)
+
+### **적용 예시 (포트폴리오 최적화):**
+* 단가 $p_i$와 확률적 수익률 $r_i$를 가지는 금융 자산에 대해, 수익률이 $1+\alpha$ 이상일 확률을 $1-\epsilon$ 이상으로 보장하면서 포트폴리오의 구매 단가를 최소화하는 문제로 쓸 수 있습니다.
+$$
+\begin{aligned}
+\text{minimize} \quad & p^\top x \\
+\text{subject to} \quad & \mathbb{P}(r^\top x \ge 1 + \alpha) \ge 1 - \epsilon, \\
+& 1^\top x = 1
+\end{aligned}
+$$
+
+## 3.2. 가우시안 분포를 가정한 SOCP 변환
+* 계수 벡터 $a$가 평균이 $\overline{a}$이고 공분산이 $\Sigma$인 다변량 가우시안 분포를 따른다고 가정하면, 이 복잡한 확률적 제약 조건을 간단한 SOCP 제약으로 변환할 수 있습니다.
+  * 1. 새로운 확률 변수 $u = a^\top x$를 정의합니다. 이 변수의 평균은 $\overline{u} = \overline{a}^\top x$ 이고, 분산은 $\sigma^2 = x^\top \Sigma x$ 가 됩니다.
+  * 2. 확률 제약 조건을 표준화(Standardize)합니다.
+     $$\mathbb{P}\left(\frac{u - \overline{u}}{\sigma} \le \frac{b - \overline{u}}{\sigma}\right) \ge 1 - \epsilon$$ 
+     * 여기서 $\frac{u - \overline{u}}{\sigma}$ 는 평균이 0, 분산이 1인 표준 정규 분포를 따릅니다.
+  * 3. 표준 정규 분포의 누적 분포 함수(CDF)를 $\Phi(z) = \frac{1}{\sqrt{2\pi}} \int_{-\infty}^z e^{-t^2/2} dt$ 라 하면, 위 식은 $\Phi\left(\frac{b - \overline{u}}{\sigma}\right) \ge 1 - \epsilon$ 과 동치입니다.
+  * 4. 역함수 $\Phi^{-1}$을 취하고 $\overline{u}$ 와 $\sigma = ||\Sigma^{1/2}x||_2$ 를 대입하여 정리합니다.
+     $$\frac{b - \overline{a}^\top x}{||\Sigma^{1/2}x||_2} \ge \Phi^{-1}(1 - \epsilon)$$
+
+### **최종 SOCP 형태:**
+* 수식을 재배열하면 다음과 같은 완벽한 2차 원뿔 제약(Second-order cone constraint)을 얻게 됩니다.
+$$
+\begin{aligned}
+\text{minimize} \quad & c^\top x \\
+\text{subject to} \quad & \overline{a}^\top x + \Phi^{-1}(1 - \epsilon)||\Sigma^{1/2}x||_2 \le b
+\end{aligned}
+$$
+
+---
+
+# 4. 볼록 최적화 문제 간의 포함 관계
+
+## 4.1. Convex QP is SOCP
+* 이차 계획법(QP)은 보조 변수 $t$를 이용해 $\text{minimize } t$ 하에서 $t \ge \frac{1}{2}x^\top Q x + p^\top x$ 제약을 갖는 문제로 쓸 수 있습니다. $Q = P^\top P$로 분해한 뒤 식을 정리하면 다음과 같습니다.
+$$x^\top P^\top P x \le 2t - 2p^\top x$$
+
+* 이때 우변에 곱셈 공식의 변형 $A = (B+1/2)^2 - (B-1/2)^2$ 방식을 적용하면,
+$$||Px||_2^2 + (t - p^\top x - 1/2)^2 \le (t - p^\top x + 1/2)^2$$
+가 성립하며, 이를 벡터의 L2-노름 꼴로 합치면 다음과 같은 명백한 SOCP 제약 조건이 도출됩니다.
+$$
+\left|\left| \begin{pmatrix} Px \\ t - p^\top x - 1/2 \end{pmatrix} \right|\right|_2 \le t - p^\top x + 1/2
+$$
+
+* 결과적으로 볼록 이차 계획법(QP)은 SOCP의 특수한 형태입니다.
+
+## 4.2. SOCP is SDP (Lemma 6.5)
+* 반대로 모든 SOCP는 준정부호 계획법(SDP)으로 환원(Reduction)될 수 있습니다.
+* 벡터 $y \in \mathbb{R}^d$에 대한 2차 원뿔 제약 $||y||_2 \le s$ 는 다음 행렬이 양의 준정부호(PSD)인 것과 동치입니다.
+$$
+\begin{pmatrix} s & y^\top \\ y & s \cdot I \end{pmatrix} \ge 0
+$$
+
+* **증명 (Proof) :**
+  * **($\leftarrow$ 방향):** 위 행렬 양변에 벡터 $(||y||_2, -y^\top)$ 를 곱하면 $2(s||y||_2^2 - y^\top y ||y||_2) \ge 0$ 이 되며, 양변을 정리하면 $s \ge ||y||_2$ 가 성립합니다.
+  * **($\rightarrow$ 방향):** 임의의 $u \in \mathbb{R}$ 와 $v \in \mathbb{R}^d$ 에 대하여 이차 형식을 전개하면 $u^2 s + 2u y^\top v + s v^\top v$ 가 됩니다. $s \ge ||y||_2$ 조건을 대입하면 식은 $||y||_2(u^2 + ||v||_2^2) + 2u y^\top v$ 이상이 됩니다. 여기에 코시-슈바르츠 부등식(Cauchy-Schwarz inequality)을 적용하면,
+    $$\ge ||y||_2(u^2 + ||v||_2^2) - 2|u| \cdot ||y||_2 \cdot ||v||_2 = ||y||_2(|u| - ||v||_2)^2 \ge 0$$
+    이 되어 행렬이 항상 PSD임이 증명됩니다.
+  * 결론적으로, Lemma 6.5에 의해 모든 이차 원뿔 제약(SOC constraint)은 SDP 제약으로 쓸 수 있으며, **LP ⊂ QP ⊂ SOCP ⊂ SDP** 의 위계가 완성됩니다.

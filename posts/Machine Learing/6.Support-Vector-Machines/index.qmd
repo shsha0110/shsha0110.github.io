@@ -195,23 +195,53 @@ $$\begin{aligned} \text{s.t.} \quad & 0 \le \alpha_{i} \le C, \quad i=1,\dots,n,
 
 # 6. SMO 알고리즘 (Sequential Minimal Optimization)
 
-* 소프트 마진의 쌍대 문제를 풀기 위해 **SMO 알고리즘**을 사용합니다. 이는 **좌표 상승법(Coordinate Ascent Algorithm)**에 기반을 두고 있습니다. 좌표 상승법은 한 번에 하나의 변수 $\alpha_i$만 선택하여 최적화하고 나머지는 상수로 고정하는 과정을 수렴할 때까지 반복합니다.
+* 소프트 마진의 쌍대 문제를 풀기 위해 우리는 **SMO 알고리즘**을 사용합니다. 이는 기계학습 최적화에서 자주 쓰이는 **좌표 상승법(Coordinate Ascent Algorithm)**에 기반을 두고 있습니다. 
 
-![Figure: 좌표 상승법(Coordinate Ascent)의 최적화 궤적. 2차원 등고선 그래프 위에서 알고리즘이 (2, -2) 지점에서 시작하여, 한 번에 하나의 축(가로 방향 또는 세로 방향)으로만 번갈아가며 직선 이동을 하여 전역 최적점(Global Maximum) 중앙을 향해 지그재그로 수렴해 가는 경로를 직관적으로 보여준다.](./images/coordinate_ascent.png)
+## 6.1. 좌표 상승법 (Coordinate Ascent Algorithm)
 
-* 하지만 SVM 쌍대 문제에는 $\sum_{i=1}^{n}\alpha_{i}y^{(i)}=0$ 이라는 제약 조건이 존재하므로, 단 하나의 $\alpha$만 변경해서는 제약 조건을 위반하게 됩니다. 
-* 따라서 SMO 알고리즘은 **반드시 두 개의 $\alpha$ 변수(예: $\alpha_1, \alpha_2$)를 동시에 선택하여 최적화**합니다.
+* 제약 조건이 없는 다음과 같은 일반적인 최대화 문제를 가정해 봅시다.
 
-* 나머지 변수 $\alpha_3,..., \alpha_n$을 고정하면 다음의 선형 관계를 얻을 수 있습니다.
+$$\max_{\alpha} W(\alpha_{1},\alpha_{2},\dots,\alpha_{n})$$
 
-$$\alpha_{1}y^{(1)}+\alpha_{2}y^{(2)}=\zeta$$ 
+* 좌표 상승법은 가장 안쪽 루프에서 단 하나의 변수 $\alpha_i$만을 선택하여 최적화하고 나머지 변수들은 고정값으로 취급하는 과정을 수렴할 때까지 반복하는 알고리즘입니다.
 
-* 위 식을 이용해 $\alpha_1$을 $\alpha_2$에 대한 식으로 치환하여 $W(\alpha)$에 대입하면, 단순히 1차원 2차 함수(quadratic function) 최적화 문제로 단순화됩니다.
+**[Algorithm: Coordinate Ascent]**
+Loop until convergence {
+    For i = 1, ..., n, {
+        \alpha_i := \arg\max_{\hat{\alpha}_i} W(\alpha_1, ..., \alpha_{i-1}, \hat{\alpha}_i, \alpha_{i+1}, ..., \alpha_n)
+    }
+}
 
-$$\alpha_{1}=(\zeta-\alpha_{2}y^{(2)})y^{(1)}$$ 
+## 6.2. SVM에서의 문제점과 SMO의 해결책
 
-* 이때, 새로운 $\alpha_2$는 $0 \le \alpha_i \le C$ 라는 Box 제약 조건을 만족해야 하므로, 목적 함수를 미분하여 구한 무제약 상태의 최적값 $\alpha_2^{new, unclipped}$을 구한 뒤, 허용 범위 $[L, H]$ 안으로 **클리핑(Clipping)**해 줍니다.
+* 하지만 SVM 쌍대 문제에는 $\sum_{i=1}^{n}\alpha_{i}y^{(i)}=0$ 이라는 제약 조건이 존재합니다 . 만약 좌표 상승법처럼 단 하나의 $\alpha_1$만 변경하려고 하면, 이 등식 제약 조건을 즉각적으로 위반하게 됩니다 .
+
+* 따라서 SMO 알고리즘은 **반드시 두 개의 $\alpha$ 변수(예: $\alpha_1, \alpha_2$)를 동시에 선택하여 최적화**하는 방식을 취합니다 . 나머지 변수 $\alpha_3,\dots, \alpha_n$을 상수로 고정하면 다음의 선형 관계를 얻을 수 있습니다.
+
+$$\alpha_{1}y^{(1)}+\alpha_{2}y^{(2)} = -\sum_{i=3}^{n}\alpha_{i}y^{(i)}$$
+
+* 우변은 이미 고정된 상수이므로, 이를 $\zeta$ (zeta)로 치환하면 다음과 같이 단순해집니다 .
+
+$$\alpha_{1}y^{(1)}+\alpha_{2}y^{(2)} = \zeta$$
+
+* 위 식을 이용해 $\alpha_1$을 $\alpha_2$에 대한 식으로 치환할 수 있습니다 .
+
+$$\alpha_{1}=(\zeta-\alpha_{2}y^{(2)})y^{(1)}$$
+
+* 이 치환된 $\alpha_1$을 원래의 목적 함수 $W(\alpha)$에 대입하면, 다변수 함수였던 최적화 문제가 오직 $\alpha_2$에 대한 1차원 2차 함수(quadratic function) 최소/최대화 문제로 극적으로 단순화됩니다 .
+
+$$W(\alpha_{1},\alpha_{2},\dots,\alpha_{n}) = W((\zeta-\alpha_{2}y^{(2)})y^{(1)},\alpha_{2},\dots,\alpha_{n})$$
+
+### 6.3. Box 제약 조건과 클리핑 (Clipping)
+
+* 단순화된 2차 함수를 미분하여 $\alpha_2$에 대한 무제약 최적값 $\alpha_2^{new, unclipped}$을 구하는 것은 매우 쉽습니다. 하지만 소프트 마진 SVM에서는 각 $\alpha_i$가 $0 \le \alpha_i \le C$ 라는 Box 제약 조건을 만족해야 합니다 .
+
+* 위 그림처럼 두 변수의 선형 조건 $\alpha_{1}y^{(1)}+\alpha_{2}y^{(2)}=\zeta$가 $[0, C] \times [0, C]$ 상자 내부를 지나는 구간을 구하면, $\alpha_2$가 가질 수 있는 허용 범위의 하한(Lower bound) $L$과 상한(Upper bound) $H$를 계산할 수 있습니다 .
+
+* 최종적으로, 무제약 상태의 최적값 $\alpha_2^{new, unclipped}$을 이 $[L, H]$ 구간 안으로 잘라내는 **클리핑(Clipping)** 과정을 거쳐 실제 업데이트할 $\alpha_2^{new}$를 확정합니다 .
+
+$$\alpha_{2}^{new} = \begin{cases} H & \text{if } \alpha_{2}^{new, unclipped} > H \\ \alpha_{2}^{new, unclipped} & \text{if } L \le \alpha_{2}^{new, unclipped} \le H \\ L & \text{if } \alpha_{2}^{new, unclipped} < L \end{cases}$$
+
+* 이러한 가벼운 2변수 최적화 과정을 전체 데이터에 대해 반복하며, 모든 데이터 포인트가 KKT 쌍대 상보성 조건을 만족하게 되면 수렴한 것으로 판단하고 알고리즘을 종료합니다.
 
 ![Figure: SMO 알고리즘의 제약 조건 상자(Box Constraint). 알파1과 알파2는 변수의 제약 조건에 의해 가로 세로가 각각 C인 정사각형 영역 내부에서만 값을 가질 수 있다. 또한 알파1*y1 + 알파2*y2 = zeta 라는 선형 등식 조건에 따라, 이 사선이 정사각형 상자와 만나는 하한점 L(Lower bound)과 상한점 H(Upper bound) 사이의 선분 위에서만 변수가 업데이트 되어야 함을 기하학적으로 보여준다.](./images/smo_box_constraint.png)
-
-* 이러한 가벼운 2변수 최적화 과정을 KKT 조건을 모두 만족할 때까지 반복하는 것이 SMO 알고리즘의 핵심 원리입니다.

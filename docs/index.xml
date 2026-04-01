@@ -164,6 +164,536 @@
   <pubDate>Sat, 30 May 2026 15:00:00 GMT</pubDate>
 </item>
 <item>
+  <title>[Data Mining] 10. Dimensionality Reduction (Part 1)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.1/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-데이터-마이닝과-차원-축소" class="level1">
+<h1>1. Introduction: 데이터 마이닝과 차원 축소</h1>
+<ul>
+<li><p>현대의 수많은 데이터 소스(Data sources)는 행렬(Matrix)의 형태로 표현될 수 있습니다. 분석의 대상이 되는 데이터를 거대한 <img src="https://latex.codecogs.com/png.latex?m%20%5Ctimes%20n"> 행렬로 간주해 봅시다. 여기서 <img src="https://latex.codecogs.com/png.latex?m">은 데이터 포인트(또는 샘플/인스턴스)의 개수를 의미하며, <img src="https://latex.codecogs.com/png.latex?n">은 피처(Feature, 속성)의 개수를 의미합니다.</p></li>
+<li><p>예를 들어, 의료 및 건강 데이터셋(Health dataset)을 생각해 볼 수 있습니다. 이 데이터셋에서 각 사람(샘플)은 <code>&lt;키, 몸무게, 체질량지수(BMI), 혈압, 나이, 등&gt;</code>과 같은 다양한 피처의 벡터로 표현됩니다. 이러한 피처들은 분석 목적에 따라 매우 유연하게 다뤄질 수 있으며, 새롭게 생성되거나 불필요한 경우 버려질 수도 있습니다.</p></li>
+<li><p>하지만 피처의 수가 늘어날수록, 즉 데이터의 차원(<img src="https://latex.codecogs.com/png.latex?n">)이 커질수록 데이터를 처리하고 분석하는 데 비용이 증가하며 노이즈가 개입할 여지가 커집니다. 따라서 데이터가 가진 본질적인 정보를 최대한 보존하면서 차원을 줄이는 <strong>차원 축소(Dimensionality Reduction)</strong> 기법이 데이터 마이닝의 핵심적인 전처리 과정으로 요구됩니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="core-concepts-데이터-매니폴드data-manifold와-잠재-요인" class="level1">
+<h1>2. Core Concepts: 데이터 매니폴드(Data Manifold)와 잠재 요인</h1>
+<ul>
+<li><p>데이터가 표면적으로는 <img src="https://latex.codecogs.com/png.latex?n">차원 공간에 존재하더라도, 실제로 데이터가 분포하는 본질적인 구조인 <strong>데이터 매니폴드(Data Manifold)</strong>가 반드시 <img src="https://latex.codecogs.com/png.latex?n">차원 공간 전체를 채우는 것은 아닙니다.</p></li>
+<li><p>매니폴드의 크기(차원)는 곧 데이터에 내재된 <strong>잠재 요인(Latent factors)</strong>의 개수와 같습니다. 앞선 건강 데이터셋의 예시를 다시 떠올려보면, 어떤 사람을 ‘몸무게’, ‘키’, ’BMI’라는 3개의 피처로 표현할 수 있습니다. 그러나 BMI는 본질적으로 몸무게와 키를 통해 계산되는 값이므로, 이 3개의 변수는 완전히 독립적이지 않습니다. 즉, 3차원으로 표현되어 있지만 실제 이 데이터를 지배하는 독립적인 잠재 요인은 그보다 적습니다.</p></li>
+<li><p>우리는 차원 축소 과정을 통해 표면적인 피처들 이면에 숨어있는 진짜 <strong>잠재 요인들을 발견</strong>하고자 합니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.1/images/data_manifold_3d_to_2d.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: 3차원 공간(<img src="https://latex.codecogs.com/png.latex?D=3">)에 분포한 데이터 포인트들이 실제로는 2차원 평면(<img src="https://latex.codecogs.com/png.latex?d=2">) 상에 밀집해 있는 모습을 보여주는 매니폴드 도식. 붉은색 테두리의 격자 평면이 데이터의 내재적 구조(Manifold)를 의미하며, 3차원 좌표계(검은 점선축) 대신 붉은색 화살표로 표현된 새로운 2개의 축(Latent factors)만으로 각 점의 위치(<img src="https://latex.codecogs.com/png.latex?A">)를 충분히 설명할 수 있음을 나타낸다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+<section id="mathematical-formulation-행렬의-랭크rank-of-a-matrix" class="level1">
+<h1>3. Mathematical Formulation: 행렬의 랭크(Rank of a Matrix)</h1>
+<ul>
+<li><p>데이터에 내재된 잠재 요인의 수를 수학적으로 어떻게 정의할 수 있을까요? 선형대수학의 관점에서 이는 <strong>행렬의 랭크(Rank of a Matrix)</strong>와 정확히 일치합니다.</p></li>
+<li><p>데이터 행렬 <img src="https://latex.codecogs.com/png.latex?M">의 랭크는 선형적으로 독립적인(linearly independent) 행(row) 또는 열(column)의 최대 개수로 정의됩니다. 여기서 <strong>선형 독립(Independence)</strong>이란, 행(또는 열) 벡터들의 0이 아닌 선형 결합(nonzero linear sum)으로 영벡터(<img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7B0%7D">)를 만들 수 없는 상태를 의미합니다.</p></li>
+<li><p>구체적인 수학적 예시를 통해 이를 유도해 보겠습니다. 3차원 공간 상에 존재하는 3개의 데이터 포인트 <img src="https://latex.codecogs.com/png.latex?A,%20B,%20C">가 행렬 <img src="https://latex.codecogs.com/png.latex?M">으로 주어졌다고 가정해 봅시다:</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AM%20=%20%5Cbegin%7Bbmatrix%7D%20A%20%5C%5C%20B%20%5C%5C%20C%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%201%20&amp;%202%20&amp;%201%20%5C%5C%20-2%20&amp;%20-3%20&amp;%201%20%5C%5C%203%20&amp;%205%20&amp;%200%20%5Cend%7Bbmatrix%7D%0A"></p>
+<ul>
+<li>얼핏 보면 이 데이터는 3개의 행(샘플)과 3개의 열(피처)을 가지고 있으므로 차원이 3인 것처럼 보입니다. 하지만 이 행렬의 실질적인 랭크를 계산해 보면 다음과 같은 종속성을 발견할 수 있습니다.</li>
+</ul>
+<section id="행row-기준의-선형-종속성-검증" class="level2">
+<h2 class="anchored" data-anchor-id="행row-기준의-선형-종속성-검증"><strong>1. 행(Row) 기준의 선형 종속성 검증:</strong></h2>
+<ul>
+<li><p>각 행을 벡터로 보았을 때, 첫 번째 행(<img src="https://latex.codecogs.com/png.latex?A">)에서 두 번째 행(<img src="https://latex.codecogs.com/png.latex?B">)과 세 번째 행(<img src="https://latex.codecogs.com/png.latex?C">)을 빼면 영벡터가 됩니다. <img src="https://latex.codecogs.com/png.latex?A%20-%20B%20-%20C%20=%20%5B1,%202,%201%5D%20-%20%5B-2,%20-3,%201%5D%20-%20%5B3,%205,%200%5D%20=%20%5B0,%200,%200%5D%20=%20%5Cmathbf%7B0%7D"></p></li>
+<li><p>즉, <img src="https://latex.codecogs.com/png.latex?C%20=%20A%20-%20B">로 표현될 수 있으므로, 세 번째 데이터 포인트는 앞의 두 포인트가 그리는 2차원 평면 위에 존재하게 됩니다.</p></li>
+</ul>
+</section>
+<section id="열column-기준의-선형-종속성-검증" class="level2">
+<h2 class="anchored" data-anchor-id="열column-기준의-선형-종속성-검증"><strong>2. 열(Column) 기준의 선형 종속성 검증:</strong></h2>
+<ul>
+<li><p>열 벡터 단위(<img src="https://latex.codecogs.com/png.latex?c_1,%20c_2,%20c_3">)로 살펴보아도 선형 종속성이 존재합니다. <img src="https://latex.codecogs.com/png.latex?5c_1%20-%203c_2%20+%20c_3%20=%205%5Cbegin%7Bbmatrix%7D%201%20%5C%5C%20-2%20%5C%5C%203%20%5Cend%7Bbmatrix%7D%20-%203%5Cbegin%7Bbmatrix%7D%202%20%5C%5C%20-3%20%5C%5C%205%20%5Cend%7Bbmatrix%7D%20+%20%5Cbegin%7Bbmatrix%7D%201%20%5C%5C%201%20%5C%5C%200%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%205%20%5C%5C%20-10%20%5C%5C%2015%20%5Cend%7Bbmatrix%7D%20-%20%5Cbegin%7Bbmatrix%7D%206%20%5C%5C%20-9%20%5C%5C%2015%20%5Cend%7Bbmatrix%7D%20+%20%5Cbegin%7Bbmatrix%7D%201%20%5C%5C%201%20%5C%5C%200%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%200%20%5C%5C%200%20%5C%5C%200%20%5Cend%7Bbmatrix%7D"></p></li>
+<li><p>따라서 열 벡터 간의 선형 결합 합이 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7B0%7D">이 되므로, 피처 간에도 완벽한 종속 관계가 존재합니다.</p></li>
+<li><p>결론적으로 이 행렬의 선형적으로 독립인 벡터의 최대 개수는 2이므로 <strong>랭크(Rank)는 2</strong>가 됩니다.</p></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="detailed-derivations-기저-변환을-통한-효율적인-좌표-재작성" class="level1">
+<h1>4. Detailed Derivations: 기저 변환을 통한 효율적인 좌표 재작성</h1>
+<ul>
+<li><p>행렬의 랭크가 2라는 사실은, 3차원으로 표현된 이 데이터 포인트들을 정보 손실 없이 단 2개의 새로운 기저(basis)를 이용해 효율적으로 재작성할 수 있음을 의미합니다.</p></li>
+<li><p>기존의 3차원 표준 기저 벡터(Old basis vectors)를 <img src="https://latex.codecogs.com/png.latex?e_1%20=%20%5B1,%200,%200%5D">, <img src="https://latex.codecogs.com/png.latex?e_2%20=%20%5B0,%201,%200%5D">, <img src="https://latex.codecogs.com/png.latex?e_3%20=%20%5B0,%200,%201%5D">이라고 합시다. 기존 좌표계에서 데이터 포인트 <img src="https://latex.codecogs.com/png.latex?A">는 다음과 같이 표현되었습니다: <img src="https://latex.codecogs.com/png.latex?A%20=%201e_1%20+%202e_2%20+%201e_3"></p></li>
+<li><p>이제 선형적으로 독립적인 두 개의 행 <img src="https://latex.codecogs.com/png.latex?A">와 <img src="https://latex.codecogs.com/png.latex?B">를 새로운 기저 벡터(New basis vectors) <img src="https://latex.codecogs.com/png.latex?u_1,%20u_2">로 설정해 보겠습니다.</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?u_1%20=%20%5B1,%202,%201%5D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?u_2%20=%20%5B-2,%20-3,%201%5D"></li>
+</ul></li>
+<li><p>이 새로운 기저를 사용하여 데이터 포인트 <img src="https://latex.codecogs.com/png.latex?A,%20B,%20C">의 좌표를 다시 계산해 봅시다.</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?A">는 그 자체로 <img src="https://latex.codecogs.com/png.latex?u_1">이므로: <img src="https://latex.codecogs.com/png.latex?A%20=%201u_1%20+%200u_2"> <img src="https://latex.codecogs.com/png.latex?%5Cimplies"> 새로운 좌표: <strong><img src="https://latex.codecogs.com/png.latex?%5B1,%200%5D"></strong></li>
+<li><img src="https://latex.codecogs.com/png.latex?B">는 그 자체로 <img src="https://latex.codecogs.com/png.latex?u_2">이므로: <img src="https://latex.codecogs.com/png.latex?B%20=%200u_1%20+%201u_2"> <img src="https://latex.codecogs.com/png.latex?%5Cimplies"> 새로운 좌표: <strong><img src="https://latex.codecogs.com/png.latex?%5B0,%201%5D"></strong></li>
+<li>앞서 증명한 선형 종속성(<img src="https://latex.codecogs.com/png.latex?C%20=%20A%20-%20B">)에 의해 <img src="https://latex.codecogs.com/png.latex?C">는: <img src="https://latex.codecogs.com/png.latex?C%20=%201u_1%20-%201u_2"> <img src="https://latex.codecogs.com/png.latex?%5Cimplies"> 새로운 좌표: <strong><img src="https://latex.codecogs.com/png.latex?%5B1,%20-1%5D"></strong></li>
+</ul></li>
+<li><p>이처럼 적절한 기저를 선택함으로써 데이터의 실질적인 차원을 3차원(<img src="https://latex.codecogs.com/png.latex?D=3">)에서 2차원(<img src="https://latex.codecogs.com/png.latex?d=2">)으로 성공적으로 축소(Reduced)시켰습니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="interpretation-and-intuition-데이터의-진짜-축-발견과-노이즈" class="level1">
+<h1>5. Interpretation and Intuition: 데이터의 ‘진짜 축’ 발견과 노이즈</h1>
+<ul>
+<li>앞선 사례처럼 차원 축소의 궁극적인 목표는 데이터가 실제로 분포해 있는 매니폴드, 즉 <strong>데이터의 진짜 축(actual axes)</strong>을 발견하여 이를 따라가는 것입니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.1/images/dimensionality_reduction_1d.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: 2차원 공간(<img src="https://latex.codecogs.com/png.latex?D=2">) 상의 데이터 포인트들을 1차원 선(<img src="https://latex.codecogs.com/png.latex?d=1">)으로 프로젝션(Projection)하는 차원 축소의 직관적 예시. 파란색 원들은 기존 데이터 포인트를 의미하며, 붉은 실선(Manifold)은 데이터의 주된 분산을 설명하는 새로운 단일 축을 나타낸다. 점들을 붉은 선 위로 정사영시킴으로써 각 점을 1개의 좌표(1D)로 간략히 표현할 수 있다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><p>위 그림처럼 2차원 공간에 넓게 퍼져있는 것 같아 보여도, 포인트들이 하나의 붉은 선(매니폴드)을 따라 군집해 있다면, 이 선을 새로운 축으로 삼아 각 점을 1개의 좌표로만 표현(Represent each point with 1 coordinate)할 수 있습니다.</p></li>
+<li><p>앞선 3D → 2D 수식 예제에서는 랭크가 정확히 2로 떨어졌기 때문에 데이터 손실이 전혀 없는 완벽한 압축이 가능했습니다(No error if the rank is exactly equal to the reduced dimension).</p></li>
+<li><p>하지만 현실의 데이터는 어떨까요? 현실의 데이터에는 항상 노이즈가 존재하며, 데이터 포인트들이 매니폴드(붉은 선이나 평면) 위에 ‘정확하게’ 놓여있지 않습니다 (points do not exactly lie on the line). 따라서 현실 데이터의 차원을 억지로 축소시킬 경우, 필연적으로 <strong>약간의 오차(Error)</strong>가 발생하게 됩니다. 현대 차원 축소 기법들(예: PCA 등)의 핵심은 결국 “어떻게 하면 이 정보 손실(Error)을 최소화하면서 차원을 압축할 수 있을 것인가”를 푸는 최적화 문제로 귀결됩니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="summary" class="level1">
+<h1>6. Summary</h1>
+<ul>
+<li>데이터는 보통 행(샘플)과 열(피처)로 구성된 행렬로 표현되며, 피처가 많아질수록 분석 복잡도가 증가합니다.</li>
+<li>데이터가 고차원 공간에 위치하더라도 실제 본질적 구조인 <strong>데이터 매니폴드</strong>는 더 낮은 차원(잠재 요인의 수)을 가질 수 있습니다.</li>
+<li>수학적으로 이 잠재 요인의 수는 선형 독립인 벡터의 최대 개수인 <strong>행렬의 랭크(Rank)</strong>로 정의됩니다.</li>
+<li>차원 축소는 기저 변환을 통해 <strong>데이터의 실질적 축(Actual axes)</strong>을 찾는 과정이며 , 현실 데이터에서는 점들이 매니폴드에 정확히 일치하지 않으므로 축소 과정에서 불가피하게 오차가 발생합니다.</li>
+</ul>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.1/</guid>
+  <pubDate>Wed, 01 Apr 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 10. Dimensionality Reduction (Part 2)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.2/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-차원-축소와-고유벡터의-연결고리" class="level1">
+<h1>1. Introduction: 차원 축소와 고유벡터의 연결고리</h1>
+<ul>
+<li><p>지난 포스트에서는 차원 축소(Dimensionality Reduction)가 데이터에 내재된 실제 축(Manifold)을 찾아 정보 손실을 최소화하며 데이터를 압축하는 과정임을 살펴보았습니다. 데이터 행렬의 랭크(Rank)를 통해 차원을 이해했다면, 이제는 “그렇다면 그 최적의 축(기저)을 수학적으로 어떻게 찾아낼 것인가?”라는 질문에 답할 차례입니다.</p></li>
+<li><p>이를 위해 데이터 마이닝과 머신러닝에서 가장 핵심적으로 사용되는 선형대수학의 개념인 <strong>고윳값(Eigenvalues)</strong>과 <strong>고유벡터(Eigenvectors)</strong>, 그리고 이를 활용한 <strong>고유분해(Eigendecomposition)</strong>에 대해 다루겠습니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="직교성orthogonality의-기본-개념" class="level1">
+<h1>2. 직교성(Orthogonality)의 기본 개념</h1>
+<ul>
+<li>고유벡터를 깊이 이해하기 위해서는 벡터 공간에서의 직교성(Orthogonality)과 관련된 기초 용어들을 먼저 정리해야 합니다.
+<ul>
+<li><strong>단위 벡터 (Unit Vector):</strong> 벡터의 크기(norm)가 1인 벡터를 의미합니다. 벡터 <img src="https://latex.codecogs.com/png.latex?v">가 단위 벡터이기 위한 조건은 다음과 같이 <img src="https://latex.codecogs.com/png.latex?L_2"> 노름(norm)으로 정의됩니다. <img src="https://latex.codecogs.com/png.latex?%7C%7Cv%7C%7C%20%5Cequiv%20%7C%7Cv%7C%7C_2%20%5Cequiv%20%5Csqrt%7B%5Csum_i%20v_i%5E2%7D%20=%201"></li>
+<li><strong>직교 (Orthogonal):</strong> 두 벡터 <img src="https://latex.codecogs.com/png.latex?v_1">과 <img src="https://latex.codecogs.com/png.latex?v_2">가 서로 수직일 때 직교한다고 하며, 이는 두 벡터의 내적이 0임을 의미합니다. <img src="https://latex.codecogs.com/png.latex?v_1%5ET%20v_2%20=%200"></li>
+<li><strong>정규 직교 (Orthonormal):</strong> 두 벡터가 직교(orthogonal)하면서 동시에 각각이 단위 벡터(unit vector)일 때를 정규 직교한다고 표현합니다.</li>
+<li><strong>직교 행렬 (Orthogonal Matrix):</strong> 행렬 <img src="https://latex.codecogs.com/png.latex?A">의 모든 행(rows)이나 열(columns)이 서로 정규 직교(orthonormal)하는 행렬을 직교 행렬이라고 부릅니다. 직교 행렬은 역행렬이 전치 행렬과 같다는 매우 유용한 수학적 성질을 가집니다. <img src="https://latex.codecogs.com/png.latex?AA%5ET%20=%20A%5ET%20A%20=%20I%20%5Cquad%20%5Ctext%7Band%7D%20%5Cquad%20A%5ET%20=%20A%5E%7B-1%7D"></li>
+</ul></li>
+</ul>
+<hr>
+</section>
+<section id="고윳값과-고유벡터-eigenvalues-and-eigenvectors" class="level1">
+<h1>3. 고윳값과 고유벡터 (Eigenvalues and Eigenvectors)</h1>
+<ul>
+<li>임의의 <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20n"> 정방 행렬(square matrix) <img src="https://latex.codecogs.com/png.latex?M">과 스칼라 <img src="https://latex.codecogs.com/png.latex?%5Clambda">, 그리고 벡터 <img src="https://latex.codecogs.com/png.latex?e">가 있다고 가정해 봅시다. 이때 행렬 <img src="https://latex.codecogs.com/png.latex?M">을 벡터 <img src="https://latex.codecogs.com/png.latex?e">에 곱하는 선형 변환을 수행했을 때, 그 결과가 단순히 벡터 <img src="https://latex.codecogs.com/png.latex?e">의 상수배(<img src="https://latex.codecogs.com/png.latex?%5Clambda">)가 되는 관계가 성립한다면 다음과 같이 정의할 수 있습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?Me%20=%20%5Clambda%20e"></p>
+<ul>
+<li>위 식을 만족할 때, <strong><img src="https://latex.codecogs.com/png.latex?%5Clambda">를 행렬 <img src="https://latex.codecogs.com/png.latex?M">의 고윳값(eigenvalue)이라 하고, <img src="https://latex.codecogs.com/png.latex?e">를 그에 대응하는 고유벡터(eigenvector)</strong>라고 부릅니다.</li>
+<li>이러한 <img src="https://latex.codecogs.com/png.latex?%5Clambda">와 <img src="https://latex.codecogs.com/png.latex?e">의 쌍(pair)을 <strong>고유쌍(eigenpair)</strong>이라고 명명합니다.</li>
+<li>특히, 절댓값이 가장 큰 고윳값(<img src="https://latex.codecogs.com/png.latex?%7C%5Clambda%7C">)에 대응하는 고유벡터를 <strong>주 고유벡터(principal eigenvector)</strong>라고 부르며, 이는 데이터 분산이 가장 큰 주요 축을 나타내는 데 활용됩니다.</li>
+</ul>
+<hr>
+</section>
+<section id="고유벡터의-모호성ambiguity과-정규화" class="level1">
+<h1>4. 고유벡터의 모호성(Ambiguity)과 정규화</h1>
+<ul>
+<li>수학적으로 고유벡터는 유일하게 결정되지 않는 <strong>모호성(Ambiguity)</strong>을 가집니다. 만약 <img src="https://latex.codecogs.com/png.latex?e">가 행렬 <img src="https://latex.codecogs.com/png.latex?M">의 고유벡터라면, <img src="https://latex.codecogs.com/png.latex?e">에 임의의 상수 <img src="https://latex.codecogs.com/png.latex?c">를 곱한 <img src="https://latex.codecogs.com/png.latex?ce"> 역시 동일한 고윳값 <img src="https://latex.codecogs.com/png.latex?%5Clambda">를 갖는 고유벡터가 됩니다. 그 이유는 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?M(ce)%20=%20c(Me)%20=%20c(%5Clambda%20e)%20=%20%5Clambda(ce)"></p>
+<ul>
+<li>즉, 무수히 많은 배수 벡터들이 모두 같은 고유벡터 역할을 할 수 있기 때문에(<img src="https://latex.codecogs.com/png.latex?e">와 <img src="https://latex.codecogs.com/png.latex?ce">가 같은 고윳값에 대응), 이 모호성을 피하고 일관된 기준을 세우기 위해 보통 다음의 두 가지 제약 조건을 도입합니다.
+<ul>
+<li><ol type="1">
+<li><strong>Unit vector:</strong> 모든 고유벡터 <img src="https://latex.codecogs.com/png.latex?e">는 단위 벡터가 되어야 합니다 (<img src="https://latex.codecogs.com/png.latex?%7C%7Ce%7C%7C%20=%201">).</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Positive first component:</strong> 고유벡터의 첫 번째 0이 아닌 성분(first nonzero component)은 반드시 양수(positive)여야 합니다.</li>
+</ol></li>
+</ul></li>
+<li><strong>[예시 수식]</strong>
+<ul>
+<li>행렬 <img src="https://latex.codecogs.com/png.latex?M%20=%20%5Cbegin%7Bbmatrix%7D%203%20&amp;%202%20%5C%5C%202%20&amp;%206%20%5Cend%7Bbmatrix%7D"> 이 주어졌을 때, 고유쌍을 구해보면 다음과 같습니다.</li>
+<li>고윳값 <img src="https://latex.codecogs.com/png.latex?%5Clambda%20=%207"> 일 때, 대응하는 고유벡터 <img src="https://latex.codecogs.com/png.latex?e">는 모호성 방지 규칙에 따라 계산됩니다. <img src="https://latex.codecogs.com/png.latex?e%20=%20%5Cbegin%7Bbmatrix%7D%201/%5Csqrt%7B5%7D%20%5C%5C%202/%5Csqrt%7B5%7D%20%5Cend%7Bbmatrix%7D"> 이 벡터는 크기가 1인 단위 벡터(Unit vector)이며, 첫 번째 성분(<img src="https://latex.codecogs.com/png.latex?1/%5Csqrt%7B5%7D">)이 양수(Positive) 조건을 만족합니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+<section id="고유분해eigendecomposition와-대각화-가능성" class="level1">
+<h1>5. 고유분해(Eigendecomposition)와 대각화 가능성</h1>
+<section id="고유분해의-정의" class="level2">
+<h2 class="anchored" data-anchor-id="고유분해의-정의">5.1. 고유분해의 정의</h2>
+<ul>
+<li>정방 행렬 <img src="https://latex.codecogs.com/png.latex?M">의 <strong>고유분해(Eigendecomposition)</strong>는 행렬을 그 고유벡터와 고윳값들로 분해하여 표현하는 방법으로, 다음과 같이 정의됩니다. <img src="https://latex.codecogs.com/png.latex?M%20=%20Q%5CLambda%20Q%5E%7B-1%7D">
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?Q"></strong>: <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20n"> 행렬로, <img src="https://latex.codecogs.com/png.latex?i">번째 열(column)이 <img src="https://latex.codecogs.com/png.latex?M">의 <img src="https://latex.codecogs.com/png.latex?i">번째 고유벡터로 구성된 행렬입니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?%5CLambda"> (Lambda)</strong>: 대각 요소(diagonal elements)가 고윳값들로 채워진 대각 행렬(diagonal matrix)입니다.</li>
+<li>주의할 점은 모든 행렬이 이처럼 고유분해가 가능한 것은 아니라는 점입니다 (Not for all matrices).</li>
+</ul></li>
+</ul>
+</section>
+<section id="대각화-가능-행렬-diagonalizable-matrix" class="level2">
+<h2 class="anchored" data-anchor-id="대각화-가능-행렬-diagonalizable-matrix">5.2. 대각화 가능 행렬 (Diagonalizable Matrix)</h2>
+<ul>
+<li>대각 행렬(Diagonal Matrix) <img src="https://latex.codecogs.com/png.latex?D">는 비대각 요소가 모두 0인 행렬입니다 (<img src="https://latex.codecogs.com/png.latex?i%20%5Cneq%20j%20%5CRightarrow%20d(i,j)%20=%200">).</li>
+<li>어떤 정방 행렬 <img src="https://latex.codecogs.com/png.latex?M">이 <strong>대각화 가능(Diagonalizable)</strong>하다는 것은 직관적으로 “거의 대각 행렬(almost diagonal matrix)과 같다”는 의미이며 , 공식적으로는 다음을 만족하는 가역 행렬(invertible matrix) <img src="https://latex.codecogs.com/png.latex?P">와 대각 행렬 <img src="https://latex.codecogs.com/png.latex?D">가 존재함을 뜻합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?P%5E%7B-1%7DMP%20=%20D"></p>
+</section>
+<section id="고유분해와-대각화의-관계-independent-eigenvectors" class="level2">
+<h2 class="anchored" data-anchor-id="고유분해와-대각화의-관계-independent-eigenvectors">5.3. 고유분해와 대각화의 관계 (Independent Eigenvectors)</h2>
+<ul>
+<li><p>대각화가 가능한 행렬 <img src="https://latex.codecogs.com/png.latex?M">은 항상 고유분해를 가집니다. 이는 <img src="https://latex.codecogs.com/png.latex?M">이 항상 <img src="https://latex.codecogs.com/png.latex?n">개의 선형 독립인(linearly independent) 고유벡터를 가지기 때문입니다. 이를 대각화 공식에서부터 유도해 볼 수 있습니다.</p></li>
+<li><p><img src="https://latex.codecogs.com/png.latex?P%5E%7B-1%7DMP%20=%20D"> 의 양변 왼쪽에 <img src="https://latex.codecogs.com/png.latex?P">를 곱하면, <img src="https://latex.codecogs.com/png.latex?MP%20=%20PD"> 가 됩니다. 이를 열 벡터 단위로 쪼개어 보면 다음과 같은 식이 성립합니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?Mv_i%20=%20P(%5Clambda_i%20e_i)%20=%20%5Clambda_i%20v_i"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?v_i">는 행렬 <img src="https://latex.codecogs.com/png.latex?P">의 <img src="https://latex.codecogs.com/png.latex?i">번째 열이고 , <img src="https://latex.codecogs.com/png.latex?%5Clambda_i">는 대각 행렬 <img src="https://latex.codecogs.com/png.latex?D">의 <img src="https://latex.codecogs.com/png.latex?i">번째 대각 요소입니다. <img src="https://latex.codecogs.com/png.latex?e_i">는 단위 행렬 <img src="https://latex.codecogs.com/png.latex?I">의 <img src="https://latex.codecogs.com/png.latex?i">번째 열을 나타냅니다.</li>
+<li>위 수식(<img src="https://latex.codecogs.com/png.latex?Mv_i%20=%20%5Clambda_i%20v_i">)은 정확히 고유쌍의 정의와 일치합니다. 따라서 <img src="https://latex.codecogs.com/png.latex?P">의 열들은 <img src="https://latex.codecogs.com/png.latex?M">의 고유벡터가 됩니다. 전제 조건에서 <img src="https://latex.codecogs.com/png.latex?P">는 가역 행렬(invertible)이라고 했으므로, 이 고유벡터들은 서로 <strong>선형 독립(linearly independent)</strong>임을 알 수 있습니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="대칭-행렬-symmetric-matrix의-강력한-성질" class="level1">
+<h1>6. 대칭 행렬 (Symmetric Matrix)의 강력한 성질</h1>
+<ul>
+<li>차원 축소 기법(특히 PCA)을 다룰 때, 공분산 행렬과 같이 실제 데이터에서 파생되는 많은 행렬은 <strong>대칭 행렬(Symmetric Matrix)</strong>입니다. <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20n"> 실수 대칭 행렬 <img src="https://latex.codecogs.com/png.latex?S">(<img src="https://latex.codecogs.com/png.latex?S%20=%20S%5ET">)는 매우 강력하고 유용한 세 가지 수학적 특성을 가집니다 (본 강의에서는 복소수 행렬은 다루지 않습니다).
+<ul>
+<li><strong>Property 1: <img src="https://latex.codecogs.com/png.latex?S">는 <img src="https://latex.codecogs.com/png.latex?n">개의 정규 직교(Orthonormal) 고유벡터를 가집니다.</strong>
+<ul>
+<li>대칭성(Symmetry) 덕분에 행렬 <img src="https://latex.codecogs.com/png.latex?S">는 서로 직교하는 방향을 따라 독립적으로 작용할 수 있습니다.</li>
+</ul></li>
+<li><strong>Property 2: <img src="https://latex.codecogs.com/png.latex?S">는 대각화 가능(Diagonalizable)합니다.</strong>
+<ul>
+<li>앞서 언급했듯, <img src="https://latex.codecogs.com/png.latex?n">개의 선형 독립인 고유벡터를 가지므로 당연히 대각화가 가능합니다.</li>
+</ul></li>
+<li><strong>Property 3: 고유분해 <img src="https://latex.codecogs.com/png.latex?S%20=%20Q%5CLambda%20Q%5E%7B-1%7D">에서, 행렬 <img src="https://latex.codecogs.com/png.latex?Q">는 직교 행렬(Orthonormal)입니다.</strong>
+<ul>
+<li>Property 1과 2의 결과에 의해, <img src="https://latex.codecogs.com/png.latex?Q">의 열들이 모두 정규 직교하는 고유벡터로 이루어져 있기 때문입니다. 따라서 <img src="https://latex.codecogs.com/png.latex?Q%5E%7B-1%7D%20=%20Q%5ET">로 더 쉽게 계산될 수 있습니다.</li>
+</ul></li>
+</ul></li>
+</ul>
+<hr>
+</section>
+<section id="summary" class="level1">
+<h1>7. Summary</h1>
+<ul>
+<li>행렬의 직교성과 단위 벡터 개념은 고유벡터의 모호성을 해결하는 기준(정규화)이 됩니다 .</li>
+<li><strong>고유쌍(<img src="https://latex.codecogs.com/png.latex?%5Clambda,%20e">)</strong>은 변환 <img src="https://latex.codecogs.com/png.latex?M">을 가했을 때 방향은 변하지 않고 스케일링(<img src="https://latex.codecogs.com/png.latex?%5Clambda">)만 일어나는 벡터(<img src="https://latex.codecogs.com/png.latex?e">)를 의미합니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?n">개의 선형 독립인 고유벡터를 가진 행렬은 <strong>고유분해(<img src="https://latex.codecogs.com/png.latex?M%20=%20Q%5CLambda%20Q%5E%7B-1%7D">)</strong>가 가능하며, 이는 대각화 가능성(<img src="https://latex.codecogs.com/png.latex?P%5E%7B-1%7DMP%20=%20D">)과 동일한 의미를 갖습니다 .</li>
+<li>실수 <strong>대칭 행렬(<img src="https://latex.codecogs.com/png.latex?S=S%5ET">)</strong>은 항상 직교하는 고유벡터들로 구성된 행렬 <img src="https://latex.codecogs.com/png.latex?Q">를 통해 고유분해가 보장된다는 매우 중요한 성질을 갖습니다 .</li>
+</ul>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.2/</guid>
+  <pubDate>Wed, 01 Apr 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 10. Dimensionality Reduction (Part 3)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.3/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-어떻게-고유분해를-실제로-수행할-것인가" class="level1">
+<h1>1. Introduction: 어떻게 고유분해를 실제로 수행할 것인가?</h1>
+<ul>
+<li><p>지금까지 고유분해(Eigendecomposition)의 개념과 그 수학적 특성에 대해 알아보았습니다. 그렇다면 “실제 컴퓨터 알고리즘 상에서 이 고유분해를 어떻게 수행할 수 있을까?”라는 실질적인 질문(Q)이 남습니다.</p></li>
+<li><p>고유분해를 수행하는 가장 대중적인 두 가지 접근법은 <strong>QR 알고리즘(QR algorithm)</strong>과 <strong>멱차수법(Power Iteration)</strong>입니다.</p>
+<ul>
+<li><strong>QR 알고리즘</strong>은 행렬의 모든 고윳값과 고유벡터를 한 번에 구할 수 있는 표준적이고 정교한 방법이지만, 우리가 다루는 데이터 마이닝 환경처럼 행렬의 크기가 거대해질 경우 계산 속도가 매우 느려진다는 치명적인 단점이 있습니다.</li>
+<li>반면 <strong>멱차수법(Power Iteration)</strong>은 모든 고윳값을 구하지는 못하고 가장 큰 고윳값(Largest eigenvalues)만을 찾아내지만, 연산 속도가 매우 빠르다는 장점을 가집니다.</li>
+</ul></li>
+<li><p>데이터 마이닝에서는 보통 아주 거대한 차원의 행렬(Large matrix)을 가정하며, 차원 축소의 목적상 데이터의 분산을 가장 잘 설명하는 몇 개의 핵심 축(주 고유벡터)만 필요로 하는 경우가 많습니다. 따라서 본 포스트에서는 <strong>멱차수법(Power Iteration)</strong>에 집중하여 그 원리를 살펴보겠습니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="power-iteration의-알고리즘-절차" class="level1">
+<h1>2. Power Iteration의 알고리즘 절차</h1>
+<ul>
+<li><p>멱차수법(Power Iteration)은 대각화 가능한(diagonalizable) <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20n"> 정방 행렬 <img src="https://latex.codecogs.com/png.latex?M">의 <strong>주 고유벡터(Principal eigenvector)</strong>를 효율적으로 찾아내는 반복 알고리즘입니다.</p></li>
+<li><p>이 알고리즘의 작동 방식(How it works)은 놀랍도록 단순하며, 다음의 3단계로 이루어집니다:</p>
+<ul>
+<li><strong>Step 1:</strong> 길이(차원)가 <img src="https://latex.codecogs.com/png.latex?n">인 영벡터가 아닌 임의의 초기 벡터 <img src="https://latex.codecogs.com/png.latex?x_0">를 준비합니다 (<img src="https://latex.codecogs.com/png.latex?x_0%20%5Cneq%20%5Cmathbf%7B0%7D">).</li>
+<li><strong>Step 2:</strong> <img src="https://latex.codecogs.com/png.latex?k=0,%201,%202,%20%5Cdots"> 에 대하여 다음의 점화식을 계산합니다. 행렬 <img src="https://latex.codecogs.com/png.latex?M">을 벡터에 곱한 뒤, 그 결과 벡터의 크기(norm)로 나누어 단위 벡터로 정규화(Normalization)하는 과정입니다. <img src="https://latex.codecogs.com/png.latex?x_%7Bk+1%7D%20=%20%5Cfrac%7BM%20x_k%7D%7B%7C%7CM%20x_k%7C%7C%7D"></li>
+<li><strong>Step 3:</strong> 연속적으로 계산된 벡터들(<img src="https://latex.codecogs.com/png.latex?x_k">와 <img src="https://latex.codecogs.com/png.latex?x_%7Bk+1%7D">) 사이의 변화량이 거의 없어질 때(show little change), 즉 수렴(Convergence)했다고 판단될 때 반복을 종료합니다.</li>
+</ul></li>
+</ul>
+<section id="구체적인-수치-예제-example" class="level2">
+<h2 class="anchored" data-anchor-id="구체적인-수치-예제-example">2.1. 구체적인 수치 예제 (Example)</h2>
+<ul>
+<li>이해를 돕기 위해 <img src="https://latex.codecogs.com/png.latex?2%20%5Ctimes%202"> 행렬을 사용한 간단한 예제를 살펴보겠습니다.</li>
+<li>주어진 행렬 <img src="https://latex.codecogs.com/png.latex?M%20=%20%5Cbegin%7Bbmatrix%7D%201%20&amp;%202%20%5C%5C%202%20&amp;%203%20%5Cend%7Bbmatrix%7D"> 이고, 초기 벡터 <img src="https://latex.codecogs.com/png.latex?x_0%20=%20%5Cbegin%7Bbmatrix%7D%201%20%5C%5C%201%20%5Cend%7Bbmatrix%7D"> 로 시작합니다.</li>
+</ul>
+<section id="첫-번째-반복-k0" class="level3">
+<h3 class="anchored" data-anchor-id="첫-번째-반복-k0"><strong>[첫 번째 반복 (<img src="https://latex.codecogs.com/png.latex?k=0">)]</strong></h3>
+<ul>
+<li><ol type="1">
+<li>행렬 곱셈: <img src="https://latex.codecogs.com/png.latex?M%20x_0%20=%20%5Cbegin%7Bbmatrix%7D%201%20&amp;%202%20%5C%5C%202%20&amp;%203%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%201%20%5C%5C%201%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%203%20%5C%5C%205%20%5Cend%7Bbmatrix%7D"></li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>벡터 정규화: 결과 벡터의 크기 <img src="https://latex.codecogs.com/png.latex?%7C%7CM%20x_0%7C%7C%20=%20%5Csqrt%7B3%5E2%20+%205%5E2%7D%20=%20%5Csqrt%7B34%7D"> 로 나눕니다. <img src="https://latex.codecogs.com/png.latex?x_1%20=%20%5Cfrac%7BM%20x_0%7D%7B%7C%7CM%20x_0%7C%7C%7D%20=%20%5Cfrac%7B1%7D%7B%5Csqrt%7B34%7D%7D%20%5Cbegin%7Bbmatrix%7D%203%20%5C%5C%205%20%5Cend%7Bbmatrix%7D%20%5Capprox%20%5Cbegin%7Bbmatrix%7D%200.51%20%5C%5C%200.86%20%5Cend%7Bbmatrix%7D"></li>
+</ol></li>
+</ul>
+</section>
+<section id="두-번째-반복-k1" class="level3">
+<h3 class="anchored" data-anchor-id="두-번째-반복-k1"><strong>[두 번째 반복 (<img src="https://latex.codecogs.com/png.latex?k=1">)]</strong></h3>
+<ul>
+<li><ol type="1">
+<li>행렬 곱셈: <img src="https://latex.codecogs.com/png.latex?M%20x_1%20=%20%5Cbegin%7Bbmatrix%7D%201%20&amp;%202%20%5C%5C%202%20&amp;%203%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%200.51%20%5C%5C%200.86%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%202.23%20%5C%5C%203.60%20%5Cend%7Bbmatrix%7D"></li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>벡터 정규화: <img src="https://latex.codecogs.com/png.latex?%7C%7CM%20x_1%7C%7C%20=%20%5Csqrt%7B2.23%5E2%20+%203.60%5E2%7D%20=%20%5Csqrt%7B17.93%7D"> 으로 나눕니다. <img src="https://latex.codecogs.com/png.latex?x_2%20=%20%5Cfrac%7BM%20x_1%7D%7B%7C%7CM%20x_1%7C%7C%7D%20=%20%5Cfrac%7B1%7D%7B%5Csqrt%7B17.93%7D%7D%20%5Cbegin%7Bbmatrix%7D%202.23%20%5C%5C%203.60%20%5Cend%7Bbmatrix%7D%20%5Capprox%20%5Cbegin%7Bbmatrix%7D%200.53%20%5C%5C%200.85%20%5Cend%7Bbmatrix%7D"></li>
+</ol></li>
+<li>이 과정을 계속 반복하면 벡터 값의 변화가 점점 줄어들며 특정 벡터로 수렴하게 됩니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="고윳값의-도출-finding-an-eigenvalue" class="level1">
+<h1>3. 고윳값의 도출 (Finding an Eigenvalue)</h1>
+<ul>
+<li><p>위의 반복을 통해 최종적으로 수렴한 벡터 <img src="https://latex.codecogs.com/png.latex?x">는 행렬 <img src="https://latex.codecogs.com/png.latex?M">의 근사적인 고유벡터(approximately an eigenvector)가 됩니다. 고유벡터의 정의에 따라 행렬을 곱해도 방향이 변하지 않으므로, 정규화를 무시하고 방향성만 보면 <img src="https://latex.codecogs.com/png.latex?Mx%20%5Capprox%20%5Clambda%20x"> 관계가 성립합니다.</p></li>
+<li><p>그렇다면 수렴한 벡터 <img src="https://latex.codecogs.com/png.latex?x">를 활용해 대응하는 <strong>고윳값(Eigenvalue) <img src="https://latex.codecogs.com/png.latex?%5Clambda"></strong>는 어떻게 구할 수 있을까요? 바로 다음의 2차 형식(Quadratic form, Rayleigh quotient)을 계산하면 됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Clambda%20=%20x%5ET%20M%20x"></p>
+<ul>
+<li>이 수식이 성립하는 이유(Why?)는 고유벡터의 정의와 단위 벡터의 특성을 이용해 간단히 증명할 수 있습니다: <img src="https://latex.codecogs.com/png.latex?x%5ET%20M%20x%20=%20x%5ET%20(%5Clambda%20x)%20=%20%5Clambda%20x%5ET%20x%20=%20%5Clambda%20%7C%7Cx%7C%7C%5E2%20=%20%5Clambda">
+<ul>
+<li>여기서 멱차수법의 결과인 <img src="https://latex.codecogs.com/png.latex?x">는 <img src="https://latex.codecogs.com/png.latex?%7C%7Cx%7C%7C=1">인 단위 벡터이므로 <img src="https://latex.codecogs.com/png.latex?%7C%7Cx%7C%7C%5E2%20=%201">이 됩니다.</li>
+</ul></li>
+<li>앞선 예제에서 도출한 근사 벡터 <img src="https://latex.codecogs.com/png.latex?x%20=%20%5Cbegin%7Bbmatrix%7D%200.53%20%5C%5C%200.85%20%5Cend%7Bbmatrix%7D"> 를 대입하여 주 고윳값을 구해보면 다음과 같습니다: <img src="https://latex.codecogs.com/png.latex?%5Clambda%20=%20%5Cbegin%7Bbmatrix%7D%200.53%20&amp;%200.85%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%201%20&amp;%202%20%5C%5C%202%20&amp;%203%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%200.53%20%5C%5C%200.85%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%200.53%20&amp;%200.85%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%202.23%20%5C%5C%203.61%20%5Cend%7Bbmatrix%7D%20%5Capprox%204.25"></li>
+</ul>
+<hr>
+</section>
+<section id="주-고유벡터로-수렴하는-이유-mathematical-proof" class="level1">
+<h1>4. 주 고유벡터로 수렴하는 이유 (Mathematical Proof)</h1>
+<ul>
+<li><p>멱차수법이 수렴한 벡터 <img src="https://latex.codecogs.com/png.latex?x">가 왜 하필 다른 고유벡터도 아닌 <strong>주 고유벡터(Principal eigenvector)</strong>가 되는 것일까요?</p></li>
+<li><p>행렬 <img src="https://latex.codecogs.com/png.latex?M">의 고윳값들의 절댓값이 다음과 같은 크기 순서를 가진다고 가정해 봅시다. <img src="https://latex.codecogs.com/png.latex?%7C%5Clambda_1%7C%20%3E%20%7C%5Clambda_2%7C%20%5Cge%20%5Cdots%20%5Cge%20%7C%5Clambda_n%7C"></p></li>
+<li><p>이에 대응하는 <img src="https://latex.codecogs.com/png.latex?M">의 고유벡터들을 <img src="https://latex.codecogs.com/png.latex?v_1,%20v_2,%20%5Cdots,%20v_n"> 이라고 합시다. (대각화 가능 행렬이므로 이들은 기저를 이룹니다).</p></li>
+<li><p>임의의 초기 벡터 <img src="https://latex.codecogs.com/png.latex?x_0">는 이 고유벡터들의 선형 결합(linear combination)으로 표현될 수 있습니다: <img src="https://latex.codecogs.com/png.latex?x_0%20=%20c_1%20v_1%20+%20c_2%20v_2%20+%20%5Cdots%20+%20c_n%20v_n"></p></li>
+<li><p>멱차수법에서 매 단계마다 행렬 <img src="https://latex.codecogs.com/png.latex?M">을 반복해서 곱하는 것은 (스케일링 정규화 상수를 제외하고 방향성만 고려했을 때) 궁극적으로 <img src="https://latex.codecogs.com/png.latex?M%5Ek%20x_0">를 계산하는 것과 동일하게 작동합니다. 행렬 <img src="https://latex.codecogs.com/png.latex?M">을 <img src="https://latex.codecogs.com/png.latex?k">번 곱하게 되면 각 고유벡터 성분에는 고윳값의 <img src="https://latex.codecogs.com/png.latex?k">제곱이 곱해지게 됩니다: <img src="https://latex.codecogs.com/png.latex?x_k%20%5Cpropto%20M%5Ek%20x_0%20=%20c_1%20%5Clambda_1%5Ek%20v_1%20+%20c_2%20%5Clambda_2%5Ek%20v_2%20+%20%5Cdots%20+%20c_n%20%5Clambda_n%5Ek%20v_n"></p></li>
+<li><p>가장 큰 고윳값의 거듭제곱인 <img src="https://latex.codecogs.com/png.latex?%5Clambda_1%5Ek"> 로 이 식 전체를 묶어내면(factoring out) 다음과 같은 식이 도출됩니다: <img src="https://latex.codecogs.com/png.latex?x_k%20%5Cpropto%20%5Clambda_1%5Ek%20%5Cleft(%20c_1%20v_1%20+%20c_2%20%5Cleft(%5Cfrac%7B%5Clambda_2%7D%7B%5Clambda_1%7D%5Cright)%5Ek%20v_2%20+%20%5Cdots%20+%20c_n%20%5Cleft(%5Cfrac%7B%5Clambda_n%7D%7B%5Clambda_1%7D%5Cright)%5Ek%20v_n%20%5Cright)"></p></li>
+<li><p>핵심은 괄호 안의 분수 항들입니다. 가정에 의해 <img src="https://latex.codecogs.com/png.latex?%7C%5Clambda_1%7C">이 가장 크기 때문에, <img src="https://latex.codecogs.com/png.latex?i%20%3E%201"> 인 모든 <img src="https://latex.codecogs.com/png.latex?i">에 대하여 <img src="https://latex.codecogs.com/png.latex?%5Cleft%7C%20%5Cfrac%7B%5Clambda_i%7D%7B%5Clambda_1%7D%20%5Cright%7C%20%3C%201"> 이 성립합니다.</p></li>
+<li><p>따라서 반복 횟수 <img src="https://latex.codecogs.com/png.latex?k%20%5Cto%20%5Cinfty"> 로 무한히 커짐에 따라, <img src="https://latex.codecogs.com/png.latex?i%20%3E%201"> 인 항들, 즉 <img src="https://latex.codecogs.com/png.latex?%5Cleft(%5Cfrac%7B%5Clambda_i%7D%7B%5Clambda_1%7D%5Cright)%5Ek"> 는 모두 <img src="https://latex.codecogs.com/png.latex?0">으로 수렴하여 소멸합니다.</p></li>
+<li><p>결과적으로 괄호 안에는 <img src="https://latex.codecogs.com/png.latex?c_1%20v_1"> 항만 살아남게 되며, 초기 벡터 <img src="https://latex.codecogs.com/png.latex?x_0">가 무엇이었든 간에 반복이 진행될수록 방향은 오직 주 고유벡터인 <img src="https://latex.codecogs.com/png.latex?v_1">을 향해 수렴하게 됩니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="다른-고유쌍-찾기-deflation-method-finding-more-eigenpairs" class="level1">
+<h1>5. 다른 고유쌍 찾기: Deflation Method (Finding More Eigenpairs)</h1>
+<ul>
+<li><p>멱차수법은 오직 첫 번째로 큰 주 고유벡터 하나만 찾아냅니다. 그렇다면 차원 축소를 위해 2번째, 3번째로 중요한 축(고유벡터)을 찾으려면 어떻게 해야 할까요?</p></li>
+<li><p>이때는 기존 행렬 <img src="https://latex.codecogs.com/png.latex?M">에서 이미 찾아낸 주 고유벡터 <img src="https://latex.codecogs.com/png.latex?x">와 고윳값 <img src="https://latex.codecogs.com/png.latex?%5Clambda">의 영향력을 제거한(Eliminate the influence) 새로운 행렬 <img src="https://latex.codecogs.com/png.latex?M%5E*">를 만들어야 합니다. 이 과정을 보통 수치해석학에서 축소법(Deflation)이라고 부릅니다. <img src="https://latex.codecogs.com/png.latex?M%5E*%20=%20M%20-%20%5Clambda%20x%20x%5ET"></p></li>
+<li><p>이 연산의 의미는, 이미 찾은 방향인 <img src="https://latex.codecogs.com/png.latex?x">에 대한 고윳값을 강제로 <img src="https://latex.codecogs.com/png.latex?0">으로 만들어 버리는 것입니다. 이렇게 만들어진 새로운 행렬 <img src="https://latex.codecogs.com/png.latex?M%5E*">에 대해 다시 멱차수법(Power Iteration)을 재귀적으로 적용(Recursively use)하면, 기존의 2번째로 컸던 고윳값이 이제 <img src="https://latex.codecogs.com/png.latex?M%5E*">에서는 1번째로 큰 주 고윳값이 되므로 이를 찾아낼 수 있습니다.</p></li>
+<li><p>앞선 예제(<img src="https://latex.codecogs.com/png.latex?%5Clambda%20%5Capprox%204.25">, <img src="https://latex.codecogs.com/png.latex?x%20%5Capprox%20%5Cbegin%7Bbmatrix%7D%200.53%20%5C%5C%200.85%20%5Cend%7Bbmatrix%7D">)를 활용해 <img src="https://latex.codecogs.com/png.latex?M%5E*">를 계산해 보겠습니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?M%5E*%20=%20%5Cbegin%7Bbmatrix%7D%201%20&amp;%202%20%5C%5C%202%20&amp;%203%20%5Cend%7Bbmatrix%7D%20-%204.25%20%5Cbegin%7Bbmatrix%7D%200.53%20%5C%5C%200.85%20%5Cend%7Bbmatrix%7D%20%5Cbegin%7Bbmatrix%7D%200.53%20&amp;%200.85%20%5Cend%7Bbmatrix%7D%20=%20%5Cbegin%7Bbmatrix%7D%20-0.19%20&amp;%200.09%20%5C%5C%200.09%20&amp;%200.07%20%5Cend%7Bbmatrix%7D"></p>
+<ul>
+<li>이제 이 <img src="https://latex.codecogs.com/png.latex?M%5E*"> 행렬을 새로운 시작점으로 삼아 다시 멱차수법 Step 1~3을 반복하면 두 번째 고유쌍(Eigenpair)을 구할 수 있습니다.</li>
+</ul>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.3/</guid>
+  <pubDate>Wed, 01 Apr 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 10. Dimensionality Reduction (Part 4)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.4/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-데이터의-핵심-축-찾기" class="level1">
+<h1>1. Introduction: 데이터의 핵심 축 찾기</h1>
+<ul>
+<li><p>지금까지 행렬의 랭크, 고유벡터의 직교성, 그리고 이를 계산하기 위한 멱차수법(Power Iteration)까지 차원 축소를 위한 선형대수학적 기초 공사를 마쳤습니다. 이제 이러한 개념들이 어떻게 현대 데이터 마이닝의 가장 핵심적인 차원 축소 기법인 <strong>주성분 분석(Principal Component Analysis, PCA)</strong>으로 결실을 맺는지 살펴볼 차례입니다.</p></li>
+<li><p>PCA는 고차원의 데이터를 분석할 때, 데이터의 정보(분산)를 최대한 보존하면서 차원을 압축하는 방법론입니다. 이번 포스트에서는 PCA가 본질적으로 어떤 최적화 문제를 풀고 있는 것인지, 그리고 왜 앞서 배운 고유벡터가 그 해답이 되는지를 수학적으로 엄밀하게 증명해 보겠습니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="core-concepts-주성분principal-component의-정의" class="level1">
+<h1>2. Core Concepts: 주성분(Principal Component)의 정의</h1>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?n">차원으로 이루어진 데이터가 주어졌을 때, PCA는 이 데이터를 설명할 수 있는 <strong>새로운 <img src="https://latex.codecogs.com/png.latex?n">개의 직교하는 축(axes)</strong>을 찾습니다. 이때 새로운 축들은 다음과 같은 중요한 기준에 따라 순차적으로 결정됩니다.
+<ul>
+<li><strong>제1 주성분 (First Principal Component):</strong> 데이터의 분산(Variance)이 가장 크게 나타나는 방향의 축입니다.</li>
+<li><strong>제2 주성분 (Second Principal Component):</strong> 제1 주성분과 직교(Orthogonal)한다는 조건 하에서, 그 다음으로 분산이 크게 나타나는 방향의 축입니다.</li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.4/images/pca_principal_components.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: 2차원 공간 상에 분포한 데이터 포인트(회색 원)와 이를 설명하는 두 개의 주성분 축(검은색 화살표)을 나타낸 도식. 데이터가 가장 넓게 퍼져 있는(분산이 최대인) 대각선 방향이 ’First principal component’가 되며, 이와 직교하면서 남은 분산을 최대한 설명하는 방향이 ’Second principal component’가 된다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>데이터의 분산이 크다는 것은 데이터 포인트들이 그 축을 따라 넓게 퍼져 있다는 뜻이며, 이는 곧 해당 축이 데이터를 구분 짓는 가장 많은 정보를 담고 있다는 것을 의미합니다.</li>
+</ul>
+<hr>
+</section>
+<section id="preprocessing-평균-중심화-zero-centering의-필수성" class="level1">
+<h1>3. Preprocessing: 평균 중심화 (Zero-Centering)의 필수성</h1>
+<ul>
+<li><p>PCA 최적화 식을 세우기 전에 반드시 수행해야 하는 전처리 과정이 있습니다. 바로 데이터의 평균을 0으로 맞추는 <strong>평균 중심화(Zero-centering 또는 Mean-centering)</strong>입니다.</p></li>
+<li><p>만약 입력 데이터 행렬 <img src="https://latex.codecogs.com/png.latex?M">이 영점 중심(zero-centered)으로 맞춰져 있지 않다면 어떤 문제가 발생할까요?</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.4/images/pca_without_zero_centering.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: 원점이 아닌 곳에 군집해 있는 데이터 포인트들을 향해 원점에서부터 뻗어나가는 붉은색 화살표를 보여주는 도식. 데이터가 Zero-centered 되지 않은 경우, PCA가 데이터의 실질적인 분산 방향이 아닌 데이터의 평균 위치(원점으로부터의 거리)를 가장 큰 분산으로 오인하여 제1 주성분(First PC)으로 잡아버리는 현상을 시각적으로 설명한다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>데이터가 원점에서 멀리 떨어져 있을 경우, 알고리즘이 찾아내는 첫 번째 주성분(First PC)은 데이터 내부의 퍼짐(분산)을 가리키는 대신, <strong>원점으로부터 데이터의 평균 위치를 가리키는 벡터</strong>가 될 가능성이 매우 높습니다. 이는 데이터 자체의 본질적인 형태가 아니라, 위치 편향으로 인해 생성된 인위적이고 거대한 분산(large artificial variance)을 잡아내는 꼴이 됩니다. 따라서 특성 표준화(Feature standardization)를 통해 평균을 원점으로 이동시키는 것은 PCA에서 절대적으로 필수적인 단계입니다.</li>
+</ul>
+<hr>
+</section>
+<section id="mathematical-formulation-분산-최대화-문제의-정의" class="level1">
+<h1>4. Mathematical Formulation: 분산 최대화 문제의 정의</h1>
+<ul>
+<li><p>이제 평균 중심화가 완료된 <img src="https://latex.codecogs.com/png.latex?m%20%5Ctimes%20n"> 데이터 행렬 <img src="https://latex.codecogs.com/png.latex?M">이 있다고 가정해 봅시다. 우리의 목표는 분산을 최대화하는 변환 행렬 <img src="https://latex.codecogs.com/png.latex?T">의 첫 번째 열(column), 즉 <strong>제1 주성분 벡터 <img src="https://latex.codecogs.com/png.latex?t_1"></strong>을 효율적으로 찾는 것입니다.</p></li>
+<li><p>어떤 임의의 방향 벡터 <img src="https://latex.codecogs.com/png.latex?t"> (단, <img src="https://latex.codecogs.com/png.latex?%7C%7Ct%7C%7C=1">인 단위 벡터) 위로 데이터 <img src="https://latex.codecogs.com/png.latex?M">을 정사영(projection)시켰을 때의 데이터 분산 <img src="https://latex.codecogs.com/png.latex?var(t)">는 다음과 같이 정의할 수 있습니다. (평균이 0이므로 분산 공식에서 평균을 빼는 부분은 생략됩니다).</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?var(t)%20%5Cequiv%20%5Csum_%7Bi%7D%20(M_i%20t%20-%200)%5E2%20=%20%7C%7CMt%7C%7C%5E2%20=%20(Mt)%5ET%20Mt%20=%20t%5ET%20M%5ET%20M%20t"></p>
+<ul>
+<li><p>여기서 <img src="https://latex.codecogs.com/png.latex?M_i">는 행렬 <img src="https://latex.codecogs.com/png.latex?M">의 <img src="https://latex.codecogs.com/png.latex?i">번째 행(샘플)을 의미합니다.</p></li>
+<li><p>결과적으로 분산은 <img src="https://latex.codecogs.com/png.latex?t%5ET%20M%5ET%20M%20t"> 라는 이차 형식(Quadratic form)으로 깔끔하게 정리됩니다.</p></li>
+<li><p>따라서 제1 주성분 <img src="https://latex.codecogs.com/png.latex?t_1">을 찾는 것은 다음의 최적화 문제를 푸는 것과 같습니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?t_1%20=%20%5Carg%5Cmax_%7B%7C%7Ct%7C%7C=1%7D%20var(t)%20=%20%5Carg%5Cmax_%7B%7C%7Ct%7C%7C=1%7D%20(t%5ET%20M%5ET%20M%20t)"></p>
+<hr>
+</section>
+<section id="detailed-derivations-rayleigh-quotient와-고유벡터" class="level1">
+<h1>5. Detailed Derivations: Rayleigh Quotient와 고유벡터</h1>
+<ul>
+<li>위의 최적화 문제를 푸는 열쇠는 <strong>Rayleigh Quotient(레일리 몫)</strong> 개념과 앞서 배운 고유분해(Eigendecomposition)에 있습니다. 이 해답을 찾기 위해 두 가지 관찰(Observation)을 수학적으로 증명해 보겠습니다.</li>
+</ul>
+<section id="observation-1-분산의-상한과-하한" class="level2">
+<h2 class="anchored" data-anchor-id="observation-1-분산의-상한과-하한">5.1. Observation 1: 분산의 상한과 하한</h2>
+<ul>
+<li><p><strong>명제:</strong> 분산 <img src="https://latex.codecogs.com/png.latex?var(t)%20=%20t%5ET%20M%5ET%20M%20t"> 의 값은 항상 행렬 <img src="https://latex.codecogs.com/png.latex?M%5ET%20M">의 가장 작은 고윳값 <img src="https://latex.codecogs.com/png.latex?%5Clambda_%7Bmin%7D"> 과 가장 큰 고윳값 <img src="https://latex.codecogs.com/png.latex?%5Clambda_%7Bmax%7D"> 사이에 존재합니다.</p></li>
+<li><p><strong>증명 (Proof):</strong></p>
+<ul>
+<li><ol type="1">
+<li>먼저 <img src="https://latex.codecogs.com/png.latex?M%5ET%20M">은 형태상 항상 <strong>대칭 행렬(Symmetric matrix)</strong>이 됩니다. 지난 포스트에서 대칭 행렬은 정규 직교 행렬 <img src="https://latex.codecogs.com/png.latex?Q">를 통해 대각화(Diagonalizable)가 가능하다고 배웠습니다. 즉, <img src="https://latex.codecogs.com/png.latex?M%5ET%20M%20=%20Q%5CLambda%20Q%5ET"> 입니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>이를 분산 식에 대입해 봅니다: <img src="https://latex.codecogs.com/png.latex?t%5ET%20M%5ET%20M%20t%20=%20t%5ET%20(Q%5CLambda%20Q%5ET)%20t%20=%20(t%5ET%20Q)%20%5CLambda%20(Q%5ET%20t)"></li>
+</ol></li>
+<li><ol start="3" type="1">
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?y%20%5Cequiv%20Q%5ET%20t"> 라는 새로운 벡터를 정의해 봅시다. <img src="https://latex.codecogs.com/png.latex?y"> 역시 단위 벡터(unit vector)입니다.</li>
+</ol>
+<ul>
+<li>이유: <img src="https://latex.codecogs.com/png.latex?%7C%7Cy%7C%7C%5E2%20=%20y%5ET%20y%20=%20(Q%5ET%20t)%5ET%20(Q%5ET%20t)%20=%20t%5ET%20Q%20Q%5ET%20t">. 직교 행렬의 성질에 의해 <img src="https://latex.codecogs.com/png.latex?QQ%5ET%20=%20I"> 이므로, <img src="https://latex.codecogs.com/png.latex?t%5ET%20t%20=%201"> 이 됩니다.</li>
+</ul></li>
+<li><ol start="4" type="1">
+<li>이제 식을 <img src="https://latex.codecogs.com/png.latex?y">로 다시 표현하면 대각 행렬 <img src="https://latex.codecogs.com/png.latex?%5CLambda">와의 곱셈이 되므로 합계 기호로 전개할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?y%5ET%20%5CLambda%20y%20=%20%5Csum_%7Bi%7D%20%5Clambda_i%20y_i%5E2"></li>
+</ol></li>
+<li><ol start="5" type="1">
+<li><img src="https://latex.codecogs.com/png.latex?y">가 단위 벡터이므로 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bi%7D%20y_i%5E2%20=%201"> 입니다. 따라서 <img src="https://latex.codecogs.com/png.latex?var(t)">는 결국 <strong>고윳값 <img src="https://latex.codecogs.com/png.latex?%5Clambda_i">들의 가중 평균(weighted average)</strong> 형태가 됩니다. 어떤 수들의 가중 평균은 필연적으로 그 수들의 최솟값과 최댓값 사이에 위치하게 됩니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+</section>
+<section id="observation-2-분산이-최대화되는-조건" class="level2">
+<h2 class="anchored" data-anchor-id="observation-2-분산이-최대화되는-조건">5.2. Observation 2: 분산이 최대화되는 조건</h2>
+<ul>
+<li><p><strong>명제:</strong> 방향 벡터 <img src="https://latex.codecogs.com/png.latex?t">가 <img src="https://latex.codecogs.com/png.latex?M%5ET%20M">의 주 고유벡터(principal eigenvector)인 <img src="https://latex.codecogs.com/png.latex?v_1">일 때, 분산은 최댓값 <img src="https://latex.codecogs.com/png.latex?%5Clambda_%7Bmax%7D">를 달성합니다 (<img src="https://latex.codecogs.com/png.latex?t%20=%20v_1"> 일 때 <img src="https://latex.codecogs.com/png.latex?var(t)%20=%20%5Clambda_%7Bmax%7D">).</p></li>
+<li><p><strong>증명 (Proof):</strong></p>
+<ul>
+<li><ol type="1">
+<li>앞선 증명에서 분산은 고윳값들의 가중 평균 <img src="https://latex.codecogs.com/png.latex?var(t)%20=%20%5Csum_%7Bi%7D%20%5Clambda_i%20y_i%5E2"> 이 됨을 보였습니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>고윳값들이 <img src="https://latex.codecogs.com/png.latex?%5Clambda_1%20%5Cge%20%5Clambda_2%20%5Cge%20%5Cdots%20%5Cge%20%5Clambda_n"> 순서로 정렬되어 있다고 할 때, 이 가중 평균이 최대가 되려면 가장 큰 가중치인 <img src="https://latex.codecogs.com/png.latex?%5Clambda_1">에 모든 비중을 몰아주어야 합니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li>즉, <img src="https://latex.codecogs.com/png.latex?%7Cy_1%7C%20=%201"> 이고 나머지 모든 <img src="https://latex.codecogs.com/png.latex?i%20%3E%201"> 에 대해 <img src="https://latex.codecogs.com/png.latex?%7Cy_i%7C%20=%200"> 일 때 최댓값을 갖습니다.</li>
+</ol></li>
+<li><ol start="4" type="1">
+<li><img src="https://latex.codecogs.com/png.latex?y_1">의 정의를 다시 풀어보면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%7Cy_1%7C%20=%20%7C(Q%5ET%20t)_1%7C%20=%20%7Cv_1%5ET%20t%7C%20=%201"></li>
+</ol>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?Q">의 첫 번째 열이 <img src="https://latex.codecogs.com/png.latex?v_1">이므로 <img src="https://latex.codecogs.com/png.latex?Q%5ET">의 첫 번째 행과 <img src="https://latex.codecogs.com/png.latex?t">의 내적은 <img src="https://latex.codecogs.com/png.latex?v_1%5ET%20t"> 가 됩니다.</li>
+</ul></li>
+<li><ol start="5" type="1">
+<li>두 단위 벡터 <img src="https://latex.codecogs.com/png.latex?v_1">과 <img src="https://latex.codecogs.com/png.latex?t">의 내적의 절댓값이 1이 되기 위해서는 (코사인 유사도가 1 또는 -1이므로) 두 벡터가 완벽히 동일한 방향이어야 합니다. 결론적으로 <strong><img src="https://latex.codecogs.com/png.latex?t%20=%20v_1"></strong> 이 성립합니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="pca의-결과물과-차원-축소-적용-output-of-pca" class="level1">
+<h1>6. PCA의 결과물과 차원 축소 적용 (Output of PCA)</h1>
+<ul>
+<li><p>최적화 문제에 대한 해답(Answer)이 명확해졌습니다.</p></li>
+<li><p>변환 행렬 <img src="https://latex.codecogs.com/png.latex?T">의 첫 번째 열 <img src="https://latex.codecogs.com/png.latex?t_1">은 데이터의 <strong>공분산 행렬(Covariance matrix)인 <img src="https://latex.codecogs.com/png.latex?M%5ET%20M">의 주 고유벡터(Principal eigenvector)</strong>입니다.</p></li>
+<li><p>마찬가지로 두 번째 주성분 <img src="https://latex.codecogs.com/png.latex?t_2">는 <img src="https://latex.codecogs.com/png.latex?M%5ET%20M">의 두 번째 고유벡터가 되며, 이들은 이전 포스트에서 다룬 <strong>멱차수법(Power Iteration)</strong>을 통해 효율적으로 순차 계산할 수 있습니다.</p></li>
+<li><p>이렇게 구한 <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20n"> 변환 행렬 <img src="https://latex.codecogs.com/png.latex?T">를 원본 데이터 행렬 <img src="https://latex.codecogs.com/png.latex?M">에 곱하면, 주성분 축으로 새롭게 투영된 데이터 행렬 <img src="https://latex.codecogs.com/png.latex?M'">를 얻게 됩니다. <img src="https://latex.codecogs.com/png.latex?M'%20=%20M%20T"></p></li>
+<li><p>차원 축소(Dimensionality Reduction)는 어떻게 이루어질까요?</p></li>
+<li><p>새로운 행렬 <img src="https://latex.codecogs.com/png.latex?M'">는 열(column)의 순서대로 데이터의 분산(정보량)을 가장 많이 담고 있습니다. 따라서 전체 <img src="https://latex.codecogs.com/png.latex?n">개의 열을 모두 사용하는 대신, 가장 중요한 앞부분의 <strong><img src="https://latex.codecogs.com/png.latex?r">개 열(columns)만 선택(keeping)하여 남기면</strong> 됩니다 (<img src="https://latex.codecogs.com/png.latex?r%20%3C%20n">). 이 과정을 통해 노이즈를 제거하고 본질적인 정보(Information)만을 유지한 채 데이터의 차원을 성공적으로 압축할 수 있습니다.</p></li>
+</ul>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.4/</guid>
+  <pubDate>Wed, 01 Apr 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
   <title>[Data Mining] 9. Clustering (Part 1)</title>
   <dc:creator>유성현 </dc:creator>
   <link>https://shsha0110.github.io/posts/Data Mining/9.Clustering-2/9.1/</link>
@@ -2748,590 +3278,6 @@
   <category>Data Mining</category>
   <guid>https://shsha0110.github.io/posts/Data Mining/7.Finding-Similar-Items-2/7.3/</guid>
   <pubDate>Mon, 23 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Data Mining] 7. Finding Similar Items (Part 4)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Data Mining/7.Finding-Similar-Items-2/7.4/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-다양한-거리-척도의-필요성" class="level1">
-<h1>1. Introduction: 다양한 거리 척도의 필요성</h1>
-<p>이전 포스트까지 우리는 집합(Set) 데이터 간의 유사도를 측정하는 자카드 유사도(Jaccard Similarity)와 이를 위한 미니해싱(Minhashing) 기법을 중점적으로 다루었습니다. 하지만 실제 머신러닝 문제에서는 텍스트뿐만 아니라 실수형(Real-valued) 벡터로 표현되는 데이터가 훨씬 많습니다.</p>
-<p>텍스트북이나 여러 연구를 살펴보면 유클리디안(Euclidean), 맨해튼(Manhattan), 체비셰프(Chebyshev), 민코프스키(Minkowski), 해밍(Hamming), 하버사인(Haversine) 등 다양한 거리 척도(Distance measures)가 존재합니다. 이번 포스트에서는 그중에서도 딥러닝 임베딩 공간 등에서 널리 쓰이는 <strong>코사인 유사도(Cosine Similarity)</strong>와 <strong>각도 거리(Angular Distance)</strong>에 특화된 LSH 기법을 알아보겠습니다.</p>
-</section>
-<section id="mathematical-formulation-코사인-유사도와-각도-거리" class="level1">
-<h1>2. Mathematical Formulation: 코사인 유사도와 각도 거리</h1>
-<p>데이터 포인트를 원점에서 해당 위치로 뻗어 나가는 벡터(Vector)로 상상해 봅시다. 두 데이터 포인트 <img src="https://latex.codecogs.com/png.latex?x">와 <img src="https://latex.codecogs.com/png.latex?y">가 주어졌을 때, 두 벡터가 이루는 각도(Angle)를 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">라고 합니다.</p>
-<p>일반적으로 두 벡터 사이의 <strong>코사인 유사도(Cosine Similarity)</strong>는 벡터의 내적을 각 벡터의 크기(Norm)의 곱으로 나눈 값으로 정의됩니다: <img src="https://latex.codecogs.com/png.latex?cos(%5Ctheta)%20=%20%5Cfrac%7Bx%20%5Ccdot%20y%7D%7B%7C%7Cx%7C%7C%20%5Ccdot%20%7C%7Cy%7C%7C%7D"></p>
-<p>하지만 앞선 포스트에서 배웠듯, 유사도 자체는 거리(Distance) 척도 공리를 만족하지 않습니다. 따라서 각도 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 기반으로 한 <strong>각도 거리(Angular Distance)</strong>를 다음과 같이 정의합니다: <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BAngular%20Distance%7D%20=%20%5Cfrac%7B%5Ctheta%7D%7B%5Cpi%7D"></p>
-<p>각도 거리는 0에서 1 사이의 값을 가지며, 두 벡터가 완전히 같은 방향일 때 0, 정반대 방향일 때 1이 되는 완벽한 거리 척도로 기능합니다.</p>
-</section>
-<section id="core-concepts-랜덤-하이퍼플레인-random-hyperplanes" class="level1">
-<h1>3. Core Concepts: 랜덤 하이퍼플레인 (Random Hyperplanes)</h1>
-<p>그렇다면 이 각도 거리를 위한 LSH 해시 함수는 어떻게 설계할까요? 자카드 거리에 미니해싱(Minhashing)이 있다면, 각도 거리에는 <strong>랜덤 하이퍼플레인(Random Hyperplanes)</strong> 기법이 있습니다. 어떤 두 벡터 <img src="https://latex.codecogs.com/png.latex?x">와 <img src="https://latex.codecogs.com/png.latex?y">가 각도 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 이루고 있다면, 이 두 벡터는 하나의 평면(Plane)을 정의합니다. 원점을 지나는 무수히 많은 초평면(Hyperplanes)을 랜덤하게 그어보면, 이 초평면들은 크게 두 가지 유형으로 분류될 수 있습니다:</p>
-<ol type="1">
-<li><strong>Red Hyperplane (적색 초평면):</strong> 벡터 <img src="https://latex.codecogs.com/png.latex?x">와 <img src="https://latex.codecogs.com/png.latex?y">가 초평면을 기준으로 <strong>같은 면(Same side)</strong>에 존재하는 경우.</li>
-<li><strong>Blue Hyperplane (청색 초평면):</strong> 벡터 <img src="https://latex.codecogs.com/png.latex?x">와 <img src="https://latex.codecogs.com/png.latex?y">가 초평면을 기준으로 <strong>서로 다른 면(Different sides)</strong>에 존재하는 경우 (즉, 초평면이 두 벡터 사이를 가로지름).</li>
-</ol>
-<section id="법선-벡터normal-vector를-통한-수학적-판별" class="level3">
-<h3 class="anchored" data-anchor-id="법선-벡터normal-vector를-통한-수학적-판별">법선 벡터(Normal Vector)를 통한 수학적 판별</h3>
-<p>어떤 초평면이 주어졌을 때, 그 초평면에 수직인 <strong>법선 벡터(Normal vector) <img src="https://latex.codecogs.com/png.latex?v"></strong>를 정의할 수 있습니다. 랜덤 하이퍼플레인을 선택한다는 것은 곧 랜덤한 법선 벡터 <img src="https://latex.codecogs.com/png.latex?v">를 선택하는 것과 동일합니다.</p>
-<ul>
-<li><strong>청색 초평면(서로 다른 면)인 경우:</strong> 초평면이 두 벡터를 가로지르므로, 내적값 <img src="https://latex.codecogs.com/png.latex?v%20%5Ccdot%20x"> 와 <img src="https://latex.codecogs.com/png.latex?v%20%5Ccdot%20y"> 는 <strong>서로 다른 부호(Different signs)</strong>를 가집니다. <img src="https://latex.codecogs.com/png.latex?v">가 어느 방향으로 뻗어있든 부호가 다르다는 사실은 변하지 않습니다.</li>
-<li><strong>적색 초평면(같은 면)인 경우:</strong> 초평면이 두 벡터를 가로지르지 않으므로, 내적값 <img src="https://latex.codecogs.com/png.latex?v%20%5Ccdot%20x"> 와 <img src="https://latex.codecogs.com/png.latex?v%20%5Ccdot%20y"> 는 <strong>같은 부호(Same sign)</strong>를 가집니다.</li>
-</ul>
-</section>
-</section>
-<section id="probabilities-lsh-families" class="level1">
-<h1>4. Probabilities &amp; LSH Families</h1>
-<p>이제 무작위로 <img src="https://latex.codecogs.com/png.latex?v">를 선택했을 때, 그 초평면이 두 벡터를 가로지르지 않고 같은 쪽에 남겨둘(즉, 적색 초평면이 될) 확률을 계산해 봅시다.</p>
-<p>두 벡터가 이루는 전체 2차원 평면의 각도는 <img src="https://latex.codecogs.com/png.latex?2%5Cpi">입니다. 초평면의 법선 벡터 <img src="https://latex.codecogs.com/png.latex?v">가 두 벡터 사이를 가로지르는(청색) 영역의 각도는 정확히 두 벡터의 사잇각 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">의 양방향인 <img src="https://latex.codecogs.com/png.latex?2%5Ctheta">가 됩니다. 따라서 청색 초평면이 될 확률은 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B2%5Ctheta%7D%7B2%5Cpi%7D%20=%20%5Cfrac%7B%5Ctheta%7D%7B%5Cpi%7D"> 입니다. 반대로, <strong>두 벡터가 같은 면에 위치할(적색 초평면) 확률</strong>은 전체에서 이를 뺀 값이 됩니다: <img src="https://latex.codecogs.com/png.latex?P(%5Ctext%7BRed-type%7D)%20=%201%20-%20%5Cfrac%7B%5Ctheta%7D%7B%5Cpi%7D"></p>
-<section id="각도-거리를-위한-lsh-family-정의" class="level3">
-<h3 class="anchored" data-anchor-id="각도-거리를-위한-lsh-family-정의">각도 거리를 위한 LSH Family 정의</h3>
-<p>이 원리를 이용해 해시 함수 <img src="https://latex.codecogs.com/png.latex?f%20%5Cin%20F">를 “랜덤하게 선택된 벡터 <img src="https://latex.codecogs.com/png.latex?v">와의 내적 부호”로 정의합니다. 즉, <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20f(y)"> 가 성립하기 위한 필요충분조건은 <img src="https://latex.codecogs.com/png.latex?v%20%5Ccdot%20x"> 와 <img src="https://latex.codecogs.com/png.latex?v%20%5Ccdot%20y"> 가 같은 부호를 가지는 것(적색 초평면)입니다.</p>
-<p>앞서 Part 3에서 배운 LSH 패밀리 공식 <img src="https://latex.codecogs.com/png.latex?(d_1,%20d_2,%20p_1,%20p_2)">에 대입해보면, 각도 거리 <img src="https://latex.codecogs.com/png.latex?d%20=%20%5Ctheta%20/%20%5Cpi"> 이므로, 이 랜덤 하이퍼플레인 패밀리 <img src="https://latex.codecogs.com/png.latex?F">는 다음과 같이 정의됩니다: <img src="https://latex.codecogs.com/png.latex?%5Cleft(d_1,%20d_2,%201%20-%20%5Cfrac%7Bd_1%7D%7B%5Cpi%7D,%201%20-%20%5Cfrac%7Bd_2%7D%7B%5Cpi%7D%5Cright)%5Ctext%7B-sensitive%7D"></p>
-<p>이 형태는 놀랍게도 자카드 거리의 미니해싱 패밀리인 <img src="https://latex.codecogs.com/png.latex?(d_1,%20d_2,%201%20-%20d_1,%201%20-%20d_2)">와 거의 유사한 선형적 구조를 가집니다. 따라서 미니해싱에서 사용했던 대역(Bands) 기반의 <strong>AND-OR 증폭(Amplification) 기법을 이 랜덤 하이퍼플레인 패밀리에도 똑같이 적용하여 완벽한 S-Curve를 만들어낼 수 있습니다</strong>.</p>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Data Mining</category>
-  <guid>https://shsha0110.github.io/posts/Data Mining/7.Finding-Similar-Items-2/7.4/</guid>
-  <pubDate>Mon, 23 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Machine Learning] 5. Support Vector Machines</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Machine Learing/5.Support-Vector-Machines/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-서포트-벡터-머신svm의-개요" class="level1">
-<h1>1. Introduction: 서포트 벡터 머신(SVM)의 개요</h1>
-<ul>
-<li><p>서포트 벡터 머신(Support Vector Machines, 이하 SVM)은 기계학습 분야에서 현존하는 최고의 “Off-the-shelf(사전 훈련 없이 즉시 사용할 수 있는)” 지도 학습 알고리즘 중 하나로 평가받습니다. 복잡한 데이터 분포에서도 강력한 일반화 성능을 보여주며, 다양한 산업 및 연구 분야에서 널리 활용되고 있습니다.</p></li>
-<li><p>SVM의 동작 원리를 온전히 이해하기 위해서는 다음과 같은 핵심 주제들을 순차적으로 파악해야 합니다:</p>
-<ul>
-<li><strong>마진(Margins)</strong>: 데이터를 분리할 때 단순히 나누는 것을 넘어, 가능한 한 큰 “여백(gap)”을 두고 분리하려는 직관.</li>
-<li><strong>최적 마진 분류기(The optimal margin classifier)와 라그랑주 쌍대성(Lagrange duality)</strong>: 마진을 최대화하는 최적화 문제를 수학적으로 정의하고 푸는 과정.</li>
-<li><strong>커널 기법(Kernels)</strong>: 무한 차원과 같은 매우 높은 고차원 특성 공간(feature space)에서 SVM을 효율적으로 적용할 수 있게 해주는 수학적 트릭.</li>
-<li><strong>SMO 알고리즘</strong>: SVM의 최적화 문제를 실제로 빠르게 연산하고 구현할 수 있게 해주는 알고리즘.</li>
-</ul></li>
-<li><p>이번 포스트에서는 SVM의 가장 기초가 되는 <strong>마진의 직관적 의미</strong>와 이를 수학적으로 공식화한 <strong>최적 마진 분류기</strong>의 도출 과정에 집중하여 정리해 보겠습니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="margins-마진에-대한-직관" class="level1">
-<h1>2. Margins: 마진에 대한 직관</h1>
-<ul>
-<li>SVM의 철학을 이해하기 위해, 우리가 이미 잘 알고 있는 <strong>로지스틱 회귀(Logistic Regression)</strong> 모델부터 시작해 보겠습니다.</li>
-<li>로지스틱 회귀에서 데이터 <img src="https://latex.codecogs.com/png.latex?x">가 주어졌을 때 클래스 <img src="https://latex.codecogs.com/png.latex?y=1">일 확률 <img src="https://latex.codecogs.com/png.latex?p(y=1%7Cx;%5Ctheta)">는 시그모이드 함수 <img src="https://latex.codecogs.com/png.latex?g(%5Ccdot)">를 사용하여 다음과 같이 모델링됩니다:</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?h_%5Ctheta(x)%20=%20g(%5Ctheta%5E%5Ctop%20x)"></p>
-<ul>
-<li>이때 모델은 <img src="https://latex.codecogs.com/png.latex?h_%5Ctheta(x)%20%5Cge%200.5">일 때 (즉, <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x%20%5Cge%200">일 때) 클래스 “1”로 예측합니다.</li>
-</ul>
-<section id="분류의-자신감confidence" class="level2">
-<h2 class="anchored" data-anchor-id="분류의-자신감confidence">2.1. 분류의 “자신감(Confidence)”</h2>
-<ul>
-<li><p>긍정적 훈련 예제(Positive training example, <img src="https://latex.codecogs.com/png.latex?y=1">)를 가정해 봅시다.</p></li>
-<li><p><img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x">의 값이 커질수록 <img src="https://latex.codecogs.com/png.latex?h_%5Ctheta(x)">의 값(확률) 역시 커지며, 이는 모델이 해당 데이터의 레이블을 1로 예측하는 데 있어 <strong>“자신감(degree of confidence)”</strong>이 높다는 것을 의미합니다. 즉, <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x%20%5Cgg%200">일 때 우리는 모델이 <img src="https://latex.codecogs.com/png.latex?y=1">이라는 예측에 대해 매우 확신하고 있다고 생각할 수 있습니다.</p></li>
-<li><p>반대로 부정적 예제(<img src="https://latex.codecogs.com/png.latex?y=0">)에 대해서는 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x%20%5Cll%200">일 때 <img src="https://latex.codecogs.com/png.latex?y=0">이라는 예측에 강한 확신을 가집니다.</p></li>
-<li><p>결과적으로, 훈련 데이터에 대한 <strong>“좋은 적합(Good fit)”</strong>이란 단순히 예측을 맞추는 것을 넘어 다음과 같은 조건을 만족하는 상태입니다:</p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=1">일 때마다 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x%5E%7B(i)%7D%20%5Cgg%200"></li>
-<li><img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=0">일 때마다 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x%5E%7B(i)%7D%20%5Cll%200"></li>
-</ul></li>
-<li><p>우리는 이러한 “분류의 자신감”을 수학적으로 엄밀하게 다루기 위해 <strong>함수적 마진(Functional margins)</strong>이라는 개념을 도입하게 됩니다.</p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Machine Learing/5.Support-Vector-Machines/images/decision_boundary_confidence.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 결정 경계와 데이터 포인트들의 위치 관계. X는 긍정적 예제(y=1), O는 부정적 예제(y=0)를 나타내며, 실선은 결정 경계(Separating hyperplane)인 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%5Ctop%20x=0">을 의미합니다. 점 A는 결정 경계로부터 매우 멀리 떨어져 있어 예측에 대한 확신이 가장 높으며, 점 C는 경계에 아슬아슬하게 위치하여 예측의 불확실성이 큽니다. 즉, 예측의 확신도 측면에서 A &gt; B &gt; C의 관계가 성립함을 보여주는 도식입니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>위 그림에서 보듯, 점 A는 결정 경계에서 멀리 떨어져 있어 모델이 예측을 매우 확신할 수 있는 반면, 점 C는 경계와 매우 가까워 모델의 예측이 상대적으로 불안정합니다. 우리의 목표는 모든 훈련 예제에 대해 정확하면서도 <strong>“확신에 찬(confident)”</strong> 예측을 할 수 있는, 즉 모든 데이터를 결정 경계로부터 최대한 멀리 떨어뜨리는(마진을 최대화하는) 결정 경계를 찾는 것입니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="notation-새로운-표기법의-도입" class="level1">
-<h1>3. Notation: 새로운 표기법의 도입</h1>
-<ul>
-<li>본격적으로 마진을 수학적으로 정의하기 전에, SVM에서 널리 사용되는 표기법(Notation)으로 전환하겠습니다.
-<ul>
-<li><ol type="1">
-<li><strong>클래스 레이블의 변경</strong>: 기존의 <img src="https://latex.codecogs.com/png.latex?%5C%7B0,%201%5C%7D"> 대신 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5C%7B-1,%201%5C%7D">을 사용합니다. 이는 수식 전개를 훨씬 깔끔하게 만들어줍니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>파라미터의 분리</strong>: 파라미터 벡터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 가중치 벡터 <img src="https://latex.codecogs.com/png.latex?w">와 편향(절편) <img src="https://latex.codecogs.com/png.latex?b">로 분리합니다.</li>
-</ol>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?b">는 기존의 <img src="https://latex.codecogs.com/png.latex?%5Ctheta_0"> (Intercept term) 역할을 명시적으로 분리하여 담당합니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?w">는 기존의 <img src="https://latex.codecogs.com/png.latex?%5B%5Ctheta_1%20...%20%5Ctheta_d%5D%5E%5Ctop"> 역할을 담당합니다.</li>
-</ul></li>
-<li><ol start="3" type="1">
-<li><strong>예측 함수의 정의</strong>: 로지스틱 회귀처럼 <img src="https://latex.codecogs.com/png.latex?p(y=1)">의 확률값을 추정하는 중간 단계를 거치지 않고, 퍼셉트론(Perceptron) 알고리즘과 같이 직접적으로 1 또는 -1을 예측합니다. 모델의 가설 함수는 다음과 같이 정의됩니다:</li>
-</ol></li>
-</ul></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?h_%7Bw,b%7D(x)%20=%20g(w%5E%5Ctop%20x%20+%20b)"> <img src="https://latex.codecogs.com/png.latex?g(z)%20=%20%5Cbegin%7Bcases%7D%201%20&amp;%20%5Ctext%7Bif%20%7D%20z%20%5Cge%200,%20%5C%5C%20-1%20&amp;%20%5Ctext%7Botherwise%7D%20%5Cend%7Bcases%7D"></p>
-<hr>
-</section>
-<section id="functional-and-geometric-margins" class="level1">
-<h1>4. Functional and Geometric Margins</h1>
-<ul>
-<li>데이터 포인트가 결정 경계로부터 얼마나 안전하게(확신을 가지고) 분류되었는지를 측정하는 두 가지 지표를 정의합니다.</li>
-</ul>
-<section id="함수적-마진-functional-margin" class="level2">
-<h2 class="anchored" data-anchor-id="함수적-마진-functional-margin">4.1. 함수적 마진 (Functional Margin)</h2>
-<ul>
-<li>주어진 훈련 예제 <img src="https://latex.codecogs.com/png.latex?(x%5E%7B(i)%7D,%20y%5E%7B(i)%7D)">에 대한 파라미터 <img src="https://latex.codecogs.com/png.latex?(w,%20b)">의 <strong>함수적 마진(Functional margin)</strong> <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D%5E%7B(i)%7D">는 다음과 같이 정의됩니다:</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D%5E%7B(i)%7D%20=%20y%5E%7B(i)%7D(w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b)"></p>
-<ul>
-<li><p>함수적 마진이 크다는 것은 우리의 예측이 올바르고 그 확신도 크다는 것을 의미합니다.</p>
-<ul>
-<li>만약 실제 레이블이 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=1">이라면, 예측이 정확하고 확신이 크기 위해서는 <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b">가 매우 큰 양수여야 합니다.</li>
-<li>만약 실제 레이블이 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=-1">이라면, <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b">가 매우 큰 음수여야 두 값을 곱했을 때 큰 양수가 도출됩니다.</li>
-</ul></li>
-<li><p>따라서, <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D(w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b)%20%3E%200"> 이라는 조건은 모델이 해당 데이터를 정확하게 분류했음을 나타냅니다.</p></li>
-<li><p><strong>전체 데이터셋에 대한 함수적 마진</strong> <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D">는 개별 데이터들의 마진 중 가장 작은 값(최악의 경우)으로 정의합니다: <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D%20=%20%5Cmin_%7Bi=1,...,n%7D%20%5Chat%7B%5Cgamma%7D%5E%7B(i)%7D"></p></li>
-</ul>
-<section id="함수적-마진의-한계-정규화의-필요성" class="level3">
-<h3 class="anchored" data-anchor-id="함수적-마진의-한계-정규화의-필요성">함수적 마진의 한계: 정규화의 필요성</h3>
-<ul>
-<li>함수적 마진만으로는 최적화에 문제가 발생할 수 있습니다. 만약 파라미터 <img src="https://latex.codecogs.com/png.latex?(w,%20b)">를 2배씩 스케일링하여 <img src="https://latex.codecogs.com/png.latex?(2w,%202b)">로 바꾼다고 가정해 봅시다.</li>
-<li>가설 함수 <img src="https://latex.codecogs.com/png.latex?h_%7Bw,b%7D(x)%20=%20g(w%5E%5Ctop%20x%20+%20b)">는 단순히 부호(sign)만 확인하므로 결정 경계의 기하학적 위치나 모델의 실제 예측 결과는 전혀 변하지 않습니다.</li>
-<li>하지만 계산된 함수적 마진 값은 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D(2w%5E%5Ctop%20x%5E%7B(i)%7D%20+%202b)%20=%202%5Chat%7B%5Cgamma%7D%5E%7B(i)%7D">가 되어 원래보다 2배 커지게 됩니다. 즉, 파라미터의 스케일만 키워도(실제 분류 성능은 그대로인데) 함수적 마진을 무한대로 키울 수 있는 문제가 발생합니다. 이를 해결하기 위해 파라미터에 대한 <strong>정규화(Normalization)</strong>가 필요해지며, 통상적으로 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C_2%20=%201">이 되도록 <img src="https://latex.codecogs.com/png.latex?%5Cleft(%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C_2%7D,%20%5Cfrac%7Bb%7D%7B%7C%7Cw%7C%7C_2%7D%5Cright)"> 형태로 크기를 강제하는 방식을 고려할 수 있습니다.</li>
-</ul>
-</section>
-</section>
-<section id="기하학적-마진-geometric-margin" class="level2">
-<h2 class="anchored" data-anchor-id="기하학적-마진-geometric-margin">4.2. 기하학적 마진 (Geometric Margin)</h2>
-<ul>
-<li>이러한 스케일 의존성 문제를 해결하고, 실제 공간상에서 데이터 포인트가 결정 경계(<img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%20+%20b%20=%200">)로부터 떨어진 <strong>유클리디안 거리(Euclidean distance)</strong>를 측정하는 것이 바로 <strong>기하학적 마진</strong>입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Machine Learing/5.Support-Vector-Machines/images/geometric_margin_derivation.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 기하학적 마진의 기하학적 도출 과정. 벡터 w는 결정 경계와 직교(orthogonal)하는 법선 벡터입니다. 공간상의 한 점 A(<img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">)에서 결정 경계로 수선의 발을 내린 점을 B라고 할 때, 선분 AB의 길이가 기하학적 마진 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D">가 됩니다. 점 A에서 벡터 w의 반대 방향으로 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D">만큼 이동하면 점 B에 도달하게 되는 관계를 보여줍니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><p>위 그림을 참고하여, 클래스가 양성(<img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=1">)인 데이터 포인트 A(좌표 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">)가 결정 경계로부터 떨어진 거리를 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D">라고 합시다.</p></li>
-<li><p>벡터 <img src="https://latex.codecogs.com/png.latex?w">는 결정 경계 <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%20+%20b%20=%200">에 수직인 법선 벡터입니다. 법선 벡터의 방향을 나타내는 단위 벡터는 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D">가 됩니다.</p></li>
-<li><p>따라서 점 A에서 결정 경계를 향해 수선의 발을 내린 점 B의 좌표는 원래 위치 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">에서 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D"> 길이만큼 단위 벡터 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D">의 반대 방향으로 이동한 것이므로 다음과 같습니다: <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BPoint%20B%7D%20=%20x%5E%7B(i)%7D%20-%20%5Cgamma%5E%7B(i)%7D%20%5Ccdot%20%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D"></p></li>
-<li><p>점 B는 정확히 결정 경계 위에 존재하므로, 결정 경계 방정식에 대입하면 등식이 성립해야 합니다: <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20%5Cleft(%20x%5E%7B(i)%7D%20-%20%5Cgamma%5E%7B(i)%7D%20%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D%20%5Cright)%20+%20b%20=%200%20%5Cquad%20%5Ctext%7B%5BEq.1%5D%7D"></p></li>
-<li><p>이제 [Eq.1]을 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D">에 대해 정리해 보겠습니다. 전개 과정을 살펴보면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%5E%7B(i)%7D%20-%20%5Cgamma%5E%7B(i)%7D%20%5Cfrac%7Bw%5E%5Ctop%20w%7D%7B%7C%7Cw%7C%7C%7D%20+%20b%20=%200"></p></li>
-<li><p>여기서 <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20w%20=%20%7C%7Cw%7C%7C%5E2"> 이므로 식은 다음과 같이 간소화됩니다. <img src="https://latex.codecogs.com/png.latex?w%5E%5Ctop%20x%5E%7B(i)%7D%20-%20%5Cgamma%5E%7B(i)%7D%20%7C%7Cw%7C%7C%20+%20b%20=%200"> <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D%20%7C%7Cw%7C%7C%20=%20w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b"> <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D%20=%20%5Cfrac%7Bw%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b%7D%7B%7C%7Cw%7C%7C%7D%20=%20%5Cleft(%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D%5Cright)%5E%5Ctop%20x%5E%7B(i)%7D%20+%20%5Cfrac%7Bb%7D%7B%7C%7Cw%7C%7C%7D"></p></li>
-<li><p>위 도출은 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=1">일 때를 가정한 것입니다. 만약 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=-1">인 경우 거리는 양수여야 하므로 앞에 음수 기호가 붙어야 합니다. 이를 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D">를 곱해줌으로써 모든 훈련 예제 <img src="https://latex.codecogs.com/png.latex?(x%5E%7B(i)%7D,%20y%5E%7B(i)%7D)">에 대해 일반화된 <strong>기하학적 마진</strong> 공식을 얻게 됩니다:</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cgamma%5E%7B(i)%7D%20=%20y%5E%7B(i)%7D%20%5Cleft(%20%5Cleft(%5Cfrac%7Bw%7D%7B%7C%7Cw%7C%7C%7D%5Cright)%5E%5Ctop%20x%5E%7B(i)%7D%20+%20%5Cfrac%7Bb%7D%7B%7C%7Cw%7C%7C%7D%20%5Cright)"></p>
-<ul>
-<li><strong>기하학적 마진의 중요한 특징</strong>
-<ul>
-<li><strong>Scale Invariance (스케일 불변성)</strong>: 파라미터 <img src="https://latex.codecogs.com/png.latex?w">와 <img src="https://latex.codecogs.com/png.latex?b">를 어떤 상수배로 리스케일링하더라도, 분모의 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C"> 역시 동일하게 스케일링되므로 기하학적 마진 값 자체는 변하지 않습니다.</li>
-<li><strong>함수적 마진과의 관계</strong>: 만약 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C%20=%201">로 정규화된다면, 식의 분모가 1이 되므로 기하학적 마진과 함수적 마진은 정확히 일치하게 됩니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="the-optimal-margin-classifier-최적-마진-분류기-공식화" class="level1">
-<h1>5. The Optimal Margin Classifier: 최적 마진 분류기 공식화</h1>
-<ul>
-<li><p>우리의 최종 목표는 훈련 데이터와 결정 경계 사이의 기하학적 마진 중 최솟값(가장 가까운 거리)을 <strong>최대화(maximize)</strong>하는 결정 경계를 찾는 것입니다. 이를 “최적 마진 분류기”라고 부릅니다.</p></li>
-<li><p>초기 최적화 문제는 다음과 같이 공식화할 수 있습니다: <img src="https://latex.codecogs.com/png.latex?%5Cmax_%7B%5Cgamma,%20w,%20b%7D%20%5Cgamma"> <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bs.t.%7D%20%5Cquad%20y%5E%7B(i)%7D(w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b)%20%5Cge%20%5Cgamma,%20%5Cquad%20i=1,...,n"> <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C%20=%201"></p>
-<ul>
-<li>조건 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C=1">은 기하학적 마진과 함수적 마진을 동일하게 만들어주기 위함입니다.</li>
-</ul></li>
-<li><p>하지만 제약조건 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C%20=%201">은 원이나 구의 표면을 나타내며, 이는 수학적으로 <strong>비볼록(non-convex)</strong> 제약이므로 최적화 해를 구하기가 매우 까다롭습니다.</p></li>
-</ul>
-<section id="최적화-문제의-변환-convex-transformation" class="level2">
-<h2 class="anchored" data-anchor-id="최적화-문제의-변환-convex-transformation">5.1. 최적화 문제의 변환 (Convex Transformation)</h2>
-<ul>
-<li><p>이를 해결하기 위해 문제를 변형합니다. 기하학적 마진 <img src="https://latex.codecogs.com/png.latex?%5Cgamma">를 함수적 마진 <img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D">와 노름 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C">의 관계인 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Chat%7B%5Cgamma%7D%7D%7B%7C%7Cw%7C%7C%7D">로 치환합니다. 그러면 최적화 문제는 다음과 같이 바뀝니다: <img src="https://latex.codecogs.com/png.latex?%5Cmax_%7B%5Chat%7B%5Cgamma%7D,%20w,%20b%7D%20%5Cfrac%7B%5Chat%7B%5Cgamma%7D%7D%7B%7C%7Cw%7C%7C%7D"> <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bs.t.%7D%20%5Cquad%20y%5E%7B(i)%7D(w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b)%20%5Cge%20%5Chat%7B%5Cgamma%7D,%20%5Cquad%20i=1,...,n"></p></li>
-<li><p>이제 성가신 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C=1"> 제약조건이 사라졌습니다.</p></li>
-<li><p>여기에 앞서 다룬 기하학적 마진의 <strong>스케일 불변성(Scale Invariance)</strong>을 기가 막히게 활용합니다. <img src="https://latex.codecogs.com/png.latex?w">와 <img src="https://latex.codecogs.com/png.latex?b">를 스케일링하더라도 목적함수나 제약조건의 본질은 변하지 않으므로, 우리는 편의상 함수적 마진의 최솟값이 정확히 1이 되도록(<img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D%20=%201">) 파라미터의 스케일을 조정할 수 있습니다.</p></li>
-<li><p><img src="https://latex.codecogs.com/png.latex?%5Chat%7B%5Cgamma%7D%20=%201">을 대입하면 목적함수는 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B%7C%7Cw%7C%7C%7D">을 최대화하는 문제가 됩니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B%7C%7Cw%7C%7C%7D">을 최대화하는 것은 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C%5E2">을 최소화하는 것과 수학적으로 완전히 동일합니다. 미분 계산의 편의를 위해 앞에 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B2%7D">을 붙여주면, 최종적인 SVM의 최적화 문제는 다음과 같은 깔끔한 형태로 완성됩니다:</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bw,b%7D%20%5Cfrac%7B1%7D%7B2%7D%20%7C%7Cw%7C%7C%5E2"> <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bs.t.%7D%20%5Cquad%20y%5E%7B(i)%7D(w%5E%5Ctop%20x%5E%7B(i)%7D%20+%20b)%20%5Cge%201,%20%5Cquad%20i=1,...,n"></p>
-<ul>
-<li>이 형태가 바로 SVM 최적 마진 분류기의 표준형(Primal form)입니다. 이 식은 볼록 목적 함수(Convex objective function)와 선형 제약 조건(Linear constraints)을 가지는 전형적인 <strong>이차 계획법(Quadratic Programming, QP)</strong> 문제로 변환되었으며, 널리 사용되는 상용 QP Solver를 통해 글로벌 최적해(Global optimum)를 매우 효율적이고 안정적으로 찾아낼 수 있습니다.</li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Machine Learning</category>
-  <guid>https://shsha0110.github.io/posts/Machine Learing/5.Support-Vector-Machines/</guid>
-  <pubDate>Mon, 23 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] Lecture 6. Convex Optimization Beyond Linear Programming</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/6.Convex-Optimization-Beyond-Linear-Programming/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-볼록-최적화의-확장" class="level1">
-<h1>Introduction: 볼록 최적화의 확장</h1>
-<ul>
-<li>이번 포스트에서는 선형 계획법(Linear Programming, LP)을 넘어선 다양한 <strong>볼록 최적화(Convex Optimization)</strong> 기법들을 다룹니다.</li>
-<li>구체적으로 다음의 주제들을 수학적 수식과 함께 단계별로 살펴봅니다.
-<ul>
-<li><strong>이차 계획법 (Quadratic Programming, QP)</strong></li>
-<li><strong>반정부호 계획법 (Semidefinite Programming, SDP)</strong></li>
-<li><strong>원뿔 계획법 (Conic Programming, CP)</strong></li>
-<li><strong>이차 원뿔 계획법 (Second-Order Cone Programming, SOCP)</strong></li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="이차-계획법-quadratic-programming-qp" class="level1">
-<h1>1. 이차 계획법 (Quadratic Programming, QP)</h1>
-<section id="개념-및-정의" class="level2">
-<h2 class="anchored" data-anchor-id="개념-및-정의">1.1. 개념 및 정의</h2>
-<p>이차 계획법(QP)은 목적 함수가 이차항을 포함하고, 제약 조건은 선형인 최적화 문제의 형태를 띱니다. 일반적인 수식은 다음과 같습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20%5Cfrac%7B1%7D%7B2%7Dx%5E%7B%5Ctop%7DQx%20+%20%5Crho%5E%7B%5Ctop%7Dx%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20Ax%20%5Cge%20b%0A%5Cend%7Baligned%7D%0A"></p>
-<p>이차 계획법이 볼록(Convex) 문제이기 위해서는 행렬 <img src="https://latex.codecogs.com/png.latex?Q">가 반드시 <strong>양의 준정부호(Positive Semidefinite, <img src="https://latex.codecogs.com/png.latex?Q%20%5Csucceq%200">)</strong>여야 합니다.</p>
-</section>
-<section id="머신러닝-및-금융에서의-qp-응용" class="level2">
-<h2 class="anchored" data-anchor-id="머신러닝-및-금융에서의-qp-응용">1.2. 머신러닝 및 금융에서의 QP 응용</h2>
-<section id="예제-1-포트폴리오-최적화-portfolio-optimization" class="level3">
-<h3 class="anchored" data-anchor-id="예제-1-포트폴리오-최적화-portfolio-optimization">예제 1: 포트폴리오 최적화 (Portfolio Optimization)</h3>
-<ul>
-<li>포트폴리오 최적화 모델은 다음과 같이 정형화될 수 있습니다.
-<ul>
-<li>목적 함수: <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bmaximize%7D%20%5Cquad%20%5Cmu%5E%7B%5Ctop%7Dx%20-%20%5Cgamma%20x%5E%7B%5Ctop%7D%5CSigma%20x"></li>
-<li>제약 조건: <img src="https://latex.codecogs.com/png.latex?1%5E%7B%5Ctop%7Dx%20=%201">, <img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D_%7B+%7D%5E%7Bn%7D"></li>
-</ul></li>
-</ul>
-<p>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%20%3E%200">이며, 공분산 행렬(Covariance matrix)인 <img src="https://latex.codecogs.com/png.latex?%5CSigma">는 양의 준정부호입니다. 최적화의 편의를 위해 목적 함수에 음수를 취해 최소화 문제로 변환하면 동치인 다음과 같은 볼록 이차 계획법 형태가 됩니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20%5Cgamma%20x%5E%7B%5Ctop%7D%5CSigma%20x%20-%20%5Cmu%5E%7B%5Ctop%7Dx%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%201%5E%7B%5Ctop%7Dx%20=%201%20%5C%5C%0A&amp;%20x%20%5Cge%200%0A%5Cend%7Baligned%7D%0A"></p>
-</section>
-<section id="예제-2-서포트-벡터-머신-support-vector-machine-svm" class="level3">
-<h3 class="anchored" data-anchor-id="예제-2-서포트-벡터-머신-support-vector-machine-svm">예제 2: 서포트 벡터 머신 (Support Vector Machine, SVM)</h3>
-<p>서포트 벡터 머신의 목적 함수는 다음과 같습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmin_%7Bw,b%7D%20%5Clambda%7C%7Cw%7C%7C_%7B2%7D%5E%7B2%7D%20+%20%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7D%5Cmax%5C%7B0,%201%20-%20y_%7Bi%7D(w%5E%7B%5Ctop%7Dx_%7Bi%7D%20-%20b)%5C%7D%0A"></p>
-<p>이 형태는 비선형적인 <img src="https://latex.codecogs.com/png.latex?%5Cmax"> 함수를 포함하고 있지만, 보조 변수(Slack variable) <img src="https://latex.codecogs.com/png.latex?%5Cxi_i%20%5Cge%200">를 도입하면 동치인 볼록 이차 계획법으로 재구성할 수 있습니다. (강의 자료에서는 빈칸으로 제시되었으나, 통상적으로 다음과 같이 변환됩니다.)</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20%5Clambda%7C%7Cw%7C%7C_%7B2%7D%5E%7B2%7D%20+%20%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7D%5Cxi_i%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20y_%7Bi%7D(w%5E%7B%5Ctop%7Dx_%7Bi%7D%20-%20b)%20%5Cge%201%20-%20%5Cxi_i,%20%5Cquad%20%5Cforall%20i%20%5C%5C%0A&amp;%20%5Cxi_i%20%5Cge%200,%20%5Cquad%20%5Cforall%20i%0A%5Cend%7Baligned%7D%0A"></p>
-</section>
-<section id="예제-3-lasso-회귀-lasso-regression" class="level3">
-<h3 class="anchored" data-anchor-id="예제-3-lasso-회귀-lasso-regression">예제 3: LASSO 회귀 (LASSO Regression)</h3>
-<p>LASSO는 다음과 같이 L1 정규화를 포함합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmin_%7B%5Cbeta%7D%20%5Cfrac%7B1%7D%7Bn%7D%7C%7Cy%20-%20X%5Cbeta%7C%7C_%7B2%7D%5E%7B2%7D%20+%20%5Clambda%7C%7C%5Cbeta%7C%7C_%7B1%7D%0A"></p>
-<p>절댓값 기호 때문에 미분 불가능해 보이지만, 변수를 <img src="https://latex.codecogs.com/png.latex?%5Cbeta%20=%20%5Cbeta%5E+%20-%20%5Cbeta%5E-"> (단, <img src="https://latex.codecogs.com/png.latex?%5Cbeta%5E+,%20%5Cbeta%5E-%20%5Cge%200">)로 분리하면 역시 이차 계획법으로 변환 가능합니다.</p>
-<hr>
-</section>
-</section>
-</section>
-<section id="반정부호-계획법-semidefinite-programming-sdp" class="level1">
-<h1>2. 반정부호 계획법 (Semidefinite Programming, SDP)</h1>
-<section id="동기-최대-절단max-cut-문제" class="level2">
-<h2 class="anchored" data-anchor-id="동기-최대-절단max-cut-문제">2.1. 동기: 최대 절단(Max-Cut) 문제</h2>
-<p>반정부호 계획법(SDP)은 NP-hard 이산 최적화 문제를 푸는 훌륭한 도구입니다. 대표적으로 Goemans와 Williamson(1995)에 의해 연결성이 밝혀진 Maximum Cut(Max-Cut) 문제가 있습니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/6.Convex-Optimization-Beyond-Linear-Programming/images/max_cut_graph.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: Max-Cut 문제에서 노드들을 두 그룹(빨간색 사각형과 검은색 원형)으로 분리하고, 두 파티션을 가로지르는 간선을 녹색 선으로 표시한 그래프 도식입니다.</figcaption>
-</figure>
-</div>
-<p>그래프 <img src="https://latex.codecogs.com/png.latex?G=(V,E)">에서 정점 집합 <img src="https://latex.codecogs.com/png.latex?V">를 두 그룹 <img src="https://latex.codecogs.com/png.latex?(V_1,%20V_2)">로 분할할 때 (<img src="https://latex.codecogs.com/png.latex?V_1%20%5Ccup%20V_2%20=%20V">, <img src="https://latex.codecogs.com/png.latex?V_1%20%5Ccap%20V_2%20=%20%5Cemptyset">), 파티션을 가로지르는 간선의 수(<img src="https://latex.codecogs.com/png.latex?%5C%7Buv%20%5Cin%20E%20:%20u%20%5Cin%20V_1,%20v%20%5Cin%20V_2%5C%7D">)를 최대화하는 문제입니다.</p>
-<p>이를 수식화하면, 각 정점 <img src="https://latex.codecogs.com/png.latex?v%20%5Cin%20V">에 대해 변수 <img src="https://latex.codecogs.com/png.latex?x_v%20%5Cin%20%5C%7B-1,%201%5C%7D">를 할당하여 다음과 같은 목적 함수를 얻습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7Bmaximize%7D%20%5Cquad%20%5Csum_%7Buv%5Cin%20E%7D%5Cfrac%7B1%20-%20x_%7Bu%7Dx_%7Bv%7D%7D%7B2%7D%0A"></p>
-<p>제약 조건 <img src="https://latex.codecogs.com/png.latex?x_v%20%5Cin%20%5C%7B-1,%201%5C%7D">은 이산적이어서 다루기 매우 어렵습니다.</p>
-</section>
-<section id="max-cut의-sdp-이완-relaxation" class="level2">
-<h2 class="anchored" data-anchor-id="max-cut의-sdp-이완-relaxation">2.2. Max-Cut의 SDP 이완 (Relaxation)</h2>
-<p>제약 조건을 완화하기 위해 <img src="https://latex.codecogs.com/png.latex?d%20%5Ctimes%20d"> 행렬 <img src="https://latex.codecogs.com/png.latex?X">를 정의하고 그 원소를 <img src="https://latex.codecogs.com/png.latex?X_%7Bij%7D%20=%20X_i%20X_j">로 둡니다. 이렇게 정의된 행렬 <img src="https://latex.codecogs.com/png.latex?X">는 양의 준정부호(Positive Semidefinite, <img src="https://latex.codecogs.com/png.latex?X%20%5Csucceq%200">)가 됩니다. 따라서 원래 문제는 다음과 같이 동치로 표현됩니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bmaximize%7D%20%5Cquad%20&amp;%20%5Csum_%7Buv%5Cin%20E%7D%5Cfrac%7B1%20-%20X_%7Buv%7D%7D%7B2%7D%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20X_%7Bii%7D%20=%201,%20%5Cquad%20%5Cforall%20i%20%5Cin%20V%20%5C%5C%0A&amp;%20X%20%5Csucceq%200%0A%5Cend%7Baligned%7D%0A"></p>
-<p>이러한 형태로 최적화하는 것을 SDP 완화(Relaxation)라고 합니다.</p>
-</section>
-<section id="sdp의-일반-형태-및-쌍대성" class="level2">
-<h2 class="anchored" data-anchor-id="sdp의-일반-형태-및-쌍대성">2.3. SDP의 일반 형태 및 쌍대성</h2>
-<p>일반적인 반정부호 계획법(SDP)은 행렬의 대각합(Trace) 기반 내적, <img src="https://latex.codecogs.com/png.latex?tr(C%5E%7B%5Ctop%7DX)"> 및 <img src="https://latex.codecogs.com/png.latex?tr(A_l%5E%7B%5Ctop%7DX)">을 활용합니다.</p>
-<ul>
-<li><p><strong>원문제 (Primal SDP)</strong>: <img src="https://latex.codecogs.com/png.latex?%0A%20%20%5Cbegin%7Baligned%7D%0A%20%20%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20tr(C%5E%7B%5Ctop%7DX)%20%5C%5C%0A%20%20%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20tr(A_%7Bl%7D%5E%7B%5Ctop%7DX)%20=%20b_%7Bl%7D%20%5Cquad%20%5Ctext%7Bfor%20%7D%20l=1,...,n%20%5C%5C%0A%20%20&amp;%20X%20%5Cge%200%20%5Cquad%20(%5Ctext%7B%EC%A6%89,%20%7D%20X%20%5Csucceq%200)%0A%20%20%5Cend%7Baligned%7D%0A%20%20"></p></li>
-<li><p><strong>쌍대문제 (Dual SDP)</strong>: <img src="https://latex.codecogs.com/png.latex?%0A%20%20%5Cbegin%7Baligned%7D%0A%20%20%5Ctext%7Bmaximize%7D%20%5Cquad%20&amp;%20%5Csum_%7Bl=1%7D%5E%7Bm%7Db_%7Bl%7Dy_%7Bl%7D%20%5C%5C%0A%20%20%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20%5Csum_%7Bl=1%7D%5E%7Bm%7Dy_%7Bl%7DA_%7Bl%7D%20%5Cle%20C%0A%20%20%5Cend%7Baligned%7D%0A%20%20"> 여기서 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bl=1%7D%5E%7Bm%7Dy_%7Bl%7DA_%7Bl%7D%20%5Cle%20C">는 <img src="https://latex.codecogs.com/png.latex?C%20-%20%5Csum_%7Bl=1%7D%5E%7Bm%7Dy_%7Bl%7DA_%7Bl%7D"> 행렬이 양의 준정부호임을 의미합니다.</p></li>
-</ul>
-</section>
-<section id="qp의-sdp-변환-schur-complement" class="level2">
-<h2 class="anchored" data-anchor-id="qp의-sdp-변환-schur-complement">2.4. QP의 SDP 변환 (Schur Complement)</h2>
-<p>볼록 이차 계획법(QP)은 다음의 형태로 다시 쓸 수 있습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20t%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20t%20%5Cge%20%5Cfrac%7B1%7D%7B2%7Dx%5E%7B%5Ctop%7DQx%20+%20p%5E%7B%5Ctop%7Dx%0A%5Cend%7Baligned%7D%0A"> (강의자료 슬라이드 25장과 동일 )</p>
-<p>어떤 양의 준정부호 행렬 <img src="https://latex.codecogs.com/png.latex?Q">라도 <img src="https://latex.codecogs.com/png.latex?Q%20=%20P%5E%7B%5Ctop%7DP">를 만족하는 <img src="https://latex.codecogs.com/png.latex?P">가 존재합니다. 그리고 다음 보조정리(Lemma)를 이용하면 이 제약식을 선형 행렬 부등식으로 나타낼 수 있습니다.</p>
-<blockquote class="blockquote">
-<p><strong>Lemma</strong>: 벡터 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd%7D">에 대해, <img src="https://latex.codecogs.com/png.latex?y%5E%7B%5Ctop%7Dy%20%5Cle%20s"> 라는 부등식은 블록 행렬이 양의 준정부호임 <img src="https://latex.codecogs.com/png.latex?(%5Cbegin%7Bmatrix%7D%20s%20&amp;%20y%5E%7B%5Ctop%7D%20%5C%5C%20y%20&amp;%20I%20%5Cend%7Bmatrix%7D)%20%5Cge%200"> 과 동치입니다 (여기서 <img src="https://latex.codecogs.com/png.latex?I">는 <img src="https://latex.codecogs.com/png.latex?d%20%5Ctimes%20d"> 단위행렬입니다).</p>
-</blockquote>
-<p>이를 활용해 임의의 볼록 이차 계획법을 완벽히 반정부호 계획법(SDP)으로 전환할 수 있습니다.</p>
-<hr>
-</section>
-</section>
-<section id="원뿔-계획법-conic-programming" class="level1">
-<h1>3. 원뿔 계획법 (Conic Programming)</h1>
-<section id="선형-계획법lp-복습-및-원뿔cone의-개념" class="level2">
-<h2 class="anchored" data-anchor-id="선형-계획법lp-복습-및-원뿔cone의-개념">3.1. 선형 계획법(LP) 복습 및 원뿔(Cone)의 개념</h2>
-<p>선형 계획법(LP)은 선형 목적 함수와 선형 부등식 제약 조건을 가집니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7Bminimize%20%7D%20c%5E%7B%5Ctop%7Dx%20%5Cquad%20%5Ctext%7Bsubject%20to%20%7D%20Ax%20%5Cge%20b%20%5Cquad%20(a_%7B1%7D%5E%7B%5Ctop%7Dx%20%5Cge%20b_%7B1%7D,%20...,%20a_%7Bn%7D%5E%7B%5Ctop%7Dx%20%5Cge%20b_%7Bn%7D)%0A"></p>
-<p>제약식 <img src="https://latex.codecogs.com/png.latex?Ax%20%5Cge%20b">는 <img src="https://latex.codecogs.com/png.latex?Ax%20-%20b%20%5Cge%200">과 같으며, 이는 <img src="https://latex.codecogs.com/png.latex?Ax%20-%20b">의 각 성분이 모두 음수가 아님을 뜻합니다. 다시 말해, 이는 벡터가 <strong>음이 아닌 오탄트(Nonnegative orthant, <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D_%7B+%7D%5E%7Bn%7D">)</strong>에 포함된다는 의미입니다 (<img src="https://latex.codecogs.com/png.latex?Ax%20-%20b%20%5Cin%20%5Cmathbb%7BR%7D_%7B+%7D%5E%7Bn%7D">). 즉 LP는 다음과 같이 쓸 수 있습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20c%5E%7B%5Ctop%7Dx%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20Ax%20-%20b%20%5Cin%20%5Cmathbb%7BR%7D_%7B+%7D%5E%7Bn%7D%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li>음이 아닌 오탄트 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D_%7B+%7D%5E%7Bn%7D">는 다음 세 가지 특징을 갖춘 볼록 원뿔(Convex cone)입니다:
-<ul>
-<li><ol type="1">
-<li><strong>Pointed (뾰족함)</strong></li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>Closed (닫혀있음)</strong></li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><strong>Nonempty Interior (내부가 비어있지 않음)</strong>: 내부는 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D_%7B++%7D%5E%7Bn%7D"> (양의 오탄트)입니다.</li>
-</ol></li>
-</ul></li>
-</ul>
-<p>이 세 조건을 모두 충족하는 원뿔을 <strong>정규 원뿔(Regular cones)</strong>이라고 부릅니다.</p>
-</section>
-<section id="정규-원뿔의-종류-및-일반-cp-형태" class="level2">
-<h2 class="anchored" data-anchor-id="정규-원뿔의-종류-및-일반-cp-형태">3.2. 정규 원뿔의 종류 및 일반 CP 형태</h2>
-<ul>
-<li>대표적인 정규 원뿔은 다음과 같습니다.
-<ul>
-<li><strong>로렌츠 원뿔 (Lorentz cone)</strong>: 또는 이차 원뿔(Second-order cone), <img src="https://latex.codecogs.com/png.latex?l_2">-norm cone. <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BL%7D_%7Bn%7D%20=%20%5C%7B(x_%7B1%7D,...,x_%7Bn-1%7D,x_%7Bn%7D)%5E%7B%5Ctop%7D%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bn%7D%20:%20%7C%7C(x_%7B1%7D,...,x_%7Bn-1%7D)%5E%7B%5Ctop%7D%7C%7C_%7B2%7D%20%5Cle%20x_%7Bn%7D%5C%7D"> 내부는 부등호가 <img src="https://latex.codecogs.com/png.latex?%3C">인 집합입니다.</li>
-<li><strong>양의 준정부호 원뿔 (Positive semidefinite cone, <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BS%7D_%7B+%7D%5E%7Bd%7D">)</strong>: <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BS%7D_%7B+%7D%5E%7Bd%7D%20=%20%5C%7BS%20%5Cin%20%5Cmathbb%7BS%7D%5E%7Bd%7D%20:%20x%5E%7B%5Ctop%7DSx%20%5Cge%200%20%5Ctext%7B%20for%20all%20%7D%20x%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd%7D%5C%7D"> 내부는 양의 정부호 행렬의 집합입니다.</li>
-</ul></li>
-</ul>
-<p>원뿔 계획법(CP)은 <img src="https://latex.codecogs.com/png.latex?Ax%20-%20b%20%5Cge%200"> 제약을 임의의 정규 원뿔 <img src="https://latex.codecogs.com/png.latex?K">에 대한 소속 제약으로 치환한 최적화 문제입니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20c%5E%7B%5Ctop%7Dx%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20Ax%20-%20b%20%5Cin%20K%20%5Cquad%20(%5Ctext%7B%EB%98%90%EB%8A%94%20%7D%20Ax%20%5Cge_%7BK%7D%20b,%20Ax%20-%20b%20%5Cge_%7BK%7D%200)%0A%5Cend%7Baligned%7D%0A"></p>
-<p><img src="https://latex.codecogs.com/png.latex?K%20=%20%5Cmathbb%7BR%7D_%7B+%7D%5E%7Bn%7D">이면 선형 계획법이 되고 , <img src="https://latex.codecogs.com/png.latex?K">가 로렌츠 원뿔이면 이차 원뿔 계획법(SOCP) , <img src="https://latex.codecogs.com/png.latex?K">가 양의 준정부호 원뿔이면 반정부호 계획법(SDP)이 됩니다.</p>
-<hr>
-</section>
-</section>
-<section id="이차-원뿔-계획법-second-order-cone-programming-socp" class="level1">
-<h1>4. 이차 원뿔 계획법 (Second-Order Cone Programming, SOCP)</h1>
-<section id="개념과-정의" class="level2">
-<h2 class="anchored" data-anchor-id="개념과-정의">4.1. 개념과 정의</h2>
-<p>SOCP는 원뿔 계획법의 한 종류로, 일반 형태는 다음과 같습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20f%5E%7B%5Ctop%7Dx%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20%7C%7CA_%7Bi%7Dx%20+%20b_%7Bi%7D%7C%7C_%7B2%7D%20%5Cle%20c_%7Bi%7D%5E%7B%5Ctop%7Dx%20+%20d_%7Bi%7D%20%5Cquad%20%5Ctext%7Bfor%20%7D%20i=1,...,m%20%5C%5C%0A&amp;%20Ex%20=%20g%0A%5Cend%7Baligned%7D%0A"></p>
-</section>
-<section id="응용-확률-제약-선형-계획법-chance-constrained-lp" class="level2">
-<h2 class="anchored" data-anchor-id="응용-확률-제약-선형-계획법-chance-constrained-lp">4.2. 응용: 확률 제약 선형 계획법 (Chance-Constrained LP)</h2>
-<p>불확실성이 있는 상황을 다루기 위한 방법으로 다음의 확률 제약 계획법(CCP)을 고려해 볼 수 있습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20c%5E%7B%5Ctop%7Dx%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20%5Cmathbb%7BP%7D(a%5E%7B%5Ctop%7Dx%20%5Cle%20b)%20%5Cge%201%20-%20%5Cepsilon%0A%5Cend%7Baligned%7D%0A"></p>
-<p>여기서 제약 조건 내 벡터 <img src="https://latex.codecogs.com/png.latex?a">는 확률 변수입니다. 이 문제는 제약 조건 <img src="https://latex.codecogs.com/png.latex?a%5E%7B%5Ctop%7Dx%20%5Cle%20b">가 만족될 확률이 최소 <img src="https://latex.codecogs.com/png.latex?1-%5Cepsilon"> 이상 보장되도록 하는 변수 <img src="https://latex.codecogs.com/png.latex?x">를 찾는 것입니다. 금융 포트폴리오의 경우, <img src="https://latex.codecogs.com/png.latex?p">를 금융 자산의 단가, <img src="https://latex.codecogs.com/png.latex?r">을 확률적 수익률, <img src="https://latex.codecogs.com/png.latex?%5Calpha">를 목표 수익률이라고 하면 다음과 같이 표현됩니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bminimize%20%7D%20p%5E%7B%5Ctop%7Dx%20%5Cquad%20%5Ctext%7Bsubject%20to%20%7D%20%5Cmathbb%7BP%7D(r%5E%7B%5Ctop%7Dx%20%5Cge%201+%5Calpha)%20%5Cge%201-%5Cepsilon,%20%5Cquad%201%5E%7B%5Ctop%7Dx%20=%201"></p>
-<section id="정규-분포-가정에서의-변환-및-유도-gaussian-case" class="level3">
-<h3 class="anchored" data-anchor-id="정규-분포-가정에서의-변환-및-유도-gaussian-case">정규 분포 가정에서의 변환 및 유도 (Gaussian Case)</h3>
-<p>랜덤 벡터 <img src="https://latex.codecogs.com/png.latex?a">가 평균이 <img src="https://latex.codecogs.com/png.latex?%5Coverline%7Ba%7D">이고 공분산 행렬이 <img src="https://latex.codecogs.com/png.latex?%5CSigma">인 다변량 정규 분포를 따른다고 가정합시다. 이때 <img src="https://latex.codecogs.com/png.latex?a%5E%7B%5Ctop%7Dx">는 선형 결합이므로 평균이 <img src="https://latex.codecogs.com/png.latex?%5Coverline%7Ba%7D%5E%7B%5Ctop%7Dx">, 분산이 <img src="https://latex.codecogs.com/png.latex?%5Csigma%5E%7B2%7D%20=%20x%5E%7B%5Ctop%7D%5CSigma%20x">인 1차원 정규 변수가 됩니다. 확률 제약식을 표준화(Standardization)하면 다음과 같습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbb%7BP%7D(a%5E%7B%5Ctop%7Dx%20%5Cle%20b)%20=%20%5Cmathbb%7BP%7D%5Cleft(%5Cfrac%7Ba%5E%7B%5Ctop%7Dx%20-%20%5Coverline%7Ba%7D%5E%7B%5Ctop%7Dx%7D%7B%5Csigma%7D%20%5Cle%20%5Cfrac%7Bb%20-%20%5Coverline%7Ba%7D%5E%7B%5Ctop%7Dx%7D%7B%5Csigma%7D%5Cright)%0A"></p>
-<p>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Ba%5E%7B%5Ctop%7Dx%20-%20%5Coverline%7Ba%7D%5E%7B%5Ctop%7Dx%7D%7B%5Csigma%7D">는 표준 정규 분포(Standard Normal)를 따릅니다. 표준 정규 분포의 누적 분포 함수를 <img src="https://latex.codecogs.com/png.latex?%5CPhi(z)%20=%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%5Cpi%7D%7D%5Cint_%7B-%5Cinfty%7D%5E%7Bz%7De%5E%7B-t%5E%7B2%7D/2%7Ddt"> 라 할 때 , 위 확률이 <img src="https://latex.codecogs.com/png.latex?1-%5Cepsilon"> 이상이 되기 위한 조건은 다음과 동치입니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cfrac%7Bb%20-%20%5Coverline%7Ba%7D%5E%7B%5Ctop%7Dx%7D%7B%5Csigma%7D%20%5Cge%20%5CPhi%5E%7B-1%7D(1-%5Cepsilon)%0A"></p>
-<p>표준 편차는 <img src="https://latex.codecogs.com/png.latex?%5Csigma%20=%20%5Csqrt%7Bx%5E%7B%5Ctop%7D%5CSigma%20x%7D%20=%20%7C%7C%5CSigma%5E%7B1/2%7Dx%7C%7C_%7B2%7D"> 이므로 , 이를 식에 대입하여 정리하면 최종적으로 다음 수식을 얻게 됩니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Coverline%7Ba%7D%5E%7B%5Ctop%7Dx%20+%20%5CPhi%5E%7B-1%7D(1-%5Cepsilon)%7C%7C%5CSigma%5E%7B1/2%7Dx%7C%7C_%7B2%7D%20%5Cle%20b%0A"></p>
-<p>결론적으로, 다변량 정규 분포를 따르는 CCP는 다음과 같은 명확한 이차 원뿔 계획법(SOCP)으로 변환됩니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20c%5E%7B%5Ctop%7Dx%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20%5Coverline%7Ba%7D%5E%7B%5Ctop%7Dx%20+%20%5CPhi%5E%7B-1%7D(1-%5Cepsilon)%7C%7C%5CSigma%5E%7B1/2%7Dx%7C%7C_%7B2%7D%20%5Cle%20b%0A%5Cend%7Baligned%7D%0A"></p>
-</section>
-<section id="socp를-sdp로-환원" class="level3">
-<h3 class="anchored" data-anchor-id="socp를-sdp로-환원">SOCP를 SDP로 환원</h3>
-<p>놀랍게도 SOCP 또한 반정부호 계획법의 한 사례(Instance)에 불과합니다. 벡터 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd%7D">에 대해 제약식 <img src="https://latex.codecogs.com/png.latex?%7C%7Cy%7C%7C_%7B2%7D%20%5Cle%20s">는 다음 형태의 행렬 부등식으로 표현됩니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cleft(%5Cbegin%7Bmatrix%7D%20s%20&amp;%20y%5E%7B%5Ctop%7D%20%5C%5C%20y%20&amp;%20s-1%20%5Cend%7Bmatrix%7D%5Cright)%20%5Cge%200%0A"> <em>(주: 원문 강의자료 슬라이드 26장에 기재된 위 수식은, 통상적인 Schur Complement 적용 시 <img src="https://latex.codecogs.com/png.latex?sI"> (Identity Matrix)로 표기되기도 합니다)</em>.</p>
-<hr>
-</section>
-</section>
-</section>
-<section id="볼록-최적화-클래스-간의-위계-hierarchy" class="level1">
-<h1>5. 볼록 최적화 클래스 간의 위계 (Hierarchy)</h1>
-<p>이러한 볼록 최적화 문제들은 엄격한 부분집합 관계의 위계 구조를 형성합니다. 가장 간단한 선형 계획법(LP)에서부터 시작하여 일반화가 진행됩니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/6.Convex-Optimization-Beyond-Linear-Programming/images/convex_hierarchy.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 최적화 문제 클래스들의 계층적 위계를 나타낸 벤 다이어그램입니다. Linear programming이 가장 안쪽에 위치하며, Convex quadratic programming, Second-order cone programming, Semidefinite programming, Conic programming, 그리고 Convex optimization 순으로 외부를 감싸고 있습니다.</figcaption>
-</figure>
-</div>
-<p>위 그림에서 확인할 수 있듯, 포함 관계는 다음과 같이 성립합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7BLP%7D%20%5Csubset%20%5Ctext%7BConvex%20QP%7D%20%5Csubset%20%5Ctext%7BSOCP%7D%20%5Csubset%20%5Ctext%7BSDP%7D%20%5Csubset%20%5Ctext%7BConic%20Programming%7D%20%5Csubset%20%5Ctext%7BConvex%20Optimization%7D"></p>
-
-
-
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/6.Convex-Optimization-Beyond-Linear-Programming/</guid>
-  <pubDate>Sun, 22 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] Lecture 6. Convex Optimization Beyond Linear Programming (Part 1)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/6.Convex-Optimization-Beyond-Linear-Programming/6.1/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>1. Introduction</h1>
-<ul>
-<li><p>이번 포스트에서는 선형 계획법(Linear Programming)을 넘어선 <strong>볼록 계획법(Convex Programming)</strong>의 다양한 형태를 살펴봅니다. Dabeen Lee 교수님의 서울대학교 2026년 봄학기 수리 및 수치 최적화 강의(Lecture #6)를 바탕으로 정리되었습니다.</p></li>
-<li><p>해당 강의에서 다루는 확장된 볼록 계획법의 범주는 다음과 같습니다:</p>
-<ul>
-<li><strong>Quadratic programming (이차 계획법)</strong></li>
-<li>Semidefinite programming (준정부호 계획법)</li>
-<li>Conic programming (원뿔 계획법)</li>
-<li>Second-order cone programming (이차 원뿔 계획법)</li>
-</ul></li>
-<li><p>이번 글에서는 가장 널리 쓰이는 형태 중 하나인 <strong>이차 계획법(Quadratic Programming, QP)</strong>의 정의와, 머신러닝 및 금융 공학에서 이것이 어떻게 활용되는지 3가지 핵심 예시를 통해 자세히 알아보겠습니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="quadratic-programming-이차-계획법" class="level1">
-<h1>2. Quadratic Programming (이차 계획법)</h1>
-<section id="기본-정의-standard-form" class="level2">
-<h2 class="anchored" data-anchor-id="기본-정의-standard-form">2.1. 기본 정의 (Standard Form)</h2>
-<ul>
-<li>이차 계획법(QP)은 제약 조건이 선형이면서 목적 함수가 이차식인 최적화 문제를 의미합니다. QP의 표준 형태는 다음과 같이 정의됩니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20%5Cfrac%7B1%7D%7B2%7Dx%5E%7B%5Ctop%7DQx%20+%20p%5E%7B%5Ctop%7Dx%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20Ax%20%5Cge%20b%0A%5Cend%7Baligned%7D%0A">
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?x">: 최적화하고자 하는 결정 변수 벡터</li>
-<li><img src="https://latex.codecogs.com/png.latex?Q">: 이차항의 계수를 나타내는 행렬</li>
-<li><img src="https://latex.codecogs.com/png.latex?p">: 선형항의 계수를 나타내는 벡터</li>
-<li><img src="https://latex.codecogs.com/png.latex?A,%20b">: 선형 부등식 제약조건을 구성하는 행렬 및 벡터</li>
-</ul></li>
-</ul>
-</section>
-<section id="볼록성-조건-convexity-condition" class="level2">
-<h2 class="anchored" data-anchor-id="볼록성-조건-convexity-condition">2.2. 볼록성 조건 (Convexity Condition)</h2>
-<ul>
-<li><p>이차 계획법이 <strong>볼록 최적화 문제(Convex Optimization Problem)</strong>가 되기 위한 핵심 조건은 바로 행렬 <img src="https://latex.codecogs.com/png.latex?Q">의 성질에 있습니다.</p></li>
-<li><p><strong>이차 계획법은 행렬 <img src="https://latex.codecogs.com/png.latex?Q">가 양의 준정부호(Positive Semidefinite, PSD)일 때만 볼록(convex)합니다.</strong></p></li>
-<li><p>행렬 <img src="https://latex.codecogs.com/png.latex?Q">가 PSD라는 것은 임의의 벡터 <img src="https://latex.codecogs.com/png.latex?x">에 대하여 <img src="https://latex.codecogs.com/png.latex?x%5E%7B%5Ctop%7DQx%20%5Cge%200">이 성립함을 의미합니다. 이 조건이 충족되면 목적 함수가 아래로 볼록한 형태를 띠게 되어, 국소적 최솟값(Local minimum)이 곧 전역적 최솟값(Global minimum)이 되는 강력한 이점을 갖습니다.</p></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="application-examples" class="level1">
-<h1>3. Application Examples</h1>
-<ul>
-<li>이차 계획법은 다양한 실제 문제에 적용될 수 있습니다. 여기서는 포트폴리오 최적화, 서포트 벡터 머신(SVM), LASSO 회귀라는 세 가지 구체적인 예시를 통해 선형 제약 및 이차 목적함수가 어떻게 도출되는지 단계별로 살펴보겠습니다.</li>
-</ul>
-<section id="example-portfolio-optimization-포트폴리오-최적화" class="level2">
-<h2 class="anchored" data-anchor-id="example-portfolio-optimization-포트폴리오-최적화">3.1. Example: Portfolio Optimization (포트폴리오 최적화)</h2>
-<ul>
-<li>금융 공학에서 자산의 배분 비율을 결정하는 포트폴리오 최적화 문제는 대표적인 QP 문제입니다. 기대 수익률을 최대화하면서 동시에 위험(분산)을 최소화하고자 하는 것이 핵심 목표입니다.</li>
-</ul>
-<section id="초기-공식화-original-formulation" class="level3">
-<h3 class="anchored" data-anchor-id="초기-공식화-original-formulation"><strong>초기 공식화 (Original Formulation):</strong></h3>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bmaximize%7D%20%5Cquad%20&amp;%20%5Cmu%5E%7B%5Ctop%7Dx%20-%20%5Cgamma%20x%5E%7B%5Ctop%7D%5CSigma%20x%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%201%5E%7B%5Ctop%7Dx%20=%201,%20%5C%5C%0A&amp;%20x%20%5Cin%20%5Cmathbb%7BR%7D_%7B+%7D%5E%7Bn%7D%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?x">: 각 자산에 대한 투자 비율 벡터</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cmu">: 각 자산의 기대 수익률 벡터</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5CSigma">: 자산 간의 공분산 행렬 (Covariance matrix)</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cgamma">: 위험 회피 성향을 나타내는 파라미터 (단, <img src="https://latex.codecogs.com/png.latex?%5Cgamma%20%3E%200">)</li>
-<li><img src="https://latex.codecogs.com/png.latex?1%5E%7B%5Ctop%7Dx%20=%201">: 전체 투자 비율의 합은 1 (100%)이어야 한다는 제약</li>
-<li><img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D_%7B+%7D%5E%7Bn%7D">: 공매도를 허용하지 않음 (투자 비율은 0 이상)</li>
-</ul>
-</section>
-<section id="qp-형태로의-변환-과정" class="level3">
-<h3 class="anchored" data-anchor-id="qp-형태로의-변환-과정"><strong>QP 형태로의 변환 과정:</strong></h3>
-<ul>
-<li><p>최대화(maximize) 문제는 목적 함수에 음수(-)를 취함으로써 동등한 최소화(minimize) 문제로 변환할 수 있습니다. 임의의 목적 함수 <img src="https://latex.codecogs.com/png.latex?f">와 실현 가능 집합 <img src="https://latex.codecogs.com/png.latex?C">에 대해 다음이 성립합니다. <img src="https://latex.codecogs.com/png.latex?%5Cmax%5C%7Bf(x):%20x%20%5Cin%20C%5C%7D%20=%20-%5Cmin%5C%7B-f(x):%20x%20%5Cin%20C%5C%7D"></p></li>
-<li><p>이를 적용하여 위 수식에 음수를 취해 최소화 문제로 변경하면 다음과 같은 최종 형태를 얻습니다:</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20%5Cgamma%20x%5E%7B%5Ctop%7D%5CSigma%20x%20-%20%5Cmu%5E%7B%5Ctop%7Dx%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%201%5E%7B%5Ctop%7Dx%20=%201%20%5C%5C%0A&amp;%20x%20%5Cge%200%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%20%3E%200">이고 공분산 행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma">는 본질적으로 양의 준정부호(Positive Semidefinite)이므로, 이 변환된 문제는 볼록 이차 계획법(Convex Quadratic Program)이 됩니다.</li>
-</ul>
-</section>
-</section>
-<section id="example-support-vector-machine-svm" class="level2">
-<h2 class="anchored" data-anchor-id="example-support-vector-machine-svm">3.2. Example: Support Vector Machine (SVM)</h2>
-<ul>
-<li>머신러닝의 대표적인 분류 알고리즘인 서포트 벡터 머신(SVM) 역시 QP로 변환할 수 있습니다. SVM의 목적은 마진을 최대화(가중치 벡터의 크기를 최소화)하면서 데이터의 오분류(Hinge loss)를 최소화하는 것입니다.</li>
-</ul>
-<section id="초기-공식화" class="level3">
-<h3 class="anchored" data-anchor-id="초기-공식화"><strong>초기 공식화:</strong></h3>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmin_%7Bw,b%7D%20%5Clambda%20%7C%7Cw%7C%7C_%7B2%7D%5E%7B2%7D%20+%20%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7D%5Cmax%5C%7B0,%201%20-%20y_%7Bi%7D(w%5E%7B%5Ctop%7Dx_%7Bi%7D%20-%20b)%5C%7D%0A"></p>
-<ul>
-<li>위 식에서 <img src="https://latex.codecogs.com/png.latex?%7C%7Cw%7C%7C_%7B2%7D%5E%7B2%7D%20=%20w%5E%7B%5Ctop%7Dw%20=%20w%5E%7B%5Ctop%7DIw"> (<img src="https://latex.codecogs.com/png.latex?I">는 단위 행렬)로 표현되며, 이는 볼록한 이차 함수(convex quadratic function)입니다.</li>
-</ul>
-</section>
-<section id="보조-변수auxiliary-variables를-이용한-선형화-변환" class="level3">
-<h3 class="anchored" data-anchor-id="보조-변수auxiliary-variables를-이용한-선형화-변환"><strong>보조 변수(Auxiliary Variables)를 이용한 선형화 변환:</strong></h3>
-<ul>
-<li>목적 함수에 포함된 <img src="https://latex.codecogs.com/png.latex?%5Cmax"> 항은 미분 불가능하며 최적화를 어렵게 만듭니다. 이를 해결하기 위해 보조 변수 <img src="https://latex.codecogs.com/png.latex?t_i">를 도입하여 <img src="https://latex.codecogs.com/png.latex?%5Cmax"> 항을 대체할 수 있습니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20%5Clambda%20w%5E%7B%5Ctop%7Dw%20+%20%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7Dt_%7Bi%7D%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20t_%7Bi%7D%20%5Cge%20%5Cmax%5C%7B0,%201%20-%20y_%7Bi%7D(w%5E%7B%5Ctop%7Dx_%7Bi%7D%20-%20b)%5C%7D%20%5Cquad%20%5Ctext%7Bfor%20%7D%20i=1,...,n%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li>이 식은 다시 두 개의 선형 제약 조건으로 분리하여 쓸 수 있습니다. <img src="https://latex.codecogs.com/png.latex?%5Cmax"> 함수보다 크거나 같다는 것은 괄호 안의 두 값 모두보다 크거나 같다는 의미이기 때문입니다.</li>
-</ul>
-</section>
-<section id="최종-qp-형태" class="level3">
-<h3 class="anchored" data-anchor-id="최종-qp-형태"><strong>최종 QP 형태:</strong></h3>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20%5Clambda%20w%5E%7B%5Ctop%7Dw%20+%20%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7Dt_%7Bi%7D%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20t_%7Bi%7D%20%5Cge%201%20-%20y_%7Bi%7D(w%5E%7B%5Ctop%7Dx_%7Bi%7D%20-%20b)%20%5Cquad%20%5Ctext%7Bfor%20%7D%20i=1,...,n%20%5C%5C%0A&amp;%20t_%7Bi%7D%20%5Cge%200%20%5Cquad%20%5Ctext%7Bfor%20%7D%20i=1,...,n%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li>이러한 과정을 통해, 복잡했던 원래의 SVM 수식은 <strong>이차 형태의 목적 함수와 선형 제약 조건</strong>을 가지는 완벽한 볼록 이차 계획법(Convex QP)으로 재구성되었습니다.</li>
-</ul>
-</section>
-</section>
-<section id="example-lasso-least-absolute-shrinkage-and-selection-operator" class="level2">
-<h2 class="anchored" data-anchor-id="example-lasso-least-absolute-shrinkage-and-selection-operator">3.3. Example: LASSO (Least Absolute Shrinkage and Selection Operator)</h2>
-<ul>
-<li>선형 회귀에서 변수 선택과 정규화를 동시에 수행하는 LASSO는 L1-norm 페널티를 포함합니다.</li>
-</ul>
-<section id="초기-공식화-1" class="level3">
-<h3 class="anchored" data-anchor-id="초기-공식화-1"><strong>초기 공식화:</strong></h3>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmin_%7B%5Cbeta%7D%20%5Cfrac%7B1%7D%7Bn%7D%7C%7Cy%20-%20X%5Cbeta%7C%7C_%7B2%7D%5E%7B2%7D%20+%20%5Clambda%7C%7C%5Cbeta%7C%7C_%7B1%7D%0A"></p>
-</section>
-<section id="목적-함수의-전개-및-이차항-분석" class="level3">
-<h3 class="anchored" data-anchor-id="목적-함수의-전개-및-이차항-분석"><strong>목적 함수의 전개 및 이차항 분석:</strong></h3>
-<ul>
-<li><p>먼저 잔차 제곱합 부분(L2 loss)을 전개해 봅니다. <img src="https://latex.codecogs.com/png.latex?%0A%7C%7Cy%20-%20X%5Cbeta%7C%7C_%7B2%7D%5E%7B2%7D%20=%20(y%20-%20X%5Cbeta)%5E%7B%5Ctop%7D(y%20-%20X%5Cbeta)%20=%20%5Cbeta%5E%7B%5Ctop%7DX%5E%7B%5Ctop%7DX%5Cbeta%20-%202y%5E%7B%5Ctop%7DX%5Cbeta%20+%20y%5E%7B%5Ctop%7Dy%0A"></p></li>
-<li><p>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">에 대한 이차항의 계수 행렬은 <img src="https://latex.codecogs.com/png.latex?X%5E%7B%5Ctop%7DX">입니다. 임의의 벡터 <img src="https://latex.codecogs.com/png.latex?u">에 대하여 다음이 성립합니다. <img src="https://latex.codecogs.com/png.latex?u%5E%7B%5Ctop%7DX%5E%7B%5Ctop%7DXu%20=%20%7C%7CXu%7C%7C_%7B2%7D%5E%7B2%7D%20%5Cge%200"></p></li>
-<li><p>따라서 <img src="https://latex.codecogs.com/png.latex?X%5E%7B%5Ctop%7DX">는 양의 준정부호(Positive Semidefinite) 행렬임이 증명됩니다. 또한, 전개식에서 <img src="https://latex.codecogs.com/png.latex?y%5E%7B%5Ctop%7Dy">는 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">와 무관한 상수항이므로 최적화 과정에서 무시(생략)할 수 있습니다.</p></li>
-</ul>
-</section>
-<section id="l1-norm의-선형-제약-조건-변환" class="level3">
-<h3 class="anchored" data-anchor-id="l1-norm의-선형-제약-조건-변환"><strong>L1-norm의 선형 제약 조건 변환:</strong></h3>
-<ul>
-<li>SVM에서와 마찬가지로 <img src="https://latex.codecogs.com/png.latex?%7C%7C%5Cbeta%7C%7C_%7B1%7D"> 항 역시 최적화를 까다롭게 만듭니다. 우리는 보조 변수 집합 <img src="https://latex.codecogs.com/png.latex?s_i">와 전체 L1-norm의 합을 나타낼 보조 변수 <img src="https://latex.codecogs.com/png.latex?t"> 및 선형 제약 조건을 도입하여 이를 대체할 수 있습니다.</li>
-</ul>
-</section>
-<section id="최종-변환-공식" class="level3">
-<h3 class="anchored" data-anchor-id="최종-변환-공식"><strong>최종 변환 공식:</strong></h3>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Ctext%7Bminimize%7D%20%5Cquad%20&amp;%20%5Cfrac%7B1%7D%7Bn%7D%5Cbeta%5E%7B%5Ctop%7DX%5E%7B%5Ctop%7DX%5Cbeta%20-%20%5Cfrac%7B2%7D%7Bn%7Dy%5E%7B%5Ctop%7DX%5Cbeta%20+%20%5Clambda%20t%20%5C%5C%0A%5Ctext%7Bsubject%20to%7D%20%5Cquad%20&amp;%20t%20%5Cge%20%5Csum_%7Bi=1%7D%5E%7Bd%7Ds_%7Bi%7D,%20%5C%5C%0A&amp;%20s_%7Bi%7D%20%5Cge%20%5Cbeta%20%5Cge%20-s_%7Bi%7D%20%5Cquad%20%5Ctext%7Bfor%20%7D%20i=1,...,d%0A%5Cend%7Baligned%7D%0A"></p>
-<ul>
-<li>참고: 제약조건의 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">는 맥락상 각 차원의 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cbeta_i">를 의미합니다.</li>
-<li>결과적으로 L1 정규화 항을 포함했던 LASSO 문제 역시 이차 계획법(Quadratic Program)의 형태로 재공식화될 수 있음을 확인했습니다.</li>
-</ul>
-
-
-
-</section>
-</section>
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/6.Convex-Optimization-Beyond-Linear-Programming/6.1/</guid>
-  <pubDate>Sun, 22 Mar 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>
 </rss>

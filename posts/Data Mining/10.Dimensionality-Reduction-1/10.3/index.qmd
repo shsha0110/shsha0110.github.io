@@ -1,0 +1,111 @@
+---
+title: "[Data Mining] 10. Dimensionality Reduction (Part 3)"
+description: "Power Iteration"
+author: "유성현"
+date: "2026-04-02"
+categories: [Data Mining]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: 어떻게 고유분해를 실제로 수행할 것인가?
+
+* 지금까지 고유분해(Eigendecomposition)의 개념과 그 수학적 특성에 대해 알아보았습니다. 그렇다면 "실제 컴퓨터 알고리즘 상에서 이 고유분해를 어떻게 수행할 수 있을까?"라는 실질적인 질문(Q)이 남습니다. 
+
+* 고유분해를 수행하는 가장 대중적인 두 가지 접근법은 **QR 알고리즘(QR algorithm)**과 **멱차수법(Power Iteration)**입니다. 
+  * **QR 알고리즘**은 행렬의 모든 고윳값과 고유벡터를 한 번에 구할 수 있는 표준적이고 정교한 방법이지만, 우리가 다루는 데이터 마이닝 환경처럼 행렬의 크기가 거대해질 경우 계산 속도가 매우 느려진다는 치명적인 단점이 있습니다.
+  * 반면 **멱차수법(Power Iteration)**은 모든 고윳값을 구하지는 못하고 가장 큰 고윳값(Largest eigenvalues)만을 찾아내지만, 연산 속도가 매우 빠르다는 장점을 가집니다.
+
+* 데이터 마이닝에서는 보통 아주 거대한 차원의 행렬(Large matrix)을 가정하며, 차원 축소의 목적상 데이터의 분산을 가장 잘 설명하는 몇 개의 핵심 축(주 고유벡터)만 필요로 하는 경우가 많습니다. 따라서 본 포스트에서는 **멱차수법(Power Iteration)**에 집중하여 그 원리를 살펴보겠습니다.
+
+---
+
+# 2. Power Iteration의 알고리즘 절차
+
+* 멱차수법(Power Iteration)은 대각화 가능한(diagonalizable) $n \times n$ 정방 행렬 $M$의 **주 고유벡터(Principal eigenvector)**를 효율적으로 찾아내는 반복 알고리즘입니다. 
+
+* 이 알고리즘의 작동 방식(How it works)은 놀랍도록 단순하며, 다음의 3단계로 이루어집니다:
+  * **Step 1:** 길이(차원)가 $n$인 영벡터가 아닌 임의의 초기 벡터 $x_0$를 준비합니다 ($x_0 \neq \mathbf{0}$).
+  * **Step 2:** $k=0, 1, 2, \dots$ 에 대하여 다음의 점화식을 계산합니다. 행렬 $M$을 벡터에 곱한 뒤, 그 결과 벡터의 크기(norm)로 나누어 단위 벡터로 정규화(Normalization)하는 과정입니다.
+    $$x_{k+1} = \frac{M x_k}{||M x_k||}$$
+  * **Step 3:** 연속적으로 계산된 벡터들($x_k$와 $x_{k+1}$) 사이의 변화량이 거의 없어질 때(show little change), 즉 수렴(Convergence)했다고 판단될 때 반복을 종료합니다.
+
+## 2.1. 구체적인 수치 예제 (Example)
+
+* 이해를 돕기 위해 $2 \times 2$ 행렬을 사용한 간단한 예제를 살펴보겠습니다.
+* 주어진 행렬 $M = \begin{bmatrix} 1 & 2 \\ 2 & 3 \end{bmatrix}$ 이고, 초기 벡터 $x_0 = \begin{bmatrix} 1 \\ 1 \end{bmatrix}$ 로 시작합니다.
+
+### **[첫 번째 반복 ($k=0$)]**
+* 1. 행렬 곱셈: $M x_0 = \begin{bmatrix} 1 & 2 \\ 2 & 3 \end{bmatrix} \begin{bmatrix} 1 \\ 1 \end{bmatrix} = \begin{bmatrix} 3 \\ 5 \end{bmatrix}$
+* 2. 벡터 정규화: 결과 벡터의 크기 $||M x_0|| = \sqrt{3^2 + 5^2} = \sqrt{34}$ 로 나눕니다.
+   $$x_1 = \frac{M x_0}{||M x_0||} = \frac{1}{\sqrt{34}} \begin{bmatrix} 3 \\ 5 \end{bmatrix} \approx \begin{bmatrix} 0.51 \\ 0.86 \end{bmatrix}$$ 
+
+### **[두 번째 반복 ($k=1$)]**
+* 1. 행렬 곱셈: $M x_1 = \begin{bmatrix} 1 & 2 \\ 2 & 3 \end{bmatrix} \begin{bmatrix} 0.51 \\ 0.86 \end{bmatrix} = \begin{bmatrix} 2.23 \\ 3.60 \end{bmatrix}$
+* 2. 벡터 정규화: $||M x_1|| = \sqrt{2.23^2 + 3.60^2} = \sqrt{17.93}$ 으로 나눕니다.
+   $$x_2 = \frac{M x_1}{||M x_1||} = \frac{1}{\sqrt{17.93}} \begin{bmatrix} 2.23 \\ 3.60 \end{bmatrix} \approx \begin{bmatrix} 0.53 \\ 0.85 \end{bmatrix}$$ 
+
+* 이 과정을 계속 반복하면 벡터 값의 변화가 점점 줄어들며 특정 벡터로 수렴하게 됩니다.
+
+---
+
+# 3. 고윳값의 도출 (Finding an Eigenvalue)
+
+* 위의 반복을 통해 최종적으로 수렴한 벡터 $x$는 행렬 $M$의 근사적인 고유벡터(approximately an eigenvector)가 됩니다. 고유벡터의 정의에 따라 행렬을 곱해도 방향이 변하지 않으므로, 정규화를 무시하고 방향성만 보면 $Mx \approx \lambda x$ 관계가 성립합니다.
+
+* 그렇다면 수렴한 벡터 $x$를 활용해 대응하는 **고윳값(Eigenvalue) $\lambda$**는 어떻게 구할 수 있을까요? 바로 다음의 2차 형식(Quadratic form, Rayleigh quotient)을 계산하면 됩니다.
+
+$$\lambda = x^T M x$$
+
+* 이 수식이 성립하는 이유(Why?)는 고유벡터의 정의와 단위 벡터의 특성을 이용해 간단히 증명할 수 있습니다:
+$$x^T M x = x^T (\lambda x) = \lambda x^T x = \lambda ||x||^2 = \lambda$$
+  * 여기서 멱차수법의 결과인 $x$는 $||x||=1$인 단위 벡터이므로 $||x||^2 = 1$이 됩니다.
+
+* 앞선 예제에서 도출한 근사 벡터 $x = \begin{bmatrix} 0.53 \\ 0.85 \end{bmatrix}$ 를 대입하여 주 고윳값을 구해보면 다음과 같습니다:
+$$\lambda = \begin{bmatrix} 0.53 & 0.85 \end{bmatrix} \begin{bmatrix} 1 & 2 \\ 2 & 3 \end{bmatrix} \begin{bmatrix} 0.53 \\ 0.85 \end{bmatrix} = \begin{bmatrix} 0.53 & 0.85 \end{bmatrix} \begin{bmatrix} 2.23 \\ 3.61 \end{bmatrix} \approx 4.25$$ 
+
+---
+
+# 4. 주 고유벡터로 수렴하는 이유 (Mathematical Proof)
+
+* 멱차수법이 수렴한 벡터 $x$가 왜 하필 다른 고유벡터도 아닌 **주 고유벡터(Principal eigenvector)**가 되는 것일까요?  
+
+* 행렬 $M$의 고윳값들의 절댓값이 다음과 같은 크기 순서를 가진다고 가정해 봅시다.
+$$|\lambda_1| > |\lambda_2| \ge \dots \ge |\lambda_n|$$ 
+
+* 이에 대응하는 $M$의 고유벡터들을 $v_1, v_2, \dots, v_n$ 이라고 합시다. (대각화 가능 행렬이므로 이들은 기저를 이룹니다).
+
+* 임의의 초기 벡터 $x_0$는 이 고유벡터들의 선형 결합(linear combination)으로 표현될 수 있습니다:
+$$x_0 = c_1 v_1 + c_2 v_2 + \dots + c_n v_n$$
+
+* 멱차수법에서 매 단계마다 행렬 $M$을 반복해서 곱하는 것은 (스케일링 정규화 상수를 제외하고 방향성만 고려했을 때) 궁극적으로 $M^k x_0$를 계산하는 것과 동일하게 작동합니다. 행렬 $M$을 $k$번 곱하게 되면 각 고유벡터 성분에는 고윳값의 $k$제곱이 곱해지게 됩니다:
+$$x_k \propto M^k x_0 = c_1 \lambda_1^k v_1 + c_2 \lambda_2^k v_2 + \dots + c_n \lambda_n^k v_n$$ 
+
+* 가장 큰 고윳값의 거듭제곱인 $\lambda_1^k$ 로 이 식 전체를 묶어내면(factoring out) 다음과 같은 식이 도출됩니다:
+$$x_k \propto \lambda_1^k \left( c_1 v_1 + c_2 \left(\frac{\lambda_2}{\lambda_1}\right)^k v_2 + \dots + c_n \left(\frac{\lambda_n}{\lambda_1}\right)^k v_n \right)$$ 
+
+* 핵심은 괄호 안의 분수 항들입니다. 가정에 의해 $|\lambda_1|$이 가장 크기 때문에, $i > 1$ 인 모든 $i$에 대하여 $\left| \frac{\lambda_i}{\lambda_1} \right| < 1$ 이 성립합니다. 
+* 따라서 반복 횟수 $k \to \infty$ 로 무한히 커짐에 따라, $i > 1$ 인 항들, 즉 $\left(\frac{\lambda_i}{\lambda_1}\right)^k$ 는 모두 $0$으로 수렴하여 소멸합니다. 
+
+* 결과적으로 괄호 안에는 $c_1 v_1$ 항만 살아남게 되며, 초기 벡터 $x_0$가 무엇이었든 간에 반복이 진행될수록 방향은 오직 주 고유벡터인 $v_1$을 향해 수렴하게 됩니다.
+
+---
+
+# 5. 다른 고유쌍 찾기: Deflation Method (Finding More Eigenpairs)
+
+* 멱차수법은 오직 첫 번째로 큰 주 고유벡터 하나만 찾아냅니다. 그렇다면 차원 축소를 위해 2번째, 3번째로 중요한 축(고유벡터)을 찾으려면 어떻게 해야 할까요? 
+
+* 이때는 기존 행렬 $M$에서 이미 찾아낸 주 고유벡터 $x$와 고윳값 $\lambda$의 영향력을 제거한(Eliminate the influence) 새로운 행렬 $M^*$를 만들어야 합니다. 이 과정을 보통 수치해석학에서 축소법(Deflation)이라고 부릅니다.
+$$M^* = M - \lambda x x^T$$ 
+
+* 이 연산의 의미는, 이미 찾은 방향인 $x$에 대한 고윳값을 강제로 $0$으로 만들어 버리는 것입니다. 이렇게 만들어진 새로운 행렬 $M^*$에 대해 다시 멱차수법(Power Iteration)을 재귀적으로 적용(Recursively use)하면, 기존의 2번째로 컸던 고윳값이 이제 $M^*$에서는 1번째로 큰 주 고윳값이 되므로 이를 찾아낼 수 있습니다.
+
+* 앞선 예제($\lambda \approx 4.25$, $x \approx \begin{bmatrix} 0.53 \\ 0.85 \end{bmatrix}$)를 활용해 $M^*$를 계산해 보겠습니다.
+
+$$M^* = \begin{bmatrix} 1 & 2 \\ 2 & 3 \end{bmatrix} - 4.25 \begin{bmatrix} 0.53 \\ 0.85 \end{bmatrix} \begin{bmatrix} 0.53 & 0.85 \end{bmatrix} = \begin{bmatrix} -0.19 & 0.09 \\ 0.09 & 0.07 \end{bmatrix}$$ 
+
+* 이제 이 $M^*$ 행렬을 새로운 시작점으로 삼아 다시 멱차수법 Step 1~3을 반복하면 두 번째 고유쌍(Eigenpair)을 구할 수 있습니다.

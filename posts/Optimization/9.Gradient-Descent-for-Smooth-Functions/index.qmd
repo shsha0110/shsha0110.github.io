@@ -1,0 +1,123 @@
+---
+title: "[Optimization] Lecture 9. Gradient Descent for Smooth Functions"
+description: "Gradient Descent for Smooth Functions"
+author: "유성현"
+date: "2026-04-31"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. Introduction
+
+* 볼록 최적화(Convex Optimization) 및 머신러닝 분야에서 경사하강법(Gradient Descent, GD)은 가장 기본적이면서도 강력한 알고리즘입니다. 이전까지는 일반적인 볼록 함수나 립시츠 연속(Lipschitz continuous) 함수에서의 Subgradient Method를 다루었다면, 이번 포스트에서는 목적 함수가 **매끄러운(Smooth)** 형태일 때 경사하강법이 어떠한 수학적 이점과 수렴 속도를 가지는지 심도 있게 살펴보겠습니다.
+
+* 특히 Smooth function이 가지는 핵심 성질인 이차 상한(Quadratic Upper Bound)과 **자가 조정(Self-tuning) 성질**, 그리고 이를 바탕으로 한 **수렴성(Convergence) 및 Co-coercivity** 개념을 차례대로 정리합니다.
+
+-----
+
+# 2. Smooth Functions and Core Properties
+
+## 2.1. Smooth Function의 정의
+
+* 함수가 매끄럽다는 것은 직관적으로 함수의 기울기(Gradient)가 급격하게 변하지 않음을 의미합니다. 수학적으로, 미분 가능한 함수 $f:\mathbb{R}^{d}\rightarrow\mathbb{R}$가 다음 조건을 만족할 때 $l_{2}$ 노름(norm)에 대해 **$\beta$-smooth**하다고 정의합니다.
+
+$$||\nabla f(x)-\nabla f(y)||_{2}\le\beta||x-y||_{2}$$
+
+* 이는 함수의 Gradient $\nabla f$가 상수가 $\beta$인 립시츠 연속(Lipschitz continuous) 조건을 만족함을 뜻합니다. 즉, 입력값 $x$와 $y$의 거리보다 기울기의 차이가 $\beta$배 이상 커지지 않도록 제한하는 역할을 합니다.
+
+## 2.2. 볼록 함수(Convex Function)와의 관계
+
+* 일반적인 볼록 함수 $f$는 1차 테일러 전개(First-order Taylor expansion)를 통해 항상 접선(또는 접평면)보다 크거나 같다는 하한(Lower bound) 성질을 가집니다.
+
+$$f(y)\ge f(x)+\nabla f(x)^{\top}(y-x)$$
+
+* 반면, $f$가 $\beta$-smooth하다면, 함수 값의 증가가 이차 함수 형태로 제한되는 **상한(Upper bound)** 성질이 추가됩니다.
+
+$$f(y)\le f(x)+\nabla f(x)^{\top}(y-x)+\frac{\beta}{2}||y-x||_{2}^{2}$$
+
+* 이 부등식은 Smooth optimization에서 가장 중요한 역할을 하는 식입니다. 어떤 지점 $x$에서 함수를 근사할 때, 1차 근사값에 이차항 $\frac{\beta}{2}||y-x||_{2}^{2}$을 더한 것보다는 항상 아래에 위치함을 보장합니다.
+
+## 2.3. 매끄러운 함수 vs 매끄럽지 않은 함수 (Self-tuning Property)
+
+* 위 그림에서 보듯, 매끄러운 함수는 최적점 $x^*$에 다가갈수록 기울기 $\nabla f(x)$의 크기가 점차 0에 수렴합니다. 경사하강법의 업데이트 규칙인 $x_{t+1}=x_{t}-\eta_{t}\nabla f(x_{t})$를 고려해 볼 때, $\nabla f(x_t)$ 자체가 작아지므로 스텝 사이즈 $\eta_t$를 굳이 갈수록 줄이지 않아도 업데이트 보폭이 자연스럽게 줄어듭니다. 이를 **Self-tuning property**라고 합니다.
+
+* 반면, 매끄럽지 않은 함수(예: $f(x) = |x|$)에서는 최적점 근처에서도 Subgradient의 크기가 0으로 줄어들지 않으므로, 최적점에 수렴하기 위해서는 사용자가 인위적으로 스텝 사이즈 $\eta_t$를 감소시켜야만 합니다.
+
+-----
+
+# 3. Quadratic Upper Bounds
+
+* $\beta$-smooth 함수의 성질을 더 깊이 파고들어 보겠습니다. 앞서 언급한 이차 상한(Quadratic upper bound) 성질은 함수가 볼록(convex)한지 여부와 상관없이 성립합니다.
+
+* 이와 관련하여 더욱 강력한 형태의 Lemma가 존재합니다. $f$가 $l_{2}$ 노름에서 $\beta$-smooth하다면 다음이 성립합니다.
+
+$$|f(y)-f(x)-\nabla f(x)^{\top}(y-x)|\le\frac{\beta}{2}||y-x||^{2}$$
+
+* 이 식은 함수의 실제 값 $f(y)$와 $x$에서의 1차 선형 근사값 $f(x)+\nabla f(x)^{\top}(y-x)$의 오차가 최대 $\frac{\beta}{2}||y-x||^{2}$로 바운드됨을 명확히 보여줍니다.
+
+* 볼록 함수와의 일차적 특징(First-order characterization)에 의해, 다음 조건들은 서로 동치입니다.
+어떤 볼록 함수 $f$가 $\beta$-smooth 하다는 것은, 함수 $\frac{\beta}{2}||x||_{2}^{2}-f(x)$ 가 볼록(Convex)하다는 것과 필요충분조건입니다.
+
+-----
+
+# 4. Convergence of Gradient Descent
+
+* 이제 매끄러운 볼록 함수에 대해 경사하강법을 적용했을 때의 수렴 속도를 확인해 보겠습니다.
+
+## 4.1. 수렴성 정리 (Convergence Theorem)
+
+* 함수 $f:\mathbb{R}^{d}\rightarrow\mathbb{R}$가 $l_{2}$-노름에서 $\beta$-smooth하고 볼록하다고 가정합니다. 경사하강법의 스텝 사이즈를 $\eta_{t}=\frac{1}{\beta}$로 고정하고 생성된 시퀀스를 $\{x_{t}:t=1,...,T+1\}$이라고 할 때, 최적해 $x^{*}$에 대해 다음 수렴성이 성립합니다.
+
+$$f(x_{T+1})-f(x^{*})\le\frac{\beta||x_{1}-x^{*}||_{2}^{2}}{2T}$$
+
+* **(참고: 초기 슬라이드 수식과의 교차 검증)**
+  * 강의 자료 전반부에 $\frac{||x_{1}-x^{*}||_{2}^{2}}{2\beta T}$로 표기된 부분이 있으나, 스텝 사이즈 $\eta = 1/\beta$를 적용한 수렴성 증명의 최종 결과는 $\frac{\beta||x_{1}-x^{*}||_{2}^{2}}{2T}$ 가 도출되는 것이 맞습니다.
+
+* 이 정리가 시사하는 바는 매우 큽니다. $T$번 반복했을 때 최적값과의 오차가 $O(1/T)$ 속도로 감소한다는 것을 보여줍니다.
+
+## 4.2. Subgradient Method와의 비교
+
+* 립시츠 연속(Lipschitz continuous)인 일반 볼록 함수에 대한 Subgradient method의 수렴 결과와 비교해보면 그 차이가 확연합니다.
+  * **Subgradient method:**
+    $$f(\frac{1}{T}\sum_{t=1}^{T}x_{t})-f(x^{*})\le\frac{1}{T}\sum_{t=1}^{T}f(x_{t})-f(x^{*})\le\frac{||x_{1}-x^{*}||_{2}^{2}}{2\eta T}+\frac{\eta}{2}L^{2}$$
+    * 여기서 최적의 $\eta$를 설정하더라도 수렴 속도는 $O(1/\sqrt{T})$입니다. 평균화된 지점(Averaged iterates)을 사용해야 성능이 보장되는 경우가 많습니다.
+  * **Gradient Descent (for smooth functions):**
+    $$f(x_{T+1})-f(x^{*})\le\frac{1}{T}\sum_{t=1}^{T}f(x_{t+1})-f(x^{*})\le\frac{\beta||x_{1}-x^{*}||_{2}^{2}}{2T}$$
+    * 반면, Smooth 함수에서는 마지막 iterate인 $x_{T+1}$만으로도 $O(1/T)$의 빠른 수렴 속도를 보장받을 수 있습니다. 상수가 $\beta/2$로 깔끔하게 떨어지며, $L^2$와 같은 잔여 오차 항이 발생하지 않습니다.
+
+-----
+
+# 5. Optimality Gap & Co-coercivity
+
+* 마지막으로 Smooth function 분석에서 자주 활용되는 두 가지 주요 부등식을 정리합니다.
+
+## 5.1. Optimality Gap
+
+* $f$가 $\beta$-smooth하고 볼록할 때, 임의의 $x \in \mathbb{R}^d$에 대하여 현재 함수 값과 최적값 $f(x^*)$의 차이(Optimality Gap)는 다음과 같이 Gradient와 거리에 의해 양쪽으로 바운드됩니다.
+
+$$\frac{1}{2\beta} \|\nabla f(x)\|_2^2 \le f(x)-f(x^{*}) \le \frac{\beta}{2} \|x - x^*\|_2^2$$
+
+* 오른쪽 부등식은 Quadratic upper bound에서 $\nabla f(x^*)=0$을 적용하여 도출되며, 왼쪽 부등식은 $f(x - \frac{1}{\beta}\nabla f(x)) \le f(x) - \frac{1}{2\beta}||\nabla f(x)||_2^2$ 라는 descent lemma를 최적점과 연결하여 얻을 수 있습니다. 이는 $\nabla f(x)$가 0에 가까워져야만 실제 $f(x)$도 최적값에 가까워짐을 정량적으로 보장합니다.
+
+## 5.2. Co-coercivity (코-코어시버티)
+
+* 함수 $f$가 $\beta$-smooth하고 볼록할 때, Gradient 연산자 자체는 다음과 같은 **Co-coercivity** 성질을 만족합니다. 임의의 $x, y \in \mathbb{R}^d$에 대해:
+
+$$(\nabla f(x)-\nabla f(y))^{\top}(x-y)\ge\frac{1}{\beta}||\nabla f(x)-\nabla f(y)||_{2}^{2}$$
+
+* 이는 단순한 단조성(Monotonicity, $(\nabla f(x)-\nabla f(y))^{\top}(x-y)\ge 0$)보다 훨씬 강한 조건입니다. 우변에 기울기 차이의 제곱에 비례하는 양수 값이 존재하므로, $x$와 $y$가 변할 때 Gradient의 변화가 억제되면서 동시에 안정적인 방향성을 가짐을 의미합니다. 이 성질은 수많은 최적화 알고리즘의 수렴 증명에 핵심적인 레마로 활용됩니다.
+
+-----
+
+# 6. Summary
+
+* 이번 포스트에서는 매끄러운(Smooth) 볼록 함수에서의 경사하강법(Gradient Descent)을 다루었습니다.
+    * 1.  **$\beta$-smoothness**는 기울기의 변화를 제한하며, 이는 함수 값의 **Quadratic upper bound**를 보장합니다.
+    * 2.  매끄러운 함수의 **Self-tuning** 성질 덕분에 스텝 사이즈 $\eta = 1/\beta$로 고정하더라도 $O(1/T)$의 빠른 수렴 속도를 얻습니다 (Subgradient의 $O(1/\sqrt{T})$ 대비 우수함).
+    * 3.  **Optimality gap**과 **Co-coercivity**는 Smooth 최적화 문제를 수학적으로 다룰 때 매우 유용한 도구가 됩니다.

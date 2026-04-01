@@ -245,3 +245,54 @@ $$\alpha_{2}^{new} = \begin{cases} H & \text{if } \alpha_{2}^{new, unclipped} > 
 * 이러한 가벼운 2변수 최적화 과정을 전체 데이터에 대해 반복하며, 모든 데이터 포인트가 KKT 쌍대 상보성 조건을 만족하게 되면 수렴한 것으로 판단하고 알고리즘을 종료합니다.
 
 ![Figure: SMO 알고리즘의 제약 조건 상자(Box Constraint). 알파1과 알파2는 변수의 제약 조건에 의해 가로 세로가 각각 C인 정사각형 영역 내부에서만 값을 가질 수 있다. 또한 알파1*y1 + 알파2*y2 = zeta 라는 선형 등식 조건에 따라, 이 사선이 정사각형 상자와 만나는 하한점 L(Lower bound)과 상한점 H(Upper bound) 사이의 선분 위에서만 변수가 업데이트 되어야 함을 기하학적으로 보여준다.](./images/smo_box_constraint.png)
+
+# 7. SMO 알고리즘 실전 최적화 예시 (Toy Example)
+
+* 앞서 다룬 SMO 알고리즘의 수학적 전개가 실제 계산 과정에서 어떻게 작동하는지 살펴보기 위해, 단 2개의 데이터 포인트만 존재하는 극단적으로 단순화된 모델을 최적화해 보겠습니다.
+
+## 7.1. 문제 설정 (Initialization)
+
+* 다음과 같은 2개의 2차원 데이터 포인트가 주어졌다고 가정해 봅시다.
+  * **양성 데이터 ($i=1$):** $x^{(1)} = (1, 2)^{\top}, \quad y^{(1)} = 1$
+  * **음성 데이터 ($i=2$):** $x^{(2)} = (-1, -2)^{\top}, \quad y^{(2)} = -1$
+
+* 알고리즘을 시작하기 전, 라그랑주 승수와 하이퍼파라미터는 다음과 같이 초기화합니다.
+  * 초기 승수: $\alpha_{1} = 0, \quad \alpha_{2} = 0$
+  * 페널티 파라미터 (Soft Margin): $C = 1$
+
+## 7.2. 등식 제약 조건과 치환 (Constraint & Substitution)
+
+* SMO는 한 번에 두 개의 변수만 업데이트합니다. 여기서는 전체 변수가 2개뿐이므로 $\alpha_1$과 $\alpha_2$를 선택합니다. 먼저 등식 제약 조건 $\sum \alpha_{i}y^{(i)} = 0$을 전개합니다.
+
+$$\alpha_{1}(1) + \alpha_{2}(-1) = 0 \quad \Rightarrow \quad \alpha_{1} = \alpha_{2}$$
+
+* 이 단순한 관계식 덕분에, 우리는 $\zeta = 0$인 상태에서 $\alpha_1$을 완벽하게 $\alpha_2$로 치환할 수 있습니다. 상자 제약 조건(Box Constraint)인 $0 \le \alpha_i \le C$에 따라, $\alpha_1 = \alpha_2$이므로 $\alpha_2$가 가질 수 있는 유효 구간은 $[L, H] = [0, 1]$이 됩니다.
+
+## 7.3. 내적 계산 및 1차원 목적 함수 생성
+
+* 목적 함수 $W(\alpha)$를 계산하기 위해 데이터 간의 내적(Inner Product)을 먼저 구합니다.
+  * $\langle x^{(1)}, x^{(1)} \rangle = 1^2 + 2^2 = 5$
+  * $\langle x^{(2)}, x^{(2)} \rangle = (-1)^2 + (-2)^2 = 5$
+  * $\langle x^{(1)}, x^{(2)} \rangle = 1(-1) + 2(-2) = -5$
+
+* 이제 원래의 목적 함수 $W(\alpha_{1}, \alpha_{2})$에 $\alpha_{1} = \alpha_{2}$를 대입하여, 오직 $\alpha_2$에 대한 1차원 2차 함수로 만듭니다.
+
+$$\begin{aligned} W(\alpha_{2}) &= (\alpha_{1} + \alpha_{2}) - \frac{1}{2}\left[ y^{(1)}y^{(1)}\alpha_{1}^{2}\langle x^{(1)}, x^{(1)} \rangle + y^{(2)}y^{(2)}\alpha_{2}^{2}\langle x^{(2)}, x^{(2)} \rangle + 2y^{(1)}y^{(2)}\alpha_{1}\alpha_{2}\langle x^{(1)}, x^{(2)} \rangle \right] \\ &= 2\alpha_{2} - \frac{1}{2}\left[ (1)(1)\alpha_{2}^{2}(5) + (-1)(-1)\alpha_{2}^{2}(5) + 2(1)(-1)\alpha_{2}^{2}(-5) \right] \\ &= 2\alpha_{2} - \frac{1}{2}\left[ 5\alpha_{2}^{2} + 5\alpha_{2}^{2} + 10\alpha_{2}^{2} \right] \\ &= 2\alpha_{2} - 10\alpha_{2}^{2} \end{aligned}$$
+
+## 7.4. 미분 및 클리핑 (Optimization & Clipping)
+
+* 이제 다변수 최적화 문제가 중학교 수준의 2차 함수 최대값 찾기 문제로 바뀌었습니다. 위 식을 $\alpha_2$에 대해 미분하여 0이 되는 지점을 찾습니다.
+
+$$\frac{d W(\alpha_{2})}{d \alpha_{2}} = 2 - 20\alpha_{2} = 0 \quad \Rightarrow \quad \alpha_{2}^{new, unclipped} = 0.1$$
+
+* 구해진 무제약 최적값 $0.1$이 앞서 구한 허용 구간 $[L, H] = [0, 1]$ 내에 존재하는지 확인(Clipping)합니다. 구간 안에 포함되므로 값은 그대로 확정됩니다.
+  * 업데이트 결과: $\alpha_{2}^{new} = 0.1$
+  * 관계식에 의한 도출: $\alpha_{1}^{new} = \alpha_{2}^{new} = 0.1$
+
+## 7.5. 최종 가중치 $w$ 도출
+
+* 업데이트된 $\alpha$ 값들을 이용해 최적의 결정 경계 가중치 $w$를 계산해 봅니다.
+
+$$\begin{aligned} w &= \sum_{i=1}^{2} \alpha_{i}y^{(i)}x^{(i)} \\ &= 0.1(1)\begin{pmatrix} 1 \\ 2 \end{pmatrix} + 0.1(-1)\begin{pmatrix} -1 \\ -2 \end{pmatrix} \\ &= \begin{pmatrix} 0.1 \\ 0.2 \end{pmatrix} + \begin{pmatrix} 0.1 \\ 0.2 \end{pmatrix} = \begin{pmatrix} 0.2 \\ 0.4 \end{pmatrix} \end{aligned}$$
+
+* **결론:** 아주 단순화된 예시이지만, SMO 알고리즘이 **1) 등식 조건을 이용해 변수를 하나로 치환하고**, **2) 1차원 2차 함수 미분을 통해 무제약 해를 구한 뒤**, **3) Box 제약 조건 안으로 클리핑하는 과정**을 수만 개의 데이터 쌍에 대해 반복하며 전역 최적점(Global Optimum)을 향해 빠르게 수렴해 나간다는 원리를 명확하게 확인할 수 있습니다.

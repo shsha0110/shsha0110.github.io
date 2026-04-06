@@ -1,0 +1,122 @@
+---
+title: "[Optimization] Lecture 9. Gradient Descent for Smooth Functions (Part 1)"
+description: "Convergence of gradient descent for smooth functions"
+author: "유성현"
+date: "2026-04-01"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. Introduction
+
+* 볼록 최적화(Convex Optimization)에서 가장 기초적이고 널리 쓰이는 알고리즘은 단연 경사하강법(Gradient Descent, GD)입니다. 이번 포스트에서는 서울대학교 이다빈 교수님의 2026년 봄학기 강의 "Mathematical and Numerical Optimization"의 9번째 강의 노트를 바탕으로 경사하강법을 소개합니다. 
+* 특히 본 포스트에서는 목적 함수(Objective function)가 매끄러운(Smooth) 경우에 경사하강법이 어떻게 작동하는지 분석합니다. 매끄러운 함수가 가지는 고유한 성질들을 정의하고, 이를 통해 경사하강법이 어떻게 일정한 스텝 사이즈(Step size)만으로도 매 반복마다 목적 함수 값을 확정적으로 개선하며 빠르게 수렴하는지 그 수학적 증명 과정을 상세히 다루겠습니다.
+
+---
+
+# 2. Smooth Functions and the Self-tuning Property
+
+## 2.1. $\beta$-Smoothness의 정의
+
+* 미분 가능한(Differentiable) 함수 $f:\mathbb{R}^{d}\rightarrow\mathbb{R}$가 어떤 $\beta>0$에 대하여 $l_{2}$ 노름(norm) 관점에서 다음 조건을 만족할 때, 우리는 이 함수를 **$\beta$-smooth**하다고 정의합니다.
+
+$$||\nabla f(x)-\nabla f(y)||_{2}\le\beta||x-y||_{2}$$
+
+* 이 식은 임의의 두 점 $x, y \in \mathbb{R}^{d}$에 대하여, 함수의 기울기(Gradient) 차이가 두 점 사이의 거리의 $\beta$배를 넘지 않음을 의미합니다. 즉, Gradient가 갑작스럽게 변하지 않고 립시츠 연속(Lipschitz continuous) 성질을 가진다는 것을 수학적으로 규정한 것입니다.
+
+## 2.2. 자가 조정 성질 (Self-tuning Property)
+
+* Smooth 함수의 가장 매력적인 특징은 **자가 조정(Self-tuning) 성질**을 가진다는 것입니다. 
+
+* 제약 없는 최적화 문제(Unconstrained problems)에서 최적해 $x^{*}$는 항상 최적성 조건(Optimality condition)인 $\nabla f(x^{*})=0$을 만족합니다.
+* 함수가 Smooth하다는 것은 기울기가 연속적으로 부드럽게 변함을 의미하므로, 점이 최적해 $x^{*}$에 가까워질수록 기울기 $\nabla f(x)$의 크기 역시 자연스럽게 $0$에 가까워지게 됩니다.
+* 이는 $f(x)=|x|$와 같이 미분 불가능한 꺾인 점을 가진 함수(Non-differentiable function)가 최적점 근처에서도 Subgradient의 크기가 줄어들지 않는 것과 극명한 대조를 이룹니다.
+
+![Figure: (좌) 매끄러운 함수(Smooth function)의 경우 최적점 $x^*$에서 $\nabla f(x^*) = 0$을 만족하며, 점이 바닥으로 갈수록 기울기가 부드럽게 감소합니다. (우) 매끄럽지 않은 함수(Non-smooth function)의 경우 최적점에서 뾰족한 형태를 띠며 $0 \in \partial f(x^*)$라는 Subgradient 조건을 가집니다. 최적점 바로 옆에서도 기울기의 크기가 유지됩니다.](./images/figure_9_1_smooth_vs_nonsmooth.png) 
+
+* 이러한 특성 때문에 일반적인 립시츠 연속 함수에 대한 Subgradient method는 총 반복 횟수 $T$에 의존하는 아주 작은 스텝 사이즈 $O(1/\sqrt{T})$를 요구했습니다. 최적점에 다가가도 Subgradient 자체가 작아지지 않기 때문입니다. 반면, Smooth 함수의 경우 최적해에 근접할수록 기울기 자체가 스스로 작아지기 때문에, 우리는 굳이 스텝 사이즈를 줄이지 않고 **상수 형태의 큰 스텝 사이즈**를 취할 수 있습니다.
+
+---
+
+# 3. Strict Improvement of Gradient Steps (Descent Lemma)
+
+* 수렴성을 증명하기 전에, Smooth 함수에 대한 경사하강법의 1회 업데이트(Gradient step)가 목적 함수 값을 **항상 엄격하게 개선(Strict improvement)**시킨다는 사실을 확인해야 합니다.
+
+* 경사하강법의 업데이트 규칙은 다음과 같습니다.
+$$x_{t+1}=x_{t}-\eta_{t}\nabla f(x_{t})$$
+
+* 이제 $f(x_{t+1})$의 상한(Upper bound)을 전개해 보겠습니다.
+* 우선 $f$가 $\beta$-smooth하다는 성질을 이용해 이차 상한(Quadratic upper bound)을 적용합니다.
+$$f(x_{t+1})\le f(x_{t})+\nabla f(x_{t})^{\top}(x_{t+1}-x_{t})+\frac{\beta}{2}||x_{t+1}-x_{t}||_{2}^{2}$$ 
+
+* 여기에 $x_{t+1}-x_{t} = -\eta_t \nabla f(x_t)$를 대입하여 식을 정리합니다.
+$$=f(x_{t})+(-\eta_{t}+\frac{\eta_{t}^{2}\beta}{2})||\nabla f(x_{t})||_{2}^{2}$$ 
+
+* 괄호 안의 식 $(-\eta_{t}+\frac{\eta_{t}^{2}\beta}{2})$은 $\eta_t$에 대한 2차 함수입니다. 이 항을 최소화(또는 음의 방향으로 최대화)하기 위해 $\eta_t = 1/\beta$를 대입합니다.
+$$\le f(x_{t})-\frac{1}{2\beta}||\nabla f(x_{t})||_{2}^{2}$$ 
+
+* **결론:** $\eta_t = 1/\beta$로 설정하면, 현재 점 $x_t$가 최적해가 아닌 이상($||\nabla f(x_t)||_2 \neq 0$), 다음 스텝의 함수 값 $f(x_{t+1})$은 이전 값 $f(x_t)$보다 **반드시 확정적으로 감소(Strictly better)**합니다.
+
+---
+
+# 4. Convergence Analysis of Gradient Descent
+
+* 위에서 관찰한 "엄격한 개선" 성질을 바탕으로, 매끄러운 볼록 함수에 대한 경사하강법의 수렴성 정리를 증명해 보겠습니다.
+
+## 4.1. 수렴성 정리 (Theorem 9.1)
+* 함수 $f:\mathbb{R}^{d}\rightarrow\mathbb{R}$가 $l_{2}$-노름에서 $\beta$-smooth하고 볼록(Convex)하다고 가정합니다. 스텝 사이즈 $\eta_{t}=\frac{1}{\beta}$를 사용하여 생성된 경사하강법의 시퀀스를 $\{x_{t}:t=1,...,T+1\}$이라고 할 때, 최적해 $x^{*}$ (즉, $min_{x\in\mathbb{R}^{d}}f(x)$의 해)에 대하여 다음이 성립합니다.
+
+$$f(x_{T+1})-f(x^{*})\le\frac{\beta||x_{1}-x^{*}||_{2}^{2}}{2T}$$ 
+
+## 4.2. Proof of Convergence
+
+### **단계 1: 함수의 1차 상한 및 하한 연결**
+* 앞서 도출한 Descent Lemma에서 시작합니다.
+$$f(x_{t+1})\le f(x_{t})-\frac{1}{2\beta}||\nabla f(x_{t})||_{2}^{2}$$ 
+
+* 여기에 $f$가 볼록 함수(Convex function)라는 성질을 적용합니다. 볼록 함수의 정의에 의해 $f(x^{*}) \ge f(x_{t})+\nabla f(x_{t})^{\top}(x^{*}-x_{t})$ 이 성립하며, 이를 이항하면 $f(x_t) \le f(x^{*})-\nabla f(x_{t})^{\top}(x^{*}-x_{t})$ 가 됩니다. 이를 위 식의 $f(x_t)$ 자리에 대입합니다.
+$$\le f(x^{*})-\nabla f(x_{t})^{\top}(x^{*}-x_{t})-\frac{1}{2\beta}||\nabla f(x_{t})||_{2}^{2}$$ 
+
+### **단계 2: 완전제곱식 형태(Telescoping sum 준비)로 정리**
+* $x_{t+1}=x_{t}-(1/\beta)\nabla f(x_{t})$ 관계를 활용하여 위 식을 두 점 간의 거리 차이로 묶어냅니다.
+$$=f(x^{*})+\frac{\beta}{2}(||x_{t}-x^{*}||_{2}^{2}-||x_{t+1}-x^{*}||_{2}^{2})$$ 
+
+* 양변에서 $f(x^*)$를 이항하여 $t$번째 스텝에서의 오차를 구합니다.
+$$f(x_{t+1})-f(x^{*})\le\frac{\beta}{2}(||x_{t}-x^{*}||_{2}^{2}-||x_{t+1}-x^{*}||_{2}^{2})$$ 
+
+### **단계 3: $t=1$부터 $T$까지 누적 합(Summation) 및 평균**
+* 위 식을 $t=1, ..., T$까지 모두 더한 뒤 $T$로 나눕니다. 우변은 연쇄적으로 소거(Telescoping)되어 맨 처음 항과 맨 마지막 항만 남습니다.
+$$\frac{1}{T}\sum_{t=1}^{T}f(x_{t+1})-f(x^{*})\le\frac{\beta}{2T}(||x_{1}-x^{*}||_{2}^{2}-||x_{T+1}-x^{*}||_{2}^{2})$$ 
+$$\le\frac{\beta}{2T}||x_{1}-x^{*}||_{2}^{2}$$  (마지막 항 $||x_{T+1}-x^{*}||_{2}^{2} \ge 0$ 이므로 생략하여 상한을 넓힘)
+
+### **단계 4: 마지막 Iterate 도출**
+* 앞서 살펴본 바와 같이 매끄러운 함수에서의 경사하강법은 매 스텝마다 함수 값을 단조 감소시킵니다 ($f(x_{t+1})\le f(x_{t})$). 
+* 따라서 마지막 스텝의 함수 값 $f(x_{T+1})$은 누적된 함수 값들의 평균보다 작거나 같습니다. 이를 부등식에 적용하면 증명이 완료됩니다.
+$$f(x_{T+1})-f(x^{*})\le\frac{1}{T}\sum_{t=1}^{T}f(x_{t+1})-f(x^{*})\le\frac{\beta||x_{1}-x^{*}||_{2}^{2}}{2T}$$ 
+
+---
+
+# 5. Implications and Comparison
+
+* 위 정리가 우리에게 주는 통찰을 요약하면 다음과 같습니다.
+  * 1. **상수 스텝 사이즈 (Constant Step Size):** Smooth 함수의 자가 조정 성질 덕분에 반복 횟수 $T$에 의존하지 않는 $1/\beta$라는 일정한 스텝 사이즈를 사용할 수 있습니다. 스텝 사이즈를 줄이지 않아도, 최적해에 가까워질수록 점 간의 이동 거리($x_{t+1} - x_t$)는 알아서 줄어듭니다.
+  * 2. **$O(1/T)$ 수렴 속도 (Convergence Rate):** 부등식 우변의 $||x_{1}-x^{*}||_{2}^{2}$와 $\beta$는 모두 고정된 상수입니다. 따라서 오차는 반복 횟수 $T$에 반비례하여 감소하는 $O(1/T)$의 수렴 속도를 가집니다.
+  * 3. **반복 복잡도 (Iteration Complexity):** 오차를 $\epsilon$ 이하로 만들기 위해 필요한 반복 횟수는 $T=O(1/\epsilon)$ 입니다.
+
+## 5.1. Subgradient Method와의 직접 비교
+
+* 이러한 결과는 매끄럽지 않은 일반 함수에 적용했던 Subgradient method의 수렴 속도인 $O(1/\sqrt{T})$ (또는 $O(1/\epsilon^{2})$ 반복 복잡도)를 크게 개선한 것입니다. 
+
+* 두 알고리즘 분석의 마지막 부등식을 비교해보면 그 차이가 명확히 드러납니다.
+  * **Subgradient method:**
+    $$f(\frac{1}{T}\sum_{t=1}^{T}x_{t})-f(x^{*})\le\frac{1}{T}\sum_{t=1}^{T}f(x_{t})-f(x^{*})\le\frac{||x_{1}-x^{*}||_{2}^{2}}{2\eta T}+\frac{\eta}{2}L^{2}$$ 
+  * **Gradient descent (Smooth functions):**
+    $$f(x_{T+1})-f(x^{*})\le\frac{1}{T}\sum_{t=1}^{T}f(x_{t+1})-f(x^{*})\le\frac{||x_{1}-x^{*}||_{2}^{2}}{2(1/\beta) T}$$ 
+
+* 가장 결정적인 차이는 Smooth 함수의 부등식 우변에는 **$\frac{\eta L^{2}}{2}$ 와 같은 잔여 오차 항(Additional term)이 없다는 점**입니다. 이 잔여 오차가 없기 때문에 $\eta$를 0으로 서서히 줄여나갈 필요가 없으며, 매 스텝마다 함수 값이 개선된다는 강력한 이점을 온전히 활용할 수 있습니다.

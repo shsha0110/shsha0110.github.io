@@ -164,6 +164,253 @@
   <pubDate>Sat, 30 May 2026 15:00:00 GMT</pubDate>
 </item>
 <item>
+  <title>[Optimization] Lecture 10. Strongly Convex Functions</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Optimization/10.Strongly-Convex-Functions/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction" class="level1">
+<h1>Introduction</h1>
+<ul>
+<li>본 포스트는 수리 및 수치 최적화 강의의 10번째 주제인 <strong>강볼록 함수(Strongly Convex Functions)</strong>와 <strong>제약 조건이 있는 최적화를 위한 사영 경사하강법(Projected Gradient Descent)</strong>에 대해 다룹니다. 단순한 볼록(Convex) 함수보다 더 강력한 조건을 가진 강볼록 함수는 머신러닝과 최적화 알고리즘에서 매우 빠른 수렴 속도를 보장하는 핵심적인 개념입니다. 이번 글에서는 강볼록 함수의 수학적 정의부터 시작하여, 평활도(Smoothness)와의 관계, 그리고 제약 집합(Feasible set)이 존재할 때 사용하는 프로젝션(Projection) 기법까지 논리적인 흐름에 따라 살펴보겠습니다.</li>
+</ul>
+<hr>
+</section>
+<section id="강볼록-함수-strongly-convex-functions" class="level1">
+<h1>1. 강볼록 함수 (Strongly Convex Functions)</h1>
+<section id="강볼록-함수의-정의" class="level2">
+<h2 class="anchored" data-anchor-id="강볼록-함수의-정의">1.1 강볼록 함수의 정의</h2>
+<ul>
+<li>어떤 함수 <img src="https://latex.codecogs.com/png.latex?f">가 주어졌을 때, 이 함수가 일반적인 볼록 함수보다 더 ‘볼록하게’ 굽어 있다면 이를 강볼록 함수라고 합니다. 수학적으로, 함수 <img src="https://latex.codecogs.com/png.latex?f">가 어떤 <img src="https://latex.codecogs.com/png.latex?%5Calpha%3E0">에 대하여 <img src="https://latex.codecogs.com/png.latex?l_2"> 노름(norm) 상에서 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-강볼록(strongly convex)이라는 것은 다음 함수가 여전히 볼록 함수임을 의미합니다:</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?f(x)-%5Cfrac%7B%5Calpha%7D%7B2%7D%7C%7Cx%7C%7C_2%5E2"></p>
+<ul>
+<li>즉, 원래 함수 <img src="https://latex.codecogs.com/png.latex?f(x)">에서 이차 함수인 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Calpha%7D%7B2%7D%7C%7Cx%7C%7C_2%5E2">를 빼더라도 여전히 볼록성이 유지될 정도로 최소한의 곡률(curvature)을 가지고 있다는 것을 뜻합니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>보조정리 (Lemma):</strong> 만약 함수 <img src="https://latex.codecogs.com/png.latex?f">가 <img src="https://latex.codecogs.com/png.latex?l_2"> 노름에서 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-강볼록이라면, 1차 테일러 전개를 이용한 하한선(lower bound)에 추가적인 이차항이 붙게 됩니다: <img src="https://latex.codecogs.com/png.latex?f(y)%5Cge%20f(x)+%5Cnabla%20f(x)%5E%5Ctop(y-x)+%5Cfrac%7B%5Calpha%7D%7B2%7D%7C%7Cy-x%7C%7C_2%5E2"></p>
+</blockquote>
+<ul>
+<li>일반적인 볼록 함수가 접선(평면)을 하한선으로 가지는 반면, 강볼록 함수는 그 아래를 굳건히 받쳐주는 <strong>이차 함수 하한선(Quadratic lower bound)</strong>을 가집니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Optimization/10.Strongly-Convex-Functions/images/quadratic_lower_bound.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 어떤 강볼록 함수의 곡면(검은색 선)과 그 특정 지점 <img src="https://latex.codecogs.com/png.latex?x">에서 함수를 아래에서 받쳐주는 이차 함수 형태의 하한선(빨간색 선). 일반적인 볼록 함수의 선형 하한선과 달리, 강볼록 함수는 곡률 <img src="https://latex.codecogs.com/png.latex?%5Calpha">에 비례하는 이차 곡선 형태의 엄격한 하한선을 가진다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="평활도smoothness와의-비교" class="level2">
+<h2 class="anchored" data-anchor-id="평활도smoothness와의-비교">1.2 평활도(Smoothness)와의 비교</h2>
+<ul>
+<li>강볼록성(Strong Convexity)은 함수의 ’최소 곡률’을 보장하는 반면, 평활도(Smoothness)는 그래디언트의 변화율을 제한하여 ’최대 곡률’을 제한하는 개념입니다.</li>
+<li>따라서 강볼록 함수라고 해서 반드시 평활한 것은 아니며, 반대로 평활하다고 해서 반드시 강볼록한 것도 아닙니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Optimization/10.Strongly-Convex-Functions/images/smooth_vs_strongly_convex.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 왼쪽 그래프는 뾰족한 최솟값을 가져 비평활(non-smooth)하지만 전체적으로 가파른 곡률을 유지하는 강볼록 함수를 보여준다. 반면 오른쪽 그래프는 미분 가능하고 부드럽게 이어지는 평활(smooth) 함수이지만, 바닥 부분이 평평하여(직선 구간 존재) 이차 함수적 하한선을 가질 수 없으므로 강볼록하지 않은 함수이다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+<section id="강볼록-함수의-주요-성질" class="level1">
+<h1>2. 강볼록 함수의 주요 성질</h1>
+<section id="최적성-간극-optimality-gap" class="level2">
+<h2 class="anchored" data-anchor-id="최적성-간극-optimality-gap">2.1 최적성 간극 (Optimality Gap)</h2>
+<ul>
+<li>강볼록 함수에서는 현재 위치 <img src="https://latex.codecogs.com/png.latex?x">의 그래디언트 크기나 최적해와의 거리를 통해 함숫값의 오차(Optimality gap) 상한과 하한을 명확히 제한할 수 있습니다. 강의 슬라이드에 누락된 수식을 표준 최적화 이론을 바탕으로 복원하면 다음과 같습니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>정리 (Theorem):</strong> 만약 <img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%5Crightarrow%5Cmathbb%7BR%7D">가 <img src="https://latex.codecogs.com/png.latex?l_2"> 노름에서 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-강볼록이라면, 모든 <img src="https://latex.codecogs.com/png.latex?x%5Cin%5Cmathbb%7BR%7D%5Ed">에 대하여 다음이 성립합니다: <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Calpha%7D%7B2%7D%7C%7Cx-x%5E*%7C%7C_2%5E2%20%5Cle%20f(x)-f(x%5E*)%5Cle%20%5Cfrac%7B1%7D%7B2%5Calpha%7D%7C%7C%5Cnabla%20f(x)%7C%7C_2%5E2"></p>
+</blockquote>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?x%5E*">는 <img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bx%5Cin%5Cmathbb%7BR%7D%5Ed%7Df(x)">의 최적해입니다. 이 부등식의 우변은 그래디언트의 크기가 작아질수록 현재 함숫값 <img src="https://latex.codecogs.com/png.latex?f(x)">가 최적값 <img src="https://latex.codecogs.com/png.latex?f(x%5E*)">에 확실하게 수렴함을 보장하며, 좌변은 최적해와의 거리 자체가 함숫값 차이에 의해 제약됨을 보여줍니다.</li>
+</ul>
+</section>
+<section id="강압성-coercivity" class="level2">
+<h2 class="anchored" data-anchor-id="강압성-coercivity">2.2 강압성 (Coercivity)</h2>
+<ul>
+<li>강볼록 함수의 또 다른 중요한 성질은 그래디언트의 변화량이 두 점 사이의 거리에 비례하여 커진다는 강압성(Coercivity)입니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>보조정리 (Lemma):</strong> <img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%5Crightarrow%5Cmathbb%7BR%7D">가 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-강볼록 함수일 때, 임의의 <img src="https://latex.codecogs.com/png.latex?x,%20y%20%5Cin%5Cmathbb%7BR%7D%5Ed">에 대하여 다음 부등식이 성립합니다: <img src="https://latex.codecogs.com/png.latex?(%5Cnabla%20f(x)-%5Cnabla%20f(y))%5E%5Ctop(x-y)%5Cge%5Calpha%7C%7Cx-y%7C%7C_2%5E2"></p>
+</blockquote>
+<hr>
+</section>
+</section>
+<section id="경사하강법의-수렴성-convergence-analysis" class="level1">
+<h1>3. 경사하강법의 수렴성 (Convergence Analysis)</h1>
+<ul>
+<li>이제 함수의 조건(립시츠 연속성, 평활도 등)에 따라 강볼록 함수에서 경사하강법(Gradient Descent)이 어떻게 수렴하는지 분석해 봅시다.</li>
+</ul>
+<section id="립시츠-연속이면서-강볼록한-경우" class="level2">
+<h2 class="anchored" data-anchor-id="립시츠-연속이면서-강볼록한-경우">3.1 립시츠 연속이면서 강볼록한 경우</h2>
+<blockquote class="blockquote">
+<p><strong>정리 (Theorem):</strong> <img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%5Crightarrow%5Cmathbb%7BR%7D">가 어떤 <img src="https://latex.codecogs.com/png.latex?L,%20%5Calpha%20%3E%200">에 대해 <img src="https://latex.codecogs.com/png.latex?L">-립시츠(Lipschitz) 연속이고 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-강볼록이라고 가정합시다. 스텝 사이즈(학습률)를 시간에 따라 감소하는 형태인 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t=2/(%5Calpha(t+1))">로 설정하여 업데이트한 경사하강법의 반복 시퀀스 <img src="https://latex.codecogs.com/png.latex?%5C%7Bx_t%5C%7D_%7Bt=1%7D%5E%7BT+1%7D">에 대하여 다음이 성립합니다: <img src="https://latex.codecogs.com/png.latex?f%5Cleft(%5Csum_%7Bt=1%7D%5ET%5Cfrac%7B2t%7D%7BT(T+1)%7Dx_t%5Cright)-f(x%5E*)%5Cle%5Cfrac%7B2L%5E2%7D%7B%5Calpha(T+1)%7D"></p>
+</blockquote>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?x%5E*">는 최적해입니다. 이 결과는 강볼록 조건이 주어졌을 때, 가중 평균된 해의 함숫값 오차가 <img src="https://latex.codecogs.com/png.latex?O(1/T)">의 속도로 수렴함을 보여줍니다.</li>
+</ul>
+</section>
+<section id="평활도smoothness와의-결합" class="level2">
+<h2 class="anchored" data-anchor-id="평활도smoothness와의-결합">3.2 평활도(Smoothness)와의 결합</h2>
+<ul>
+<li>평활한 강볼록 함수의 수렴성을 보기 전에, 평활도와 관련된 몇 가지 유용한 성질을 짚고 넘어가야 합니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>보조정리 (Lemma):</strong> <img src="https://latex.codecogs.com/png.latex?f">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활(smooth)하고 <img src="https://latex.codecogs.com/png.latex?%5Cbeta%5Cge%5Calpha">라면, 새로운 함수 <img src="https://latex.codecogs.com/png.latex?f(x)-%5Cfrac%7B%5Calpha%7D%7B2%7D%7C%7Cx%7C%7C_2%5E2">는 <img src="https://latex.codecogs.com/png.latex?(%5Cbeta-%5Calpha)">-평활합니다. 더불어, 어떤 함수 <img src="https://latex.codecogs.com/png.latex?f">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활할 필요충분조건은 <img src="https://latex.codecogs.com/png.latex?g(x)=(%5Cbeta/2)%7C%7Cx%7C%7C_2%5E2-f(x)">가 볼록 함수가 되는 것입니다.</p>
+</blockquote>
+<blockquote class="blockquote">
+<p><strong>공강압성 (Co-coercivity):</strong> <img src="https://latex.codecogs.com/png.latex?f">가 볼록하고 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활하다면 다음 공강압성이 성립합니다: <img src="https://latex.codecogs.com/png.latex?(%5Cnabla%20f(x)-%5Cnabla%20f(y))%5E%5Ctop(x-y)%5Cge%5Cfrac%7B1%7D%7B%5Cbeta%7D%7C%7C%5Cnabla%20f(x)-%5Cnabla%20f(y)%7C%7C_2%5E2"></p>
+</blockquote>
+<ul>
+<li>이 공강압성과 앞서 다룬 강볼록성의 강압성(Coercivity) 을 결합하면, 평활하면서 동시에 강볼록한 함수에 대해 훨씬 더 강력한 부등식을 도출할 수 있습니다. 원본 슬라이드에 생략된 수식을 채워 넣으면 다음과 같습니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>보조정리 (Lemma):</strong> <img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%5Crightarrow%5Cmathbb%7BR%7D">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활하고 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-강볼록할 때, 임의의 <img src="https://latex.codecogs.com/png.latex?x,%20y%20%5Cin%5Cmathbb%7BR%7D%5Ed">에 대하여 다음이 성립합니다: <img src="https://latex.codecogs.com/png.latex?(%5Cnabla%20f(x)-%5Cnabla%20f(y))%5E%5Ctop(x-y)%5Cge%20%5Cfrac%7B%5Calpha%5Cbeta%7D%7B%5Calpha+%5Cbeta%7D%7C%7Cx-y%7C%7C_2%5E2%20+%20%5Cfrac%7B1%7D%7B%5Calpha+%5Cbeta%7D%7C%7C%5Cnabla%20f(x)-%5Cnabla%20f(y)%7C%7C_2%5E2"></p>
+</blockquote>
+</section>
+<section id="평활하고-강볼록한-함수의-선형-수렴-linear-convergence" class="level2">
+<h2 class="anchored" data-anchor-id="평활하고-강볼록한-함수의-선형-수렴-linear-convergence">3.3 평활하고 강볼록한 함수의 선형 수렴 (Linear Convergence)</h2>
+<ul>
+<li>위의 강력한 성질 덕분에 평활하고 강볼록한 함수에서는 수렴 속도가 비약적으로 빨라집니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>정리 (Theorem):</strong> <img src="https://latex.codecogs.com/png.latex?f">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활하고 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-강볼록할 때, 스텝 사이즈를 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t=%5Cfrac%7B2%7D%7B%5Calpha+%5Cbeta%7D">로 일정하게 고정하여 경사하강법을 수행하면 다음과 같은 수렴 결과를 얻습니다: <img src="https://latex.codecogs.com/png.latex?f(x_%7BT+1%7D)-f(x%5E*)%5Cle%5Cfrac%7B%5Cbeta%7D%7B2%7D%5Cexp%5Cleft(-%5Cfrac%7B4T%7D%7B%5Ckappa+1%7D%5Cright)%7C%7Cx_1-x%5E*%7C%7C_2%5E2"></p>
+</blockquote>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?x%5E*">는 최적해이며, <img src="https://latex.codecogs.com/png.latex?%5Ckappa%20=%20%5Cbeta/%5Calpha">는 상태 공간의 조건수(Condition number)를 의미합니다. 이 결과는 반복 횟수 <img src="https://latex.codecogs.com/png.latex?T">에 따라 오차가 지수적(exponentially)으로 감소함을 뜻하며, 최적화 이론에서는 이를 <strong>선형 수렴(Linear convergence)</strong>이라고 부릅니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="제약-조건과-사영projection의-도입" class="level1">
+<h1>4. 제약 조건과 사영(Projection)의 도입</h1>
+<ul>
+<li>현실의 최적화 문제들은 모든 공간이 아닌 특정한 제약 집합(Feasible set, <img src="https://latex.codecogs.com/png.latex?C">) 안에서 최적해를 찾아야 하는 경우가 많습니다.</li>
+</ul>
+<section id="기존-경사하강법의-한계" class="level2">
+<h2 class="anchored" data-anchor-id="기존-경사하강법의-한계">4.1 기존 경사하강법의 한계</h2>
+<ul>
+<li>제약 집합 <img src="https://latex.codecogs.com/png.latex?C">가 있을 때, 기존의 경사하강법 업데이트인 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D=x_t-%5Ceta_t%5Cnabla%20f(x_t)">를 그대로 수행하면 어떤 문제가 발생할까요? 새롭게 계산된 지점이 제약 집합 <img src="https://latex.codecogs.com/png.latex?C"> 바깥으로 벗어나버려 실행 불가능한(infeasible) 상태가 될 수 있습니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Optimization/10.Strongly-Convex-Functions/images/infeasible_gd.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 빗금 친 영역인 제약 집합 <img src="https://latex.codecogs.com/png.latex?C"> 내부에 있던 현재 지점 <img src="https://latex.codecogs.com/png.latex?x_t">에서, 목적 함수를 감소시키는 방향인 <img src="https://latex.codecogs.com/png.latex?-%5Cnabla%20f(x_t)">를 따라 스텝 사이즈 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t">만큼 이동했을 때, 새로운 임시 지점 <img src="https://latex.codecogs.com/png.latex?x_t-%5Ceta_t%5Cnabla%20f(x_t)">가 실행 가능 영역 <img src="https://latex.codecogs.com/png.latex?C">를 완전히 벗어난(infeasible) 상황을 보여주는 도식.</figcaption>
+</figure>
+</div>
+</section>
+<section id="프로젝션-projection" class="level2">
+<h2 class="anchored" data-anchor-id="프로젝션-projection">4.2 프로젝션 (Projection)</h2>
+<ul>
+<li>이를 해결하는 가장 직관적이고 자연스러운 방법은, 경사하강법으로 이동한 임시 지점 <img src="https://latex.codecogs.com/png.latex?x_t-%5Ceta_t%5Cnabla%20f(x_t)">를 다시 제약 집합 <img src="https://latex.codecogs.com/png.latex?C"> 안으로 투영(Projection)시키는 것입니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Optimization/10.Strongly-Convex-Functions/images/projection_update.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 제약 집합 <img src="https://latex.codecogs.com/png.latex?C"> 밖으로 튕겨 나간 점 <img src="https://latex.codecogs.com/png.latex?x_t-%5Ceta_t%5Cnabla%20f(x_t)">를 집합 <img src="https://latex.codecogs.com/png.latex?C">의 경계면 상에서 가장 유클리디안 거리가 가까운 점인 <img src="https://latex.codecogs.com/png.latex?Proj_C(x_t-%5Ceta_t%5Cnabla%20f(x_t))">로 직교 투영(Projection)시켜, 다시 실행 가능한(feasible) 업데이트 지점 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D">을 확보하는 과정을 나타낸 도식.</figcaption>
+</figure>
+</div>
+<ul>
+<li>프로젝션 연산 <img src="https://latex.codecogs.com/png.latex?Proj_C(z)">는 유클리디안 거리를 기준으로 집합 <img src="https://latex.codecogs.com/png.latex?C"> 내에서 주어진 점 <img src="https://latex.codecogs.com/png.latex?z">와 가장 가까운 점을 찾는 최적화 문제로 정의됩니다: <img src="https://latex.codecogs.com/png.latex?Proj_C(z)=%5Carg%5Cmin_%7Bx%5Cin%20C%7D%5Cfrac%7B1%7D%7B2%7D%7C%7Cx-z%7C%7C_2%5E2"></li>
+<li>이는 <img src="https://latex.codecogs.com/png.latex?%5Carg%5Cmin_%7Bx%5Cin%20C%7D%7C%7Cx-z%7C%7C_2">와 동치입니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>비확장성 (Non-expansiveness) 보조정리:</strong> 볼록 집합에 대한 프로젝션의 핵심 성질은 점들 사이의 거리를 늘리지 않는다는 점입니다. 임의의 <img src="https://latex.codecogs.com/png.latex?z%5Cin%5Cmathbb%7BR%7D%5Ed">와 제약 집합 내의 점 <img src="https://latex.codecogs.com/png.latex?x%5Cin%20C">에 대해 다음이 성립합니다: <img src="https://latex.codecogs.com/png.latex?%7C%7CProj_C(z)-x%7C%7C%5Cle%7C%7Cz-x%7C%7C"></p>
+</blockquote>
+<ul>
+<li><p>이러한 프로젝션을 경사하강법 업데이트 직후에 적용하면 , <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D">은 다음과 같이 정의됩니다: <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D=Proj_C(x_t-%5Ceta_t%5Cnabla%20f(x_t))=%5Carg%5Cmin_%7Bx%5Cin%20C%7D%5Cfrac%7B1%7D%7B2%7D%7C%7Cx-x_t+%5Ceta_t%5Cnabla%20f(x_t)%7C%7C_2%5E2"></p></li>
+<li><p>식을 전개하여 정리하면 다음과 동치임을 알 수 있습니다: <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D=%5Carg%5Cmin_%7Bx%5Cin%20C%7D%5Cleft%5C%7Bf(x_t)+%5Cnabla%20f(x_t)%5E%5Ctop(x-x_t)+%5Cfrac%7B1%7D%7B2%5Ceta_t%7D%7C%7Cx-x_t%7C%7C_2%5E2%5Cright%5C%7D"></p></li>
+<li><p>결론적으로 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D">은 점 <img src="https://latex.codecogs.com/png.latex?x_t">에서 구한 함수 <img src="https://latex.codecogs.com/png.latex?f">의 2차 근사(Quadratic approximation)를 제약 집합 <img src="https://latex.codecogs.com/png.latex?C"> 내에서 최소화하는 해를 찾는 과정과 완벽히 일치합니다. 또한 비확장성에 의해 최적해 <img src="https://latex.codecogs.com/png.latex?x%5E*">와의 거리가 투영 과정에서 더 멀어지지 않음이 보장됩니다: <img src="https://latex.codecogs.com/png.latex?%7C%7Cx_%7Bt+1%7D-x%5E*%7C%7C_2%5Cle%7C%7Cx_t-%5Ceta_t%5Cnabla%20f(x_t)-x%5E*%7C%7C_2"></p></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="제약이-있는-최적화를-위한-알고리즘과-수렴성" class="level1">
+<h1>5. 제약이 있는 최적화를 위한 알고리즘과 수렴성</h1>
+<ul>
+<li>위의 프로젝션 개념을 실제 알고리즘으로 구현한 두 가지 방법을 소개합니다.</li>
+</ul>
+<section id="사영-경사하강법-projected-gradient-method" class="level2">
+<h2 class="anchored" data-anchor-id="사영-경사하강법-projected-gradient-method">5.1 사영 경사하강법 (Projected Gradient Method)</h2>
+<ul>
+<li>함수가 미분 가능할 때 사용하는 기본적인 방법입니다.</li>
+</ul>
+<section id="algorithm-1-projected-gradient-method" class="level3">
+<h3 class="anchored" data-anchor-id="algorithm-1-projected-gradient-method"><strong>Algorithm 1: Projected gradient method</strong></h3>
+<ul>
+<li><ol type="1">
+<li>제약 집합 내의 점 <img src="https://latex.codecogs.com/png.latex?x_1%20%5Cin%20C"> 로 초기화합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><img src="https://latex.codecogs.com/png.latex?t=1,...,T"> 동안 다음을 반복합니다:</li>
+</ol>
+<ul>
+<li>스텝 사이즈 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t%3E0">에 대해, <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D=Proj_C%5C%7Bx_t-%5Ceta_t%5Cnabla%20f(x_t)%5C%7D"></li>
+</ul></li>
+<li><ol start="3" type="1">
+<li>업데이트된 점들의 스텝 사이즈 가중 평균을 반환합니다: <img src="https://latex.codecogs.com/png.latex?(%5Csum_%7Bt=1%7D%5ET%5Ceta_t)%5E%7B-1%7D%5Csum_%7Bt=1%7D%5ET%5Ceta_t%20x_t"></li>
+</ol></li>
+</ul>
+</section>
+</section>
+<section id="사영-서브그래디언트-방법-projected-subgradient-method" class="level2">
+<h2 class="anchored" data-anchor-id="사영-서브그래디언트-방법-projected-subgradient-method">5.2 사영 서브그래디언트 방법 (Projected Subgradient Method)</h2>
+<ul>
+<li>목적 함수가 미분 불가능한 점을 포함할 경우에는 그래디언트 대신 서브그래디언트(Subgradient) <img src="https://latex.codecogs.com/png.latex?g_t%5Cin%5Cpartial%20f(x_t)">를 사용하여 동일한 프레임워크를 적용할 수 있습니다.</li>
+</ul>
+<section id="algorithm-2-projected-subgradient-method" class="level3">
+<h3 class="anchored" data-anchor-id="algorithm-2-projected-subgradient-method"><strong>Algorithm 2: Projected subgradient method</strong></h3>
+<ul>
+<li><ol type="1">
+<li><img src="https://latex.codecogs.com/png.latex?x_1%20%5Cin%20C"> 초기화</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><img src="https://latex.codecogs.com/png.latex?t=1,...,T"> 에 대해:</li>
+</ol>
+<ul>
+<li>서브그래디언트 계산: <img src="https://latex.codecogs.com/png.latex?g_t%5Cin%5Cpartial%20f(x_t)"></li>
+<li>프로젝션 업데이트: <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D=Proj_C%5C%7Bx_t-%5Ceta_t%20g_t%5C%7D"> (<img src="https://latex.codecogs.com/png.latex?%5Ceta_t%3E0">)</li>
+</ul></li>
+<li><ol start="3" type="1">
+<li>평균값 반환: <img src="https://latex.codecogs.com/png.latex?(%5Csum_%7Bt=1%7D%5ET%5Ceta_t)%5E%7B-1%7D%5Csum_%7Bt=1%7D%5ET%5Ceta_t%20x_t"></li>
+</ol></li>
+</ul>
+</section>
+<section id="알고리즘의-수렴성-분석-convergence-results" class="level3">
+<h3 class="anchored" data-anchor-id="알고리즘의-수렴성-분석-convergence-results">5.3 알고리즘의 수렴성 분석 (Convergence Results)</h3>
+<ul>
+<li>사영 서브그래디언트 방법에서는 프로젝션의 비확장성 덕분에 매 스텝마다 다음 거리에 대한 상한이 보장됩니다. <img src="https://latex.codecogs.com/png.latex?%7C%7Cx_%7Bt+1%7D-x%5E*%7C%7C_2%5Cle%7C%7C(x_t-%5Ceta_t%20g_t)-x%5E*%7C%7C_2"> (단, <img src="https://latex.codecogs.com/png.latex?x%5E*">는 <img src="https://latex.codecogs.com/png.latex?min_%7Bx%5Cin%20C%7Df(x)">의 최적해)</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>정리 (립시츠 연속인 함수의 경우):</strong> <img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%5Crightarrow%5Cmathbb%7BR%7D">가 볼록 함수이고, 모든 <img src="https://latex.codecogs.com/png.latex?x%5Cin%5Cmathbb%7BR%7D%5Ed">의 임의의 서브그래디언트에 대해 <img src="https://latex.codecogs.com/png.latex?%7C%7Cg%7C%7C_2%5Cle%20L">을 만족한다고 합시다. 스텝 사이즈를 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t=%7C%7Cx_1-x%5E*%7C%7C_2/L%5Csqrt%7BT%7D">로 잡고 사영 서브그래디언트 방법을 수행하면 다음과 같은 수렴성을 얻습니다: <img src="https://latex.codecogs.com/png.latex?f%5Cleft(%5Cfrac%7B1%7D%7BT%7D%5Csum_%7Bt=1%7D%5ET%20x_t%5Cright)-f(x%5E*)%5Cle%5Cfrac%7BL%7C%7Cx_1-x%5E*%7C%7C_2%7D%7B%5Csqrt%7BT%7D%7D"> (단, <img src="https://latex.codecogs.com/png.latex?x%5E*">는 제약 조건 <img src="https://latex.codecogs.com/png.latex?C"> 내의 최적해)</p>
+</blockquote>
+<blockquote class="blockquote">
+<p><strong>정리 (평활한 함수의 경우):</strong> 반면 <img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%5Crightarrow%5Cmathbb%7BR%7D">가 제약이 있는 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활 볼록 함수일 때, 고정된 스텝 사이즈 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t=1/%5Cbeta">를 사용한 사영 경사하강법은 더 빠른 수렴성을 가집니다: <img src="https://latex.codecogs.com/png.latex?f(x_T)-f(x%5E*)%5Cle%5Cfrac%7B3%5Cbeta%7C%7Cx_1-x%5E*%7C%7C_2%5E2+f(x_1)-f(x%5E*)%7D%7BT%7D"> (단, <img src="https://latex.codecogs.com/png.latex?x%5E*">는 제약 조건 <img src="https://latex.codecogs.com/png.latex?C"> 내의 최적해)</p>
+</blockquote>
+<ul>
+<li>함수가 부드럽고 미분 가능하므로 가중 평균이 아닌 마지막 업데이트 지점 <img src="https://latex.codecogs.com/png.latex?x_T">의 값 자체가 <img src="https://latex.codecogs.com/png.latex?O(1/T)"> 속도로 수렴함을 보장할 수 있습니다.</li>
+</ul>
+
+
+
+</section>
+</section>
+</section>
+
+ ]]></description>
+  <category>Optimization</category>
+  <guid>https://shsha0110.github.io/posts/Optimization/10.Strongly-Convex-Functions/</guid>
+  <pubDate>Sun, 05 Apr 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
   <title>[Data Mining] 10. Dimensionality Reduction (Part 1)</title>
   <dc:creator>유성현 </dc:creator>
   <link>https://shsha0110.github.io/posts/Data Mining/10.Dimensionality-Reduction-1/10.1/</link>
@@ -3094,241 +3341,6 @@
  ]]></description>
   <category>Optimization</category>
   <guid>https://shsha0110.github.io/posts/Optimization/7.Conic-Duality-and-Introduction-to-Gradient-Descent/7.2/</guid>
-  <pubDate>Tue, 24 Mar 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] Lecture 7. Conic Duality and Introduction to Gradient Descent</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/7.Conic-Duality-and-Introduction-to-Gradient-Descent/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>1. Introduction</h1>
-<ul>
-<li>최적화 문제, 특히 머신러닝과 계량경제학의 추정 문제를 풀다 보면 제약이 있는 볼록 최적화(Convex Optimization) 문제와 마주하게 됩니다. 이번 포스트에서는 서울대학교 수리과학부 이다빈 교수님의 수리 및 수치 최적화 강의(Lecture 7)를 바탕으로, 최적화 이론의 기둥이 되는 <strong>원뿔 쌍대성(Conic Duality)</strong>을 이해하고, 볼록 최소화 문제의 <strong>최적성 조건(Optimality Conditions)</strong>을 유도해 보겠습니다. 나아가 머신러닝의 가장 기본이 되는 알고리즘인 <strong>경사하강법(Gradient Descent)</strong>의 원리를 테일러 전개(Taylor Approximation) 관점에서 직관적으로 해석해 봅니다.</li>
-</ul>
-<hr>
-</section>
-<section id="conic-programming-duality-원뿔-계획법과-쌍대성" class="level1">
-<h1>2. Conic Programming &amp; Duality (원뿔 계획법과 쌍대성)</h1>
-<section id="conic-programming-원뿔-계획법" class="level2">
-<h2 class="anchored" data-anchor-id="conic-programming-원뿔-계획법">2.1 Conic Programming (원뿔 계획법)</h2>
-<ul>
-<li><p><strong>원뿔 계획법(Conic Program, CP)</strong>은 내부가 비어있지 않고(nonempty interior), 뾰족하며(pointed), 닫힌(closed) 볼록 원뿔(convex cone) <img src="https://latex.codecogs.com/png.latex?K">를 이용해 정의되는 최적화 문제입니다.</p></li>
-<li><p>기본적인 원뿔 계획법의 형태는 다음과 같습니다: <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bminimize%7D%20%5Cquad%20c%5E%5Ctop%20x"> <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bsubject%20to%7D%20%5Cquad%20Ax%20-%20b%20%5Cin%20K"></p></li>
-<li><p>일반적으로 벡터가 원뿔 <img src="https://latex.codecogs.com/png.latex?K">에 속한다는 것은 “<img src="https://latex.codecogs.com/png.latex?%5Cge_K">”라는 기호를 사용해 나타낼 수 있습니다. 즉, <img src="https://latex.codecogs.com/png.latex?Ax%20-%20b%20%5Cin%20K">는 <img src="https://latex.codecogs.com/png.latex?Ax%20-%20b%20%5Cge_K%200"> 혹은 <img src="https://latex.codecogs.com/png.latex?Ax%20%5Cge_K%20b">와 동치이며, 이를 통해 문제를 제약식의 관점에서 유연하게 바라볼 수 있습니다. 원뿔 <img src="https://latex.codecogs.com/png.latex?K">의 형태에 따라 문제의 종류가 다음과 같이 분류됩니다:</p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?K%20=%20%5Cmathbb%7BR%7D_+%5En"> 인 경우: 가장 친숙한 선형 계획법(Linear Program, LP)으로 축소됩니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?K">가 이차 원뿔(Second-order cone)인 경우: 이차 원뿔 계획법(SOCP)이 됩니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?K">가 양의 준정부호 원뿔(Positive semidefinite cone)인 경우: 반정부호 계획법(SDP)이 됩니다.</li>
-</ul></li>
-</ul>
-</section>
-<section id="dual-cone-쌍대-원뿔" class="level2">
-<h2 class="anchored" data-anchor-id="dual-cone-쌍대-원뿔">2.2 Dual Cone (쌍대 원뿔)</h2>
-<ul>
-<li><p>원뿔 계획법의 쌍대 문제를 정의하기 위해서는 먼저 <strong>쌍대 원뿔(Dual cone)</strong>의 개념이 필요합니다. <img src="https://latex.codecogs.com/png.latex?K%20%5Csubseteq%20%5Cmathbb%7BR%7D%5En">의 쌍대 원뿔 <img src="https://latex.codecogs.com/png.latex?K%5E*">는 다음과 같이 정의됩니다: <img src="https://latex.codecogs.com/png.latex?K%5E*%20=%20%5C%7By%20%5Cin%20%5Cmathbb%7BR%7D%5En%20:%20y%5E%5Ctop%20x%20%5Cge%200%20%5Cquad%20%5Cforall%20x%20%5Cin%20K%5C%7D"></p></li>
-<li><p>즉, <img src="https://latex.codecogs.com/png.latex?K"> 내의 모든 원소와 내적했을 때 음수가 되지 않는 벡터들의 집합입니다.</p></li>
-<li><p><strong>자기 쌍대성(Self-dual)</strong>: 일부 원뿔은 자기 자신과 쌍대 원뿔이 일치하는 성질을 가집니다. 대표적으로 음이 아닌 직교 좌표계(nonnegative orthant) <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D_+%5Ed">의 쌍대 원뿔은 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D_+%5Ed"> 자신입니다.</p></li>
-<li><p>양의 준정부호 원뿔 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BS%7D_+%5Ed"> 역시 자기 쌍대(self-dual)이며, 두 행렬의 내적 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Btr%7D(X%5E%5Ctop%20S)%20%5Cge%200"> 조건을 만족합니다.</p></li>
-<li><p>이차 원뿔 또한 자기 쌍대 원뿔입니다.</p></li>
-<li><p><strong>정리</strong>: 원뿔 <img src="https://latex.codecogs.com/png.latex?K">가 내부가 비어있지 않고 뾰족한 닫힌 볼록 원뿔이라면, 쌍대 원뿔 <img src="https://latex.codecogs.com/png.latex?K%5E*"> 역시 동일한 성질을 가지며, 나아가 <img src="https://latex.codecogs.com/png.latex?(K%5E*)%5E*%20=%20K">를 만족합니다.</p></li>
-</ul>
-</section>
-<section id="derivation-of-dual-conic-program-쌍대-문제-유도" class="level2">
-<h2 class="anchored" data-anchor-id="derivation-of-dual-conic-program-쌍대-문제-유도">2.3 Derivation of Dual Conic Program (쌍대 문제 유도)</h2>
-<ul>
-<li>주어진 원뿔 계획법(CP)의 하한(lower bound)을 구하는 과정에서 쌍대 문제(Dual-CP)가 자연스럽게 도출됩니다.</li>
-<li><ol type="1">
-<li><img src="https://latex.codecogs.com/png.latex?Ax%20-%20b%20%5Cin%20K">를 만족하는 <img src="https://latex.codecogs.com/png.latex?x">와 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20K%5E*">를 생각해보면, 쌍대 원뿔의 정의에 의해 <img src="https://latex.codecogs.com/png.latex?y%5E%5Ctop(Ax%20-%20b)%20%5Cge%200">가 성립합니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li>이를 전개하면 <img src="https://latex.codecogs.com/png.latex?y%5E%5Ctop%20Ax%20%5Cge%20y%5E%5Ctop%20b">가 되며, 만약 제약조건 <img src="https://latex.codecogs.com/png.latex?A%5E%5Ctop%20y%20=%20c">를 추가로 만족한다면, <img src="https://latex.codecogs.com/png.latex?c%5E%5Ctop%20x%20=%20y%5E%5Ctop%20Ax%20%5Cge%20y%5E%5Ctop%20b">가 성립합니다.</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li>따라서 원문제의 목적함수 <img src="https://latex.codecogs.com/png.latex?c%5E%5Ctop%20x">의 값을 하한에서 근사하기 위해 다음과 같은 쌍대 문제를 구성할 수 있습니다: <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bmaximize%7D%20%5Cquad%20b%5E%5Ctop%20y"> <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bsubject%20to%7D%20%5Cquad%20A%5E%5Ctop%20y%20=%20c,%20%5Cquad%20y%20%5Cin%20K%5E*"></li>
-</ol></li>
-</ul>
-</section>
-<section id="conic-duality-theorem-원뿔-쌍대성-정리" class="level2">
-<h2 class="anchored" data-anchor-id="conic-duality-theorem-원뿔-쌍대성-정리">2.4 Conic Duality Theorem (원뿔 쌍대성 정리)</h2>
-<ul>
-<li><strong>약한 쌍대성(Weak Duality)</strong>: 항상 쌍대 문제(Dual-CP)의 최적값은 원문제(CP) 최적값의 하한(lower bound)이 됩니다.</li>
-<li><strong>강한 쌍대성(Strong Duality)을 위한 강한 타당성(Strict Feasibility)</strong>: 원문제와 쌍대 문제의 최적값이 완전히 일치(Strong duality)하기 위해서는 특수한 조건이 필요합니다. 해 <img src="https://latex.codecogs.com/png.latex?x">가 <img src="https://latex.codecogs.com/png.latex?Ax%20-%20b">가 <img src="https://latex.codecogs.com/png.latex?K">의 <strong>내부(interior)</strong>에 포함될 때 이를 강하게 타당한(strictly feasible) 해라고 부릅니다 (<img src="https://latex.codecogs.com/png.latex?Ax%20-%20b%20%3E_K%200">). (선형 계획법에서는 <img src="https://latex.codecogs.com/png.latex?Ax%20%3E%20b">인 경우입니다.)</li>
-<li><strong>쌍대성 정리</strong>:
-<ul>
-<li>(CP)가 강하게 타당하고 유계(bounded)라면, (dual-CP)는 풀이 가능하며 두 최적값은 같습니다.</li>
-<li>(dual-CP)가 강하게 타당하고 유계라면, (CP)는 풀이 가능하며 두 최적값은 같습니다.</li>
-<li>이는 라그랑주 쌍대성(Lagrangian duality)에서 배울 슬레이터 조건(Slater’s condition)과 본질적으로 유사한 개념입니다.</li>
-</ul></li>
-<li><strong>LP 쌍대성의 특수성</strong>: 선형 계획법(LP)의 경우 Slater 조건(강한 타당성)이 필요하지 않으며, 타당하고 유계이기만 하다면 강한 쌍대성이 성립합니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="optimality-conditions-for-convex-minimization" class="level1">
-<h1>3. Optimality Conditions for Convex Minimization</h1>
-<section id="local-vs-global-optimality" class="level2">
-<h2 class="anchored" data-anchor-id="local-vs-global-optimality">3.1 Local vs Global Optimality</h2>
-<ul>
-<li>볼록 최적화 문제의 가장 아름다운 특성 중 하나는 <strong>“어떠한 국소 최적해(locally optimal solution)도 전역 최적해(globally optimal solution)가 된다”</strong>는 정리입니다. 볼록하지 않은(nonconvex) 문제에서는 국소 최적해가 전체의 최적이 아닐 수 있습니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/7.Conic-Duality-and-Introduction-to-Gradient-Descent/images/nonconvex_local.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: Nonconvex 함수에서 발견되는 국소 최적점. 볼록하지 않은(Nonconvex) 함수의 그래프를 보여주며, 붉은색 실선 구간 내의 붉은 점은 해당 좁은 범위에서 가장 낮은 점(국소 최적해)이지만, 전체 함수(검은색 곡선) 관점에서는 우측에 더 낮은 지점이 존재하므로 전역 최적해가 아님을 시각적으로 보여줍니다. 볼록성(Convexity)이 보장되지 않을 때 발생하는 한계를 명확히 나타냅니다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="first-order-optimality-condition-제1계-최적성-조건" class="level2">
-<h2 class="anchored" data-anchor-id="first-order-optimality-condition-제1계-최적성-조건">3.2 First-order Optimality Condition (제1계 최적성 조건)</h2>
-<ul>
-<li><p>미분 가능한 목적 함수 <img src="https://latex.codecogs.com/png.latex?f(x)">를 가진 제약 볼록 최적화 문제 <img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bx%20%5Cin%20C%7D%20f(x)">를 생각해보겠습니다.</p></li>
-<li><p>단일 변수(Univariate) 함수의 경우 최적성 조건은 다음과 같이 나뉩니다.</p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/7.Conic-Duality-and-Introduction-to-Gradient-Descent/images/univariate_optimality.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: 단일 변수(Univariate) 볼록 함수의 제1계 최적성 조건. 왼쪽 그래프는 제약이 없는 경우로, 최적점 <img src="https://latex.codecogs.com/png.latex?x%5E*">에서 함수의 기울기 <img src="https://latex.codecogs.com/png.latex?f'(x%5E*)=0">이 됨을 보여줍니다. 오른쪽 그래프는 경계(boundary) 제약이 있는 경우로, 함수값이 계속 감소할 수 있음에도 구역 내에 머물러야 하므로 <img src="https://latex.codecogs.com/png.latex?f'(x%5E*)%20%3E%200"> 이고 <img src="https://latex.codecogs.com/png.latex?x%20-%20x%5E*%20%5Cge%200">인 상태에서 최적점(붉은 점)이 형성됨을 명확히 보여줍니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><p>보다 일반화하여 다차원 공간에서 점 <img src="https://latex.codecogs.com/png.latex?x%5E*%20%5Cin%20C">가 최적해일 필요충분조건은 다음과 같습니다: <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x%5E*)%5E%5Ctop%20(x%20-%20x%5E*)%20%5Cge%200%20%5Cquad%20%5Cforall%20x%20%5Cin%20C"></p></li>
-<li><p>만약 제약이 없는(unconstrained) 최적화, 즉 <img src="https://latex.codecogs.com/png.latex?C%20=%20%5Cmathbb%7BR%7D%5Ed">라면, 이는 단순히 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x%5E*)%20=%200">이 됨을 의미합니다.</p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/7.Conic-Duality-and-Introduction-to-Gradient-Descent/images/bivariate_optimality.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: 다변수(Bivariate) 볼록 함수의 제1계 최적성 조건. 빗금 친 영역은 제약 집합 <img src="https://latex.codecogs.com/png.latex?C">를 나타냅니다. 왼쪽 그래프의 최적점 <img src="https://latex.codecogs.com/png.latex?x%5E*">에서, 함수를 감소시키는 가장 가파른 방향인 <img src="https://latex.codecogs.com/png.latex?-%5Cnabla%20f(x%5E*)"> (붉은색 바깥쪽 화살표)가 집합 <img src="https://latex.codecogs.com/png.latex?C">의 바깥을 향하고 있습니다. 따라서 집합 내의 임의의 점 <img src="https://latex.codecogs.com/png.latex?x">로 향하는 벡터 <img src="https://latex.codecogs.com/png.latex?x%20-%20x%5E*">와 <img src="https://latex.codecogs.com/png.latex?-%5Cnabla%20f(x%5E*)">가 둔각을 이루며, 집합 <img src="https://latex.codecogs.com/png.latex?C"> 내부로 이동해서는 함수값을 더 감소시킬 수 없음을 기하학적으로 증명합니다. 오른쪽 그래프는 제약조건 내부 공간에 최적해 <img src="https://latex.codecogs.com/png.latex?x%5E*">가 위치할 때는 단순히 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x%5E*)%20=%200">이 됨을 나타냅니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>핵심 직관은 <img src="https://latex.codecogs.com/png.latex?x%5E*">가 최적이라면, 집합 <img src="https://latex.codecogs.com/png.latex?C"> 내에서 <img src="https://latex.codecogs.com/png.latex?x%5E*">로부터 <img src="https://latex.codecogs.com/png.latex?f">가 감소하는 방향으로 더 이상 나아갈 수 없어야 한다는 것입니다.</li>
-</ul>
-</section>
-<section id="normal-cones-법선-원뿔" class="level2">
-<h2 class="anchored" data-anchor-id="normal-cones-법선-원뿔">3.3 Normal Cones (법선 원뿔)</h2>
-<ul>
-<li>최적성 조건을 다른 기하학적 각도에서 해석하기 위해 <strong>법선 원뿔(Normal cone)</strong>의 개념을 도입합니다. 점 <img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20C">에서의 법선 원뿔 <img src="https://latex.codecogs.com/png.latex?N_C(x)">는 다음과 같이 정의됩니다: <img src="https://latex.codecogs.com/png.latex?N_C(x)%20=%20%5C%7Bg%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20:%20g%5E%5Ctop%20(y%20-%20x)%20%5Cle%200%20%5Cquad%20%5Cforall%20y%20%5Cin%20C%5C%7D"></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/7.Conic-Duality-and-Introduction-to-Gradient-Descent/images/normal_cone.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 4: 법선 원뿔(Normal Cone)의 시각화. 왼쪽 그래프는 볼록 집합 <img src="https://latex.codecogs.com/png.latex?C">(아래 빗금 친 영역)의 경계점 <img src="https://latex.codecogs.com/png.latex?x">에서 바깥쪽으로 향하는 벡터를 보여줍니다. 오른쪽 그래프는 점 <img src="https://latex.codecogs.com/png.latex?x">를 원점으로 평행이동했을 때, 집합 <img src="https://latex.codecogs.com/png.latex?C"> 내부의 어떤 점을 향하는 벡터와도 둔각을 이루는 벡터들의 집합인 법선 원뿔 <img src="https://latex.codecogs.com/png.latex?N_C(x)">(우상단 붉은 빗금 영역)를 나타냅니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>이러한 법선 원뿔을 이용하면 앞서 유도한 제1계 최적성 조건 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x%5E*)%5E%5Ctop%20(x%20-%20x%5E*)%20%5Cge%200">는 다음과 같이 매우 간결하고 아름답게 표현됩니다: <img src="https://latex.codecogs.com/png.latex?-%5Cnabla%20f(x%5E*)%20%5Cin%20N_C(x%5E*)"></li>
-<li>즉, 음의 기울기(가장 가파른 하강 방향) 방향이 집합 <img src="https://latex.codecogs.com/png.latex?C">의 법선 원뿔 내에 포함되어야 함을 뜻합니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="projections-사영" class="level1">
-<h1>4. Projections (사영)</h1>
-<ul>
-<li><p>볼록 최적화 알고리즘(예: Projected Gradient Descent)에서 자주 등장하는 개념이 바로 어떤 점 <img src="https://latex.codecogs.com/png.latex?p">를 볼록 집합 <img src="https://latex.codecogs.com/png.latex?C">로 사영(Projection)하는 것입니다. 사영 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BProj%7D_C(p)">은 <img src="https://latex.codecogs.com/png.latex?p">로부터 거리를 최소화하는 집합 <img src="https://latex.codecogs.com/png.latex?C"> 내의 점 <img src="https://latex.codecogs.com/png.latex?x">를 찾는 문제입니다: <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bminimize%7D_%7Bx%20%5Cin%20C%7D%20%5Cquad%20%5C%7Cx%20-%20p%5C%7C_2%5E2"></p></li>
-<li><p>제1계 최적성 조건을 이 사영 문제에 적용하면 재미있는 성질(Non-expansiveness)을 증명할 수 있습니다. 두 점 <img src="https://latex.codecogs.com/png.latex?u,%20v">와 각각의 사영 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BProj%7D_C(u),%20%5Ctext%7BProj%7D_C(v)">에 대해 다음 부등식들이 성립합니다:</p>
-<ul>
-<li><ol type="1">
-<li><img src="https://latex.codecogs.com/png.latex?(u%20-%20%5Ctext%7BProj%7D_C(u))%5E%5Ctop%20(%5Ctext%7BProj%7D_C(v)%20-%20%5Ctext%7BProj%7D_C(u))%20%5Cle%200"></li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?(v%20-%20%5Ctext%7BProj%7D_C(v))%5E%5Ctop%20(%5Ctext%7BProj%7D_C(u)%20-%20%5Ctext%7BProj%7D_C(v))%20%5Cle%200"></li>
-</ol></li>
-</ul></li>
-<li><p>두 식을 더하고 코시-슈바르츠 부등식(Cauchy-Schwarz inequality)을 적용하면, 최종적으로 사영 함수가 거리를 팽창시키지 않는다는 <strong>Non-expansive</strong> 성질을 얻게 됩니다: <img src="https://latex.codecogs.com/png.latex?%5C%7C%5Ctext%7BProj%7D_C(u)%20-%20%5Ctext%7BProj%7D_C(v)%5C%7C_2%20%5Cle%20%5C%7Cu%20-%20v%5C%7C_2"></p></li>
-</ul>
-<hr>
-</section>
-<section id="introduction-to-gradient-descent-경사하강법-입문" class="level1">
-<h1>5. Introduction to Gradient Descent (경사하강법 입문)</h1>
-<ul>
-<li>이제 머신러닝 최적화의 기본 알고리즘인 경사하강법에 대해 알아보겠습니다.</li>
-</ul>
-<section id="descent-directions-하강-방향" class="level2">
-<h2 class="anchored" data-anchor-id="descent-directions-하강-방향">5.1 Descent Directions (하강 방향)</h2>
-<ul>
-<li>함수 <img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5Cmathbb%7BR%7D">가 주어졌을 때, 영벡터가 아닌 <img src="https://latex.codecogs.com/png.latex?d%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20%5Csetminus%20%5C%7B0%5C%7D">가 점 <img src="https://latex.codecogs.com/png.latex?x">에서의 <strong>하강 방향(descent direction)</strong>이 되려면 다음을 만족해야 합니다: <img src="https://latex.codecogs.com/png.latex?f(x%20+%20%5Ceta%20d)%20%3C%20f(x)%20%5Cquad%20%5Ctext%7Bfor%20some%20strictly%20positive%20%7D%20%5Ceta"></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/7.Conic-Duality-and-Introduction-to-Gradient-Descent/images/descent_direction.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 5: 하강 방향(Descent Direction)의 직관적 이해. 2차원 평면의 함수 곡선 위에서 현재 위치 <img src="https://latex.codecogs.com/png.latex?x">의 함수값 <img src="https://latex.codecogs.com/png.latex?(x,%20f(x))">를 우상단 붉은 점으로 나타내고 있습니다. 하강 방향 <img src="https://latex.codecogs.com/png.latex?d%20%3C%200"> (왼쪽을 향하는 붉은 화살표)를 따라 적절한 보폭(step size) <img src="https://latex.codecogs.com/png.latex?%5Ceta">만큼 이동한 새로운 위치 <img src="https://latex.codecogs.com/png.latex?x%20+%20%5Ceta%20%5Ccdot%20d">에서는 기존보다 함수값이 확연히 작아짐(더 낮은 위치의 붉은 점)을 보여줍니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><p><img src="https://latex.codecogs.com/png.latex?f">가 미분 가능하다면 방향 도함수의 정의에 의해 다음이 성립합니다: <img src="https://latex.codecogs.com/png.latex?%5Clim_%7B%5Ceta%20%5Crightarrow%200+%7D%20%5Cfrac%7Bf(x%20+%20%5Ceta%20d)%20-%20f(x)%7D%7B%5Ceta%7D%20=%20%5Cnabla%20f(x)%5E%5Ctop%20d"></p></li>
-<li><p>즉, <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x)%5E%5Ctop%20d">는 점 <img src="https://latex.codecogs.com/png.latex?x">에서 방향 <img src="https://latex.codecogs.com/png.latex?d">로 이동할 때의 함수 <img src="https://latex.codecogs.com/png.latex?f">의 변화율을 의미합니다. 따라서 영이 아닌 벡터 <img src="https://latex.codecogs.com/png.latex?d">가 하강 방향이기 위한 필요충분조건은 다음과 같습니다: <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x)%5E%5Ctop%20d%20%3C%200"></p></li>
-</ul>
-</section>
-<section id="algorithm-step-size-알고리즘-및-스텝-사이즈" class="level2">
-<h2 class="anchored" data-anchor-id="algorithm-step-size-알고리즘-및-스텝-사이즈">5.2 Algorithm &amp; Step Size (알고리즘 및 스텝 사이즈)</h2>
-<ul>
-<li>일반적인 하강 방법론은 다음과 같이 반복(iteration)합니다:
-<ul>
-<li><ol type="1">
-<li><img src="https://latex.codecogs.com/png.latex?x_1%20%5Cin%20%5Ctext%7Bdom%7D(f)"> 초기화</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?t%20=%201,%20%5Cdots,%20T">에 대해:</li>
-</ol>
-<ul>
-<li>하강 방향 <img src="https://latex.codecogs.com/png.latex?d_t">를 구한다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20x_t%20+%20%5Ceta_t%20d_t"> (이때 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t%20%3E%200">는 스텝 사이즈)</li>
-</ul></li>
-</ul></li>
-<li>이때 적절한 스텝 사이즈 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t">를 선택하는 것이 알고리즘의 안정성에 결정적인 영향을 미칩니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/7.Conic-Duality-and-Introduction-to-Gradient-Descent/images/step_size_convergence.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 6: 스텝 사이즈(Step size)에 따른 경사하강법의 수렴 거동 비교. 왼쪽 그래프는 적절하게 작은 스텝 사이즈를 사용하여 최적점을 향해 부드럽게(파란색 궤적) 수렴해 나가는 모습을 보여줍니다. 반면, 오른쪽 그래프는 스텝 사이즈가 너무 커서 계곡 양옆을 지그재그 형태로 크게 오가며(진동, oscillation) 불안정하게 이동하는 모습을 시각적으로 대조하여 보여줍니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>스텝 사이즈 결정 전략은 대표적으로 다음과 같습니다:
-<ul>
-<li><strong>Constant step size</strong>: 모든 <img src="https://latex.codecogs.com/png.latex?t">에 대해 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t%20=%20%5Ceta">로 고정.</li>
-<li><strong>Exact line search</strong>: 매 스텝마다 완벽한 크기를 계산: <img src="https://latex.codecogs.com/png.latex?%5Ceta_t%20=%20%5Carg%5Cmin_%7B%5Ceta%20%5Cge%200%7D%20f(x_t%20+%20%5Ceta%20d_t)">.</li>
-<li><strong>Backtracking line search</strong>: 조건 <img src="https://latex.codecogs.com/png.latex?f(x%20+%20%5Ceta%20d_t)%20%3C%20f(x)%20+%20%5Calpha%20%5Ceta%20%5Cnabla%20f(x)%5E%5Ctop%20d_t">가 만족될 때까지 초기 스텝 사이즈를 점진적으로 줄여나가는 방식입니다 (<img src="https://latex.codecogs.com/png.latex?0%20%3C%20%5Calpha,%20%5Cbeta%20%3C%201">).</li>
-</ul></li>
-</ul>
-</section>
-<section id="gradient-descent-algorithm-경사하강법" class="level2">
-<h2 class="anchored" data-anchor-id="gradient-descent-algorithm-경사하강법">5.3 Gradient Descent Algorithm (경사하강법)</h2>
-<ul>
-<li>가파른 하강 방향(steepest descent direction)은 바로 음의 기울기 방향인 <img src="https://latex.codecogs.com/png.latex?d%20=%20-%5Cnabla%20f(x)">입니다. 이를 대입한 <strong>경사하강법(Gradient Descent)</strong>의 업데이트 규칙은 아래와 같습니다: <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20x_t%20-%20%5Ceta_t%20%5Cnabla%20f(x_t)"></li>
-</ul>
-<section id="예제-fx-2x2-3x" class="level3">
-<h3 class="anchored" data-anchor-id="예제-fx-2x2-3x">예제: <img src="https://latex.codecogs.com/png.latex?f(x)%20=%202x%5E2%20+%203x"></h3>
-<ul>
-<li>해당 이차 함수의 도함수는 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x)%20=%204x%20+%203">이므로, 분석적인 최적해는 <img src="https://latex.codecogs.com/png.latex?x%5E*%20=%20-3/4">입니다. 경사하강법을 적용하면, 일정한 스텝 사이즈 <img src="https://latex.codecogs.com/png.latex?%5Ceta">에 대해 점화식은 다음과 같이 정의됩니다: <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20x_t%20-%20%5Ceta%20(4x_t%20+%203)"></li>
-<li>적절한 <img src="https://latex.codecogs.com/png.latex?%5Ceta">가 선택되었다면 <img src="https://latex.codecogs.com/png.latex?x_t">는 점차 <img src="https://latex.codecogs.com/png.latex?-3/4">로 수렴하게 됩니다.</li>
-</ul>
-</section>
-</section>
-<section id="taylor-approximation-interpretation-테일러-전개-관점의-해석" class="level2">
-<h2 class="anchored" data-anchor-id="taylor-approximation-interpretation-테일러-전개-관점의-해석">5.4 Taylor Approximation Interpretation (테일러 전개 관점의 해석)</h2>
-<ul>
-<li><p>경사하강법의 업데이트 규칙이 단순한 경험적 직관이 아닌 강력한 수학적 근거를 가지고 있음을 <strong>테일러 전개(Taylor approximation)</strong>를 통해 확인할 수 있습니다.</p></li>
-<li><p>점 <img src="https://latex.codecogs.com/png.latex?x_t"> 근방에서 함수 <img src="https://latex.codecogs.com/png.latex?f(x)">를 1차 테일러 전개로 근사하면 다음과 같습니다: <img src="https://latex.codecogs.com/png.latex?f(x)%20%5Capprox%20f(x_t)%20+%20%5Cnabla%20f(x_t)%5E%5Ctop%20(x%20-%20x_t)"></p></li>
-<li><p>하지만 단순한 1차 근사는 <img src="https://latex.codecogs.com/png.latex?x">가 <img src="https://latex.codecogs.com/png.latex?x_t">에서 멀어질수록 오차가 커집니다. 따라서, 다음 이동 지점 <img src="https://latex.codecogs.com/png.latex?x">가 현재 위치 <img src="https://latex.codecogs.com/png.latex?x_t">에서 너무 멀어지지 않도록 패널티(proximity term)를 부여하여 근사 모델을 개선할 수 있습니다: <img src="https://latex.codecogs.com/png.latex?f(x)%20%5Capprox%20f(x_t)%20+%20%5Cnabla%20f(x_t)%5E%5Ctop%20(x%20-%20x_t)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta_t%7D%20%5C%7Cx%20-%20x_t%5C%7C_2%5E2"></p></li>
-<li><p>놀랍게도 위 2차 근사식을 <img src="https://latex.codecogs.com/png.latex?x">에 대하여 최소화(미분하여 0이 되는 지점을 탐색)하면 정확히 경사하강법의 업데이트 식인 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20x_t%20-%20%5Ceta_t%20%5Cnabla%20f(x_t)">를 얻게 됩니다. 즉, 경사하강법은 <strong>“현재 점에서의 1차 함수 근사를 믿되, 너무 멀리 이동하지 않도록 보폭을 제한하여 최소점을 찾아나가는 과정”</strong>으로 우아하게 해석할 수 있습니다.</p></li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/7.Conic-Duality-and-Introduction-to-Gradient-Descent/</guid>
   <pubDate>Tue, 24 Mar 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>

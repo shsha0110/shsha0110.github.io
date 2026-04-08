@@ -1,0 +1,135 @@
+---
+title: "[Optimization] Lecture 10. Strongly Convex Functions (Part 2)"
+description: "Gradient descent for strongly convex functions"
+author: "유성현"
+date: "2026-04-06"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# Introduction
+
+* 지난 포스트에서는 강볼록 함수(Strongly Convex Functions)의 기하학적 의미와 2차 함수 하한선, 그리고 강압성(Coercivity) 등 핵심적인 수학적 성질들을 살펴보았습니다. 이번 포스트는 그 연속 선상(Serial post)에서, **강볼록 함수에 경사하강법(Gradient Descent)을 적용했을 때의 수렴성(Convergence)**을 본격적으로 분석합니다. 
+
+* 특히 함수가 립시츠 연속(Lipschitz continuous)일 때와 평활(Smooth)할 때, 알고리즘의 수렴 속도가 어떻게 극적으로 달라지는지 엄밀한 수식 전개를 통해 단계별로 증명해 보겠습니다.
+
+---
+
+# 1. 강볼록 & 립시츠 연속 조건에서의 수렴성
+
+* 함수 $f$가 강볼록하면서 동시에 그래디언트의 크기가 제한되는 립시츠 연속성을 만족할 때, 시간에 따라 감소하는 스텝 사이즈(Diminishing step size)를 사용하면 $O(1/T)$의 수렴 속도를 보장할 수 있습니다.
+
+> **정리 (Theorem 10.4):**
+> 
+> 함수 $f:\mathbb{R}^d\rightarrow\mathbb{R}$가 어떤 $L, \alpha > 0$에 대하여 $L$-립시츠 연속($||\nabla f(x)||_2\le L$)이고 $l_2$ 노름에서 $\alpha$-강볼록하다고 가정합시다. 스텝 사이즈를 $\eta_t=2/(\alpha(t+1))$로 설정하여 경사하강법을 수행한 반복 시퀀스 $\{x_t\}_{t=1}^{T+1}$에 대하여 다음이 성립합니다.
+> 
+> $$f\left(\sum_{t=1}^T\frac{2t}{T(T+1)}x_t\right)-f(x^*)\le\frac{2L^2}{\alpha(T+1)}$$
+> 
+> (단, $x^*$는 $\min_{x\in\mathbb{R}^d}f(x)$의 최적해입니다.)
+
+### **[증명 과정]**
+* 1. **거리의 제곱 전개:** 업데이트 규칙 $x_{t+1}=x_t-\eta_t\nabla f(x_t)$를 이용하여 최적해와의 거리 제곱을 전개합니다.
+   $$||x_{t+1}-x^*||_2^2=||x_t-\eta_t\nabla f(x_t)-x^*||_2^2$$
+   $$=||x_t-x^*||_2^2-2\eta_t\nabla f(x_t)^\top(x_t-x^*)+\eta_t^2||\nabla f(x_t)||_2^2$$
+
+* 2. **강볼록성 및 립시츠 조건 적용:** 앞서 배운 강볼록 함수의 하한선 성질에 의해 $-\nabla f(x_t)^\top(x_t-x^*)\le -(f(x_t)-f(x^*))-\frac{\alpha}{2}||x_t-x^*||_2^2$ 가 성립합니다. 또한 $||\nabla f(x_t)||_2^2 \le L^2$ 이므로 이를 대입합니다.
+   $$\le ||x_t-x^*||_2^2-2\eta_t(f(x_t)-f(x^*))-\alpha\eta_t||x_t-x^*||_2^2+\eta_t^2 L^2$$
+   $$=(1-\alpha\eta_t)||x_t-x^*||_2^2+\eta_t^2 L^2-2\eta_t(f(x_t)-f(x^*))$$
+
+* 3. **함숫값 차이에 대해 정리:** 위 식을 $f(x_t)-f(x^*)$ 에 대하여 재배열하고 양변을 $2\eta_t$로 나눕니다.
+   $$f(x_t)-f(x^*)\le\frac{\eta_t}{2}L^2+\left(\frac{1}{2\eta_t}-\frac{\alpha}{2}\right)||x_t-x^*||_2^2-\frac{1}{2\eta_t}||x_{t+1}-x^*||_2^2$$
+
+* 4. **망원합(Telescoping sum) 유도:** 스텝 사이즈 $\eta_t=2/(\alpha(t+1))$를 대입하면 $\frac{1}{2\eta_t}=\frac{\alpha(t+1)}{4}$ 이고, $\left(\frac{1}{2\eta_t}-\frac{\alpha}{2}\right)=\frac{\alpha(t-1)}{4}$가 됩니다. 양변에 $t$를 곱해줍니다. (참고: 원본 강의 노트의 표기 오류를 수정하여 수학적으로 올바른 $\alpha$ 위치를 반영합니다.)
+   $$t(f(x_t)-f(x^*))\le\frac{t}{\alpha(t+1)}L^2+\frac{\alpha(t-1)t}{4}||x_t-x^*||_2^2-\frac{\alpha t(t+1)}{4}||x_{t+1}-x^*||_2^2$$
+   * 여기서 $\frac{t}{t+1} < 1$ 이므로 우변 첫 항은 $\frac{L^2}{\alpha}$ 로 상한을 둘 수 있습니다. 이제 $t=1$부터 $T$까지 모두 더하면 연쇄적으로 상쇄되는 망원합 형태가 됩니다.
+   $$\sum_{t=1}^T t(f(x_t)-f(x^*))\le\frac{L^2 T}{\alpha}-\frac{\alpha T(T+1)}{4}||x_{T+1}-x^*||_2^2\le\frac{L^2 T}{\alpha}$$
+
+* 5. **최종 결론 (볼록 조합):** 양변을 $t$의 합인 $\sum_{t=1}^T t = \frac{T(T+1)}{2}$ 로 나누어줍니다. $f$는 볼록 함수이므로 젠센의 부등식(Jensen's inequality)에 의해 가중 평균의 함숫값이 함숫값의 가중 평균보다 작거나 같습니다.
+   $$f\left(\sum_{t=1}^T\frac{2t}{T(T+1)}x_t\right)-f(x^*)\le\sum_{t=1}^T\frac{2t}{T(T+1)}(f(x_t)-f(x^*))\le\frac{2L^2}{\alpha(T+1)}$$
+   $\blacksquare$
+
+---
+
+# 2. 평활도(Smoothness)와 강볼록성(Strong Convexity)의 결합
+
+* 최적화에서 가장 이상적인 환경은 함수가 강볼록하면서 동시에 평활한 경우입니다. 이 두 성질이 결합하면 그래디언트의 상한과 하한이 모두 엄격하게 통제되어 엄청난 시너지를 발휘합니다.
+
+## 2.1 평활도 보조정리
+
+> **보조정리 (Lemma 10.5):**
+> 
+> 볼록 함수 $f:\mathbb{R}^d\rightarrow\mathbb{R}$가 $l_2$ 노름에서 $\beta$-평활(smooth)하고 $\beta\ge\alpha$라면, 함수 $f(x)-\frac{\alpha}{2}||x||_2^2$ 는 $(\beta-\alpha)$-평활합니다.
+
+### **[증명 과정]**
+* 어떤 함수 $h(x)$가 $\gamma$-평활하다는 것은 $\frac{\gamma}{2}||x||_2^2 - h(x)$ 가 볼록 함수라는 것과 동치입니다.
+* 여기서 $h(x)=f(x)-\frac{\alpha}{2}||x||_2^2$ 로 두고 이 조건을 적용해 봅니다.
+$$\frac{\beta-\alpha}{2}||x||_2^2-\left(f(x)-\frac{\alpha}{2}||x||_2^2\right)=\frac{\beta}{2}||x||_2^2-f(x)$$
+* 우변의 식은 $f(x)$가 $\beta$-평활하기 때문에 자연스럽게 볼록 함수가 됩니다. 따라서 원래 함수 $f(x)-\frac{\alpha}{2}||x||_2^2$ 는 $(\beta-\alpha)$-평활합니다. $\blacksquare$
+
+## 2.2 결합된 공강압성 (Co-coercivity)
+
+* 위의 보조정리를 바탕으로, 평활도와 강볼록성이 결합된 강력한 부등식을 유도할 수 있습니다. 
+
+> **보조정리 (Lemma 10.6):**
+> 
+> $f:\mathbb{R}^d\rightarrow\mathbb{R}$가 $\beta$-평활하고 $\alpha$-강볼록할 때, 임의의 $x, y\in\mathbb{R}^d$에 대하여 다음이 성립합니다.
+> 
+> $$(\nabla f(x)-\nabla f(y))^\top(x-y)\ge\frac{1}{\beta+\alpha}||\nabla f(x)-\nabla f(y)||_2^2+\frac{\alpha\beta}{\beta+\alpha}||x-y||_2^2$$
+
+### **[증명 과정]**
+* 1. $g(x)=f(x)-\frac{\alpha}{2}||x||_2^2$ 라고 합시다. 강볼록성에 의해 $g(x)$는 볼록 함수이며, 보조정리 10.5에 의해 $(\beta-\alpha)$-평활합니다.
+* 2. 평활한 볼록 함수의 공강압성(Co-coercivity)에 의해 다음이 성립합니다.
+   $$(\nabla g(x)-\nabla g(y))^\top(x-y)\ge\frac{1}{\beta-\alpha}||\nabla g(x)-\nabla g(y)||_2^2$$
+* 3. $\nabla g(x)=\nabla f(x)-\alpha x$ 임을 대입하여 전개합니다.
+   $$(\nabla f(x)-\nabla f(y))^\top(x-y)-\alpha||x-y||_2^2$$
+   $$\ge\frac{1}{\beta-\alpha}\left|\left|(\nabla f(x)-\nabla f(y))-\alpha(x-y)\right|\right|_2^2$$
+   $$\ge\frac{1}{\beta-\alpha}||\nabla f(x)-\nabla f(y)||_2^2-\frac{2\alpha}{\beta-\alpha}(\nabla f(x)-\nabla f(y))^\top(x-y)+\frac{\alpha^2}{\beta-\alpha}||x-y||_2^2$$
+* 4. 내적 항을 좌변으로, 나머지 항을 우변으로 모아서 정리합니다. 좌변의 계수는 $(1+\frac{2\alpha}{\beta-\alpha})=\frac{\beta+\alpha}{\beta-\alpha}$ 가 되며, 우변의 거리 제곱 항의 계수는 $(\alpha+\frac{\alpha^2}{\beta-\alpha})=\frac{\alpha\beta}{\beta-\alpha}$ 가 됩니다.
+* 5. 양변에 $\frac{\beta-\alpha}{\beta+\alpha}$ 를 곱해주면 우리가 원하는 최종 부등식이 도출됩니다. $\blacksquare$
+
+---
+
+# 3. 선형 수렴 (Linear Convergence)의 증명
+
+* 이제 대망의 결과입니다. $f$가 평활하면서 동시에 강볼록할 때, 학습률을 상수로 고정해도 경사하강법이 지수적인 속도(선형 수렴)로 최적해에 도달함을 증명합니다.
+
+> **정리 (Theorem 10.7):**
+> 
+> $f:\mathbb{R}^d\rightarrow\mathbb{R}$가 $\beta$-평활하고 $\alpha$-강볼록하다고 가정합시다. 고정된 스텝 사이즈 $\eta_t=2/(\alpha+\beta)$ 를 사용하는 경사하강법의 시퀀스 $\{x_t\}_{t=1}^{T+1}$에 대하여 다음이 성립합니다.
+> 
+> $$f(x_{T+1})-f(x^*)\le\frac{\beta}{2}\exp\left(-\frac{4T}{\kappa+1}\right)||x_1-x^*||_2^2$$
+> 
+> (여기서 $\kappa=\beta/\alpha$ 이며 $x^*$는 최적해입니다.)
+
+### **[증명 과정]**
+* 1. **거리 전개 및 Lemma 10.6 대입:** 
+  $$||x_{t+1}-x^*||_2^2=||x_t-\eta\nabla f(x_t)-x^*||_2^2$$
+  $$=||x_t-x^*||_2^2-2\eta\nabla f(x_t)^\top(x_t-x^*)+\eta^2||\nabla f(x_t)||_2^2$$
+  *  이 식에 보조정리 10.6(단, $y=x^*$이고 $\nabla f(x^*)=0$)을 대입하여 내적 항 $-\nabla f(x_t)^\top(x_t-x^*)$ 의 상한을 적용합니다.
+  $$\le||x_t-x^*||_2^2-\frac{2\eta}{\alpha+\beta}||\nabla f(x_t)||_2^2-\frac{2\eta\alpha\beta}{\alpha+\beta}||x_t-x^*||_2^2+\eta^2||\nabla f(x_t)||_2^2$$
+
+* 2. **항 묶기 및 스텝 사이즈 최적화:** $x_t-x^*$ 항과 $\nabla f(x_t)$ 항으로 각각 묶어줍니다.
+   $$=\left(1-\frac{2\eta\alpha\beta}{\alpha+\beta}\right)||x_t-x^*||_2^2+\left(\eta^2-\frac{2\eta}{\alpha+\beta}\right)||\nabla f(x_t)||_2^2$$
+   * 여기서 마법이 일어납니다. 스텝 사이즈를 $\eta=\frac{2}{\alpha+\beta}$ 로 설정하면, 두 번째 항의 계수 $\left(\eta^2-\frac{2\eta}{\alpha+\beta}\right)$ 가 정확히 **0**이 되어 그래디언트 크기 항이 완전히 사라집니다!
+
+* 3. **수축 비율(Contraction factor) 계산:**
+   * 첫 번째 항의 계수에 $\eta$를 대입하여 계산합니다.
+   $$1-\frac{4\alpha\beta}{(\alpha+\beta)^2}=\frac{(\alpha+\beta)^2-4\alpha\beta}{(\alpha+\beta)^2}=\frac{(\alpha-\beta)^2}{(\alpha+\beta)^2}=\left(\frac{\beta-\alpha}{\beta+\alpha}\right)^2$$
+   * 조건수(Condition number) $\kappa=\beta/\alpha$ 로 분모와 분자를 나누어 표기하면 $\left(\frac{\kappa-1}{\kappa+1}\right)^2$ 가 됩니다.
+   * 따라서 매 스텝마다 최적해와의 거리의 제곱은 다음과 같이 일정 비율로 줄어듭니다.
+   $$||x_{t+1}-x^*||_2\le\left(\frac{\kappa-1}{\kappa+1}\right)||x_t-x^*||_2\le\left(\frac{\kappa-1}{\kappa+1}\right)^t||x_1-x^*||_2$$
+
+* 4. **함숫값 오차로의 변환:**
+   * 함수 $f$가 $\beta$-평활하므로 $f(x_{t+1})-f(x^*)\le\frac{\beta}{2}||x_{t+1}-x^*||_2^2$ 가 성립합니다.
+   $$f(x_{t+1})-f(x^*)\le\frac{\beta}{2}\left(\frac{\kappa-1}{\kappa+1}\right)^{2t}||x_1-x^*||_2^2$$
+   * 자연상수 부등식 $(1-x)\le \exp(-x)$ 를 활용하여 $(1-\frac{2}{\kappa+1})^{2t}\le \exp(-\frac{4t}{\kappa+1})$ 로 변환하면 최종 결론에 도달합니다.
+   $$f(x_{T+1})-f(x^*)\le\frac{\beta}{2}\exp\left(-\frac{4T}{\kappa+1}\right)||x_1-x^*||_2^2$$
+   * 증명이 완료되었습니다. $\blacksquare$
+
+* 이 결과는 평활하고 강볼록한 조건에서는 경사하강법이 목표 오차에 도달하는 데 필요한 반복 횟수가 변수의 차원(dimension)이 아닌 조건수 $\kappa$ 에만 의존하며, 그 속도가 지수적으로 빠르다는 놀라운 사실을 시사합니다.

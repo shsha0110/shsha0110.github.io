@@ -1,0 +1,146 @@
+---
+title: "[Optimization] 12. Proximal Gradient Descent (Part 2)"
+description: "Convergence of proximal gradient descent"
+author: "유성현"
+date: "2026-04-13"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. 도입: 왜 근접 경사 하강법인가? (Motivation)
+
+* 기계학습과 통계학에서 모델의 해석력을 높이고 희소성(Sparsity)을 유도하기 위해 가장 널리 사용되는 기법 중 하나는 **LASSO (Least Absolute Shrinkage and Selection Operator)** 회귀입니다. LASSO의 최적화 문제는 다음과 같이 공식화할 수 있습니다.
+
+$$\min_{\beta} \frac{1}{n} \|y - X\beta\|_2^2 + \lambda \|\beta\|_1$$
+
+* 이 목적 함수(Objective function)가 가진 가장 큰 특징은 **볼록 함수(Convex function)이지만, 모든 지점에서 미분 가능하지는 않다(Non-smooth)**는 점입니다.
+* 구체적으로 데이터 적합도를 나타내는 첫 번째 항(MSE)은 매끄러운(smooth) 반면, 정규화 항인 $\lambda \|\beta\|_1$는 $\beta = 0$인 지점에서 미분이 정의되지 않습니다.
+
+* 이러한 미분 불가능성 때문에 일반적인 경사 하강법(Gradient Descent)은 사용할 수 없습니다. 대안으로 미분 불가능한 볼록 함수에 적용할 수 있는 **서브그레이디언트 방법(Subgradient Method)**을 떠올릴 수 있습니다. $\|\beta\|_1$의 서브디퍼렌셜(Subdifferential)은 수학적으로 명확히 규명되어 있으므로, 이 방법을 적용하는 것 자체는 문제가 없습니다.
+
+* 하지만 서브그레이디언트 방법은 **수렴 속도가 매우 느리다**는 치명적인 단점이 있습니다. 허용 오차(additive error)를 $\epsilon$ 이내로 줄이는 $\epsilon$-근사해를 구하기 위해 서브그레이디언트 방법은 무려 $O(1/\epsilon^2)$ 번의 반복(iterations)을 요구합니다. 
+
+* 여기서 우리는 목적 함수의 구조적 특징에 다시 주목해야 합니다. 목적 함수 전체가 미분 불가능한 것이 아니라, **매끄러운 부분(Smooth part)**과 **서브디퍼렌셜을 완벽히 이해하고 있는 미분 불가능한 부분(Non-smooth part)**의 합으로 구성되어 있습니다. 
+
+* 과연 이 구조를 적극적으로 활용하여 더 빠르고 효율적인 알고리즘을 설계할 수 있을까요? 이 질문에 대한 해답이 바로 $O(1/\epsilon)$의 수렴 속도를 달성할 수 있는 **근접 경사 하강법(Proximal Gradient Descent)**입니다.
+
+# 2. 투영 연산자에서 근접 연산자로 (From Projection to Proximal Operator)
+
+* 근접 경사 하강법을 정의하기 전에, 우리가 이미 익숙한 투영된 경사 하강법(Projected Gradient Descent)에서 아이디어를 확장해 보겠습니다. 
+
+* 제약 조건이 있는 최적화 문제에서, 제약 집합 $C$로의 **투영 연산자(Projection operator)**는 다음과 같이 정의됩니다.
+
+$$\text{Proj}_C(x) = \arg\min_{u \in C} \frac{1}{2} \|u - x\|_2^2$$
+
+* 이를 지시 함수(Indicator function, $I_C(u)$)를 사용하여 제약이 없는 최적화 문제 형태로 다시 쓰면 다음과 같습니다. (단, $u \in C$이면 $I_C(u) = 0$, $u \notin C$이면 $I_C(u) = \infty$)
+
+$$\text{Proj}_C(x) = \arg\min_{u \in \mathbb{R}^d} \left\{ I_C(u) + \frac{1}{2} \|u - x\|_2^2 \right\}$$
+
+* 위 식은 강한 볼록(Strongly convex) 최적화 문제이므로 유일한 최소값을 가집니다. 여기서 투영 연산자가 '지시 함수 $I_C(u)$'와 '거리 패널티 $\frac{1}{2}\|u - x\|_2^2$'의 결합으로 정의되었음을 알 수 있습니다.
+
+* **근접 연산자(Proximal Operator)**는 이 개념을 일반화한 것입니다. 지시 함수 $I_C(u)$ 대신 일반적인 볼록 함수 $h(u)$를 대입하면 함수 $h$에 대한 근접 연산자를 정의할 수 있습니다.
+
+$$\text{Prox}_h(x) = \arg\min_{u \in \mathbb{R}^d} \left\{ h(u) + \frac{1}{2} \|u - x\|_2^2 \right\}$$
+
+* 학습률(Learning rate) 또는 스텝 사이즈(Step size)를 나타내는 하이퍼파라미터 $\eta > 0$를 도입하면 일반적인 근접 연산자는 다음과 같이 표현됩니다.
+
+$$\text{Prox}_{\eta h}(x) = \arg\min_{u \in \mathbb{R}^d} \left\{ h(u) + \frac{1}{2\eta} \|u - x\|_2^2 \right\}$$
+
+### 2.1. 근접 경사 하강법의 업데이트 규칙
+
+* 투영된 경사 하강법의 업데이트 규칙이 $x_{t+1} = \text{Proj}_C(x_t - \eta \nabla f(x_t))$ 였다는 사실을 상기해봅시다. 
+* 투영 연산자 $\text{Proj}_C$를 근접 연산자 $\text{Prox}_{\eta h}$로 대체하기만 하면, 자연스럽게 **근접 경사 하강법의 업데이트 규칙**이 완성됩니다.
+$$x_{t+1} = \text{Prox}_{\eta h}(x_t - \eta \nabla f(x_t))$$
+  * 참고: 만약 $h$가 지시 함수 $I_C$라면, 근접 경사 하강법은 정확히 투영된 경사 하강법으로 환원됩니다.
+
+
+# 3. 근접 연산자의 핵심 수학적 성질
+
+* 근접 연산자가 최적화 과정에서 어떻게 작동하는지 이해하기 위해, 가장 중요한 수학적 필요충분조건을 증명해 보겠습니다.
+
+> **Lemma 12.1**
+> 
+> $u = \text{prox}_{\eta h}(x)$ 이기 위한 필요충분조건은 다음과 같다: 
+> 
+> $$x - u \in \eta \partial h(u)$$
+
+### **[증명]**
+* $u = \text{prox}_{\eta h}(x)$ 라는 것은 $u$가 다음 목적 함수의 전역 최소점(Global minimizer)임을 의미합니다.
+$$\min_u \left\{ h(u) + \frac{1}{2\eta} \|u - x\|_2^2 \right\}$$
+
+* 볼록 함수의 최적성 조건(Optimality condition)에 의해, 목적 함수의 서브디퍼렌셜(Subdifferential) 집합에 $0$이 포함되어야 합니다.
+$$0 \in \partial h(u) + \nabla_u \left( \frac{1}{2\eta} \|u - x\|_2^2 \right)$$
+
+* 거리를 나타내는 2차항은 미분 가능하므로 그래디언트를 구하면 $\frac{1}{\eta}(u - x)$ 가 됩니다. 따라서:
+$$0 \in \partial h(u) + \frac{1}{\eta}(u - x)$$
+
+* 식을 이항하고 정리하면 다음을 얻습니다.
+$$\frac{1}{\eta}(x - u) \in \partial h(u) \iff x - u \in \eta \partial h(u)$$
+
+# 4. 근접 연산자 적용 예시 (Examples)
+
+* 이제 실제 기계학습 모델에서 마주하는 함수들에 대해 근접 연산자를 유도해 보겠습니다.
+
+## 4.1. L1 정규화 (LASSO)
+
+* 함수 $h(x) = \|x\|_1$ 인 경우를 살펴봅시다. 근접 연산자의 정의에 의해 다음과 같습니다.
+
+$$\text{prox}_{\eta h}(x) = \arg\min_{u \in \mathbb{R}^d} \left\{ \|u\|_1 + \frac{1}{2\eta} \|u - x\|_2^2 \right\}$$
+
+* 이를 해결하기 위해 앞서 증명한 **Lemma 12.1**을 사용합니다. 해 $u$는 $x - u \in \eta \partial \|u\|_1$ 를 만족해야 합니다.
+$\|u\|_1$은 각 차원 $i$에 대해 분리(separable) 가능하므로, 성분별로 서브그레이디언트를 계산할 수 있습니다. 
+
+* 요소 $u_i$에 대한 $|u_i|$의 서브그레이디언트 $g_i \in \partial |u_i|$는 다음과 같이 정의됩니다.
+  * $u_i > 0$ 이면, $g_i = 1$
+  * $u_i < 0$ 이면, $g_i = -1$
+  * $u_i = 0$ 이면, $g_i \in [-1, 1]$ (원점에서의 기울기 범위)
+
+* 이를 바탕으로 $x_i - u_i \in \eta \partial |u_i|$ 조건을 각 경우별로 풀어봅시다.
+
+* 1. **$u_i > 0$ 인 경우:** $\partial |u_i| = 1$ 이므로, $x_i - u_i = \eta \implies u_i = x_i - \eta$. 
+  * 이 조건이 성립하려면 $u_i > 0$ 이어야 하므로 $x_i > \eta$ 이어야 합니다.
+* 2. **$u_i < 0$ 인 경우:** $\partial |u_i| = -1$ 이므로, $x_i - u_i = -\eta \implies u_i = x_i + \eta$.
+  * 이 조건이 성립하려면 $u_i < 0$ 이어야 하므로 $x_i < -\eta$ 이어야 합니다.
+* 3. **$u_i = 0$ 인 경우:** $x_i - 0 \in \eta [-1, 1] \implies -\eta \le x_i \le \eta$.
+
+* 위 세 가지 경우를 종합하여 하나의 수식으로 깔끔하게 표현하면 다음과 같습니다.
+
+$$u_i = \max\{0, |x_i| - \eta\} \cdot \text{sign}(x_i)$$
+
+* **예시 계산:** 만약 $x = (3, 1, -2)^\top$ 이고 $\eta = 1$ (즉, $h = \|x\|_1$) 이라면:
+  * $x_1 = 3 \implies 3 - 1 = 2$
+  * $x_2 = 1 \implies$ 임계값 1 이하이므로 $0$
+  * $x_3 = -2 \implies -2 + 1 = -1$
+* 따라서 $\text{prox}_{h}((3, 1, -2)^\top) = (2, 0, -1)^\top$ 이 됩니다.
+
+* 이처럼 L1 노름에 대한 근접 연산자는 벡터의 각 성분을 $0$을 향해 일정량($\eta$)만큼 '축소'시키는 역할을 합니다. 이 때문에 이 연산자를 **소프트 임계값 연산자(Soft-thresholding operator)** 또는 **수축 연산자(Shrinkage operator)**라고 부릅니다.
+
+![Figure: Soft-thresholding (Shrinkage) 연산자의 시각화. 가로축은 입력값 $x_i$, 세로축은 출력값 $u_i$를 나타냅니다. 원점 근처의 $[-\eta, \eta]$ 구간에서는 출력값이 0으로 축소(shrink)되어 모델의 희소성(Sparsity)을 유도하며, 그 외의 구간에서는 기울기가 1인 선형 함수의 형태를 띠며 영점을 향해 평행이동한 모습을 보여줍니다.](./images/soft_thresholding.png)
+
+
+## 4.2. 이차 함수 (Quadratic Function)
+
+* 이번에는 미분 가능한 볼록 이차 함수인 $h(x) = \frac{1}{2}x^\top A x + b^\top x + c$ (단, $A$는 양의 준정부호 Positive Semidefinite 행렬)의 경우를 살펴보겠습니다.
+
+$$\text{prox}_{\eta h}(x) = \arg\min_{u \in \mathbb{R}^d} \left\{ \frac{1}{2}u^\top A u + b^\top u + c + \frac{1}{2\eta}\|u - x\|_2^2 \right\}$$
+
+* 이 함수는 모든 지점에서 미분 가능하므로 서브디퍼렌셜 대신 일반 그래디언트를 취해 $0$이 되는 지점을 찾으면 됩니다. 해를 $v = \text{prox}_{\eta h}(x)$라고 할 때 최적성 조건에 의해:
+
+$$0 = \nabla h(v) + \frac{1}{\eta}(v - x)$$
+$$0 = (Av + b) + \frac{1}{\eta}(v - x)$$
+
+* 양변에 $\eta$를 곱하고 $v$에 대해 식을 정리해 봅시다.
+$$0 = \eta Av + \eta b + v - x$$
+$$(I + \eta A)v = x - \eta b$$
+
+* 행렬 $(I + \eta A)$는 $A$가 양의 준정부호이므로 항상 역행렬이 존재합니다. 따라서 최종적으로 근접 연산자의 닫힌 형태(Closed-form) 해는 다음과 같습니다.
+
+$$\text{prox}_{\eta h}(x) = v = (I + \eta A)^{-1}(x - \eta b)$$
+
+* 이는 선형 시스템(Linear system)을 푸는 문제로 귀결됨을 의미합니다.

@@ -1,0 +1,80 @@
+---
+title: "[Optimization] 13. Lagrangian Duality"
+description: "Lagrangian Duality"
+author: "유성현"
+date: "2026-04-13"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# Introduction
+
+* 본 포스트에서는 비매끄러운(non-smooth) 최적화 문제를 해결하기 위한 **Proximal Methods**의 심화 과정과, 제약 조건이 있는 최적화의 근간이 되는 **Lagrangian Duality**를 다룹니다. 특히 강의 자료에서 생략되었던 근접점 알고리즘의 업데이트 수식과 경사 하강법과의 수학적 연결 고리를 상세히 복원하여 정리하였습니다.
+
+# LASSO와 가속화된 근접 경사 하강법
+
+## LASSO 문제 정의
+* LASSO는 L1 정규화 항으로 인해 목적 함수가 미분 불가능한 지점을 포함합니다.
+$$\min_{\theta} \frac{1}{n}||y-X\theta||_{2}^{2}+\lambda||\theta||_{1} \quad \text{}$$
+
+* 이 문제는 $g(\theta) = \frac{1}{n}||y-X\theta||_2^2$ (매끄러운 부분)와 $h(\theta) = \lambda||\theta||_1$ (비매끄러운 부분)으로 나눌 수 있습니다.
+
+## ISTA에서 FISTA로의 도약
+* 기본적인 근접 경사 하강법(ISTA)은 $O(1/T)$의 수렴 속도를 보이지만 , Nesterov 가속 기법을 적용한 **FISTA(Fast ISTA)**는 $O(1/T^2)$의 속도를 달성합니다.
+
+# Proximal Point Algorithm (PPA)
+
+* 강의 자료에서 공백으로 남겨졌던 알고리즘의 핵심 업데이트 규칙을 정의합니다.
+
+## Algorithm 2: Proximal Point Algorithm (PPA)
+* 근접점 알고리즘은 복합 최적화의 근간이 되며, 다음과 같이 업데이트합니다.
+  * **Initialize:** $x_1$ 설정 
+  * **For $t=1, \dots, T$ do:**
+      * **Update:** $x_{t+1} = \text{prox}_{\eta f}(x_t) = \arg\min_{z} \left\{ f(z) + \frac{1}{2\eta} \|z - x_t\|_2^2 \right\}$
+  * **Return** $x_{T+1}$ 
+
+## 경사 하강법과의 연결 (Slide 14-15 보완)
+* 우리는 경사 하강법(GD)을 PPA의 특수한 경우로 해석할 수 있습니다. $f$를 $x_t$ 근처에서 1차 테일러 근사하면 다음과 같습니다.
+$$f(x) \approx f(x_t) + \nabla f(x_t)^\top (x - x_t)$$
+* 이 근사식을 PPA의 업데이트 식에 대입하면:
+$$x_{t+1} = \arg\min_{x} \left\{ f(x_t) + \nabla f(x_t)^\top (x - x_t) + \frac{1}{2\eta} \|x - x_t\|_2^2 \right\}$$
+* 이를 $x$에 대해 미분하여 0으로 두면 $x_{t+1} = x_t - \eta \nabla f(x_t)$라는 표준 GD 식이 유도됩니다.
+
+* 또한, 근접 연산자는 다음과 같은 성질을 가집니다:
+$$\text{prox}_{\eta f}(x) = (I + \eta \partial f)^{-1}(x)$$
+* 이는 최적해의 조건 $0 \in \partial f(x_{t+1}) + \frac{1}{\eta}(x_{t+1} - x_t)$ 로부터 도출됩니다.
+
+# Lagrangian Duality
+
+## 원문제와 라그랑주 함수
+* 제약 조건이 있는 최적화 문제(Primal)를 정의합니다:
+$$\min f(x) \quad \text{s.t. } g_i(x) \le 0, \; h_j(x) = 0$$
+
+* 라그랑주 함수는 다음과 같습니다:
+$$\mathcal{L}(x,\lambda,\mu) = f(x) + \sum_{i=1}^{m}\lambda_{i}g_{i}(x) + \sum_{j=1}^{l}\mu_{j}h_{j}(x)$$
+
+## 쌍대 함수와 약한 쌍대성
+* **라그랑주 쌍대 함수** $q(\lambda, \mu)$는 라그랑주 함수의 $x$에 대한 하한(infimum)으로 정의됩니다.
+$$q(\lambda, \mu) = \inf_{x} \mathcal{L}(x, \lambda, \mu)$$
+* 이 함수는 원문제의 최적값 $f(x^*)$에 대한 **하한(Lower Bound)** 역할을 하며, 이를 **약한 쌍대성(Weak Duality)**이라고 합니다:
+$$f(x^*) \ge q(\lambda, \mu) \quad \forall \lambda \ge 0$$
+
+## 강한 쌍대성과 Slater's Condition
+* 만약 문제의 $f, g$가 볼록(convex)하고 $h$가 아핀(affine)이며, 제약 조건을 엄격히 만족하는 점이 존재한다면(**Slater's Condition**), 원문제와 쌍대 문제의 최적값은 일치합니다.
+$$\min_{x} f(x) = \max_{\lambda \ge 0, \mu} q(\lambda, \mu)$$
+
+# KKT Conditions (Slide 30-32 보완)
+
+* 강한 쌍대성이 성립할 때, $x^*$가 최적해가 되기 위한 필요충분조건인 KKT 조건을 정리합니다.
+  * 1.  **Stationarity:** $\nabla f(x^*) + \sum \lambda_i^* \nabla g_i(x^*) + \sum \mu_j^* \nabla h_j(x^*) = 0$ 
+  * 2.  **Primal Feasibility:** $g_i(x^*) \le 0, h_j(x^*) = 0$ 
+  * 3.  **Dual Feasibility:** $\lambda_i^* \ge 0$ 
+  * 4.  **Complementary Slackness:** $\lambda_i^* g_i(x^*) = 0$ 
+
+* 선형 제약 조건($Ax \le b, Cx = d$)의 경우, Slater's Condition 없이도 $f$가 볼록하다면 KKT 조건이 최적성의 충분조건이 됩니다.

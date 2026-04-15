@@ -1212,7 +1212,7 @@
     "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html",
     "title": "[Optimization] 12. Proximal Gradient Descent (Part 1)",
     "section": "",
-    "text": "많은 최적화 문제, 특히 통계적 학습(Statistical Learning) 모델은 목적 함수가 다음과 같이 두 부분의 합으로 구성됩니다. \\[\\min_{x \\in \\mathbb{R}^d} f(x) = g(x) + h(x)\\]\n\n\\(g(x)\\): 매끄러운 볼록 함수(Smooth Convex). 예를 들어 LASSO의 Least Squares 항인 \\(\\frac{1}{n}\\|y-X\\beta\\|_2^2\\)가 이에 해당합니다.\n\\(h(x)\\): 매끄럽지 않지만 구조가 단순한 볼록 함수(Non-smooth Convex). LASSO의 \\(L_1\\) 페널티 항인 \\(\\lambda\\|\\beta\\|_1\\)이 대표적입니다.\n\n\\(h(x)\\)의 비미분성 때문에 표준 경사 하강법을 쓸 수 없고, Subgradient Method는 \\(O(1/\\epsilon^2)\\)으로 매우 느립니다. 이를 해결하기 위해 \\(g\\)의 미분 정보와 \\(h\\)의 근접 연산자를 결합한 Proximal Gradient Descent가 등장합니다.",
+    "text": "이 포스트에서는 기계학습 및 통계적 최적화에서 광범위하게 활용되는 근접 경사 하강법(Proximal Gradient Descent)에 대해 다룹니다.\nProximal Gradient Descent가 왜 필요한지 이해하기 위해, 통계학에서 널리 쓰이는 LASSO(Least Absolute Shrinkage and Selection Operator) 모델의 목적 함수를 먼저 살펴보겠습니다.\n\n\\[\\min_{\\beta} \\frac{1}{n} \\|y - X\\beta\\|_2^2 + \\lambda \\|\\beta\\|_1\\]\n\n이 목적 함수는 크게 두 부분으로 나눌 수 있습니다. 첫 번째 항인 잔차 제곱합 부분(\\(\\frac{1}{n} \\|y - X\\beta\\|_2^2\\))은 미분 가능한(smooth) 부분입니다. 반면, 두 번째 항인 \\(l_1\\)-정규화(regularization) 항 \\(\\lambda\\|\\beta\\|_1\\)은 \\(\\beta=0\\)에서 미분이 불가능하므로(non-differentiable), 전체 목적 함수는 매끄럽지 않습니다(non-smooth).\n목적 함수가 볼록(convex)하기 때문에, 매끄럽지 않은 함수를 최적화하기 위해 일반적으로 Subgradient Method(준경사 하강법)를 적용할 수 있습니다. Subgradient Method를 사용하면 수렴 자체는 보장되지만, 허용 오차 \\(\\epsilon\\) 내에 도달하기 위해 \\(O(1/\\epsilon^2)\\)번의 매우 많은 반복(iteration)이 필요하다는 단점이 있습니다.\n이러한 한계를 극복하기 위해, 목적 함수의 ’구조’를 활용하는 방법이 고안되었습니다. 목적 함수가 매끄러운 함수 부분과 Subdifferential(준미분)을 잘 이해할 수 있는 매끄럽지 않은 부분의 합으로 구성되어 있다는 점을 이용하면 수렴 속도를 비약적으로 높일 수 있습니다. 이번 포스트의 핵심은 이 구조를 활용하여 \\(O(1/\\epsilon)\\)의 반복만으로 \\(\\epsilon\\)-근사 해(approximate solution)에 도달할 수 있는 Proximal Gradient Descent 알고리즘을 도출하는 것입니다.",
     "crumbs": [
       "About",
       "Posts",
@@ -1222,11 +1222,11 @@
     ]
   },
   {
-    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#정의와-성질",
-    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#정의와-성질",
+    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#projection-operator",
+    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#projection-operator",
     "title": "[Optimization] 12. Proximal Gradient Descent (Part 1)",
-    "section": "2.1. 정의와 성질",
-    "text": "2.1. 정의와 성질\n\n함수 \\(h\\)에 대한 파라미터 \\(\\eta &gt; 0\\)의 근접 연산자는 다음과 같이 정의됩니다. \\[\\text{prox}_{\\eta h}(x) = \\arg\\min_u \\left\\{ h(u) + \\frac{1}{2\\eta} \\|u - x\\|_2^2 \\right\\}\\]\n이 연산자는 다음의 중요한 성질을 만족합니다.\n\n\nLemma (Optimality Condition)\n\\(u = \\text{prox}_{\\eta h}(x)\\) 이기 위한 필요충분조건은 다음과 같습니다.\n\\[x - u \\in \\eta \\partial h(u)\\]\n\n\n[증명]\n\n\\(u\\)가 정의에 따른 최소화 해라면, 해당 목적 함수의 \\(u\\)에 대한 Sub-differential에 0이 포함되어야 합니다. \\[0 \\in \\partial h(u) + \\frac{1}{\\eta}(u - x) \\implies \\frac{1}{\\eta}(x - u) \\in \\partial h(u) \\implies x - u \\in \\eta \\partial h(u)\\]",
+    "section": "2.1 Projection Operator",
+    "text": "2.1 Projection Operator\n\n제약 집합(Constraint set)이 \\(C\\)로 주어졌을 때, 어떤 점 \\(x\\)를 집합 \\(C\\)로 투영하는 연산자 \\(Proj_C(x)\\)는 다음과 같이 정의됩니다.\n\n\\[Proj_C(x) = \\arg\\min_{u \\in C} \\frac{1}{2} \\|u - x\\|_2^2 = \\arg\\min_{u \\in \\mathbb{R}^d} \\left\\{ I_C(u) + \\frac{1}{2} \\|u - x\\|_2^2 \\right\\}\\]\n\n여기서 \\(I_C(u)\\)는 집합 \\(C\\)에 대한 지시 함수(Indicator function)로, \\(u \\in C\\)이면 0, 그렇지 않으면 무한대의 값을 가집니다. 이 최적화 문제는 유일한 최소값을 가지므로 정의가 타당(proper)합니다. 즉, 투영 연산자는 지시 함수 \\(I_C(u)\\)와 점 \\(x\\)와의 거리를 나타내는 근접항(proximity term) \\(\\frac{1}{2}\\|u-x\\|_2^2\\)의 합을 최소화하는 점을 찾는 과정입니다.",
     "crumbs": [
       "About",
       "Posts",
@@ -1236,11 +1236,11 @@
     ]
   },
   {
-    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#핵심-보조정리-incremental-improvement",
-    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#핵심-보조정리-incremental-improvement",
+    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#proximal-operator",
+    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#proximal-operator",
     "title": "[Optimization] 12. Proximal Gradient Descent (Part 1)",
-    "section": "5.1. 핵심 보조정리: Incremental Improvement",
-    "text": "5.1. 핵심 보조정리: Incremental Improvement\n\nLemma (Descent Property)\n\\(g\\)가 \\(\\beta\\)-smooth하고 \\(\\alpha\\)-strongly convex(\\(\\alpha \\ge 0\\))일 때, 학습률 \\(\\eta \\le 1/\\beta\\)에 대하여 다음이 성립합니다.\n\\[f(x - \\eta G_\\eta(x)) \\le f(z) + G_\\eta(x)^\\top (x - z) - \\frac{\\eta}{2} \\|G_\\eta(x)\\|_2^2 - \\frac{\\alpha}{2} \\|x - z\\|_2^2\\]\n\n\n[증명 개요]\n\n\\(g\\)의 \\(\\beta\\)-smoothness 성질(\\(g(y) \\le g(x) + \\nabla g(x)^\\top(y-x) + \\frac{\\beta}{2}\\|y-x\\|^2\\))과 \\(h\\)의 볼록성, 그리고 근접 연산자의 최적성 조건을 결합하여 유도합니다.",
+    "section": "2.2 Proximal Operator",
+    "text": "2.2 Proximal Operator\n\nProximal operator(근접 연산자)는 위 투영 연산자의 지시 함수 \\(I_C(u)\\)를 일반적인 볼록 함수 \\(h(u)\\)로 일반화한 개념입니다. 임의의 볼록 함수 \\(h\\)에 대하여 근접 연산자는 다음과 같이 정의됩니다.\n\n\\[Prox_h(x) = \\arg\\min_{u \\in \\mathbb{R}^d} \\left\\{ h(u) + \\frac{1}{2} \\|u - x\\|_2^2 \\right\\}\\]\n\n목적 함수가 강볼록(strongly convex) 함수이기 때문에 항상 유일한 해가 존재합니다. 여기에 학습률 혹은 스텝 사이즈에 해당하는 파라미터 \\(\\eta &gt; 0\\)를 도입하면 다음과 같이 표현할 수 있습니다.\n\n\\[Prox_{\\eta h}(x) = \\arg\\min_{u \\in \\mathbb{R}^d} \\left\\{ h(u) + \\frac{1}{2\\eta} \\|u - x\\|_2^2 \\right\\}\\]",
     "crumbs": [
       "About",
       "Posts",
@@ -1250,11 +1250,11 @@
     ]
   },
   {
-    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#smooth-case-o1t-수렴",
-    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#smooth-case-o1t-수렴",
+    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#최적성-조건-lemma-12.1",
+    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#최적성-조건-lemma-12.1",
     "title": "[Optimization] 12. Proximal Gradient Descent (Part 1)",
-    "section": "5.2. Smooth Case (\\(O(1/T)\\) 수렴)",
-    "text": "5.2. Smooth Case (\\(O(1/T)\\) 수렴)\n\nTheorem 1\n\\(g\\)가 \\(\\beta\\)-smooth convex이고 \\(h\\)가 convex일 때, \\(\\eta = 1/\\beta\\)로 설정하면 다음을 만족합니다.\n\\[f(x_{T+1}) - f(x^*) \\le \\frac{\\beta \\|x_1 - x^*\\|_2^2}{2T}\\]\n\n\n[증명]\n\n위 Lemma에서 \\(z=x_t\\), \\(z=x^*\\)를 번갈아 대입하여 얻은 부등식들을 \\(t=1\\)부터 \\(T\\)까지 합산(Telescoping sum)하면 \\(O(1/T)\\)의 속도를 얻을 수 있습니다.",
+    "section": "3.1 최적성 조건 (Lemma 12.1)",
+    "text": "3.1 최적성 조건 (Lemma 12.1)\n\n근접 연산자를 계산할 때 가장 중요한 수학적 성질은 다음과 같습니다.\n\n\nLemma 12.1\n\\(u = Prox_{\\eta h}(x)\\) 이기 위한 필요충분조건은 다음과 같다:\n\\[x - u \\in \\eta \\partial h(u)\\]\n\n\nProof.\n\n\\(u = Prox_{\\eta h}(x)\\)는 \\(u\\)가 \\(h(u) + \\frac{1}{2\\eta} \\|u - x\\|_2^2\\)를 최소화한다는 것을 의미합니다. 볼록 함수의 최적성 조건(optimality condition)에 의해, 목적 함수의 Subdifferential이 0을 포함해야 합니다.\n즉, \\[0 \\in \\partial h(u) + \\frac{1}{\\eta} (u - x)\\]\n이를 정리하면 \\(x - u \\in \\eta \\partial h(u)\\) 가 성립합니다. \\(\\blacksquare\\)",
     "crumbs": [
       "About",
       "Posts",
@@ -1264,11 +1264,11 @@
     ]
   },
   {
-    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#strongly-convex-case-linear-convergence",
-    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#strongly-convex-case-linear-convergence",
+    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#example-1-l_1-regularization-lasso",
+    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#example-1-l_1-regularization-lasso",
     "title": "[Optimization] 12. Proximal Gradient Descent (Part 1)",
-    "section": "5.3. Strongly Convex Case (Linear Convergence)",
-    "text": "5.3. Strongly Convex Case (Linear Convergence)\n\nTheorem 2\n\\(g\\)가 \\(\\alpha\\)-strongly convex이고 \\(\\beta\\)-smooth일 때 다음을 만족합니다.\n\\[\\|x_{T+1} - x^*\\|_2^2 \\le \\left(1 - \\frac{\\alpha}{\\beta}\\right)^T \\|x_1 - x^*\\|_2^2\\]\n\n\n이것은 강한 볼록성이 있을 때 알고리즘이 기하급수적으로 빠르게 최적해에 수렴함을 의미합니다.",
+    "section": "4.1 Example 1: \\(l_1\\) Regularization (LASSO)",
+    "text": "4.1 Example 1: \\(l_1\\) Regularization (LASSO)\n\n\\(h(x) = \\|x\\|_1\\)인 경우를 살펴보겠습니다. \\[Prox_{\\eta h}(x) = \\arg\\min_{u \\in \\mathbb{R}^d} \\left\\{ \\|u\\|_1 + \\frac{1}{2\\eta} \\|u - x\\|_2^2 \\right\\}\\]\n\\(u = Prox_{\\eta h}(x)\\)라고 할 때, 앞서 증명한 Lemma 12.1에 의해 다음이 성립합니다. \\[x - u \\in \\eta \\partial \\|u\\|_1\\]\n절댓값 함수 \\(\\|u\\|_1\\)의 Subdifferential \\(g \\in \\partial\\|u\\|_1\\)은 요소별(element-wise)로 다음과 같이 정의됩니다. \\[\ng_i =\n\\begin{cases}\n\\text{sign}(u_i), & \\text{if } u_i \\neq 0 \\\\\n[-1, 1]\\text{ 사이의 값}, & \\text{if } u_i = 0\n\\end{cases}\n\\]\n이를 \\(x_i - u_i \\in \\eta \\partial |u_i|\\) 식에 대입하여 경우를 나누어 분석해봅시다.\n\n\\(u_i &gt; 0\\) 인 경우: \\(\\partial |u_i| = 1\\)이므로, \\(x_i - u_i = \\eta \\implies u_i = x_i - \\eta\\). 이 조건이 성립하려면 \\(x_i \\ge \\eta\\)여야 합니다.\n\n\n\\(u_i &lt; 0\\) 인 경우: \\(\\partial |u_i| = -1\\)이므로, \\(x_i - u_i = -\\eta \\implies u_i = x_i + \\eta\\). 이 조건이 성립하려면 \\(x_i \\le -\\eta\\)여야 합니다.\n\n\n\\(u_i = 0\\) 인 경우: \\(\\partial |u_i| \\in [-1, 1]\\)이므로, \\(x_i \\in [-\\eta, \\eta]\\) 범위에 있어야 합니다.\n\n따라서 근접 연산자의 결과는 아래와 같이 도출됩니다. \\[\nu_i =\n\\begin{cases}\nx_i - \\eta, & \\text{if } x_i \\ge \\eta \\\\\n0, & \\text{if } -\\eta \\le x_i \\le \\eta \\\\\nx_i + \\eta, & \\text{if } x_i \\le -\\eta\n\\end{cases}\n\\]\n이 식은 보다 간결하게 다음과 같이 표현할 수 있습니다. \\[u_i = \\max\\{0, |x_i| - \\eta\\} \\cdot \\text{sign}(x_i)\\]\n이러한 형태의 연산자는 벡터의 크기를 \\(\\eta\\)만큼 줄여주기 때문에 Soft-thresholding operator 또는 Shrinkage operator라고 부릅니다.\n예를 들어, \\(x = (3, 1, -2)^\\top\\)이고 \\(\\eta = 1\\) (즉, \\(h = \\|x\\|_1\\)) 이라면, \\[Prox_{h}((3, 1, -2)^\\top) = (2, 0, -1)^\\top\\] 가 됩니다.",
     "crumbs": [
       "About",
       "Posts",
@@ -1278,25 +1278,11 @@
     ]
   },
   {
-    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#momentum의-도입",
-    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#momentum의-도입",
+    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#example-2-이차-함수-quadratic-function",
+    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#example-2-이차-함수-quadratic-function",
     "title": "[Optimization] 12. Proximal Gradient Descent (Part 1)",
-    "section": "6.1. Momentum의 도입",
-    "text": "6.1. Momentum의 도입\n\n현재 점 \\(x_t\\)에서 직접 업데이트하는 대신, 이전 스텝의 정보를 담은 Momentum 방향으로 이동한 \\(y_t\\)에서 경사를 계산합니다. \\[y_t = x_t + \\gamma_t (x_t - x_{t-1})\\]\n\n\nAlgorithm 2: Accelerated Proximal Gradient Descent\n\n\nInitialize: \\(x_1 \\in \\mathbb{R}^d\\), \\(x_0 = x_1\\)\n\n\nFor \\(t=1, \\dots, T\\) do:\n\n\n\\(y_t = x_t + \\gamma_t(x_t - x_{t-1})\\)\n\\(x_{t+1} = \\text{prox}_{h/\\beta} \\left( y_t - \\frac{1}{\\beta} \\nabla g(y_t) \\right)\\)\n\n\nReturn \\(x_{T+1}\\)",
-    "crumbs": [
-      "About",
-      "Posts",
-      "Optimization",
-      "12.Proximal Gradient Descent",
-      "[Optimization] 12. Proximal Gradient Descent (Part 1)"
-    ]
-  },
-  {
-    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#가속-수렴-정리",
-    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.1/index.html#가속-수렴-정리",
-    "title": "[Optimization] 12. Proximal Gradient Descent (Part 1)",
-    "section": "6.2. 가속 수렴 정리",
-    "text": "6.2. 가속 수렴 정리\n\nTheorem 3\n가속 파라미터를 다음과 같이 설정하면:\n\\[\\eta = \\frac{1}{\\beta}, \\quad \\gamma_t = \\frac{t-2}{t+1}\\]\n수렴 속도는 다음과 같습니다.\n\\[f(x_{T+1}) - f(x^*) \\le \\frac{2\\beta}{(T+1)^2} \\|x_1 - x^*\\|_2^2\\]\n\n\n이는 복합 볼록 최적화에서 얻을 수 있는 이론적 최적 속도입니다.",
+    "section": "4.2 Example 2: 이차 함수 (Quadratic Function)",
+    "text": "4.2 Example 2: 이차 함수 (Quadratic Function)\n\n이번에는 \\(h(x) = \\frac{1}{2} x^\\top A x + b^\\top x + c\\) 인 매끄러운 이차 함수 형태를 가정해 보겠습니다 (단, 행렬 \\(A\\)는 positive semidefinite).\n이 경우 Proximal operator는 다음과 같습니다. \\[Prox_{\\eta h}(x) = \\arg\\min_{u \\in \\mathbb{R}^d} \\left\\{ \\frac{1}{2} u^\\top A u + b^\\top u + c + \\frac{1}{2\\eta} \\|u - x\\|_2^2 \\right\\}\\]\n\\(v = Prox_{\\eta h}(x)\\)로 두고 미분하여 최적성 조건을 구해보면 다음과 같습니다. \\[\\nabla_v \\left( \\dots \\right) = 0 \\implies 0 = Av + b + \\frac{1}{\\eta}(v - x)\\]\n이 식을 \\(v\\)에 대해 정리해 보겠습니다.\n\n\n양변에 \\(\\eta\\)를 곱합니다: \\(0 = \\eta Av + \\eta b + v - x\\)\n\n\n\\(v\\)로 묶습니다: \\((I + \\eta A)v = x - \\eta b\\)\n\n\n역행렬을 곱하여 \\(v\\)를 구합니다:\n\n\n\n\\[Prox_{\\eta h}(x) = v = (I + \\eta A)^{-1} (x - \\eta b)\\]",
     "crumbs": [
       "About",
       "Posts",
@@ -20770,7 +20756,7 @@
     "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.2/index.html",
     "title": "[Optimization] 12. Proximal Gradient Descent (Part 2)",
     "section": "",
-    "text": "기계학습과 통계학에서 모델의 해석력을 높이고 희소성(Sparsity)을 유도하기 위해 가장 널리 사용되는 기법 중 하나는 LASSO (Least Absolute Shrinkage and Selection Operator) 회귀입니다. LASSO의 최적화 문제는 다음과 같이 공식화할 수 있습니다.\n\n\\[\\min_{\\beta} \\frac{1}{n} \\|y - X\\beta\\|_2^2 + \\lambda \\|\\beta\\|_1\\]\n\n이 목적 함수(Objective function)가 가진 가장 큰 특징은 볼록 함수(Convex function)이지만, 모든 지점에서 미분 가능하지는 않다(Non-smooth)는 점입니다.\n구체적으로 데이터 적합도를 나타내는 첫 번째 항(MSE)은 매끄러운(smooth) 반면, 정규화 항인 \\(\\lambda \\|\\beta\\|_1\\)는 \\(\\beta = 0\\)인 지점에서 미분이 정의되지 않습니다.\n이러한 미분 불가능성 때문에 일반적인 경사 하강법(Gradient Descent)은 사용할 수 없습니다. 대안으로 미분 불가능한 볼록 함수에 적용할 수 있는 서브그레이디언트 방법(Subgradient Method)을 떠올릴 수 있습니다. \\(\\|\\beta\\|_1\\)의 서브디퍼렌셜(Subdifferential)은 수학적으로 명확히 규명되어 있으므로, 이 방법을 적용하는 것 자체는 문제가 없습니다.\n하지만 서브그레이디언트 방법은 수렴 속도가 매우 느리다는 치명적인 단점이 있습니다. 허용 오차(additive error)를 \\(\\epsilon\\) 이내로 줄이는 \\(\\epsilon\\)-근사해를 구하기 위해 서브그레이디언트 방법은 무려 \\(O(1/\\epsilon^2)\\) 번의 반복(iterations)을 요구합니다.\n여기서 우리는 목적 함수의 구조적 특징에 다시 주목해야 합니다. 목적 함수 전체가 미분 불가능한 것이 아니라, 매끄러운 부분(Smooth part)과 서브디퍼렌셜을 완벽히 이해하고 있는 미분 불가능한 부분(Non-smooth part)의 합으로 구성되어 있습니다.\n과연 이 구조를 적극적으로 활용하여 더 빠르고 효율적인 알고리즘을 설계할 수 있을까요? 이 질문에 대한 해답이 바로 \\(O(1/\\epsilon)\\)의 수렴 속도를 달성할 수 있는 근접 경사 하강법(Proximal Gradient Descent)입니다.",
+    "text": "이전 포스트에서는 Proximal Gradient Descent(근접 경사 하강법)의 개념과 \\(l_1\\)-정규화 등에 적용되는 근접 연산자(Proximal Operator)의 구체적인 형태를 살펴보았습니다. 이번 포스트에서는 이 알고리즘이 얼마나 빠르게 최적해에 도달할 수 있는지, 즉 수렴성(Convergence)을 수학적으로 엄밀하게 증명해보겠습니다.\n우리가 풀고자 하는 목적 함수는 다음과 같은 복합 볼록 최적화 문제(Composite Convex Optimization Problem)입니다.\n\n\\[\\min_{x \\in \\mathbb{R}^d} f(x) = g(x) + h(x)\\]\n\n여기서 \\(g(x)\\)는 미분 가능한 매끄러운(smooth) 볼록 함수이고, \\(h(x)\\)는 미분 불가능할 수 있는 볼록 함수입니다.\n앞서 살펴보았듯 제약이 있는 최소화 문제의 경우 \\(h(x) = I_C(x)\\) (지시 함수)로 두어 투영 연산자(Projection operator)로 환원시킬 수 있으며, LASSO 모델의 경우 \\(h(\\beta) = \\lambda \\|\\beta\\|_1\\)로 두어 Shrinkage 연산자를 도출할 수 있습니다.\n이를 푸는 Algorithm 1: Proximal Gradient Descent의 구조는 다음과 같습니다.\n\n\n초기값 \\(x_1 \\in C\\) 설정\n\n\n\\(t = 1, \\dots, T\\)에 대해 다음 업데이트 수행: \\[x_{t+1} = Prox_{\\eta h} \\left( x_t - \\frac{1}{\\beta} \\nabla g(x_t) \\right)\\]\n\n\n여기서 \\(\\beta\\)는 함수 \\(g\\)의 smoothness 파라미터이며, 학습률 \\(\\eta = 1/\\beta\\)를 사용합니다.\n\n\n\\(x_{T+1}\\) 반환",
     "crumbs": [
       "About",
       "Posts",
@@ -20780,11 +20766,11 @@
     ]
   },
   {
-    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.2/index.html#l1-정규화-lasso",
-    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.2/index.html#l1-정규화-lasso",
+    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.2/index.html#최적성-조건과-경사-매핑-lemma-12.2",
+    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.2/index.html#최적성-조건과-경사-매핑-lemma-12.2",
     "title": "[Optimization] 12. Proximal Gradient Descent (Part 2)",
-    "section": "4.1. L1 정규화 (LASSO)",
-    "text": "4.1. L1 정규화 (LASSO)\n\n함수 \\(h(x) = \\|x\\|_1\\) 인 경우를 살펴봅시다. 근접 연산자의 정의에 의해 다음과 같습니다.\n\n\\[\\text{prox}_{\\eta h}(x) = \\arg\\min_{u \\in \\mathbb{R}^d} \\left\\{ \\|u\\|_1 + \\frac{1}{2\\eta} \\|u - x\\|_2^2 \\right\\}\\]\n\n이를 해결하기 위해 앞서 증명한 Lemma 12.1을 사용합니다. 해 \\(u\\)는 \\(x - u \\in \\eta \\partial \\|u\\|_1\\) 를 만족해야 합니다. \\(\\|u\\|_1\\)은 각 차원 \\(i\\)에 대해 분리(separable) 가능하므로, 성분별로 서브그레이디언트를 계산할 수 있습니다.\n요소 \\(u_i\\)에 대한 \\(|u_i|\\)의 서브그레이디언트 \\(g_i \\in \\partial |u_i|\\)는 다음과 같이 정의됩니다.\n\n\\(u_i &gt; 0\\) 이면, \\(g_i = 1\\)\n\\(u_i &lt; 0\\) 이면, \\(g_i = -1\\)\n\\(u_i = 0\\) 이면, \\(g_i \\in [-1, 1]\\) (원점에서의 기울기 범위)\n\n이를 바탕으로 \\(x_i - u_i \\in \\eta \\partial |u_i|\\) 조건을 각 경우별로 풀어봅시다.\n\n\\(u_i &gt; 0\\) 인 경우: \\(\\partial |u_i| = 1\\) 이므로, \\(x_i - u_i = \\eta \\implies u_i = x_i - \\eta\\).\n\n\n이 조건이 성립하려면 \\(u_i &gt; 0\\) 이어야 하므로 \\(x_i &gt; \\eta\\) 이어야 합니다.\n\n\n\\(u_i &lt; 0\\) 인 경우: \\(\\partial |u_i| = -1\\) 이므로, \\(x_i - u_i = -\\eta \\implies u_i = x_i + \\eta\\).\n\n\n이 조건이 성립하려면 \\(u_i &lt; 0\\) 이어야 하므로 \\(x_i &lt; -\\eta\\) 이어야 합니다.\n\n\n\\(u_i = 0\\) 인 경우: \\(x_i - 0 \\in \\eta [-1, 1] \\implies -\\eta \\le x_i \\le \\eta\\).\n\n위 세 가지 경우를 종합하여 하나의 수식으로 깔끔하게 표현하면 다음과 같습니다.\n\n\\[u_i = \\max\\{0, |x_i| - \\eta\\} \\cdot \\text{sign}(x_i)\\]\n\n예시 계산: 만약 \\(x = (3, 1, -2)^\\top\\) 이고 \\(\\eta = 1\\) (즉, \\(h = \\|x\\|_1\\)) 이라면:\n\n\\(x_1 = 3 \\implies 3 - 1 = 2\\)\n\\(x_2 = 1 \\implies\\) 임계값 1 이하이므로 \\(0\\)\n\\(x_3 = -2 \\implies -2 + 1 = -1\\)\n\n따라서 \\(\\text{prox}_{h}((3, 1, -2)^\\top) = (2, 0, -1)^\\top\\) 이 됩니다.\n이처럼 L1 노름에 대한 근접 연산자는 벡터의 각 성분을 \\(0\\)을 향해 일정량(\\(\\eta\\))만큼 ’축소’시키는 역할을 합니다. 이 때문에 이 연산자를 소프트 임계값 연산자(Soft-thresholding operator) 또는 수축 연산자(Shrinkage operator)라고 부릅니다.\n\n\n\n\nFigure: Soft-thresholding (Shrinkage) 연산자의 시각화. 가로축은 입력값 \\(x_i\\), 세로축은 출력값 \\(u_i\\)를 나타냅니다. 원점 근처의 \\([-\\eta, \\eta]\\) 구간에서는 출력값이 0으로 축소(shrink)되어 모델의 희소성(Sparsity)을 유도하며, 그 외의 구간에서는 기울기가 1인 선형 함수의 형태를 띠며 영점을 향해 평행이동한 모습을 보여줍니다.",
+    "section": "2.1 최적성 조건과 경사 매핑 (Lemma 12.2)",
+    "text": "2.1 최적성 조건과 경사 매핑 (Lemma 12.2)\n\n경사 매핑이 그레이디언트의 역할을 제대로 수행하는지 확인하기 위해, 최적해에서 경사 매핑이 0이 되는지를 살펴보겠습니다.\n\n\nLemma 12.2. \\(G_\\eta(\\hat{x}) = 0\\) 이기 위한 필요충분조건은 \\(\\hat{x} \\in \\arg\\min_{x \\in \\mathbb{R}^d} g(x) + h(x)\\) 인 것이다.\n\n\nProof.\n\n최적성 조건에 의해, \\(\\hat{x}\\)가 \\(g+h\\)를 최소화한다는 것은 \\(\\hat{x}\\)에서의 Subdifferential이 0을 포함한다는 것과 동치입니다. \\[0 \\in \\{\\nabla g(\\hat{x})\\} + \\partial h(\\hat{x}) \\iff -\\nabla g(\\hat{x}) \\in \\partial h(\\hat{x})\\]\n양변에 \\(\\eta\\)를 곱하고 식을 재조합하면 다음과 같습니다. \\[(\\hat{x} - \\eta \\nabla g(\\hat{x})) - \\hat{x} \\in \\eta \\partial h(\\hat{x})\\]\n이전 포스트의 Lemma 12.1 (\\(u = Prox_{\\eta h}(x) \\iff x - u \\in \\eta \\partial h(u)\\))를 적용하면, 위 조건은 다음 식과 정확히 동치입니다. \\[\\hat{x} = Prox_{\\eta h}(\\hat{x} - \\eta \\nabla g(\\hat{x}))\\]\n이때 경사 매핑의 정의에 위 결과를 대입하면, \\[G_\\eta(\\hat{x}) = \\frac{1}{\\eta} \\left( \\hat{x} - Prox_{\\eta h}(\\hat{x} - \\eta \\nabla g(\\hat{x})) \\right) = \\frac{1}{\\eta} (\\hat{x} - \\hat{x}) = 0\\] 이 성립합니다. 따라서 \\(\\hat{x}\\)가 최적해인 것과 경사 매핑이 0인 것은 동치입니다. \\(\\blacksquare\\)",
     "crumbs": [
       "About",
       "Posts",
@@ -20794,11 +20780,25 @@
     ]
   },
   {
-    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.2/index.html#이차-함수-quadratic-function",
-    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.2/index.html#이차-함수-quadratic-function",
+    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.2/index.html#smooth-convex-함수의-수렴-속도-o1t",
+    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.2/index.html#smooth-convex-함수의-수렴-속도-o1t",
     "title": "[Optimization] 12. Proximal Gradient Descent (Part 2)",
-    "section": "4.2. 이차 함수 (Quadratic Function)",
-    "text": "4.2. 이차 함수 (Quadratic Function)\n\n이번에는 미분 가능한 볼록 이차 함수인 \\(h(x) = \\frac{1}{2}x^\\top A x + b^\\top x + c\\) (단, \\(A\\)는 양의 준정부호 Positive Semidefinite 행렬)의 경우를 살펴보겠습니다.\n\n\\[\\text{prox}_{\\eta h}(x) = \\arg\\min_{u \\in \\mathbb{R}^d} \\left\\{ \\frac{1}{2}u^\\top A u + b^\\top u + c + \\frac{1}{2\\eta}\\|u - x\\|_2^2 \\right\\}\\]\n\n이 함수는 모든 지점에서 미분 가능하므로 서브디퍼렌셜 대신 일반 그래디언트를 취해 \\(0\\)이 되는 지점을 찾으면 됩니다. 해를 \\(v = \\text{prox}_{\\eta h}(x)\\)라고 할 때 최적성 조건에 의해:\n\n\\[0 = \\nabla h(v) + \\frac{1}{\\eta}(v - x)\\] \\[0 = (Av + b) + \\frac{1}{\\eta}(v - x)\\]\n\n양변에 \\(\\eta\\)를 곱하고 \\(v\\)에 대해 식을 정리해 봅시다. \\[0 = \\eta Av + \\eta b + v - x\\] \\[(I + \\eta A)v = x - \\eta b\\]\n행렬 \\((I + \\eta A)\\)는 \\(A\\)가 양의 준정부호이므로 항상 역행렬이 존재합니다. 따라서 최종적으로 근접 연산자의 닫힌 형태(Closed-form) 해는 다음과 같습니다.\n\n\\[\\text{prox}_{\\eta h}(x) = v = (I + \\eta A)^{-1}(x - \\eta b)\\]\n\n이는 선형 시스템(Linear system)을 푸는 문제로 귀결됨을 의미합니다.",
+    "section": "4.1 Smooth Convex 함수의 수렴 속도 (\\(O(1/T)\\))",
+    "text": "4.1 Smooth Convex 함수의 수렴 속도 (\\(O(1/T)\\))\n\n\\(g\\)가 단순히 볼록 함수일 때(\\(\\alpha = 0\\))의 일반적인 수렴 정리입니다.\n\n\nTheorem 12.4. \\(g\\)가 \\(\\beta\\)-smooth 볼록 함수이고 \\(h\\)가 볼록 함수일 때, Proximal Gradient Descent가 반환하는 \\(x_{T+1}\\)은 다음을 만족한다.\n\\[f(x_{T+1}) - f(x^*) \\le \\frac{\\beta \\|x_1 - x^*\\|_2^2}{2T}\\]\n\n\nProof.\n\n식 (12.4)에 \\(\\alpha = 0\\)을 대입하고, 양변을 \\(t=1\\)부터 \\(T\\)까지 더합니다. 우변이 망원 급수(Telescoping sum) 형태이므로 중간 항들이 모두 소거됩니다. 그 후 양변을 \\(T\\)로 나누면 다음과 같습니다. \\[\\frac{1}{T} \\sum_{t=1}^T \\left( f(x_{t+1}) - f(x^*) \\right) \\le \\frac{\\beta}{2T} \\left( \\|x_1 - x^*\\|_2^2 - \\|x_{T+1} - x^*\\|_2^2 \\right)\\]\n앞서 (12.3)에서 보았듯 \\(f(x_t)\\)는 단조 감소하므로 \\(f(x_{T+1}) \\le f(x_t)\\) 가 성립합니다. 따라서 좌변의 평균은 최소한 \\(f(x_{T+1}) - f(x^*)\\) 보다 크거나 같습니다. 우변의 경우 \\(-\\|x_{T+1}-x^*\\|_2^2 \\le 0\\) 이므로 항을 버려서 상한을 느슨하게 만들 수 있습니다.\n결과적으로 \\(O(1/T)\\) 의 수렴 속도를 얻습니다. \\(\\blacksquare\\)",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Optimization",
+      "12.Proximal Gradient Descent",
+      "[Optimization] 12. Proximal Gradient Descent (Part 2)"
+    ]
+  },
+  {
+    "objectID": "posts/Optimization/12.Proximal-Gradient-Descent/12.2/index.html#strongly-convex-함수의-수렴-속도-linear-convergence",
+    "href": "posts/Optimization/12.Proximal-Gradient-Descent/12.2/index.html#strongly-convex-함수의-수렴-속도-linear-convergence",
+    "title": "[Optimization] 12. Proximal Gradient Descent (Part 2)",
+    "section": "4.2 Strongly Convex 함수의 수렴 속도 (Linear Convergence)",
+    "text": "4.2 Strongly Convex 함수의 수렴 속도 (Linear Convergence)\n\n\\(g\\)가 강볼록(Strongly convex) 함수일 때(\\(\\alpha &gt; 0\\)), 수렴 속도는 기하급수적으로 빨라집니다.\n\n\nTheorem 12.5. \\(g\\)가 \\(\\beta\\)-smooth 및 \\(\\alpha\\)-strongly convex 함수이고 \\(h\\)가 볼록 함수일 때, 다음이 성립한다.\n\\[\\|x_{T+1} - x^*\\|_2^2 \\le \\left( 1 - \\frac{\\alpha}{\\beta} \\right)^T \\|x_1 - x^*\\|_2^2\\]\n\n\nProof.\n\n식 (12.4)에서 좌변 \\(f(x_{t+1}) - f(x^*)\\) 는 최적해의 정의에 의해 항상 0보다 크거나 같습니다. 따라서 부등식 우변도 0보다 크거나 같아야 합니다. \\[0 \\le \\frac{\\beta}{2} \\left( \\|x_t - x^*\\|_2^2 - \\|x_{t+1} - x^*\\|_2^2 \\right) - \\frac{\\alpha}{2} \\|x_t - x^*\\|_2^2\\]\n이를 \\(\\|x_{t+1} - x^*\\|_2^2\\) 에 대해 정리해 보겠습니다. \\[\\frac{\\beta}{2} \\|x_{t+1} - x^*\\|_2^2 \\le \\frac{\\beta - \\alpha}{2} \\|x_t - x^*\\|_2^2\\] \\[\\|x_{t+1} - x^*\\|_2^2 \\le \\left( 1 - \\frac{\\alpha}{\\beta} \\right) \\|x_t - x^*\\|_2^2\\]\n이 관계식을 \\(t=1\\)부터 \\(T\\)까지 연쇄적으로(Recursively) 적용하면, 공비가 \\((1 - \\alpha/\\beta)\\)인 등비수열의 형태가 되어 증명이 완료됩니다. 이는 매 스텝마다 최적해와의 거리의 제곱이 상수 비율로 감소하는 선형 수렴(Linear Convergence)을 의미합니다. \\(\\blacksquare\\)",
     "crumbs": [
       "About",
       "Posts",

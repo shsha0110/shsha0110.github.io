@@ -857,180 +857,125 @@
 
 
 
-<section id="introduction-composite-minimization" class="level1">
-<h1>1. Introduction: Composite Minimization</h1>
+<section id="introduction-proximal-gradient-descent의-도입-배경" class="level1">
+<h1>1. Introduction: Proximal Gradient Descent의 도입 배경</h1>
 <ul>
-<li>많은 최적화 문제, 특히 통계적 학습(Statistical Learning) 모델은 목적 함수가 다음과 같이 두 부분의 합으로 구성됩니다. <img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20f(x)%20=%20g(x)%20+%20h(x)">
+<li><p>이 포스트에서는 기계학습 및 통계적 최적화에서 광범위하게 활용되는 <strong>근접 경사 하강법(Proximal Gradient Descent)</strong>에 대해 다룹니다.</p></li>
+<li><p>Proximal Gradient Descent가 왜 필요한지 이해하기 위해, 통계학에서 널리 쓰이는 LASSO(Least Absolute Shrinkage and Selection Operator) 모델의 목적 함수를 먼저 살펴보겠습니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Cmin_%7B%5Cbeta%7D%20%5Cfrac%7B1%7D%7Bn%7D%20%5C%7Cy%20-%20X%5Cbeta%5C%7C_2%5E2%20+%20%5Clambda%20%5C%7C%5Cbeta%5C%7C_1"></p>
 <ul>
-<li><strong><img src="https://latex.codecogs.com/png.latex?g(x)"></strong>: 매끄러운 볼록 함수(Smooth Convex). 예를 들어 LASSO의 Least Squares 항인 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7Bn%7D%5C%7Cy-X%5Cbeta%5C%7C_2%5E2">가 이에 해당합니다.</li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?h(x)"></strong>: 매끄럽지 않지만 구조가 단순한 볼록 함수(Non-smooth Convex). LASSO의 <img src="https://latex.codecogs.com/png.latex?L_1"> 페널티 항인 <img src="https://latex.codecogs.com/png.latex?%5Clambda%5C%7C%5Cbeta%5C%7C_1">이 대표적입니다.</li>
-</ul></li>
-<li><img src="https://latex.codecogs.com/png.latex?h(x)">의 비미분성 때문에 표준 경사 하강법을 쓸 수 없고, Subgradient Method는 <img src="https://latex.codecogs.com/png.latex?O(1/%5Cepsilon%5E2)">으로 매우 느립니다. 이를 해결하기 위해 <img src="https://latex.codecogs.com/png.latex?g">의 미분 정보와 <img src="https://latex.codecogs.com/png.latex?h">의 근접 연산자를 결합한 <strong>Proximal Gradient Descent</strong>가 등장합니다.</li>
+<li><p>이 목적 함수는 크게 두 부분으로 나눌 수 있습니다. 첫 번째 항인 잔차 제곱합 부분(<img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7Bn%7D%20%5C%7Cy%20-%20X%5Cbeta%5C%7C_2%5E2">)은 미분 가능한(smooth) 부분입니다. 반면, 두 번째 항인 <img src="https://latex.codecogs.com/png.latex?l_1">-정규화(regularization) 항 <img src="https://latex.codecogs.com/png.latex?%5Clambda%5C%7C%5Cbeta%5C%7C_1">은 <img src="https://latex.codecogs.com/png.latex?%5Cbeta=0">에서 미분이 불가능하므로(non-differentiable), 전체 목적 함수는 매끄럽지 않습니다(non-smooth).</p></li>
+<li><p>목적 함수가 볼록(convex)하기 때문에, 매끄럽지 않은 함수를 최적화하기 위해 일반적으로 <strong>Subgradient Method(준경사 하강법)</strong>를 적용할 수 있습니다. Subgradient Method를 사용하면 수렴 자체는 보장되지만, 허용 오차 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon"> 내에 도달하기 위해 <img src="https://latex.codecogs.com/png.latex?O(1/%5Cepsilon%5E2)">번의 매우 많은 반복(iteration)이 필요하다는 단점이 있습니다.</p></li>
+<li><p>이러한 한계를 극복하기 위해, 목적 함수의 ’구조’를 활용하는 방법이 고안되었습니다. 목적 함수가 <strong>매끄러운 함수 부분</strong>과 <strong>Subdifferential(준미분)을 잘 이해할 수 있는 매끄럽지 않은 부분</strong>의 합으로 구성되어 있다는 점을 이용하면 수렴 속도를 비약적으로 높일 수 있습니다. 이번 포스트의 핵심은 이 구조를 활용하여 <img src="https://latex.codecogs.com/png.latex?O(1/%5Cepsilon)">의 반복만으로 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon">-근사 해(approximate solution)에 도달할 수 있는 <strong>Proximal Gradient Descent</strong> 알고리즘을 도출하는 것입니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="projection과-proximal-operator" class="level1">
+<h1>2. Projection과 Proximal Operator</h1>
+<ul>
+<li>Proximal operator를 정의하기에 앞서, 제한 조건이 있는 최적화 문제에서 사용하는 투영 연산자(Projection operator)를 먼저 복습해보겠습니다.</li>
+</ul>
+<section id="projection-operator" class="level2">
+<h2 class="anchored" data-anchor-id="projection-operator">2.1 Projection Operator</h2>
+<ul>
+<li>제약 집합(Constraint set)이 <img src="https://latex.codecogs.com/png.latex?C">로 주어졌을 때, 어떤 점 <img src="https://latex.codecogs.com/png.latex?x">를 집합 <img src="https://latex.codecogs.com/png.latex?C">로 투영하는 연산자 <img src="https://latex.codecogs.com/png.latex?Proj_C(x)">는 다음과 같이 정의됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?Proj_C(x)%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20C%7D%20%5Cfrac%7B1%7D%7B2%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5Cleft%5C%7B%20I_C(u)%20+%20%5Cfrac%7B1%7D%7B2%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?I_C(u)">는 집합 <img src="https://latex.codecogs.com/png.latex?C">에 대한 지시 함수(Indicator function)로, <img src="https://latex.codecogs.com/png.latex?u%20%5Cin%20C">이면 0, 그렇지 않으면 무한대의 값을 가집니다. 이 최적화 문제는 유일한 최소값을 가지므로 정의가 타당(proper)합니다. 즉, 투영 연산자는 지시 함수 <img src="https://latex.codecogs.com/png.latex?I_C(u)">와 점 <img src="https://latex.codecogs.com/png.latex?x">와의 거리를 나타내는 근접항(proximity term) <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B2%7D%5C%7Cu-x%5C%7C_2%5E2">의 합을 최소화하는 점을 찾는 과정입니다.</li>
 </ul>
 </section>
-<section id="proximal-operator-근접-연산자" class="level1">
-<h1>2. Proximal Operator (근접 연산자)</h1>
-<section id="정의와-성질" class="level2">
-<h2 class="anchored" data-anchor-id="정의와-성질">2.1. 정의와 성질</h2>
+<section id="proximal-operator" class="level2">
+<h2 class="anchored" data-anchor-id="proximal-operator">2.2 Proximal Operator</h2>
 <ul>
-<li><p>함수 <img src="https://latex.codecogs.com/png.latex?h">에 대한 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20%3E%200">의 근접 연산자는 다음과 같이 정의됩니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)%20=%20%5Carg%5Cmin_u%20%5Cleft%5C%7B%20h(u)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p></li>
-<li><p>이 연산자는 다음의 중요한 성질을 만족합니다.</p></li>
+<li><strong>Proximal operator(근접 연산자)</strong>는 위 투영 연산자의 지시 함수 <img src="https://latex.codecogs.com/png.latex?I_C(u)">를 일반적인 볼록 함수 <img src="https://latex.codecogs.com/png.latex?h(u)">로 일반화한 개념입니다. 임의의 볼록 함수 <img src="https://latex.codecogs.com/png.latex?h">에 대하여 근접 연산자는 다음과 같이 정의됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?Prox_h(x)%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5Cleft%5C%7B%20h(u)%20+%20%5Cfrac%7B1%7D%7B2%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p>
+<ul>
+<li>목적 함수가 강볼록(strongly convex) 함수이기 때문에 항상 유일한 해가 존재합니다. 여기에 학습률 혹은 스텝 사이즈에 해당하는 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20%3E%200">를 도입하면 다음과 같이 표현할 수 있습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?Prox_%7B%5Ceta%20h%7D(x)%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5Cleft%5C%7B%20h(u)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p>
+<hr>
+</section>
+</section>
+<section id="proximal-gradient-descent-algorithm" class="level1">
+<h1>3. Proximal Gradient Descent Algorithm</h1>
+<ul>
+<li><p>우리가 다루려는 최적화 문제는 <img src="https://latex.codecogs.com/png.latex?f(x)%20+%20h(x)"> 형태를 최소화하는 것입니다 (단, <img src="https://latex.codecogs.com/png.latex?f">는 매끄러운 함수, <img src="https://latex.codecogs.com/png.latex?h">는 매끄럽지 않을 수 있으나 근접 연산자를 계산하기 쉬운 함수).</p></li>
+<li><p>투영 경사 하강법(Projected Gradient Descent)의 업데이트 규칙은 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20Proj_C%20%5C%7B%20x_t%20-%20%5Ceta%20%5Cnabla%20f(x_t)%20%5C%7D"></p></li>
+<li><p>Proximal Gradient Descent는 위 규칙에서 투영 연산자 대신 근접 연산자를 사용하여 다음과 같이 업데이트합니다. <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20Prox_%7B%5Ceta%20h%7D%20(%20x_t%20-%20%5Ceta%20%5Cnabla%20f(x_t)%20)"></p></li>
+<li><p>특히 함수 <img src="https://latex.codecogs.com/png.latex?h">가 지시 함수 <img src="https://latex.codecogs.com/png.latex?I_C">일 경우, Proximal Gradient Descent는 정확히 투영 경사 하강법과 동일해집니다.</p></li>
+</ul>
+<section id="최적성-조건-lemma-12.1" class="level2">
+<h2 class="anchored" data-anchor-id="최적성-조건-lemma-12.1">3.1 최적성 조건 (Lemma 12.1)</h2>
+<ul>
+<li>근접 연산자를 계산할 때 가장 중요한 수학적 성질은 다음과 같습니다.</li>
 </ul>
 <blockquote class="blockquote">
-<p><strong>Lemma (Optimality Condition)</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?u%20=%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)"> 이기 위한 필요충분조건은 다음과 같습니다.</p>
+<p><strong>Lemma 12.1</strong></p>
+<p><img src="https://latex.codecogs.com/png.latex?u%20=%20Prox_%7B%5Ceta%20h%7D(x)"> 이기 위한 필요충분조건은 다음과 같다:</p>
 <p><img src="https://latex.codecogs.com/png.latex?x%20-%20u%20%5Cin%20%5Ceta%20%5Cpartial%20h(u)"></p>
 </blockquote>
-<section id="증명" class="level3">
-<h3 class="anchored" data-anchor-id="증명"><strong>[증명]</strong></h3>
+<section id="proof." class="level3">
+<h3 class="anchored" data-anchor-id="proof."><strong>Proof.</strong></h3>
 <ul>
-<li><img src="https://latex.codecogs.com/png.latex?u">가 정의에 따른 최소화 해라면, 해당 목적 함수의 <img src="https://latex.codecogs.com/png.latex?u">에 대한 Sub-differential에 0이 포함되어야 합니다. <img src="https://latex.codecogs.com/png.latex?0%20%5Cin%20%5Cpartial%20h(u)%20+%20%5Cfrac%7B1%7D%7B%5Ceta%7D(u%20-%20x)%20%5Cimplies%20%5Cfrac%7B1%7D%7B%5Ceta%7D(x%20-%20u)%20%5Cin%20%5Cpartial%20h(u)%20%5Cimplies%20x%20-%20u%20%5Cin%20%5Ceta%20%5Cpartial%20h(u)"></li>
+<li><img src="https://latex.codecogs.com/png.latex?u%20=%20Prox_%7B%5Ceta%20h%7D(x)">는 <img src="https://latex.codecogs.com/png.latex?u">가 <img src="https://latex.codecogs.com/png.latex?h(u)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2">를 최소화한다는 것을 의미합니다. 볼록 함수의 최적성 조건(optimality condition)에 의해, 목적 함수의 Subdifferential이 0을 포함해야 합니다.</li>
+<li>즉, <img src="https://latex.codecogs.com/png.latex?0%20%5Cin%20%5Cpartial%20h(u)%20+%20%5Cfrac%7B1%7D%7B%5Ceta%7D%20(u%20-%20x)"></li>
+<li>이를 정리하면 <img src="https://latex.codecogs.com/png.latex?x%20-%20u%20%5Cin%20%5Ceta%20%5Cpartial%20h(u)"> 가 성립합니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></li>
 </ul>
+<hr>
 </section>
 </section>
 </section>
-<section id="proximal-gradient-descent-algorithm-1" class="level1">
-<h1>3. Proximal Gradient Descent (Algorithm 1)</h1>
+<section id="proximal-operator의-구체적-예시" class="level1">
+<h1>4. Proximal Operator의 구체적 예시</h1>
+<section id="example-1-l_1-regularization-lasso" class="level2">
+<h2 class="anchored" data-anchor-id="example-1-l_1-regularization-lasso">4.1 Example 1: <img src="https://latex.codecogs.com/png.latex?l_1"> Regularization (LASSO)</h2>
 <ul>
-<li>복합 목적 함수 <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20g(x)%20+%20h(x)">를 최소화하기 위한 업데이트 규칙은 다음과 같습니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x_t%20-%20%5Ceta%20%5Cnabla%20g(x_t))"></p>
-<ul>
-<li>이 과정은 <img src="https://latex.codecogs.com/png.latex?x_t">에서 <img src="https://latex.codecogs.com/png.latex?g"> 방향으로 경사 하강을 한 후, 그 결과를 <img src="https://latex.codecogs.com/png.latex?h">에 대해 근접 연산(Projection의 일반화)을 수행하는 것으로 해석할 수 있습니다.</li>
-</ul>
-<section id="algorithm-1-proximal-gradient-descent" class="level3">
-<h3 class="anchored" data-anchor-id="algorithm-1-proximal-gradient-descent">Algorithm 1: Proximal Gradient Descent</h3>
-<ul>
+<li><p><img src="https://latex.codecogs.com/png.latex?h(x)%20=%20%5C%7Cx%5C%7C_1">인 경우를 살펴보겠습니다. <img src="https://latex.codecogs.com/png.latex?Prox_%7B%5Ceta%20h%7D(x)%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5Cleft%5C%7B%20%5C%7Cu%5C%7C_1%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p></li>
+<li><p><img src="https://latex.codecogs.com/png.latex?u%20=%20Prox_%7B%5Ceta%20h%7D(x)">라고 할 때, 앞서 증명한 Lemma 12.1에 의해 다음이 성립합니다. <img src="https://latex.codecogs.com/png.latex?x%20-%20u%20%5Cin%20%5Ceta%20%5Cpartial%20%5C%7Cu%5C%7C_1"></p></li>
+<li><p>절댓값 함수 <img src="https://latex.codecogs.com/png.latex?%5C%7Cu%5C%7C_1">의 Subdifferential <img src="https://latex.codecogs.com/png.latex?g%20%5Cin%20%5Cpartial%5C%7Cu%5C%7C_1">은 요소별(element-wise)로 다음과 같이 정의됩니다. <img src="https://latex.codecogs.com/png.latex?%0Ag_i%20=%0A%5Cbegin%7Bcases%7D%0A%5Ctext%7Bsign%7D(u_i),%20&amp;%20%5Ctext%7Bif%20%7D%20u_i%20%5Cneq%200%20%5C%5C%0A%5B-1,%201%5D%5Ctext%7B%20%EC%82%AC%EC%9D%B4%EC%9D%98%20%EA%B0%92%7D,%20&amp;%20%5Ctext%7Bif%20%7D%20u_i%20=%200%0A%5Cend%7Bcases%7D%0A"></p></li>
+<li><p>이를 <img src="https://latex.codecogs.com/png.latex?x_i%20-%20u_i%20%5Cin%20%5Ceta%20%5Cpartial%20%7Cu_i%7C"> 식에 대입하여 경우를 나누어 분석해봅시다.</p></li>
 <li><ol type="1">
-<li><strong>Initialize:</strong> <img src="https://latex.codecogs.com/png.latex?x_1%20%5Cin%20%5Cmathbb%7BR%7D%5Ed"></li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?u_i%20%3E%200"> 인 경우:</strong> <img src="https://latex.codecogs.com/png.latex?%5Cpartial%20%7Cu_i%7C%20=%201">이므로, <img src="https://latex.codecogs.com/png.latex?x_i%20-%20u_i%20=%20%5Ceta%20%5Cimplies%20u_i%20=%20x_i%20-%20%5Ceta">. 이 조건이 성립하려면 <img src="https://latex.codecogs.com/png.latex?x_i%20%5Cge%20%5Ceta">여야 합니다.</li>
 </ol></li>
 <li><ol start="2" type="1">
-<li><strong>For <img src="https://latex.codecogs.com/png.latex?t=1,%20%5Cdots,%20T"> do:</strong></li>
-</ol>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x_t%20-%20%5Ceta%20%5Cnabla%20g(x_t))"></li>
-</ul></li>
-<li><ol start="3" type="1">
-<li><strong>Return</strong> <img src="https://latex.codecogs.com/png.latex?x_%7BT+1%7D"></li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?u_i%20%3C%200"> 인 경우:</strong> <img src="https://latex.codecogs.com/png.latex?%5Cpartial%20%7Cu_i%7C%20=%20-1">이므로, <img src="https://latex.codecogs.com/png.latex?x_i%20-%20u_i%20=%20-%5Ceta%20%5Cimplies%20u_i%20=%20x_i%20+%20%5Ceta">. 이 조건이 성립하려면 <img src="https://latex.codecogs.com/png.latex?x_i%20%5Cle%20-%5Ceta">여야 합니다.</li>
 </ol></li>
+<li><ol start="3" type="1">
+<li><strong><img src="https://latex.codecogs.com/png.latex?u_i%20=%200"> 인 경우:</strong> <img src="https://latex.codecogs.com/png.latex?%5Cpartial%20%7Cu_i%7C%20%5Cin%20%5B-1,%201%5D">이므로, <img src="https://latex.codecogs.com/png.latex?x_i%20%5Cin%20%5B-%5Ceta,%20%5Ceta%5D"> 범위에 있어야 합니다.</li>
+</ol></li>
+<li><p>따라서 근접 연산자의 결과는 아래와 같이 도출됩니다. <img src="https://latex.codecogs.com/png.latex?%0Au_i%20=%0A%5Cbegin%7Bcases%7D%0Ax_i%20-%20%5Ceta,%20&amp;%20%5Ctext%7Bif%20%7D%20x_i%20%5Cge%20%5Ceta%20%5C%5C%0A0,%20&amp;%20%5Ctext%7Bif%20%7D%20-%5Ceta%20%5Cle%20x_i%20%5Cle%20%5Ceta%20%5C%5C%0Ax_i%20+%20%5Ceta,%20&amp;%20%5Ctext%7Bif%20%7D%20x_i%20%5Cle%20-%5Ceta%0A%5Cend%7Bcases%7D%0A"></p></li>
+<li><p>이 식은 보다 간결하게 다음과 같이 표현할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?u_i%20=%20%5Cmax%5C%7B0,%20%7Cx_i%7C%20-%20%5Ceta%5C%7D%20%5Ccdot%20%5Ctext%7Bsign%7D(x_i)"></p></li>
+<li><p>이러한 형태의 연산자는 벡터의 크기를 <img src="https://latex.codecogs.com/png.latex?%5Ceta">만큼 줄여주기 때문에 <strong>Soft-thresholding operator</strong> 또는 <strong>Shrinkage operator</strong>라고 부릅니다.</p></li>
+<li><p>예를 들어, <img src="https://latex.codecogs.com/png.latex?x%20=%20(3,%201,%20-2)%5E%5Ctop">이고 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20=%201"> (즉, <img src="https://latex.codecogs.com/png.latex?h%20=%20%5C%7Cx%5C%7C_1">) 이라면, <img src="https://latex.codecogs.com/png.latex?Prox_%7Bh%7D((3,%201,%20-2)%5E%5Ctop)%20=%20(2,%200,%20-1)%5E%5Ctop"> 가 됩니다.</p></li>
 </ul>
 </section>
-</section>
-<section id="gradient-mapping-경사-매핑" class="level1">
-<h1>4. Gradient Mapping (경사 매핑)</h1>
+<section id="example-2-이차-함수-quadratic-function" class="level2">
+<h2 class="anchored" data-anchor-id="example-2-이차-함수-quadratic-function">4.2 Example 2: 이차 함수 (Quadratic Function)</h2>
 <ul>
-<li>분석을 용이하게 하기 위해, 일반적인 경사 하강법의 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f"> 역할을 하는 <strong>Gradient Mapping</strong> <img src="https://latex.codecogs.com/png.latex?G_%5Ceta(x)">를 도입합니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?G_%5Ceta(x)%20=%20%5Cfrac%7B1%7D%7B%5Ceta%7D%20%5Cleft(%20x%20-%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x%20-%20%5Ceta%20%5Cnabla%20g(x))%20%5Cright)"></p>
-<ul>
-<li><p>이 정의를 사용하면 업데이트 식은 <img src="https://latex.codecogs.com/png.latex?-%5Ceta%20G_%5Ceta(x)">를 더하는 표준적인 형태가 됩니다. <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20x_t%20-%20%5Ceta%20G_%5Ceta(x_t)"></p></li>
-<li><p><strong>특수 사례:</strong> <img src="https://latex.codecogs.com/png.latex?h(x)%20=%20I_C(x)"> (집합 <img src="https://latex.codecogs.com/png.latex?C">에 대한 지시 함수)인 경우, <img src="https://latex.codecogs.com/png.latex?G_%5Ceta(x)">는 Projected Gradient가 되며, <img src="https://latex.codecogs.com/png.latex?h=0">인 경우 <img src="https://latex.codecogs.com/png.latex?G_%5Ceta(x)%20=%20%5Cnabla%20g(x)">가 됩니다.</p></li>
-</ul>
-</section>
-<section id="수렴성-분석-convergence-analysis" class="level1">
-<h1>5. 수렴성 분석 (Convergence Analysis)</h1>
-<section id="핵심-보조정리-incremental-improvement" class="level2">
-<h2 class="anchored" data-anchor-id="핵심-보조정리-incremental-improvement">5.1. 핵심 보조정리: Incremental Improvement</h2>
-<blockquote class="blockquote">
-<p><strong>Lemma (Descent Property)</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?g">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smooth하고 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-strongly convex(<img src="https://latex.codecogs.com/png.latex?%5Calpha%20%5Cge%200">)일 때, 학습률 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20%5Cle%201/%5Cbeta">에 대하여 다음이 성립합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?f(x%20-%20%5Ceta%20G_%5Ceta(x))%20%5Cle%20f(z)%20+%20G_%5Ceta(x)%5E%5Ctop%20(x%20-%20z)%20-%20%5Cfrac%7B%5Ceta%7D%7B2%7D%20%5C%7CG_%5Ceta(x)%5C%7C_2%5E2%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%20%5C%7Cx%20-%20z%5C%7C_2%5E2"></p>
-</blockquote>
-<section id="증명-개요" class="level3">
-<h3 class="anchored" data-anchor-id="증명-개요"><strong>[증명 개요]</strong></h3>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?g">의 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smoothness 성질(<img src="https://latex.codecogs.com/png.latex?g(y)%20%5Cle%20g(x)%20+%20%5Cnabla%20g(x)%5E%5Ctop(y-x)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%5C%7Cy-x%5C%7C%5E2">)과 <img src="https://latex.codecogs.com/png.latex?h">의 볼록성, 그리고 근접 연산자의 최적성 조건을 결합하여 유도합니다.</li>
-</ul>
-</section>
-</section>
-<section id="smooth-case-o1t-수렴" class="level2">
-<h2 class="anchored" data-anchor-id="smooth-case-o1t-수렴">5.2. Smooth Case (<img src="https://latex.codecogs.com/png.latex?O(1/T)"> 수렴)</h2>
-<blockquote class="blockquote">
-<p><strong>Theorem 1</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?g">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smooth convex이고 <img src="https://latex.codecogs.com/png.latex?h">가 convex일 때, <img src="https://latex.codecogs.com/png.latex?%5Ceta%20=%201/%5Cbeta">로 설정하면 다음을 만족합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?f(x_%7BT+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B%5Cbeta%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2%7D%7B2T%7D"></p>
-</blockquote>
-<section id="증명-1" class="level3">
-<h3 class="anchored" data-anchor-id="증명-1"><strong>[증명]</strong></h3>
-<ul>
-<li>위 Lemma에서 <img src="https://latex.codecogs.com/png.latex?z=x_t">, <img src="https://latex.codecogs.com/png.latex?z=x%5E*">를 번갈아 대입하여 얻은 부등식들을 <img src="https://latex.codecogs.com/png.latex?t=1">부터 <img src="https://latex.codecogs.com/png.latex?T">까지 합산(Telescoping sum)하면 <img src="https://latex.codecogs.com/png.latex?O(1/T)">의 속도를 얻을 수 있습니다.</li>
-</ul>
-</section>
-</section>
-<section id="strongly-convex-case-linear-convergence" class="level2">
-<h2 class="anchored" data-anchor-id="strongly-convex-case-linear-convergence">5.3. Strongly Convex Case (Linear Convergence)</h2>
-<blockquote class="blockquote">
-<p><strong>Theorem 2</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?g">가 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-strongly convex이고 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smooth일 때 다음을 만족합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%5C%7Cx_%7BT+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cle%20%5Cleft(1%20-%20%5Cfrac%7B%5Calpha%7D%7B%5Cbeta%7D%5Cright)%5ET%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"></p>
-</blockquote>
-<ul>
-<li>이것은 강한 볼록성이 있을 때 알고리즘이 기하급수적으로 빠르게 최적해에 수렴함을 의미합니다.</li>
-</ul>
-</section>
-</section>
-<section id="accelerated-proximal-gradient-descent-fista" class="level1">
-<h1>6. Accelerated Proximal Gradient Descent (FISTA)</h1>
-<ul>
-<li>표준 Proximal Gradient Descent(ISTA)는 <img src="https://latex.codecogs.com/png.latex?O(1/T)">의 속도를 가지지만, Nesterov 가속 기법을 통해 이를 <img src="https://latex.codecogs.com/png.latex?O(1/T%5E2)">으로 개선할 수 있습니다.</li>
-</ul>
-<section id="momentum의-도입" class="level2">
-<h2 class="anchored" data-anchor-id="momentum의-도입">6.1. Momentum의 도입</h2>
-<ul>
-<li>현재 점 <img src="https://latex.codecogs.com/png.latex?x_t">에서 직접 업데이트하는 대신, 이전 스텝의 정보를 담은 <strong>Momentum</strong> 방향으로 이동한 <img src="https://latex.codecogs.com/png.latex?y_t">에서 경사를 계산합니다. <img src="https://latex.codecogs.com/png.latex?y_t%20=%20x_t%20+%20%5Cgamma_t%20(x_t%20-%20x_%7Bt-1%7D)"></li>
-</ul>
-<section id="algorithm-2-accelerated-proximal-gradient-descent" class="level3">
-<h3 class="anchored" data-anchor-id="algorithm-2-accelerated-proximal-gradient-descent">Algorithm 2: Accelerated Proximal Gradient Descent</h3>
+<li><p>이번에는 <img src="https://latex.codecogs.com/png.latex?h(x)%20=%20%5Cfrac%7B1%7D%7B2%7D%20x%5E%5Ctop%20A%20x%20+%20b%5E%5Ctop%20x%20+%20c"> 인 매끄러운 이차 함수 형태를 가정해 보겠습니다 (단, 행렬 <img src="https://latex.codecogs.com/png.latex?A">는 positive semidefinite).</p></li>
+<li><p>이 경우 Proximal operator는 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?Prox_%7B%5Ceta%20h%7D(x)%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5Cleft%5C%7B%20%5Cfrac%7B1%7D%7B2%7D%20u%5E%5Ctop%20A%20u%20+%20b%5E%5Ctop%20u%20+%20c%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p></li>
+<li><p><img src="https://latex.codecogs.com/png.latex?v%20=%20Prox_%7B%5Ceta%20h%7D(x)">로 두고 미분하여 최적성 조건을 구해보면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%5Cnabla_v%20%5Cleft(%20%5Cdots%20%5Cright)%20=%200%20%5Cimplies%200%20=%20Av%20+%20b%20+%20%5Cfrac%7B1%7D%7B%5Ceta%7D(v%20-%20x)"></p></li>
+<li><p>이 식을 <img src="https://latex.codecogs.com/png.latex?v">에 대해 정리해 보겠습니다.</p>
 <ul>
 <li><ol type="1">
-<li><strong>Initialize:</strong> <img src="https://latex.codecogs.com/png.latex?x_1%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">, <img src="https://latex.codecogs.com/png.latex?x_0%20=%20x_1"></li>
+<li>양변에 <img src="https://latex.codecogs.com/png.latex?%5Ceta">를 곱합니다: <img src="https://latex.codecogs.com/png.latex?0%20=%20%5Ceta%20Av%20+%20%5Ceta%20b%20+%20v%20-%20x"></li>
 </ol></li>
 <li><ol start="2" type="1">
-<li><strong>For <img src="https://latex.codecogs.com/png.latex?t=1,%20%5Cdots,%20T"> do:</strong></li>
-</ol>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?y_t%20=%20x_t%20+%20%5Cgamma_t(x_t%20-%20x_%7Bt-1%7D)"></li>
-<li><img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20%5Ctext%7Bprox%7D_%7Bh/%5Cbeta%7D%20%5Cleft(%20y_t%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20%5Cnabla%20g(y_t)%20%5Cright)"></li>
-</ul></li>
-<li><ol start="3" type="1">
-<li><strong>Return</strong> <img src="https://latex.codecogs.com/png.latex?x_%7BT+1%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?v">로 묶습니다: <img src="https://latex.codecogs.com/png.latex?(I%20+%20%5Ceta%20A)v%20=%20x%20-%20%5Ceta%20b"></li>
 </ol></li>
-</ul>
-</section>
-</section>
-<section id="가속-수렴-정리" class="level2">
-<h2 class="anchored" data-anchor-id="가속-수렴-정리">6.2. 가속 수렴 정리</h2>
-<blockquote class="blockquote">
-<p><strong>Theorem 3</strong></p>
-<p>가속 파라미터를 다음과 같이 설정하면:</p>
-<p><img src="https://latex.codecogs.com/png.latex?%5Ceta%20=%20%5Cfrac%7B1%7D%7B%5Cbeta%7D,%20%5Cquad%20%5Cgamma_t%20=%20%5Cfrac%7Bt-2%7D%7Bt+1%7D"></p>
-<p>수렴 속도는 다음과 같습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?f(x_%7BT+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B2%5Cbeta%7D%7B(T+1)%5E2%7D%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"></p>
-</blockquote>
-<ul>
-<li>이는 복합 볼록 최적화에서 얻을 수 있는 이론적 최적 속도입니다.</li>
-</ul>
-</section>
-</section>
-<section id="성능-비교-lasso-example" class="level1">
-<h1>7. 성능 비교 (LASSO Example)</h1>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/12.Proximal-Gradient-Descent/12.1/images/lasso_convergence.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: Subgradient Method, ISTA, FISTA의 수렴 속도 비교. FISTA(초록색)가 다른 기법들에 비해 압도적으로 빠르게 Loss를 줄이며 최적해에 도달하는 것을 확인할 수 있습니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>위 그래프는 300개의 변수와 100개의 샘플로 구성된 LASSO 문제의 실험 결과입니다.
-<ul>
-<li><strong>Subgradient Method</strong>: 매우 느린 감소.</li>
-<li><strong>ISTA (Proximal Gradient)</strong>: 매끄러운 수렴을 보이나 속도는 보통.</li>
-<li><strong>FISTA (Accelerated)</strong>: 모멘텀의 영향으로 초기에 약간의 진동이 있을 수 있으나 최종적으로는 월등히 빠른 속도로 수렴.</li>
+<li><ol start="3" type="1">
+<li>역행렬을 곱하여 <img src="https://latex.codecogs.com/png.latex?v">를 구합니다:</li>
+</ol></li>
 </ul></li>
 </ul>
+<p><img src="https://latex.codecogs.com/png.latex?Prox_%7B%5Ceta%20h%7D(x)%20=%20v%20=%20(I%20+%20%5Ceta%20A)%5E%7B-1%7D%20(x%20-%20%5Ceta%20b)"></p>
 
 
 
+</section>
 </section>
 
  ]]></description>
@@ -1048,148 +993,152 @@
 
 
 
-<section id="도입-왜-근접-경사-하강법인가-motivation" class="level1">
-<h1>1. 도입: 왜 근접 경사 하강법인가? (Motivation)</h1>
+<section id="introduction-composite-convex-optimization" class="level1">
+<h1>1. Introduction: Composite Convex Optimization</h1>
 <ul>
-<li>기계학습과 통계학에서 모델의 해석력을 높이고 희소성(Sparsity)을 유도하기 위해 가장 널리 사용되는 기법 중 하나는 <strong>LASSO (Least Absolute Shrinkage and Selection Operator)</strong> 회귀입니다. LASSO의 최적화 문제는 다음과 같이 공식화할 수 있습니다.</li>
+<li><p>이전 포스트에서는 Proximal Gradient Descent(근접 경사 하강법)의 개념과 <img src="https://latex.codecogs.com/png.latex?l_1">-정규화 등에 적용되는 근접 연산자(Proximal Operator)의 구체적인 형태를 살펴보았습니다. 이번 포스트에서는 이 알고리즘이 얼마나 빠르게 최적해에 도달할 수 있는지, 즉 <strong>수렴성(Convergence)</strong>을 수학적으로 엄밀하게 증명해보겠습니다.</p></li>
+<li><p>우리가 풀고자 하는 목적 함수는 다음과 같은 복합 볼록 최적화 문제(Composite Convex Optimization Problem)입니다.</p></li>
 </ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cmin_%7B%5Cbeta%7D%20%5Cfrac%7B1%7D%7Bn%7D%20%5C%7Cy%20-%20X%5Cbeta%5C%7C_2%5E2%20+%20%5Clambda%20%5C%7C%5Cbeta%5C%7C_1"></p>
+<p><img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20f(x)%20=%20g(x)%20+%20h(x)"></p>
 <ul>
-<li><p>이 목적 함수(Objective function)가 가진 가장 큰 특징은 <strong>볼록 함수(Convex function)이지만, 모든 지점에서 미분 가능하지는 않다(Non-smooth)</strong>는 점입니다.</p></li>
-<li><p>구체적으로 데이터 적합도를 나타내는 첫 번째 항(MSE)은 매끄러운(smooth) 반면, 정규화 항인 <img src="https://latex.codecogs.com/png.latex?%5Clambda%20%5C%7C%5Cbeta%5C%7C_1">는 <img src="https://latex.codecogs.com/png.latex?%5Cbeta%20=%200">인 지점에서 미분이 정의되지 않습니다.</p></li>
-<li><p>이러한 미분 불가능성 때문에 일반적인 경사 하강법(Gradient Descent)은 사용할 수 없습니다. 대안으로 미분 불가능한 볼록 함수에 적용할 수 있는 <strong>서브그레이디언트 방법(Subgradient Method)</strong>을 떠올릴 수 있습니다. <img src="https://latex.codecogs.com/png.latex?%5C%7C%5Cbeta%5C%7C_1">의 서브디퍼렌셜(Subdifferential)은 수학적으로 명확히 규명되어 있으므로, 이 방법을 적용하는 것 자체는 문제가 없습니다.</p></li>
-<li><p>하지만 서브그레이디언트 방법은 <strong>수렴 속도가 매우 느리다</strong>는 치명적인 단점이 있습니다. 허용 오차(additive error)를 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon"> 이내로 줄이는 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon">-근사해를 구하기 위해 서브그레이디언트 방법은 무려 <img src="https://latex.codecogs.com/png.latex?O(1/%5Cepsilon%5E2)"> 번의 반복(iterations)을 요구합니다.</p></li>
-<li><p>여기서 우리는 목적 함수의 구조적 특징에 다시 주목해야 합니다. 목적 함수 전체가 미분 불가능한 것이 아니라, <strong>매끄러운 부분(Smooth part)</strong>과 <strong>서브디퍼렌셜을 완벽히 이해하고 있는 미분 불가능한 부분(Non-smooth part)</strong>의 합으로 구성되어 있습니다.</p></li>
-<li><p>과연 이 구조를 적극적으로 활용하여 더 빠르고 효율적인 알고리즘을 설계할 수 있을까요? 이 질문에 대한 해답이 바로 <img src="https://latex.codecogs.com/png.latex?O(1/%5Cepsilon)">의 수렴 속도를 달성할 수 있는 <strong>근접 경사 하강법(Proximal Gradient Descent)</strong>입니다.</p></li>
-</ul>
-</section>
-<section id="투영-연산자에서-근접-연산자로-from-projection-to-proximal-operator" class="level1">
-<h1>2. 투영 연산자에서 근접 연산자로 (From Projection to Proximal Operator)</h1>
+<li><p>여기서 <img src="https://latex.codecogs.com/png.latex?g(x)">는 미분 가능한 매끄러운(smooth) 볼록 함수이고, <img src="https://latex.codecogs.com/png.latex?h(x)">는 미분 불가능할 수 있는 볼록 함수입니다.</p></li>
+<li><p>앞서 살펴보았듯 제약이 있는 최소화 문제의 경우 <img src="https://latex.codecogs.com/png.latex?h(x)%20=%20I_C(x)"> (지시 함수)로 두어 투영 연산자(Projection operator)로 환원시킬 수 있으며, LASSO 모델의 경우 <img src="https://latex.codecogs.com/png.latex?h(%5Cbeta)%20=%20%5Clambda%20%5C%7C%5Cbeta%5C%7C_1">로 두어 Shrinkage 연산자를 도출할 수 있습니다.</p></li>
+<li><p>이를 푸는 <strong>Algorithm 1: Proximal Gradient Descent</strong>의 구조는 다음과 같습니다.</p>
 <ul>
-<li><p>근접 경사 하강법을 정의하기 전에, 우리가 이미 익숙한 투영된 경사 하강법(Projected Gradient Descent)에서 아이디어를 확장해 보겠습니다.</p></li>
-<li><p>제약 조건이 있는 최적화 문제에서, 제약 집합 <img src="https://latex.codecogs.com/png.latex?C">로의 <strong>투영 연산자(Projection operator)</strong>는 다음과 같이 정의됩니다.</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7BProj%7D_C(x)%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20C%7D%20%5Cfrac%7B1%7D%7B2%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2"></p>
-<ul>
-<li>이를 지시 함수(Indicator function, <img src="https://latex.codecogs.com/png.latex?I_C(u)">)를 사용하여 제약이 없는 최적화 문제 형태로 다시 쓰면 다음과 같습니다. (단, <img src="https://latex.codecogs.com/png.latex?u%20%5Cin%20C">이면 <img src="https://latex.codecogs.com/png.latex?I_C(u)%20=%200">, <img src="https://latex.codecogs.com/png.latex?u%20%5Cnotin%20C">이면 <img src="https://latex.codecogs.com/png.latex?I_C(u)%20=%20%5Cinfty">)</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7BProj%7D_C(x)%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5Cleft%5C%7B%20I_C(u)%20+%20%5Cfrac%7B1%7D%7B2%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p>
-<ul>
-<li><p>위 식은 강한 볼록(Strongly convex) 최적화 문제이므로 유일한 최소값을 가집니다. 여기서 투영 연산자가 ’지시 함수 <img src="https://latex.codecogs.com/png.latex?I_C(u)">’와 ’거리 패널티 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B2%7D%5C%7Cu%20-%20x%5C%7C_2%5E2">’의 결합으로 정의되었음을 알 수 있습니다.</p></li>
-<li><p><strong>근접 연산자(Proximal Operator)</strong>는 이 개념을 일반화한 것입니다. 지시 함수 <img src="https://latex.codecogs.com/png.latex?I_C(u)"> 대신 일반적인 볼록 함수 <img src="https://latex.codecogs.com/png.latex?h(u)">를 대입하면 함수 <img src="https://latex.codecogs.com/png.latex?h">에 대한 근접 연산자를 정의할 수 있습니다.</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7BProx%7D_h(x)%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5Cleft%5C%7B%20h(u)%20+%20%5Cfrac%7B1%7D%7B2%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p>
-<ul>
-<li>학습률(Learning rate) 또는 스텝 사이즈(Step size)를 나타내는 하이퍼파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20%3E%200">를 도입하면 일반적인 근접 연산자는 다음과 같이 표현됩니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7BProx%7D_%7B%5Ceta%20h%7D(x)%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5Cleft%5C%7B%20h(u)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p>
-<section id="근접-경사-하강법의-업데이트-규칙" class="level3">
-<h3 class="anchored" data-anchor-id="근접-경사-하강법의-업데이트-규칙">2.1. 근접 경사 하강법의 업데이트 규칙</h3>
-<ul>
-<li>투영된 경사 하강법의 업데이트 규칙이 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20%5Ctext%7BProj%7D_C(x_t%20-%20%5Ceta%20%5Cnabla%20f(x_t))"> 였다는 사실을 상기해봅시다.</li>
-<li>투영 연산자 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BProj%7D_C">를 근접 연산자 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BProx%7D_%7B%5Ceta%20h%7D">로 대체하기만 하면, 자연스럽게 <strong>근접 경사 하강법의 업데이트 규칙</strong>이 완성됩니다. <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20%5Ctext%7BProx%7D_%7B%5Ceta%20h%7D(x_t%20-%20%5Ceta%20%5Cnabla%20f(x_t))">
-<ul>
-<li>참고: 만약 <img src="https://latex.codecogs.com/png.latex?h">가 지시 함수 <img src="https://latex.codecogs.com/png.latex?I_C">라면, 근접 경사 하강법은 정확히 투영된 경사 하강법으로 환원됩니다.</li>
-</ul></li>
-</ul>
-</section>
-</section>
-<section id="근접-연산자의-핵심-수학적-성질" class="level1">
-<h1>3. 근접 연산자의 핵심 수학적 성질</h1>
-<ul>
-<li>근접 연산자가 최적화 과정에서 어떻게 작동하는지 이해하기 위해, 가장 중요한 수학적 필요충분조건을 증명해 보겠습니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>Lemma 12.1</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?u%20=%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)"> 이기 위한 필요충분조건은 다음과 같다:</p>
-<p><img src="https://latex.codecogs.com/png.latex?x%20-%20u%20%5Cin%20%5Ceta%20%5Cpartial%20h(u)"></p>
-</blockquote>
-<section id="증명" class="level3">
-<h3 class="anchored" data-anchor-id="증명"><strong>[증명]</strong></h3>
-<ul>
-<li><p><img src="https://latex.codecogs.com/png.latex?u%20=%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)"> 라는 것은 <img src="https://latex.codecogs.com/png.latex?u">가 다음 목적 함수의 전역 최소점(Global minimizer)임을 의미합니다. <img src="https://latex.codecogs.com/png.latex?%5Cmin_u%20%5Cleft%5C%7B%20h(u)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p></li>
-<li><p>볼록 함수의 최적성 조건(Optimality condition)에 의해, 목적 함수의 서브디퍼렌셜(Subdifferential) 집합에 <img src="https://latex.codecogs.com/png.latex?0">이 포함되어야 합니다. <img src="https://latex.codecogs.com/png.latex?0%20%5Cin%20%5Cpartial%20h(u)%20+%20%5Cnabla_u%20%5Cleft(%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright)"></p></li>
-<li><p>거리를 나타내는 2차항은 미분 가능하므로 그래디언트를 구하면 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B%5Ceta%7D(u%20-%20x)"> 가 됩니다. 따라서: <img src="https://latex.codecogs.com/png.latex?0%20%5Cin%20%5Cpartial%20h(u)%20+%20%5Cfrac%7B1%7D%7B%5Ceta%7D(u%20-%20x)"></p></li>
-<li><p>식을 이항하고 정리하면 다음을 얻습니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B%5Ceta%7D(x%20-%20u)%20%5Cin%20%5Cpartial%20h(u)%20%5Ciff%20x%20-%20u%20%5Cin%20%5Ceta%20%5Cpartial%20h(u)"></p></li>
-</ul>
-</section>
-</section>
-<section id="근접-연산자-적용-예시-examples" class="level1">
-<h1>4. 근접 연산자 적용 예시 (Examples)</h1>
-<ul>
-<li>이제 실제 기계학습 모델에서 마주하는 함수들에 대해 근접 연산자를 유도해 보겠습니다.</li>
-</ul>
-<section id="l1-정규화-lasso" class="level2">
-<h2 class="anchored" data-anchor-id="l1-정규화-lasso">4.1. L1 정규화 (LASSO)</h2>
-<ul>
-<li>함수 <img src="https://latex.codecogs.com/png.latex?h(x)%20=%20%5C%7Cx%5C%7C_1"> 인 경우를 살펴봅시다. 근접 연산자의 정의에 의해 다음과 같습니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5Cleft%5C%7B%20%5C%7Cu%5C%7C_1%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%20%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p>
-<ul>
-<li><p>이를 해결하기 위해 앞서 증명한 <strong>Lemma 12.1</strong>을 사용합니다. 해 <img src="https://latex.codecogs.com/png.latex?u">는 <img src="https://latex.codecogs.com/png.latex?x%20-%20u%20%5Cin%20%5Ceta%20%5Cpartial%20%5C%7Cu%5C%7C_1"> 를 만족해야 합니다. <img src="https://latex.codecogs.com/png.latex?%5C%7Cu%5C%7C_1">은 각 차원 <img src="https://latex.codecogs.com/png.latex?i">에 대해 분리(separable) 가능하므로, 성분별로 서브그레이디언트를 계산할 수 있습니다.</p></li>
-<li><p>요소 <img src="https://latex.codecogs.com/png.latex?u_i">에 대한 <img src="https://latex.codecogs.com/png.latex?%7Cu_i%7C">의 서브그레이디언트 <img src="https://latex.codecogs.com/png.latex?g_i%20%5Cin%20%5Cpartial%20%7Cu_i%7C">는 다음과 같이 정의됩니다.</p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?u_i%20%3E%200"> 이면, <img src="https://latex.codecogs.com/png.latex?g_i%20=%201"></li>
-<li><img src="https://latex.codecogs.com/png.latex?u_i%20%3C%200"> 이면, <img src="https://latex.codecogs.com/png.latex?g_i%20=%20-1"></li>
-<li><img src="https://latex.codecogs.com/png.latex?u_i%20=%200"> 이면, <img src="https://latex.codecogs.com/png.latex?g_i%20%5Cin%20%5B-1,%201%5D"> (원점에서의 기울기 범위)</li>
-</ul></li>
-<li><p>이를 바탕으로 <img src="https://latex.codecogs.com/png.latex?x_i%20-%20u_i%20%5Cin%20%5Ceta%20%5Cpartial%20%7Cu_i%7C"> 조건을 각 경우별로 풀어봅시다.</p></li>
 <li><ol type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?u_i%20%3E%200"> 인 경우:</strong> <img src="https://latex.codecogs.com/png.latex?%5Cpartial%20%7Cu_i%7C%20=%201"> 이므로, <img src="https://latex.codecogs.com/png.latex?x_i%20-%20u_i%20=%20%5Ceta%20%5Cimplies%20u_i%20=%20x_i%20-%20%5Ceta">.</li>
-</ol>
-<ul>
-<li>이 조건이 성립하려면 <img src="https://latex.codecogs.com/png.latex?u_i%20%3E%200"> 이어야 하므로 <img src="https://latex.codecogs.com/png.latex?x_i%20%3E%20%5Ceta"> 이어야 합니다.</li>
-</ul></li>
+<li>초기값 <img src="https://latex.codecogs.com/png.latex?x_1%20%5Cin%20C"> 설정</li>
+</ol></li>
 <li><ol start="2" type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?u_i%20%3C%200"> 인 경우:</strong> <img src="https://latex.codecogs.com/png.latex?%5Cpartial%20%7Cu_i%7C%20=%20-1"> 이므로, <img src="https://latex.codecogs.com/png.latex?x_i%20-%20u_i%20=%20-%5Ceta%20%5Cimplies%20u_i%20=%20x_i%20+%20%5Ceta">.</li>
+<li><img src="https://latex.codecogs.com/png.latex?t%20=%201,%20%5Cdots,%20T">에 대해 다음 업데이트 수행: <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20Prox_%7B%5Ceta%20h%7D%20%5Cleft(%20x_t%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20%5Cnabla%20g(x_t)%20%5Cright)"></li>
 </ol>
 <ul>
-<li>이 조건이 성립하려면 <img src="https://latex.codecogs.com/png.latex?u_i%20%3C%200"> 이어야 하므로 <img src="https://latex.codecogs.com/png.latex?x_i%20%3C%20-%5Ceta"> 이어야 합니다.</li>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">는 함수 <img src="https://latex.codecogs.com/png.latex?g">의 smoothness 파라미터이며, 학습률 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20=%201/%5Cbeta">를 사용합니다.</li>
 </ul></li>
 <li><ol start="3" type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?u_i%20=%200"> 인 경우:</strong> <img src="https://latex.codecogs.com/png.latex?x_i%20-%200%20%5Cin%20%5Ceta%20%5B-1,%201%5D%20%5Cimplies%20-%5Ceta%20%5Cle%20x_i%20%5Cle%20%5Ceta">.</li>
+<li><img src="https://latex.codecogs.com/png.latex?x_%7BT+1%7D"> 반환</li>
 </ol></li>
-<li><p>위 세 가지 경우를 종합하여 하나의 수식으로 깔끔하게 표현하면 다음과 같습니다.</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?u_i%20=%20%5Cmax%5C%7B0,%20%7Cx_i%7C%20-%20%5Ceta%5C%7D%20%5Ccdot%20%5Ctext%7Bsign%7D(x_i)"></p>
-<ul>
-<li><p><strong>예시 계산:</strong> 만약 <img src="https://latex.codecogs.com/png.latex?x%20=%20(3,%201,%20-2)%5E%5Ctop"> 이고 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20=%201"> (즉, <img src="https://latex.codecogs.com/png.latex?h%20=%20%5C%7Cx%5C%7C_1">) 이라면:</p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?x_1%20=%203%20%5Cimplies%203%20-%201%20=%202"></li>
-<li><img src="https://latex.codecogs.com/png.latex?x_2%20=%201%20%5Cimplies"> 임계값 1 이하이므로 <img src="https://latex.codecogs.com/png.latex?0"></li>
-<li><img src="https://latex.codecogs.com/png.latex?x_3%20=%20-2%20%5Cimplies%20-2%20+%201%20=%20-1"></li>
 </ul></li>
-<li><p>따라서 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bprox%7D_%7Bh%7D((3,%201,%20-2)%5E%5Ctop)%20=%20(2,%200,%20-1)%5E%5Ctop"> 이 됩니다.</p></li>
-<li><p>이처럼 L1 노름에 대한 근접 연산자는 벡터의 각 성분을 <img src="https://latex.codecogs.com/png.latex?0">을 향해 일정량(<img src="https://latex.codecogs.com/png.latex?%5Ceta">)만큼 ’축소’시키는 역할을 합니다. 이 때문에 이 연산자를 <strong>소프트 임계값 연산자(Soft-thresholding operator)</strong> 또는 <strong>수축 연산자(Shrinkage operator)</strong>라고 부릅니다.</p></li>
 </ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/12.Proximal-Gradient-Descent/12.2/images/soft_thresholding.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: Soft-thresholding (Shrinkage) 연산자의 시각화. 가로축은 입력값 <img src="https://latex.codecogs.com/png.latex?x_i">, 세로축은 출력값 <img src="https://latex.codecogs.com/png.latex?u_i">를 나타냅니다. 원점 근처의 <img src="https://latex.codecogs.com/png.latex?%5B-%5Ceta,%20%5Ceta%5D"> 구간에서는 출력값이 0으로 축소(shrink)되어 모델의 희소성(Sparsity)을 유도하며, 그 외의 구간에서는 기울기가 1인 선형 함수의 형태를 띠며 영점을 향해 평행이동한 모습을 보여줍니다.</figcaption>
-</figure>
-</div>
+<hr>
 </section>
-<section id="이차-함수-quadratic-function" class="level2">
-<h2 class="anchored" data-anchor-id="이차-함수-quadratic-function">4.2. 이차 함수 (Quadratic Function)</h2>
+<section id="gradient-mapping-경사-매핑" class="level1">
+<h1>2. Gradient Mapping (경사 매핑)</h1>
 <ul>
-<li>이번에는 미분 가능한 볼록 이차 함수인 <img src="https://latex.codecogs.com/png.latex?h(x)%20=%20%5Cfrac%7B1%7D%7B2%7Dx%5E%5Ctop%20A%20x%20+%20b%5E%5Ctop%20x%20+%20c"> (단, <img src="https://latex.codecogs.com/png.latex?A">는 양의 준정부호 Positive Semidefinite 행렬)의 경우를 살펴보겠습니다.</li>
+<li><p>표준적인 경사 하강법(Gradient Descent)의 수렴성을 분석할 때는 그레이디언트 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x)"> 자체의 크기가 줄어드는 것을 지표로 삼습니다. 그러나 복합 최적화 문제에서는 <img src="https://latex.codecogs.com/png.latex?f(x)">가 전체적으로 미분 가능하지 않기 때문에, 일반적인 그레이디언트 대신 <strong>경사 매핑(Gradient Mapping)</strong>이라는 새로운 개념을 도입합니다.</p></li>
+<li><p>경사 매핑 <img src="https://latex.codecogs.com/png.latex?G_%5Ceta(x)">는 다음과 같이 정의됩니다.</p></li>
 </ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)%20=%20%5Carg%5Cmin_%7Bu%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5Cleft%5C%7B%20%5Cfrac%7B1%7D%7B2%7Du%5E%5Ctop%20A%20u%20+%20b%5E%5Ctop%20u%20+%20c%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p>
+<p><img src="https://latex.codecogs.com/png.latex?G_%5Ceta(x)%20=%20%5Cfrac%7B1%7D%7B%5Ceta%7D%20%5Cleft(%20x%20-%20Prox_%7B%5Ceta%20h%7D(x%20-%20%5Ceta%20%5Cnabla%20g(x))%20%5Cright)"></p>
 <ul>
-<li>이 함수는 모든 지점에서 미분 가능하므로 서브디퍼렌셜 대신 일반 그래디언트를 취해 <img src="https://latex.codecogs.com/png.latex?0">이 되는 지점을 찾으면 됩니다. 해를 <img src="https://latex.codecogs.com/png.latex?v%20=%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)">라고 할 때 최적성 조건에 의해:</li>
+<li>이 식을 살짝 변형하여 <img src="https://latex.codecogs.com/png.latex?-%5Ceta%20G_%5Ceta(x)%20=%20Prox_%7B%5Ceta%20h%7D(x%20-%20%5Ceta%20%5Cnabla%20g(x))%20-%20x"> 로 써보면, 이는 현재 점 <img src="https://latex.codecogs.com/png.latex?x">에서 근접 경사 하강 업데이트를 한 번 수행했을 때의 ’이동 벡터(difference)’를 의미함을 알 수 있습니다. 즉, 업데이트 규칙을 다음과 같이 아주 간단하게 표현할 수 있습니다.</li>
 </ul>
-<p><img src="https://latex.codecogs.com/png.latex?0%20=%20%5Cnabla%20h(v)%20+%20%5Cfrac%7B1%7D%7B%5Ceta%7D(v%20-%20x)"> <img src="https://latex.codecogs.com/png.latex?0%20=%20(Av%20+%20b)%20+%20%5Cfrac%7B1%7D%7B%5Ceta%7D(v%20-%20x)"></p>
+<p><img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20x_t%20-%20%5Ceta%20G_%5Ceta(x_t)"></p>
 <ul>
-<li><p>양변에 <img src="https://latex.codecogs.com/png.latex?%5Ceta">를 곱하고 <img src="https://latex.codecogs.com/png.latex?v">에 대해 식을 정리해 봅시다. <img src="https://latex.codecogs.com/png.latex?0%20=%20%5Ceta%20Av%20+%20%5Ceta%20b%20+%20v%20-%20x"> <img src="https://latex.codecogs.com/png.latex?(I%20+%20%5Ceta%20A)v%20=%20x%20-%20%5Ceta%20b"></p></li>
-<li><p>행렬 <img src="https://latex.codecogs.com/png.latex?(I%20+%20%5Ceta%20A)">는 <img src="https://latex.codecogs.com/png.latex?A">가 양의 준정부호이므로 항상 역행렬이 존재합니다. 따라서 최종적으로 근접 연산자의 닫힌 형태(Closed-form) 해는 다음과 같습니다.</p></li>
+<li>만약 <img src="https://latex.codecogs.com/png.latex?h(x)">가 별다른 패널티를 주지 않는 상수이거나 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5Ed"> 공간 전체에 대한 지시 함수라면, <img src="https://latex.codecogs.com/png.latex?Prox_%7B%5Ceta%20h%7D">는 항등 함수가 되어 <img src="https://latex.codecogs.com/png.latex?G_%5Ceta(x)%20=%20%5Cnabla%20g(x)">로 축소됩니다. 따라서 경사 매핑은 비매끄러운 최적화 문제에서 그레이디언트의 역할을 완벽히 대체하는 도구입니다.</li>
 </ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)%20=%20v%20=%20(I%20+%20%5Ceta%20A)%5E%7B-1%7D(x%20-%20%5Ceta%20b)"></p>
+<section id="최적성-조건과-경사-매핑-lemma-12.2" class="level2">
+<h2 class="anchored" data-anchor-id="최적성-조건과-경사-매핑-lemma-12.2">2.1 최적성 조건과 경사 매핑 (Lemma 12.2)</h2>
 <ul>
-<li>이는 선형 시스템(Linear system)을 푸는 문제로 귀결됨을 의미합니다.</li>
+<li>경사 매핑이 그레이디언트의 역할을 제대로 수행하는지 확인하기 위해, 최적해에서 경사 매핑이 0이 되는지를 살펴보겠습니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>Lemma 12.2.</strong> <img src="https://latex.codecogs.com/png.latex?G_%5Ceta(%5Chat%7Bx%7D)%20=%200"> 이기 위한 필요충분조건은 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D%20%5Cin%20%5Carg%5Cmin_%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20g(x)%20+%20h(x)"> 인 것이다.</p>
+</blockquote>
+<section id="proof." class="level3">
+<h3 class="anchored" data-anchor-id="proof."><strong>Proof.</strong></h3>
+<ul>
+<li><p>최적성 조건에 의해, <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D">가 <img src="https://latex.codecogs.com/png.latex?g+h">를 최소화한다는 것은 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D">에서의 Subdifferential이 0을 포함한다는 것과 동치입니다. <img src="https://latex.codecogs.com/png.latex?0%20%5Cin%20%5C%7B%5Cnabla%20g(%5Chat%7Bx%7D)%5C%7D%20+%20%5Cpartial%20h(%5Chat%7Bx%7D)%20%5Ciff%20-%5Cnabla%20g(%5Chat%7Bx%7D)%20%5Cin%20%5Cpartial%20h(%5Chat%7Bx%7D)"></p></li>
+<li><p>양변에 <img src="https://latex.codecogs.com/png.latex?%5Ceta">를 곱하고 식을 재조합하면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?(%5Chat%7Bx%7D%20-%20%5Ceta%20%5Cnabla%20g(%5Chat%7Bx%7D))%20-%20%5Chat%7Bx%7D%20%5Cin%20%5Ceta%20%5Cpartial%20h(%5Chat%7Bx%7D)"></p></li>
+<li><p>이전 포스트의 Lemma 12.1 (<img src="https://latex.codecogs.com/png.latex?u%20=%20Prox_%7B%5Ceta%20h%7D(x)%20%5Ciff%20x%20-%20u%20%5Cin%20%5Ceta%20%5Cpartial%20h(u)">)를 적용하면, 위 조건은 다음 식과 정확히 동치입니다. <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D%20=%20Prox_%7B%5Ceta%20h%7D(%5Chat%7Bx%7D%20-%20%5Ceta%20%5Cnabla%20g(%5Chat%7Bx%7D))"></p></li>
+<li><p>이때 경사 매핑의 정의에 위 결과를 대입하면, <img src="https://latex.codecogs.com/png.latex?G_%5Ceta(%5Chat%7Bx%7D)%20=%20%5Cfrac%7B1%7D%7B%5Ceta%7D%20%5Cleft(%20%5Chat%7Bx%7D%20-%20Prox_%7B%5Ceta%20h%7D(%5Chat%7Bx%7D%20-%20%5Ceta%20%5Cnabla%20g(%5Chat%7Bx%7D))%20%5Cright)%20=%20%5Cfrac%7B1%7D%7B%5Ceta%7D%20(%5Chat%7Bx%7D%20-%20%5Chat%7Bx%7D)%20=%200"> 이 성립합니다. 따라서 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D">가 최적해인 것과 경사 매핑이 0인 것은 동치입니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></p></li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="key-lemma-for-convergence-analysis-lemma-12.3" class="level1">
+<h1>3. Key Lemma for Convergence Analysis (Lemma 12.3)</h1>
+<ul>
+<li>수렴 속도를 증명하기 위해 가장 핵심이 되는 보조 정리를 살펴보겠습니다. 이 정리는 함수 값이 업데이트를 거듭함에 따라 얼마나 감소하는지에 대한 상한을 제공합니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>Lemma 12.3.</strong></p>
+<p><img src="https://latex.codecogs.com/png.latex?f%20=%20g+h"> 이고, <img src="https://latex.codecogs.com/png.latex?g">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smooth 하면서 <img src="https://latex.codecogs.com/png.latex?l_2"> norm에 대해 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-strongly convex 하다고 가정하자. (단, <img src="https://latex.codecogs.com/png.latex?%5Cbeta%20%3E%200,%20%5Calpha%20%5Cge%200">). 또한 <img src="https://latex.codecogs.com/png.latex?h">는 볼록 함수이다. 이때 임의의 <img src="https://latex.codecogs.com/png.latex?x,%20z">에 대하여 다음이 성립한다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?f%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20G_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cle%20f(z)%20+%20G_%7B1/%5Cbeta%7D(x)%5E%5Ctop%20(x-z)%20-%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%5C%7CG_%7B1/%5Cbeta%7D(x)%5C%7C_2%5E2%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%5C%7Cx-z%5C%7C_2%5E2"></p>
+</blockquote>
+<section id="proof.-1" class="level3">
+<h3 class="anchored" data-anchor-id="proof.-1"><strong>Proof.</strong></h3>
+<ul>
+<li><p>증명은 <img src="https://latex.codecogs.com/png.latex?f%20=%20g%20+%20h"> 이므로 두 부분으로 나누어 상한을 구한 뒤 더하는 방식으로 진행됩니다. 편의상 <img src="https://latex.codecogs.com/png.latex?x_%7Bnext%7D%20=%20x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)"> 라고 합시다.</p></li>
+<li><p><strong>Step 1: <img src="https://latex.codecogs.com/png.latex?g"> 부분의 상한 구하기</strong></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?g">의 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smoothness 성질을 이용해 <img src="https://latex.codecogs.com/png.latex?x_%7Bnext%7D">에서의 함수값을 전개합니다. <img src="https://latex.codecogs.com/png.latex?g%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20G_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cle%20g(x)%20+%20%5Cnabla%20g(x)%5E%5Ctop%20%5Cleft(%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20G_%7B1/%5Cbeta%7D(x)%20%5Cright)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%5Cleft%5C%7C%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20G_%7B1/%5Cbeta%7D(x)%20%5Cright%5C%7C_2%5E2"> <img src="https://latex.codecogs.com/png.latex?=%20g(x)%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20%5Cnabla%20g(x)%5E%5Ctop%20G_%7B1/%5Cbeta%7D(x)%20+%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%20%5C%7CG_%7B1/%5Cbeta%7D(x)%5C%7C_2%5E2"></li>
+<li>여기에 <img src="https://latex.codecogs.com/png.latex?g">의 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-strong convexity 정의(<img src="https://latex.codecogs.com/png.latex?g(x)%20%5Cle%20g(z)%20-%20%5Cnabla%20g(x)%5E%5Ctop(z-x)%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%5C%7Cz-x%5C%7C_2%5E2">)를 <img src="https://latex.codecogs.com/png.latex?g(x)">에 적용하여 치환합니다. <img src="https://latex.codecogs.com/png.latex?%5Cle%20g(z)%20-%20%5Cnabla%20g(x)%5E%5Ctop(z-x)%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%5C%7Cz-x%5C%7C_2%5E2%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20%5Cnabla%20g(x)%5E%5Ctop%20G_%7B1/%5Cbeta%7D(x)%20+%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%20%5C%7CG_%7B1/%5Cbeta%7D(x)%5C%7C_2%5E2%20%5Cquad%20%5Cdots%20%5Ctext%7B(12.1)%7D"></li>
+</ul></li>
+<li><p><strong>Step 2: <img src="https://latex.codecogs.com/png.latex?h"> 부분의 상한 구하기</strong></p>
+<ul>
+<li>근접 연산자의 성질(Lemma 12.1)에 의해, <img src="https://latex.codecogs.com/png.latex?u%20=%20Prox_%7B(1/%5Cbeta)h%7D(x%20-%20(1/%5Cbeta)%5Cnabla%20g(x))%20=%20x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)"> 이면 다음이 성립합니다. <img src="https://latex.codecogs.com/png.latex?%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%5Cnabla%20g(x)%5Cright)%20-%20%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cin%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%5Cpartial%20h%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)"></li>
+<li>양변에 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">를 곱하면 간단히 정리됩니다. <img src="https://latex.codecogs.com/png.latex?G_%7B1/%5Cbeta%7D(x)%20-%20%5Cnabla%20g(x)%20%5Cin%20%5Cpartial%20h%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)"></li>
+<li>이제 볼록 함수 <img src="https://latex.codecogs.com/png.latex?h">의 1차 테일러 전개 하한 성질(Subgradient 부등식)을 <img src="https://latex.codecogs.com/png.latex?x_%7Bnext%7D">와 <img src="https://latex.codecogs.com/png.latex?z">에 대해 적용합니다. <img src="https://latex.codecogs.com/png.latex?h%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cle%20h(z)%20-%20(G_%7B1/%5Cbeta%7D(x)%20-%20%5Cnabla%20g(x))%5E%5Ctop%20%5Cleft(%20z%20-%20%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cright)%20%5Cquad%20%5Cdots%20%5Ctext%7B(12.2)%7D"></li>
+</ul></li>
+<li><p><strong>Step 3: 식의 병합</strong></p>
+<ul>
+<li>식 (12.1)과 (12.2)를 더하면, 복잡한 내적 항들이 상쇄되면서 부등식이 깔끔하게 정리됩니다. <img src="https://latex.codecogs.com/png.latex?f%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cle%20f(z)%20-%20G_%7B1/%5Cbeta%7D(x)%5E%5Ctop(z-x)%20-%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%5C%7CG_%7B1/%5Cbeta%7D(x)%5C%7C_2%5E2%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%5C%7Cx-z%5C%7C_2%5E2"></li>
+<li>이는 증명하고자 했던 수식과 정확히 일치합니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></li>
+</ul></li>
+<li><p><strong>의의 (Eq 12.3)</strong></p>
+<ul>
+<li>위 보조정리에서 임의의 점 <img src="https://latex.codecogs.com/png.latex?z"> 대신 현재 점 <img src="https://latex.codecogs.com/png.latex?x">를 대입해보면 <img src="https://latex.codecogs.com/png.latex?%5Calpha"> 항이 사라지고 다음과 같이 목적 함수가 매 스텝 얼마나 감소하는지 알 수 있습니다. <img src="https://latex.codecogs.com/png.latex?f%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20G_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cle%20f(x)%20-%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%20%5C%7CG_%7B1/%5Cbeta%7D(x)%5C%7C_2%5E2%20%5Cquad%20%5Cdots%20%5Ctext%7B(12.3)%7D"></li>
+<li>이는 경사 매핑의 크기에 비례하여 함수값이 항상 단조 감소(Monotonic decrease)함을 보장합니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="convergence-theorems-수렴성-정리" class="level1">
+<h1>4. Convergence Theorems (수렴성 정리)</h1>
+<ul>
+<li><p>이제 Lemma 12.3을 활용하여, 실제 알고리즘이 반복 횟수 <img src="https://latex.codecogs.com/png.latex?T">에 따라 얼마나 빠르게 최적해 <img src="https://latex.codecogs.com/png.latex?x%5E*">에 도달하는지 수렴 속도를 도출해봅시다.</p></li>
+<li><p>먼저 Lemma 12.3 식에 <img src="https://latex.codecogs.com/png.latex?x%20=%20x_t">, <img src="https://latex.codecogs.com/png.latex?z%20=%20x%5E*"> (최적해)를 대입하면 다음 전개가 가능합니다. <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20%5Cle%20f(x%5E*)%20+%20G_%7B1/%5Cbeta%7D(x_t)%5E%5Ctop%20(x_t%20-%20x%5E*)%20-%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%5C%7CG_%7B1/%5Cbeta%7D(x_t)%5C%7C_2%5E2%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2"></p></li>
+<li><p>우변의 내적항과 제곱항을 완전제곱식 형태인 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cbeta%7D%7B2%7D(%5C%7CA%5C%7C%5E2%20-%20%5C%7CB%5C%7C%5E2)"> 로 변환하여 묶어내면 아래의 핵심 부등식(12.4)을 얻을 수 있습니다. <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%5Cleft(%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2%20-%20%5C%7Cx_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cright)%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2%20%5Cquad%20%5Cdots%20%5Ctext%7B(12.4)%7D"></p></li>
+</ul>
+<section id="smooth-convex-함수의-수렴-속도-o1t" class="level2">
+<h2 class="anchored" data-anchor-id="smooth-convex-함수의-수렴-속도-o1t">4.1 Smooth Convex 함수의 수렴 속도 (<img src="https://latex.codecogs.com/png.latex?O(1/T)">)</h2>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?g">가 단순히 볼록 함수일 때(<img src="https://latex.codecogs.com/png.latex?%5Calpha%20=%200">)의 일반적인 수렴 정리입니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>Theorem 12.4.</strong> <img src="https://latex.codecogs.com/png.latex?g">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smooth 볼록 함수이고 <img src="https://latex.codecogs.com/png.latex?h">가 볼록 함수일 때, Proximal Gradient Descent가 반환하는 <img src="https://latex.codecogs.com/png.latex?x_%7BT+1%7D">은 다음을 만족한다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?f(x_%7BT+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B%5Cbeta%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2%7D%7B2T%7D"></p>
+</blockquote>
+<section id="proof.-2" class="level3">
+<h3 class="anchored" data-anchor-id="proof.-2"><strong>Proof.</strong></h3>
+<ul>
+<li><p>식 (12.4)에 <img src="https://latex.codecogs.com/png.latex?%5Calpha%20=%200">을 대입하고, 양변을 <img src="https://latex.codecogs.com/png.latex?t=1">부터 <img src="https://latex.codecogs.com/png.latex?T">까지 더합니다. 우변이 망원 급수(Telescoping sum) 형태이므로 중간 항들이 모두 소거됩니다. 그 후 양변을 <img src="https://latex.codecogs.com/png.latex?T">로 나누면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7BT%7D%20%5Csum_%7Bt=1%7D%5ET%20%5Cleft(%20f(x_%7Bt+1%7D)%20-%20f(x%5E*)%20%5Cright)%20%5Cle%20%5Cfrac%7B%5Cbeta%7D%7B2T%7D%20%5Cleft(%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2%20-%20%5C%7Cx_%7BT+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cright)"></p></li>
+<li><p>앞서 (12.3)에서 보았듯 <img src="https://latex.codecogs.com/png.latex?f(x_t)">는 단조 감소하므로 <img src="https://latex.codecogs.com/png.latex?f(x_%7BT+1%7D)%20%5Cle%20f(x_t)"> 가 성립합니다. 따라서 좌변의 평균은 최소한 <img src="https://latex.codecogs.com/png.latex?f(x_%7BT+1%7D)%20-%20f(x%5E*)"> 보다 크거나 같습니다. 우변의 경우 <img src="https://latex.codecogs.com/png.latex?-%5C%7Cx_%7BT+1%7D-x%5E*%5C%7C_2%5E2%20%5Cle%200"> 이므로 항을 버려서 상한을 느슨하게 만들 수 있습니다.</p></li>
+<li><p>결과적으로 <img src="https://latex.codecogs.com/png.latex?O(1/T)"> 의 수렴 속도를 얻습니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></p></li>
+</ul>
+</section>
+</section>
+<section id="strongly-convex-함수의-수렴-속도-linear-convergence" class="level2">
+<h2 class="anchored" data-anchor-id="strongly-convex-함수의-수렴-속도-linear-convergence">4.2 Strongly Convex 함수의 수렴 속도 (Linear Convergence)</h2>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?g">가 강볼록(Strongly convex) 함수일 때(<img src="https://latex.codecogs.com/png.latex?%5Calpha%20%3E%200">), 수렴 속도는 기하급수적으로 빨라집니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>Theorem 12.5.</strong> <img src="https://latex.codecogs.com/png.latex?g">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smooth 및 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-strongly convex 함수이고 <img src="https://latex.codecogs.com/png.latex?h">가 볼록 함수일 때, 다음이 성립한다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%5C%7Cx_%7BT+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cle%20%5Cleft(%201%20-%20%5Cfrac%7B%5Calpha%7D%7B%5Cbeta%7D%20%5Cright)%5ET%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"></p>
+</blockquote>
+<section id="proof.-3" class="level3">
+<h3 class="anchored" data-anchor-id="proof.-3"><strong>Proof.</strong></h3>
+<ul>
+<li><p>식 (12.4)에서 좌변 <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x%5E*)"> 는 최적해의 정의에 의해 항상 0보다 크거나 같습니다. 따라서 부등식 우변도 0보다 크거나 같아야 합니다. <img src="https://latex.codecogs.com/png.latex?0%20%5Cle%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%5Cleft(%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2%20-%20%5C%7Cx_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cright)%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2"></p></li>
+<li><p>이를 <img src="https://latex.codecogs.com/png.latex?%5C%7Cx_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2"> 에 대해 정리해 보겠습니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%5C%7Cx_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cle%20%5Cfrac%7B%5Cbeta%20-%20%5Calpha%7D%7B2%7D%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2"> <img src="https://latex.codecogs.com/png.latex?%5C%7Cx_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cle%20%5Cleft(%201%20-%20%5Cfrac%7B%5Calpha%7D%7B%5Cbeta%7D%20%5Cright)%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2"></p></li>
+<li><p>이 관계식을 <img src="https://latex.codecogs.com/png.latex?t=1">부터 <img src="https://latex.codecogs.com/png.latex?T">까지 연쇄적으로(Recursively) 적용하면, 공비가 <img src="https://latex.codecogs.com/png.latex?(1%20-%20%5Calpha/%5Cbeta)">인 등비수열의 형태가 되어 증명이 완료됩니다. 이는 매 스텝마다 최적해와의 거리의 제곱이 상수 비율로 감소하는 <strong>선형 수렴(Linear Convergence)</strong>을 의미합니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></p></li>
 </ul>
 
 
 
+</section>
 </section>
 </section>
 

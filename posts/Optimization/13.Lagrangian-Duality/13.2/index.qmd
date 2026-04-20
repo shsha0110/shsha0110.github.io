@@ -1,0 +1,119 @@
+---
+title: "[Optimization] 13. Proximal Gradient Descent (Part 2)"
+description: "Nesterov’s Acceleration and FISTA"
+author: "유성현"
+date: "2026-04-13"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. Introduction
+
+* 이전 포스트에서는 LASSO와 같이 미분 불가능한 항이 포함된 복합 최적화(Composite convex minimization) 문제를 풀기 위해 **근접 경사 하강법(Proximal Gradient Descent)**과 이를 LASSO에 적용한 **ISTA(Iterative Shrinkage-Thresholding Algorithm)**를 다루었습니다. 
+
+* ISTA는 준기울기 하강법(Subgradient method)의 $O(1/\epsilon^2)$ 수렴 속도를 $O(1/\epsilon)$으로 개선했지만, 여전히 $O(1/T)$의 수렴 속도를 가집니다. 이번 포스트에서는 **Nesterov의 가속(Acceleration)** 기법을 결합하여 수렴 속도를 최적의 하한(Oracle lower bound)인 **$O(1/T^2)$**까지 끌어올리는 **FISTA(Fast ISTA)**의 알고리즘과 그 수학적 증명 과정을 매우 상세하게 살펴봅니다.
+
+---
+
+# 2. 가속화된 근접 경사 하강법 (Algorithm 1)
+
+* 매끄러운 함수 $g$와 비매끄러운 함수 $h$의 합인 $g+h$를 최소화할 때, 기존의 근접 경사 하강법은 현재 점 $x_t$에서 직접 다음 점을 계산했습니다. 
+
+$$x_{t+1} = \text{prox}_{h/\beta}\left(x_{t} - \frac{1}{\beta}\nabla g(x_{t})\right)$$
+
+* 하지만 가속화된 근접 경사 하강법은 $x_t$에서 직접 경사 하강을 적용하는 대신, 이전 스텝($x_{t-1}$에서 $x_t$)의 **모멘텀(Momentum) 방향을 따라 조금 더 나아간 지점 $y_t$**를 계산한 뒤, 이 $y_t$에서 근접 경사 하강을 수행합니다.
+
+### Algorithm 1: Accelerated Proximal Gradient Descent
+* **Initialize:** $x_1 \in \mathbb{R}^d$, 그리고 $x_0 = x_1$로 설정.
+* **For** $t = 1, \dots, T$ **do:**
+  * 1. $y_t = x_t + \gamma_t (x_t - x_{t-1})$ (단, $\gamma_t > 0$는 모멘텀 가중치)
+  * 2. $x_{t+1} = \text{prox}_{h/\beta}\left(y_t - \frac{1}{\beta}\nabla g(y_t)\right)$
+* **Return** $x_{T+1}$
+
+---
+
+# 3. 수렴성 증명을 위한 핵심 보조정리
+
+* FISTA의 수렴성을 증명하기 위해서는 근접 연산자의 특성을 나타내는 부등식이 필요합니다.
+
+> Lemma 13.1
+> 
+> 임의의 $x, z \in \mathbb{R}^d$에 대하여 다음이 성립합니다.
+> 
+> $$\frac{1}{\eta}(\text{prox}_{\eta h}(x) - x)^\top (z - \text{prox}_{\eta h}(x)) + h(z) \ge h(\text{prox}_{\eta h}(x))$$
+
+### **[Proof]**
+* 근접 연산자의 정의에 의해 $\text{prox}_{\eta h}(x) = \arg\min_{z \in \mathbb{R}^d} \left\{ h(z) + \frac{1}{2\eta}||x - z||_2^2 \right\}$ 입니다. 
+* 최적성 조건(Optimality condition)에 따라, 최적해에서의 준미분(subgradient) $g \in \partial h(\text{prox}_{\eta h}(x))$ 에 대해 다음이 성립해야 합니다.
+$$\left(g + \frac{1}{\eta}(\text{prox}_{\eta h}(x) - x)\right)^\top (z - \text{prox}_{\eta h}(x)) \ge 0$$
+* 이를 전개하면,
+$$\frac{1}{\eta}(\text{prox}_{\eta h}(x) - x)^\top (z - \text{prox}_{\eta h}(x)) + g^\top (z - \text{prox}_{\eta h}(x)) \ge 0$$
+* 한편, 함수 $h$는 볼록 함수이므로 1차 조건에 의해 $h(z) \ge h(\text{prox}_{\eta h}(x)) + g^\top (z - \text{prox}_{\eta h}(x))$ 가 성립합니다.
+* 이 두 부등식을 더하면 보조정리가 증명됩니다. $\blacksquare$
+
+---
+
+# 4. FISTA의 $O(1/T^2)$ 수렴성 증명 (Theorem 13.2)
+
+> Theorem 13.2
+> 
+> 목적 함수 $f = g + h$ 에서 $g$가 $l_2$ 노름 상에서 $\beta$-smooth한 볼록 함수이고 $h$가 볼록 함수라고 가정합니다. 
+> 
+> 학습률을 $\eta = \frac{1}{\beta}$, 모멘텀 파라미터를 $\gamma_t = \frac{t-2}{t+1}$로 설정하면, Algorithm 1이 반환하는 $x_{T+1}$은 다음을 만족합니다.
+> 
+> $$f(x_{T+1}) - f(x^*) \le \frac{2\beta}{(T+1)^2} ||x_1 - x^*||_2^2$$
+> 
+> (단, $x^*$는 최적해입니다.)
+
+### **[Proof]**
+* 증명의 핵심은 Algorithm 1을 다루기 쉬운 **동치 형태(Equivalent formulation)**로 변환하는 것입니다. Nesterov 가속 증명에서 자주 쓰이는 보조 수열 $v_t$와 $\lambda_t$를 다음과 같이 정의합니다.
+
+$$\lambda_t = \frac{2}{t+1}$$
+$$y_t = (1-\lambda_t)x_t + \lambda_t v_t$$
+$$x_{t+1} = \text{prox}_{h/\beta}\left(y_t - \frac{1}{\beta}\nabla g(y_t)\right)$$
+$$v_{t+1} = x_t + \frac{1}{\lambda_t}(x_{t+1} - x_t)$$
+
+* 이 형태가 Algorithm 1과 완전히 동일한 이유는 $y_t = x_t + \lambda_t(v_t - x_t)$ 로 쓸 수 있고, $\lambda_t(v_t - x_t)$를 전개하면 $\gamma_t(x_t - x_{t-1})$이 도출되기 때문입니다. 또한 $\lambda_1 = 1$이며, $t \ge 2$에 대해 $\frac{1-\lambda_t}{\lambda_t^2} \le \frac{1}{\lambda_{t-1}^2}$ 가 성립합니다.
+
+* **Step 1: 목적 함수의 상한 구하기**
+  * 먼저 $g$가 $\beta$-smooth 하므로 다음이 성립합니다.
+  $$g(x_{t+1}) \le g(y_t) + \nabla g(y_t)^\top (x_{t+1} - y_t) + \frac{\beta}{2} ||x_{t+1} - y_t||_2^2$$
+  * 다음으로, 비매끄러운 부분 $h$에 Lemma 13.1을 적용($\eta=1/\beta$)하면 임의의 $z$에 대해:
+  $$h(x_{t+1}) \le h(z) + \nabla g(y_t)^\top (z - x_{t+1}) + \beta(x_{t+1} - y_t)^\top (z - x_{t+1})$$
+  * 이 두 부등식을 더하고, $g$의 볼록성($g(y_t) + \nabla g(y_t)^\top(z - y_t) \le g(z)$)을 적용하면:
+  $$f(x_{t+1}) \le f(z) + \beta(x_{t+1} - y_t)^\top (z - x_{t+1}) + \frac{\beta}{2} ||x_{t+1} - y_t||_2^2$$
+
+* **Step 2: 볼록 조합을 통한 부등식 결합**
+  * 위 식에 $z = x^*$를 대입한 식과 $z = x_t$를 대입한 식을 만듭니다.
+    * 1. $f(x_{t+1}) - f(x^*) \le \beta(x_{t+1} - y_t)^\top (x^* - x_{t+1}) + \frac{\beta}{2} ||x_{t+1} - y_t||_2^2$
+    * 2. $f(x_{t+1}) - f(x_t) \le \beta(x_{t+1} - y_t)^\top (x_t - x_{t+1}) + \frac{\beta}{2} ||x_{t+1} - y_t||_2^2$
+  * 첫 번째 식에 $\lambda_t$를 곱하고, 두 번째 식에 $(1-\lambda_t)$를 곱하여 더합니다.
+  $$f(x_{t+1}) - f(x^*) - (1-\lambda_t)(f(x_t) - f(x^*)) \le \frac{\beta}{2} (x_{t+1} - y_t)^\top (2\lambda_t x^* + 2(1-\lambda_t)x_t - 2x_{t+1})$$
+  * 우변을 완전제곱식 형태로 묶기 위해 정리하면 놀랍게도 다음과 같이 에너지가 분리됩니다.
+  $$= \frac{\beta}{2} ||y_t - (1-\lambda_t)x_t - \lambda_t x^*||_2^2 - \frac{\beta}{2} ||x_{t+1} - (1-\lambda_t)x_t - \lambda_t x^*||_2^2$$
+  * 여기에 우리가 앞서 정의한 $y_t - (1-\lambda_t)x_t = \lambda_t v_t$ 와 $x_{t+1} - (1-\lambda_t)x_t = \lambda_t v_{t+1}$ 을 대입합니다.
+  $$= \frac{\beta\lambda_t^2}{2} ||v_t - x^*||_2^2 - \frac{\beta\lambda_t^2}{2} ||v_{t+1} - x^*||_2^2$$
+
+* **Step 3: 점화식 풀이 (Telescoping Sum)**
+  * 양변을 $\lambda_t^2$로 나누어 정리합니다.
+  $$\frac{1}{\lambda_t^2}(f(x_{t+1}) - f(x^*)) + \frac{\beta}{2} ||v_{t+1} - x^*||_2^2 \le \frac{1-\lambda_t}{\lambda_t^2}(f(x_t) - f(x^*)) + \frac{\beta}{2} ||v_t - x^*||_2^2$$
+  * $\frac{1-\lambda_t}{\lambda_t^2} \le \frac{1}{\lambda_{t-1}^2}$ 이므로, 이 부등식을 연쇄적으로 $t=1$까지 적용할 수 있습니다.
+  $$\le \frac{1}{\lambda_{t-1}^2}(f(x_t) - f(x^*)) + \frac{\beta}{2} ||v_t - x^*||_2^2 \le \dots \le \frac{1-\lambda_1}{\lambda_1^2}(f(x_1) - f(x^*)) + \frac{\beta}{2} ||v_1 - x^*||_2^2$$
+  * 초기 조건에서 $\lambda_1 = 1$이므로 첫 번째 항은 $0$이 되고, $v_1 = x_1$이므로 최종적으로 우변은 $\frac{\beta}{2}||x_1 - x^*||_2^2$ 만 남게 됩니다.
+  $$\frac{1}{\lambda_T^2} (f(x_{T+1}) - f(x^*)) \le \frac{\beta}{2} ||x_1 - x^*||_2^2$$
+  * $\lambda_T = \frac{2}{T+1}$ 을 대입하면 최종 정리가 도출됩니다.
+  $$f(x_{T+1}) - f(x^*) \le \frac{\beta\lambda_T^2}{2} ||x_1 - x^*||_2^2 = \frac{2\beta}{(T+1)^2} ||x_1 - x^*||_2^2 \quad \blacksquare$$
+
+---
+
+# 5. Conclusion: ISTA vs FISTA
+
+* 위 증명을 통해 가속화된 근접 경사 하강법(FISTA)이 $O(1/T^2)$의 수렴 속도를 가짐을 완벽히 보였습니다. 이는 오차(error)를 $\epsilon$ 이하로 만들기 위해 **ISTA는 $O(1/\epsilon)$번의 반복이 필요한 반면, FISTA는 단 $O(1/\sqrt{\epsilon})$번의 반복만 필요함**을 의미합니다. 
+
+* LASSO 문제에서 변수의 개수(Dimension)나 샘플의 수(Data samples)가 커질수록 이 반복 횟수의 차이는 연산 시간에 엄청난 격차를 만들어냅니다. 따라서 실무와 연구에서 LASSO 최적화를 수행할 때 기본적인 Subgradient나 ISTA 대신 **FISTA**를 표준적으로 사용하는 이유가 바로 여기에 있습니다.

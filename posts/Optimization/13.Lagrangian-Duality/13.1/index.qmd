@@ -1,0 +1,64 @@
+---
+title: "[Optimization] 13. Proximal Gradient Descent (Part 1)"
+description: "LASSO: Least Absolute Shrinkage and Selection Operator"
+author: "유성현"
+date: "2026-04-13"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. Introduction
+
+* 이번 강의에서는 비매끄러운(non-smooth) 최적화 문제를 다루기 위한 **근접 방법(Proximal Methods)**의 두 번째 파트를 학습합니다. 특히 고차원 데이터 분석과 회귀 모델에서 변수 선택(Variable selection)과 정규화(Regularization)를 동시에 수행하는 **LASSO(Least Absolute Shrinkage and Selection Operator)** 문제에 집중합니다. 
+
+* 강의의 전체적인 개요는 Nesterov의 가속 기법(Acceleration)과 FISTA(Fast Iterative Shrinkage-Thresholding Algorithm)를 다루는 것이지만, 본 문서에서는 그 기초가 되는 LASSO의 수학적 구조와 기본 ISTA 알고리즘의 유도 과정을 상세히 정리합니다.
+
+---
+
+# 2. LASSO 최적화 문제와 Subgradient Method의 한계
+
+## 2.1 LASSO 문제의 수학적 정의
+* LASSO 모델의 목적 함수(Objective function)는 다음과 같이 잔차 제곱합(MSE)에 $l_1$-정규화(Regularization) 항을 더한 형태로 정의됩니다.
+
+$$\min_{\theta} \frac{1}{n}||y - X\theta||_{2}^{2} + \lambda||\theta||_{1}$$ 
+
+* 이 식에서 목적 함수는 전체적으로 볼록(Convex) 함수입니다. 하지만, 패널티 항인 $\lambda||\theta||_{1}$이 원점($\theta=0$)에서 미분 불가능(non-differentiable)하기 때문에 전체 목적 함수 역시 비매끄러운(non-smooth) 특성을 가집니다.
+
+## 2.2 준기울기 하강법(Subgradient Method)의 적용과 한계
+* 목적 함수가 비매끄럽더라도 볼록 함수이므로, $||\theta||_1$의 준미분(Subdifferential) 특성을 활용하여 **준기울기 하강법(Subgradient Method)**을 단순하게 적용해 볼 수 있습니다. 
+
+* 하지만 준기울기 하강법은 최적화 속도 측면에서 치명적인 단점이 있습니다. 목표하는 가산 오차(additive error) $\epsilon$ 이내로 수렴하기 위해서는 $O(1/\epsilon^{2})$ 번의 반복(iteration)이 필요합니다. 즉, 고정밀도의 해를 구하려면 연산량이 기하급수적으로 증가하여 수렴이 매우 느려집니다.
+
+---
+
+# 3. 근접 경사 하강법 (Proximal Gradient Descent)과 ISTA
+
+* 준기울기 하강법의 느린 수렴 속도를 극복하기 위해, 목적 함수를 미분 가능한 매끄러운 부분과 미분 불가능한 비매끄러운 부분으로 분리하여 접근하는 **근접 경사 하강법(Proximal Gradient Descent)**을 도입합니다.
+
+## 3.1 목적 함수의 분리와 근접 연산자 (Proximal Operator)
+* LASSO의 목적 함수를 두 부분으로 나눕니다.
+  * **매끄러운 함수 (Smooth part):** $g(\theta) = \frac{1}{n}||y - X\theta||_{2}^{2}$
+  * **비매끄러운 함수 (Non-smooth part):** $h(\theta) = \lambda||\theta||_{1}$ 
+
+* 이때 $h(\theta)$에 대한 근접 연산자(Prox Operator)는 닫힌 형태(closed-form)의 해를 가지며, 이를 수학적으로 도출하면 아래와 같은 **수축 연산자(Shrinkage Operator)** 형태가 됩니다.
+
+$$\text{prox}_{\eta \lambda ||\cdot||_{1}}(\theta) = \left( \max\{0, |\theta_{i}| - \eta\lambda\} \cdot \text{sign}(\theta_{i}) \right)_{i\in[d]}$$ 
+
+* 이 연산자는 벡터 $\theta$의 각 원소 $\theta_i$에 대해 크기가 $\eta\lambda$보다 작으면 완전히 $0$으로 만들어버리고(Shrinkage), 크면 $\eta\lambda$만큼 크기를 줄이는 **Soft-thresholding** 역할을 수행합니다. 이것이 바로 LASSO가 변수 선택(희소성, Sparsity) 능력을 갖게 되는 수학적 근원입니다.
+
+## 3.2 ISTA (Iterative Shrinkage-Thresholding Algorithm)
+* 위의 근접 연산자를 활용하여 복합 최적화 문제에 대한 업데이트 규칙을 구성하면 다음과 같습니다.
+
+$$\theta_{t+1} = \text{prox}_{\eta h}(\theta_{t} - \eta\nabla g(\theta_{t}))$$ 
+
+* 작동 원리는 간단합니다.
+  * 1.  먼저 매끄러운 함수 $g(\theta)$에 대해서 일반적인 경사 하강(Gradient Descent) 스텝 $\theta_{t} - \eta\nabla g(\theta_{t})$을 밟습니다.
+  * 2.  그렇게 이동한 임시 지점에 대해 근접 연산자 $\text{prox}_{\eta h}$ (즉, Soft-thresholding)를 적용하여 최종 다음 지점 $\theta_{t+1}$을 결정합니다.
+
+* 이처럼 LASSO 문제에 근접 경사 하강법을 적용하여 얻은 알고리즘을 특별히 **반복적 수축-임계값 알고리즘(Iterative Shrinkage-Thresholding Algorithm, ISTA)**이라고 부릅니다.

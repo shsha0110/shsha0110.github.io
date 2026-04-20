@@ -1,0 +1,93 @@
+---
+title: "[Optimization] 13. Proximal Gradient Descent (Part 3)"
+description: "Proximal point algorithm"
+author: "유성현"
+date: "2026-04-13"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. Introduction
+
+* 이전 포스트들에서는 복합 최적화 문제를 풀기 위한 기본적인 근접 경사 하강법(ISTA)과, 수렴 속도를 최적화한 네스테로프 가속 기반의 FISTA를 다루었습니다. 이론적으로 FISTA는 $O(1/T^2)$의 수렴 속도를 달성하며, 실제 LASSO 문제에 적용했을 때 일반적인 준기울기 하강법이나 ISTA보다 압도적으로 빠르게 손실 함수(Loss)를 감소시킴을 확인했습니다.
+
+* 이번 포스트에서는 근접 경사 하강법의 특수한 형태이자, 최적화 이론의 근간이 되는 **근접점 알고리즘(Proximal Point Algorithm, PPA)**에 대해 자세히 알아봅니다. 특히 이 알고리즘이 우리가 잘 아는 **경사 하강법(Gradient Descent)**과 수학적으로 어떻게 연결되는지, 그리고 **암시적 경사 하강법(Implicit Gradient Descent)**으로 어떻게 해석될 수 있는지 상세히 증명해 보겠습니다.
+
+---
+
+# 2. 근접점 알고리즘 (Proximal Point Algorithm)
+
+## 2.1 자명한 복합 최소화 (Trivial Composite Minimization)
+* 근접 경사 하강법은 원래 $f(x) = g(x) + h(x)$ 형태의 목적 함수를 최소화하기 위해 설계되었습니다. 하지만 일반적인 닫힌 볼록 함수(closed convex function) $f$를 최소화하는 문제를 다음과 같이 자명한(trivial) 형태의 복합 최소화 문제로 재구성해 볼 수 있습니다.
+
+$$\text{minimize } f(x) = 0 + f(x)$$
+
+* 여기서 첫 번째 부분인 $g(x) = 0$은 모든 곳에서 미분 가능하며 기울기가 $0$인 가장 완벽한 매끄러운(smooth) 함수입니다. 두 번째 부분은 $h(x) = f(x)$가 됩니다.
+
+## 2.2 Algorithm 2: Proximal Point Algorithm
+* 위의 설정($g=0, h=f$)을 근접 경사 하강법의 업데이트 규칙 $x_{t+1} = \text{prox}_{\eta h}(x_t - \eta\nabla g(x_t))$에 대입하면, 기울기 항($\nabla g$)이 사라지면서 매우 단순한 업데이트 규칙이 도출됩니다.
+
+$$x_{t+1} = \text{prox}_{\eta f}(x_t)$$
+
+* 이를 **근접점 알고리즘(Proximal Point Algorithm)**이라고 부르며, $g=0$이 매끄러운 함수이므로 이 알고리즘은 기본적으로 $O(1/T)$의 수렴 속도를 보장받습니다.
+
+> **Algorithm 2: Proximal point algorithm**
+> * **Initialize** $x_1$
+> * **For** $t=1, \dots, T$ **do:**
+>     * **Update** $x_{t+1} = \text{prox}_{\eta f}(x_t)$
+> * **End for**
+> * **Return** $x_{T+1}$
+
+---
+
+# 3. 경사 하강법(Gradient Descent)과의 연결
+
+* 이론적으로, 근접점 알고리즘을 실행할 때 매 스텝마다 진짜 목적 함수 $f$ 대신 가상의 함수 $h_t$를 사용할 수도 있습니다. 즉, $x_{t+1} = \text{prox}_{\eta h_t}(x_t)$ 형태로 업데이트를 진행하는 것입니다.
+
+* 이때, 함수 $h_t$를 현재 점 $x_t$에서의 목적 함수 $f$에 대한 **1차 테일러 근사(First-order approximation)**로 정의해 봅시다.
+
+$$h_t(x) = f(x_t) + \nabla f(x_t)^\top (x - x_t)$$
+
+* 볼록성(Convexity)에 의해 항상 $f(x) \ge h_t(x)$가 성립합니다. 이제 이 선형 근사 함수 $h_t$를 근접점 업데이트 규칙에 대입해 보겠습니다.
+
+$$\text{prox}_{\eta h_t}(x_t) = \arg\min_{u} \left\{ f(x_t) + \nabla f(x_t)^\top (u - x_t) + \frac{1}{2\eta}||u - x_t||_2^2 \right\}$$
+
+* 위 식은 변수 $u$에 대한 2차 함수(quadratic function)이므로, 최솟값을 찾기 위해 $u$로 미분하여 $0$으로 두면 다음 결과를 얻습니다.
+
+$$= x_t - \eta\nabla f(x_t)$$
+
+* 결론적으로, **목적 함수의 1차 근사에 대해 근접점 알고리즘을 적용하는 것은 정확히 일반적인 경사 하강법(Gradient Descent)과 동일**합니다. 다시 말해, 경사 하강법은 근접점 알고리즘의 특별한 한 인스턴스(instance)로 해석될 수 있습니다.
+
+---
+
+# 4. 암시적 경사 하강법 (Implicit Gradient Descent)
+
+* 그렇다면 근사 함수 $h_t$가 아닌 원래의 함수 $f$ 자체를 근접점 알고리즘에 적용하면 어떤 의미를 가질까요? 이를 이해하기 위해 다음 보조정리가 필요합니다.
+
+> Lemma 13.3
+> 
+> $$\text{prox}_{\eta f}(x) = (I + \eta\partial f)^{-1}(x)$$
+
+## **[Proof]**
+* $u = \text{prox}_{\eta f}(x)$ 라고 둡시다. 근접 연산자의 최적성 조건에 의해 이는 다음 식과 동치입니다.
+$$x - u \in \eta\partial f(u)$$
+* 이 식을 변형하면 $x \in (I + \eta\partial f)(u)$ 가 되며, 이는 곧 $u \in (I + \eta\partial f)^{-1}(x)$ 와 같습니다. 요약하면 다음과 같습니다.
+$$u = \text{prox}_{\eta f}(x) \iff u \in (I + \eta\partial f)^{-1}(x)$$
+* 이때 $u$는 유일(unique)하므로, $u = (I + \eta\partial f)^{-1}(x)$ 가 성립합니다. $\blacksquare$
+
+## 업데이트 규칙의 재해석
+* 이 보조정리를 근접점 알고리즘의 업데이트 식에 대입해 봅니다. 함수 $f$가 미분 가능하다고 가정($\partial f = \nabla f$)하면,
+$$x_{t+1} = \text{prox}_{\eta f}(x_t) = (I + \eta\nabla f)^{-1}(x_t)$$
+* 양변에 $(I + \eta\nabla f)$를 취하면,
+$$x_t = (I + \eta\nabla f)(x_{t+1}) = x_{t+1} + \eta\nabla f(x_{t+1})$$
+* 이를 $x_{t+1}$에 대해 정리하면 다음과 같은 식을 얻습니다.
+
+$$x_{t+1} = x_t - \eta\nabla f(x_{t+1})$$
+
+* 일반적인 경사 하강법이 $x_{t+1} = x_t - \eta\nabla f(x_t)$ 로서 현재 점 $x_t$의 기울기를 사용하는 반면, 근접점 알고리즘은 **도달하게 될 미래의 점 $x_{t+1}$에서의 기울기를 사용**합니다. 이를 **암시적 경사 하강법(Implicit Gradient Descent)**이라고 부릅니다. 미래의 기울기를 계산에 포함하기 때문에 한 스텝을 계산하는 것은 더 어렵지만, 어떠한 큰 학습률(Step size, $\eta$)에 대해서도 절대 발산하지 않는 강력한 수학적 안정성을 제공합니다.

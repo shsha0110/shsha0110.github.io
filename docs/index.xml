@@ -10,7 +10,662 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>스흐의 공부 블로그</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Sun, 19 Apr 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Mon, 20 Apr 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>[Data Mining] 14. Link Analysis (Part 1)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.1/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="서론-웹-검색과-링크-분석link-analysis" class="level1">
+<h1>1. 서론: 웹 검색과 링크 분석(Link Analysis)</h1>
+<ul>
+<li><p>현대의 데이터 마이닝에서 <strong>그래프 마이닝(Graph Mining)</strong>은 데이터 내부의 연결성과 관계(Connections/Relationships)를 연구하는 매우 중요한 분야입니다. 그 중에서도 가장 대표적이고 성공적인 응용 사례가 바로 <strong>웹 검색(Web Search)</strong>입니다.</p></li>
+<li><p>본 포스트에서는 검색 엔진이 사용자의 질의(Query)에 어떻게 응답하는지, 초기의 텍스트 기반 검색 방식이 가졌던 한계는 무엇인지, 그리고 이를 극복하기 위해 <strong>웹을 그래프(Graph)로 모델링</strong>하는 아이디어가 어떻게 등장했는지 살펴봅니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="웹-검색의-기본-구조와-역색인inverted-index" class="level1">
+<h1>2. 웹 검색의 기본 구조와 역색인(Inverted Index)</h1>
+<ul>
+<li>웹 검색의 궁극적인 목표는 <strong>“사용자의 질의(Query)에 대해 가장 관련성 높은(relevant) 웹 페이지를 찾아 반환하는 것”</strong>입니다. 이를 위해 검색 엔진은 크게 두 가지 핵심 과정을 거칩니다.
+<ul>
+<li><ol type="1">
+<li><strong>색인(Indexing):</strong> 단어(Terms)를 해당 단어가 포함된 웹 페이지(Pages)에 매핑하는 <strong>역색인(Inverted Index)</strong> 구조를 구축합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>랭킹(Ranking):</strong> 검색된 페이지들을 해당 페이지의 “권위(Authority)” 또는 “신뢰도(Trust)”를 기준으로 정렬합니다.</li>
+</ol></li>
+</ul></li>
+<li>웹 검색은 인터넷 규모의 방대한 데이터(Web-scale size)를 실시간으로 처리해야 하며, 스팸(Spam) 조작을 걸러내야 한다는 두 가지 주요한 과제를 안고 있습니다.</li>
+</ul>
+<section id="역색인inverted-index의-원리" class="level2">
+<h2 class="anchored" data-anchor-id="역색인inverted-index의-원리">2.1 역색인(Inverted Index)의 원리</h2>
+<ul>
+<li>역색인은 웹 검색을 위한 가장 핵심적인 자료 구조입니다. 책의 맨 뒤에 있는 “찾아보기(Index)”와 완전히 동일한 원리로 동작합니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.1/images/inverted_index_structure.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 역색인(Inverted Index)의 구조. “cat”, “dog”와 같은 특정 단어(Term)가 인덱스로 주어지면 버킷(Buckets)을 거쳐 해당 단어가 포함된 실제 문서(Documents)들을 매핑하여 반환하는 과정을 보여줍니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><p>검색 질의가 들어오면 검색 엔진은 모든 페이지를 처음부터 끝까지 스캔하는 것이 아니라, 역색인 테이블을 참조하여 해당 단어가 포함된 페이지들을 즉각적으로 추출합니다.</p></li>
+<li><p>전통적인 정보 검색(Information Retrieval) 관점에서는 <strong>특정 단어가 페이지 내에서 더 자주 등장할수록(Term Frequency가 높을수록) 해당 페이지가 질의와 더 높은 관련성을 가진다고 판단</strong>했습니다.</p></li>
+</ul>
+</section>
+<section id="역색인-방식의-치명적인-한계-스팸-조작" class="level2">
+<h2 class="anchored" data-anchor-id="역색인-방식의-치명적인-한계-스팸-조작">2.2 역색인 방식의 치명적인 한계: 스팸 조작</h2>
+<ul>
+<li>단어의 등장 빈도에만 의존하는 방식은 악의적인 사용자(Unethical people)에 의해 매우 쉽게 조작될 수 있다는 치명적인 한계를 가집니다. 검색 엔진을 속이는 대표적인 수법은 다음과 같습니다.
+<ul>
+<li><strong>보이지 않는 텍스트(Invisible Text) 삽입:</strong> 배경색과 동일한 색상으로 특정 키워드(예: “cat”)를 페이지 내에 수천 번 반복해서 적어 넣습니다.</li>
+</ul></li>
+<li>사용자의 눈에는 보이지 않지만, 검색 엔진의 크롤러는 해당 페이지가 “cat”이라는 키워드에 대해 엄청난 관련성(빈도)을 가진 문서라고 착각하게 됩니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.1/images/inverted_index_spam_limitation.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 텍스트 스팸의 예시. 정상적인 문서들 사이에 배경색과 동일하게 “cat”이라는 단어를 수천 번 복사하여 붙여넣은 스팸 문서가 역색인에 의해 높은 순위로 랭크되는 구조적 한계를 나타냅니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>이러한 조작(Spam manipulation)이 만연해지면서, 페이지 내부의 텍스트 콘텐츠(Content)만으로는 문서의 진정한 가치와 신뢰도를 평가할 수 없게 되었습니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="새로운-패러다임-웹을-그래프graph로-이해하기" class="level1">
+<h1>3. 새로운 패러다임: 웹을 그래프(Graph)로 이해하기</h1>
+<ul>
+<li><p>텍스트 기반 랭킹의 한계를 극복하기 위한 근본적인 질문은 <strong>“어떻게 해야 진정으로 신뢰할 수 있는(trustful) 페이지를 정확하게 랭킹할 수 있을까?”</strong>였습니다.</p></li>
+<li><p>그 해답은 웹 문서들이 서로 연결되어 있는 구조, 즉 <strong>하이퍼링크(Hyperlinks)</strong>에 있었습니다. 우리는 전체 웹을 하나의 거대한 <strong>그래프(Graph)</strong>로 모델링할 수 있습니다.</p>
+<ul>
+<li><strong>노드(Nodes):</strong> 각각의 웹 페이지</li>
+<li><strong>간선(Edges):</strong> 페이지 <img src="https://latex.codecogs.com/png.latex?p_1">에서 페이지 <img src="https://latex.codecogs.com/png.latex?p_2">로 향하는 하이퍼링크 (방향성 존재)</li>
+</ul></li>
+<li><p>이 아이디어의 핵심 철학은 다음과 같습니다.</p></li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>“신뢰할 수 있고 유용한 페이지들은 자연스럽게 서로를 가리킬(point to) 것이다.”</strong></p>
+</blockquote>
+<ul>
+<li>누군가 다른 사람의 웹페이지로 링크를 건다는 것은 일종의 <strong>추천(Endorsement)</strong>이자 <strong>투표(Vote)</strong>로 해석할 수 있습니다. 텍스트는 조작하기 쉽지만, 전 세계의 수많은 사람들이 자발적으로 생성하는 하이퍼링크 구조는 조작하기가 훨씬 어렵습니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.1/images/web_as_a_graph.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 웹 페이지 간의 방향성 하이퍼링크 예시. “I teach a class on Networks” 페이지가 스탠포드 대학의 특정 건물 및 학과 페이지들을 거쳐 최종적으로 스탠포드 대학교 메인 홈페이지를 향하는 일련의 방향성 그래프 흐름을 보여줍니다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+<section id="그래프의-수학적-표현-mathematical-representation" class="level1">
+<h1>4. 그래프의 수학적 표현 (Mathematical Representation)</h1>
+<ul>
+<li><p>네트워크 분석과 머신러닝 알고리즘에 웹을 태우기 위해서는 이 거대한 그래프 구조를 수학적으로 명확하게 정의해야 합니다.</p></li>
+<li><p>그래프 <img src="https://latex.codecogs.com/png.latex?G">는 <img src="https://latex.codecogs.com/png.latex?n">개의 노드(nodes)와 <img src="https://latex.codecogs.com/png.latex?m">개의 간선(edges)을 통해 객체들 간의 관계를 모델링합니다. 이를 컴퓨터가 효율적으로 처리하기 위해 일반적으로 <strong>인접 행렬(Adjacency Matrix)</strong> <img src="https://latex.codecogs.com/png.latex?S">를 사용합니다.</p></li>
+<li><p>행렬 <img src="https://latex.codecogs.com/png.latex?S">의 크기는 <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20n">이며, 각 원소 <img src="https://latex.codecogs.com/png.latex?S_%7Bij%7D">는 노드 <img src="https://latex.codecogs.com/png.latex?i">에서 노드 <img src="https://latex.codecogs.com/png.latex?j">로의 연결 여부를 나타냅니다. (행과 열의 인덱스가 0부터 시작한다고 가정합니다.)</p></li>
+</ul>
+<section id="인접-행렬의-종류와-희소성sparsity" class="level3">
+<h3 class="anchored" data-anchor-id="인접-행렬의-종류와-희소성sparsity">4.1 인접 행렬의 종류와 희소성(Sparsity)</h3>
+<ul>
+<li><p><strong>방향 그래프 (Directed Graph):</strong> 하이퍼링크처럼 방향이 있는 경우, 행렬 <img src="https://latex.codecogs.com/png.latex?S">는 <strong>비대칭 행렬(Asymmetric matrix)</strong>이 되며 비영원소(non-zeros)의 개수는 간선의 수인 <img src="https://latex.codecogs.com/png.latex?m">개입니다.</p></li>
+<li><p><strong>무방향 그래프 (Undirected Graph):</strong> 페이스북 친구 맺기처럼 양방향 관계인 경우, 행렬 <img src="https://latex.codecogs.com/png.latex?S">는 <strong>대칭 행렬(Symmetric matrix)</strong>이 되며 비영원소의 개수는 <img src="https://latex.codecogs.com/png.latex?2m">개가 됩니다.</p></li>
+<li><p>실제 웹 환경에서는 <img src="https://latex.codecogs.com/png.latex?n">(페이지 수)이 수백억 개 이상에 달하지만, 한 페이지가 가지는 링크의 수는 보통 수십 개에 불과하므로 <img src="https://latex.codecogs.com/png.latex?S">는 0이 압도적으로 많은 <strong>희소 행렬(Sparse Matrix)</strong> 형태를 띱니다.</p></li>
+</ul>
+</section>
+<section id="예시-무방향-그래프의-인접-행렬-구성" class="level3">
+<h3 class="anchored" data-anchor-id="예시-무방향-그래프의-인접-행렬-구성">4.2 예시: 무방향 그래프의 인접 행렬 구성</h3>
+<ul>
+<li>다음과 같이 6개의 노드(0부터 5까지)를 가진 무방향 그래프가 주어졌다고 가정해 봅시다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.1/images/graph_nodes_example.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 6개의 노드(0~5)로 구성된 무방향 그래프 예시 도식화. 노드 0은 1, 2, 3, 4와 연결되어 있고, 노드 5는 2, 3과 연결된 구조 등 노드 간 상호 연결망을 선분으로 표시하고 있습니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>위 그림의 연결 상태를 기반으로 <img src="https://latex.codecogs.com/png.latex?6%20%5Ctimes%206"> 대칭 인접 행렬 <img src="https://latex.codecogs.com/png.latex?S">를 수학적으로 표현하면 다음과 같습니다. 무방향 그래프이므로 <img src="https://latex.codecogs.com/png.latex?S_%7Bij%7D%20=%20S_%7Bji%7D">가 성립하며, 자기 자신으로의 연결이 없다면 대각 원소는 모두 0이 됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?S=%5Cbegin%7Bbmatrix%7D0&amp;1&amp;1&amp;1&amp;1&amp;0%5C%5C1&amp;0&amp;0&amp;1&amp;0&amp;0%5C%5C1&amp;0&amp;0&amp;1&amp;1&amp;1%5C%5C1&amp;1&amp;1&amp;0&amp;0&amp;1%5C%5C1&amp;0&amp;1&amp;0&amp;0&amp;0%5C%5C0&amp;0&amp;1&amp;1&amp;0&amp;0%5Cend%7Bbmatrix%7D"></p>
+<ul>
+<li>예를 들어, 노드 0은 1, 2, 3, 4번 노드와 연결되어 있으므로 첫 번째 행(Row 0)은 <code>[0, 1, 1, 1, 1, 0]</code>이 됩니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="그래프-마이닝의-다양한-응용-applications" class="level1">
+<h1>5. 그래프 마이닝의 다양한 응용 (Applications)</h1>
+<ul>
+<li>데이터 마이닝 관점에서 그래프는 단지 웹 검색(PageRank)을 위해서만 존재하는 것이 아닙니다. 개체 간의 상호작용이 존재하는 곳이라면 어디든 그래프 분석을 적용할 수 있습니다.
+<ul>
+<li><ol type="1">
+<li><strong>소셜 네트워크 분석 (Social Network Analysis):</strong> 페이스북, 인스타그램 등에서 사용자 간의 친구 관계나 팔로우 관계를 분석하여 커뮤니티를 발견하고 인플루언서를 찾습니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>추천 시스템 (Recommender Systems):</strong> 사용자와 상품(또는 영화 등)을 이분 그래프(Bipartite Graph)로 연결하여, 사용자가 선호할 만한 새로운 항목을 추천합니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><strong>네트워크 및 통신 (Communication &amp; Routing):</strong> 공유기(Routers) 및 도메인 간의 네트워크 패킷 전송 구조를 최적화하여 병목 현상을 해결합니다.</li>
+</ol></li>
+<li><ol start="4" type="1">
+<li><strong>교통 최적화 (Transportation Optimization):</strong> 도로망을 노드와 간선으로 모델링하여 최적 경로 안내와 교통 흐름을 분석합니다.</li>
+</ol></li>
+<li><ol start="5" type="1">
+<li><strong>생물정보학 (Bioinformatics):</strong> 단백질 상호작용 네트워크(Protein interaction networks)를 모델링하여 유전적 질병의 원인을 찾거나 신약을 개발합니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.1/</guid>
+  <pubDate>Mon, 20 Apr 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 14. Link Analysis (Part 2)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.2/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="서론-그래프에서-중요도-순위-매기기" class="level1">
+<h1>1. 서론: 그래프에서 중요도 순위 매기기</h1>
+<ul>
+<li><p>이전 포스트에서는 웹 문서들 사이의 연결 관계를 방향성 그래프(Directed Graph)와 인접 행렬(Adjacency Matrix)로 모델링하는 방법을 살펴보았습니다. 단순히 텍스트의 등장 빈도를 세는 역색인(Inverted Index) 방식은 스팸 조작에 취약했기 때문에, 웹의 구조적 연결성을 활용하는 새로운 접근이 필요했습니다.</p></li>
+<li><p>1998년, 구글(Google)의 창립자인 래리 페이지(Larry Page)와 세르게이 브린(Sergey Brin)은 이 그래프 상의 노드(웹 페이지)들에 대해 중요도 순위를 매기는 혁신적인 알고리즘을 발표합니다. 이것이 바로 오늘날 구글을 세계 최고의 검색 엔진으로 만든 <strong>페이지랭크(PageRank)</strong>입니다.</p></li>
+<li><p>본 포스트에서는 PageRank 알고리즘이 어떤 직관에 기초하고 있는지, 이를 어떻게 수학적인 행렬 방정식으로 변환하는지, 그리고 실제 웹 생태계에서 발생하는 구조적 문제점들을 어떻게 극복했는지 상세히 유도해 보겠습니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="pagerank의-두-가지-핵심-직관-intuitions" class="level1">
+<h1>2. PageRank의 두 가지 핵심 직관 (Intuitions)</h1>
+<ul>
+<li>PageRank는 페이지의 권위(Authority)를 측정하기 위해 두 가지 상호보완적인 직관을 사용합니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.2/images/pagerank_network_overview.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 웹 그래프와 PageRank의 직관적 시각화. 왼쪽은 수많은 웹 페이지(노드)들이 하이퍼링크(간선)로 복잡하게 얽혀 있는 웹 생태계의 네트워크 구조를 보여주며, 오른쪽은 각 노드의 크기를 PageRank 점수에 비례하게 표현하여 링크가 많이 집중되는 노드(예: 노드 B, C)가 높은 중요도를 가짐을 직관적으로 나타냅니다.</figcaption>
+</figure>
+</div>
+<section id="직관-1-투표로서의-링크-links-as-votes" class="level2">
+<h2 class="anchored" data-anchor-id="직관-1-투표로서의-링크-links-as-votes">2.1 직관 1: 투표로서의 링크 (Links as Votes)</h2>
+<ul>
+<li><p>하이퍼링크는 다른 페이지를 향한 <strong>‘투표(Vote)’</strong>로 간주할 수 있습니다. 기본적으로 자신을 가리키는 링크(In-coming links)가 많은 페이지일수록 중요하다고 판단합니다. 예를 들어, 수만 개의 사이트가 연결된 <code>stanford.edu</code>는 단 1개의 링크만 가진 개인 블로그보다 훨씬 중요할 것입니다.</p></li>
+<li><p>하지만 단순히 들어오는 링크의 수를 세는 것만으로는 부족합니다. <strong>“누가 투표했는가?”</strong>가 중요합니다. 즉, <strong>중요한 페이지로부터 받는 링크는 더 높은 가치(가중치)를 가집니다.</strong> 이는 PageRank가 단순히 정적인 값이 아니라, 네트워크를 따라 재귀적 연산을 반복하여 수렴(Converged state of recursive computations)하는 값임을 시사합니다.</p></li>
+</ul>
+</section>
+<section id="직관-2-무작위-서퍼-모델-random-surfing" class="level2">
+<h2 class="anchored" data-anchor-id="직관-2-무작위-서퍼-모델-random-surfing">2.2 직관 2: 무작위 서퍼 모델 (Random Surfing)</h2>
+<ul>
+<li>투표라는 개념을 확률론적 관점에서 해석한 것이 <strong>무작위 서퍼(Random Surfer) 모델</strong>입니다. 어떤 웹 페이지가 중요하다면, 사람들은 웹서핑을 하다가 자연스럽게 그 페이지에 자주 방문하게 될 것입니다. 하지만 모든 사용자의 실제 브라우징 기록을 추적할 수는 없으므로, 다음과 같은 이상적인 무작위 서퍼를 가정합니다.
+<ul>
+<li><ol type="1">
+<li>임의의 웹 페이지에서 서핑을 시작합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>현재 페이지에 있는 외부 링크(Out-links) 중 하나를 무작위로 클릭하여 다음 페이지로 이동합니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li>이 과정을 무한히 반복합니다.</li>
+</ol></li>
+</ul></li>
+<li>이 모델에서 어떤 페이지의 <strong>PageRank 점수는 곧 무한한 시간이 흘렀을 때 무작위 서퍼가 해당 페이지에 머물고 있을 ‘확률(Probability)’</strong>과 정확히 일치하게 됩니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.2/images/pagerank_scores_bubbles.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: PageRank 점수 산출 예시. 각 노드 안의 숫자는 계산된 PageRank 점수입니다. 노드 B(38.4)와 C(34.3)는 크기가 가장 크며, 이는 다른 여러 노드로부터 링크를 받거나 중요한 노드끼리 상호 참조하기 때문입니다. 반면 하단의 작은 녹색 노드들은 점수가 1.6으로, 외부로 링크를 주지만 중요도가 높은 노드로부터 링크를 받지 못하는 상태를 보여줍니다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+<section id="수학적-정식화-mathematical-formulation" class="level1">
+<h1>3. 수학적 정식화 (Mathematical Formulation)</h1>
+<ul>
+<li>이제 위에서 설명한 직관을 수식으로 엄밀하게 정의해 봅시다.</li>
+</ul>
+<section id="재귀적-방정식-recursive-formulation" class="level2">
+<h2 class="anchored" data-anchor-id="재귀적-방정식-recursive-formulation">3.1 재귀적 방정식 (Recursive Formulation)</h2>
+<ul>
+<li><p>어떤 페이지 <img src="https://latex.codecogs.com/png.latex?j">의 중요도(PageRank 점수)를 <img src="https://latex.codecogs.com/png.latex?r_j">라고 합시다. 페이지 <img src="https://latex.codecogs.com/png.latex?j">가 <img src="https://latex.codecogs.com/png.latex?d_j">개의 외부 링크(out-degree)를 가지고 있다면, 이 페이지는 자신이 가진 중요도를 공평하게 <img src="https://latex.codecogs.com/png.latex?1/d_j">씩 나누어 연결된 페이지들에게 전달합니다. 즉, 페이지 <img src="https://latex.codecogs.com/png.latex?j">에서 나가는 링크 하나당 부여되는 투표의 가치는 <img src="https://latex.codecogs.com/png.latex?r_j%20/%20d_j">가 됩니다.</p></li>
+<li><p>따라서 임의의 페이지 <img src="https://latex.codecogs.com/png.latex?j">의 최종 중요도 <img src="https://latex.codecogs.com/png.latex?r_j">는, 페이지 <img src="https://latex.codecogs.com/png.latex?j">를 향해 링크를 쏘는 모든 부모 페이지(노드 <img src="https://latex.codecogs.com/png.latex?i">)들로부터 전달받은 가치들의 총합으로 정의됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?r_j%20=%20%5Csum_%7Bi%20%5Crightarrow%20j%7D%20%5Cfrac%7Br_i%7D%7Bd_i%7D"></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.2/images/pagerank_recursive_equation.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: PageRank의 재귀적 점수 할당 모델. 중심에 있는 붉은색 노드 j의 중요도 <img src="https://latex.codecogs.com/png.latex?r_j">는, 노드 j로 링크를 보내는 주변 노드들(초록색 노드 i, k 등)이 자신의 점수를 자신의 외부 링크 개수(out-degree)로 나눈 값(<img src="https://latex.codecogs.com/png.latex?r_i/3,%20r_k/4">)을 모두 합산하여 결정됨을 수식 <img src="https://latex.codecogs.com/png.latex?r_j%20=%20r_i/3%20+%20r_k/4">와 화살표의 흐름으로 상세히 설명하고 있습니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="행렬-방정식-matrix-formulation" class="level2">
+<h2 class="anchored" data-anchor-id="행렬-방정식-matrix-formulation">3.2 행렬 방정식 (Matrix Formulation)</h2>
+<ul>
+<li><p>위의 선형 방정식 시스템은 행렬을 이용해 간결하게 표현할 수 있습니다.</p></li>
+<li><p>전체 노드 수가 <img src="https://latex.codecogs.com/png.latex?n">개일 때, 그래프의 연결 상태를 크기 <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20n">의 <strong>전이 행렬(Transition Matrix) <img src="https://latex.codecogs.com/png.latex?M"></strong>으로 정의합니다. 노드 <img src="https://latex.codecogs.com/png.latex?i">에서 노드 <img src="https://latex.codecogs.com/png.latex?j">로 가는 링크가 존재한다면(<img src="https://latex.codecogs.com/png.latex?i%20%5Crightarrow%20j">), <img src="https://latex.codecogs.com/png.latex?M_%7Bji%7D">의 값은 <img src="https://latex.codecogs.com/png.latex?1/d_i">가 되며, 링크가 없다면 0이 됩니다. (참고: 전이 행렬의 정의에 따라 행은 도착지 <img src="https://latex.codecogs.com/png.latex?j">, 열은 출발지 <img src="https://latex.codecogs.com/png.latex?i">를 나타냅니다.)</p></li>
+<li><p>랭크 벡터(Rank vector) <img src="https://latex.codecogs.com/png.latex?r">을 크기 <img src="https://latex.codecogs.com/png.latex?n">의 열 벡터로 정의하며, 각 원소 <img src="https://latex.codecogs.com/png.latex?r_i">는 앞서 정의한 무작위 서퍼가 노드 <img src="https://latex.codecogs.com/png.latex?i">에 있을 확률을 의미합니다. 확률이므로 다음 조건을 만족해야 합니다. <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bi=1%7D%5E%7Bn%7D%20r_i%20=%201%20%5Cquad%20%5Ctext%7Band%7D%20%5Cquad%20r_i%20%5Cge%200%20%5Cquad%20%5Cforall%20i"></p></li>
+<li><p>행렬 <img src="https://latex.codecogs.com/png.latex?M">의 각 열(column)의 합은 1이 되므로, <img src="https://latex.codecogs.com/png.latex?M">은 <strong>열 확률 행렬(Column-stochastic matrix)</strong>이 됩니다. 최종적으로 PageRank의 재귀식은 선형대수학의 고윳값 문제(Eigenvalue problem) 형태인 다음 방정식으로 귀결됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?r%20=%20M%20r"></p>
+<ul>
+<li>이는 랭크 벡터 <img src="https://latex.codecogs.com/png.latex?r">이 전이 행렬 <img src="https://latex.codecogs.com/png.latex?M">의 고윳값이 1일 때의 <strong>고유벡터(Eigenvector)</strong>이자 마르코프 체인(Markov Chain)의 <strong>정상 분포(Stationary distribution)</strong>임을 의미합니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.2/images/pagerank_matrix_example.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 3개 노드(y, a, m) 그래프의 행렬 정식화 예시. 왼쪽의 방향성 그래프를 기반으로, 각 노드에서 나가는 링크의 확률을 열(Column) 단위로 나타낸 전이 행렬 M을 우측 상단에 구성했습니다. 이를 통해 <img src="https://latex.codecogs.com/png.latex?r%20=%20Mr">이라는 선형 대수학적 고윳값 방정식 시스템이 어떻게 도출되는지를 하단의 행렬식과 연립방정식으로 보여줍니다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+<section id="현실-웹-그래프의-결함과-구글의-해결책" class="level1">
+<h1>4. 현실 웹 그래프의 결함과 구글의 해결책</h1>
+<ul>
+<li>이론적으로는 아름다운 이 모델은, 실제 웹 환경에 적용할 때 두 가지 구조적 결함으로 인해 시스템이 붕괴하는 문제를 겪습니다. 구글은 각 문제에 대해 ’순간이동(Teleportation)’이라는 우아한 해법을 제시했습니다.</li>
+</ul>
+<section id="문제-1-막다른-노드-dead-ends" class="level2">
+<h2 class="anchored" data-anchor-id="문제-1-막다른-노드-dead-ends">4.1 문제 1: 막다른 노드 (Dead Ends)</h2>
+<ul>
+<li><p><strong>데드 엔드(Dead Ends)</strong>란 다른 어떤 페이지로도 링크를 내보내지 않는(Out-link가 0인) 페이지를 말합니다.</p></li>
+<li><p>무작위 서퍼가 웹 서핑을 하다가 이 페이지에 도달하면 더 이상 나갈 곳이 없으므로 서핑이 종료됩니다.</p></li>
+<li><p><strong>수학적 문제:</strong> 데드 엔드 노드에 해당하는 전이 행렬 <img src="https://latex.codecogs.com/png.latex?M">의 열(Column)은 모든 원소가 0이 됩니다. 결과적으로 <img src="https://latex.codecogs.com/png.latex?M">은 더 이상 확률 행렬(Stochastic matrix)이 아니게 되며, 시스템의 점수가 밖으로 빠져나가지 못하고 점진적으로 <strong>‘증발(Leak out)’</strong>해버립니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.2/images/pagerank_dead_ends.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 막다른 노드(Dead Ends) 문제 발생 상황. 우측 하단의 노드 m은 다른 어떤 노드로도 향하는 외부 링크(out-link)가 존재하지 않습니다. 이로 인해 인접 행렬의 3번째 열(노드 m의 열)이 모두 0으로 채워지게 되며(붉은색 0), 무작위 서퍼가 노드 m에 도달하면 더 이상 이동할 수 없어 전체 네트워크의 PageRank 점수가 시스템 밖으로 증발(Leak out)하는 구조적 결함을 나타냅니다.</figcaption>
+</figure>
+</div>
+<section id="해결책-항상-순간이동-always-teleport" class="level3">
+<h3 class="anchored" data-anchor-id="해결책-항상-순간이동-always-teleport">해결책: 항상 순간이동 (Always Teleport)</h3>
+<ul>
+<li><p>나갈 곳이 없는 페이지에 도달한 서퍼는 브라우저를 끄는 것이 아니라, 주소창에 무작위로 새로운 주소를 입력할 것입니다. 즉, 데드 엔드 노드에서는 <strong>확률 1로 그래프 내의 임의의 노드로 순간이동</strong> 하도록 가정을 수정합니다.</p></li>
+<li><p>전체 노드 수가 <img src="https://latex.codecogs.com/png.latex?n">개일 때, 행렬 <img src="https://latex.codecogs.com/png.latex?M">에서 원소가 모두 0이었던 데드 엔드 노드의 열을 모두 <img src="https://latex.codecogs.com/png.latex?1/n">로 채워 넣어 행렬을 완벽한 확률 행렬로 복구합니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.2/images/pagerank_dead_ends_solution.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 막다른 노드 문제의 해결책(Always Teleport). 노드 m에서 나가는 간선이 없어 발생하던 문제를 해결하기 위해, 노드 m에서 모든 노드(y, a, m 자신)로 향하는 가상의 순간이동 간선(점선 화살표)을 추가했습니다. 이에 따라 행렬의 3번째 열이 0에서 모두 1/3로 수정되어, 무작위 서퍼가 확률 1/3로 어디든 이동할 수 있게 보정된 확률 행렬(Stochastic matrix)을 보여줍니다.</figcaption>
+</figure>
+</div>
+</section>
+</section>
+<section id="문제-2-스파이더-트랩-spider-traps" class="level2">
+<h2 class="anchored" data-anchor-id="문제-2-스파이더-트랩-spider-traps">4.2 문제 2: 스파이더 트랩 (Spider Traps)</h2>
+<ul>
+<li><p><strong>스파이더 트랩(Spider Traps)</strong>이란 밖으로 나가는 링크가 아예 없는 것은 아니지만, 오직 자기 자신이나 자신이 속한 작은 그룹 내부로만 링크를 순환시키는 구조를 말합니다.</p></li>
+<li><p><strong>수학적 문제:</strong> 무작위 서퍼가 이곳에 우연히 진입하면 영원히 빠져나오지 못하게 됩니다. 행렬은 확률 행렬 조건을 만족하지만, 시간이 지날수록 그래프 전체의 중요도가 이 트랩 내부의 노드로 모두 <strong>흡수(Absorb)</strong>되어 버리는 극단적인 편향이 발생합니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.2/images/pagerank_spider_traps.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 스파이더 트랩(Spider Traps) 문제 발생 상황. 노드 m이 오직 자기 자신만을 가리키는 외부 링크를 가지고 있어, 우측 행렬에서 m에서 m으로 가는 전이 확률이 1로 설정되어 있습니다. 무작위 서퍼가 한 번 노드 m에 진입하면 영원히 벗어나지 못하며, 반복 연산 시 네트워크 전체의 PageRank 점수가 노드 m으로 전부 흡수되어 버리는 한계를 보여줍니다.</figcaption>
+</figure>
+</div>
+<section id="해결책-확률적-순간이동-probabilistically-teleport" class="level3">
+<h3 class="anchored" data-anchor-id="해결책-확률적-순간이동-probabilistically-teleport">해결책: 확률적 순간이동 (Probabilistically Teleport)</h3>
+<ul>
+<li>스파이더 트랩을 벗어나기 위해서는 사용자가 링크 클릭 행동 자체에 변칙을 주어야 합니다. 매 시점마다 무작위 서퍼는 다음 두 가지 행동 중 하나를 선택합니다.
+<ul>
+<li><ol type="1">
+<li><strong>확률 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">:</strong> 현재 페이지에 있는 정상적인 링크 중 하나를 따라 무작위로 이동합니다. (일반적인 서핑)</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>확률 <img src="https://latex.codecogs.com/png.latex?1-%5Cbeta">:</strong> 링크를 무시하고 웹 상의 임의의 페이지로 순간이동합니다. (랜덤 점프)</li>
+</ol></li>
+</ul></li>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">를 <strong>감쇠 계수(Damping factor)</strong>라고 부르며, 일반적으로 <strong>0.8 ~ 0.9</strong>로 설정됩니다. 서퍼는 아무리 견고한 스파이더 트랩에 갇히더라도, 몇 단계 지나지 않아 확률적으로 트랩 밖으로 순간이동하여 탈출하게 됩니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.2/images/pagerank_spider_traps_solution.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 스파이더 트랩 문제의 해결책(Probabilistic Teleport). 스파이더 트랩에 갇히는 현상을 방지하기 위해, 사용자가 일정 확률(<img src="https://latex.codecogs.com/png.latex?1-%5Cbeta">)로 현재 링크 구조를 무시하고 임의의 다른 노드로 순간이동(점선 초록색 화살표)할 수 있도록 모델을 수정했습니다. 이를 통해 서퍼가 노드 m의 무한 루프에서 빠져나와 노드 y나 a로 다시 이동할 수 있는 탈출구가 마련됨을 묘사합니다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+</section>
+<section id="구글-행렬-the-google-matrix-완성" class="level1">
+<h1>5. 구글 행렬 (The Google Matrix) 완성</h1>
+<ul>
+<li>래리 페이지와 세르게이 브린이 제시한 최종적인 PageRank 방정식은 이 두 가지 순간이동 아이디어를 모두 결합한 것입니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?r_j%20=%20%5Csum_%7Bi%20%5Crightarrow%20j%7D%20%5Cbeta%20%5Cfrac%7Br_i%7D%7Bd_i%7D%20+%20(1-%5Cbeta)%5Cfrac%7B1%7D%7Bn%7D"></p>
+<ul>
+<li>이 스칼라 방정식을 행렬 형태로 변환하면, 치명적 결함을 모두 보완한 새로운 전이 행렬인 <strong>구글 행렬(Google Matrix) <img src="https://latex.codecogs.com/png.latex?A"></strong>를 얻을 수 있습니다. (단, 기존 <img src="https://latex.codecogs.com/png.latex?M"> 행렬의 Dead End 열은 이미 <img src="https://latex.codecogs.com/png.latex?1/n">로 보정되어 있다고 가정합니다.)</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?A%20=%20%5Cbeta%20M%20+%20(1-%5Cbeta)%5Cleft%5B%20%5Cfrac%7B1%7D%7Bn%7D%20%5Cright%5D_%7Bn%20%5Ctimes%20n%7D"></p>
+<ul>
+<li>행렬 <img src="https://latex.codecogs.com/png.latex?A">는 원래의 링크 구조를 따를 확률 행렬(<img src="https://latex.codecogs.com/png.latex?%5Cbeta%20M">)과 임의의 노드로 점프할 균등 분포 확률 행렬의 볼록 결합(Convex combination)이므로, 항상 수학적으로 완벽한 <strong>확률 행렬(Stochastic matrix)</strong>임이 보장됩니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.2/images/pagerank_google_matrix.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 최종 도출된 구글 행렬(Google Matrix)의 적용 예시. Dead Ends 해결(Always Teleport)과 Spider Traps 해결(Probabilistic Teleport, 감쇠 계수 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">)이 모두 결합된 최종 그래프 상태입니다. 각 간선에 적힌 7/15, 1/15, 13/15 등의 분수는 기존 링크 전이 확률과 무작위 순간이동 확률이 혼합되어 수학적으로 완벽한 전이 확률(Transition probability)을 구성했음을 보여줍니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>이 구글 행렬 <img src="https://latex.codecogs.com/png.latex?A">를 이용하여 <img src="https://latex.codecogs.com/png.latex?r%20=%20A%20r">을 풀면, 어떠한 웹 구조에서도 항상 고유하고 안정적인 PageRank 점수 벡터 <img src="https://latex.codecogs.com/png.latex?r">을 얻을 수 있습니다.</li>
+</ul>
+<hr>
+</section>
+<section id="확장-무방향-그래프에서의-pagerank" class="level1">
+<h1>6. 확장: 무방향 그래프에서의 PageRank</h1>
+<ul>
+<li>추가로, 링크가 양방향으로 성립하는 소셜 네트워크의 친구 관계 같은 <strong>무방향 그래프(Undirected Graph)</strong>에서 PageRank를 계산하면 흥미로운 결과가 도출됩니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?n">: 전체 노드의 수</li>
+<li><img src="https://latex.codecogs.com/png.latex?m">: 전체 간선의 수 (무방향이므로 전체 차수의 합은 <img src="https://latex.codecogs.com/png.latex?2m">)</li>
+<li><img src="https://latex.codecogs.com/png.latex?d_v">: 특정 노드 <img src="https://latex.codecogs.com/png.latex?v">의 연결 차수(degree)</li>
+</ul></li>
+<li>관계가 양방향 대칭(Symmetric)이므로 특정 그룹으로 점수가 쏠리는 현상이 발생하지 않습니다. 그 결과, 임의의 노드 <img src="https://latex.codecogs.com/png.latex?v">의 PageRank 점수 <img src="https://latex.codecogs.com/png.latex?r_v">는 단지 전체 네트워크의 연결선 중 자신이 차지하는 차수(degree)의 비율로 자명하게 결정됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?r_v%20=%20%5Cfrac%7Bd_v%7D%7B2m%7D"></p>
+<ul>
+<li>방정식 <img src="https://latex.codecogs.com/png.latex?r%20=%20Mr">에서 각 <img src="https://latex.codecogs.com/png.latex?r_i"> 자리에 <img src="https://latex.codecogs.com/png.latex?d_i%20/%202m">을 대입해보면, 좌우변이 정확히 일치하여 등식이 성립함을 쉽게 수학적으로 증명할 수 있습니다.</li>
+</ul>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.2/</guid>
+  <pubDate>Mon, 20 Apr 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 14. Link Analysis (Part 3)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.3/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="서론-방대한-그래프에서-r을-어떻게-찾을-것인가" class="level1">
+<h1>1. 서론: 방대한 그래프에서 <img src="https://latex.codecogs.com/png.latex?r">을 어떻게 찾을 것인가?</h1>
+<ul>
+<li>이전 포스트에서 우리는 스파이더 트랩과 데드 엔드 문제를 해결하기 위해, 확률적 순간이동(Teleportation) 개념을 도입한 <strong>구글 행렬(Google Matrix) <img src="https://latex.codecogs.com/png.latex?A"></strong>를 정의했습니다. 그 결과 PageRank 점수 벡터 <img src="https://latex.codecogs.com/png.latex?r">은 다음의 방정식을 만족해야 함을 알 수 있었습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?r%20=%20Ar"></p>
+<ul>
+<li><p>이론적으로는 완벽해 보이지만, 실제 구글 검색 엔진이 다루어야 하는 웹 페이지의 수(<img src="https://latex.codecogs.com/png.latex?n">)는 수백억 개에 달합니다. 크기가 <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20n">인 거대한 행렬 <img src="https://latex.codecogs.com/png.latex?A">에 대해 역행렬을 구하거나 전통적인 방정식 풀이법을 적용하는 것은 컴퓨팅 자원 측면에서 절대 불가능합니다.</p></li>
+<li><p>그렇다면 구글은 어떻게 이 거대한 시스템에서 수렴된 <img src="https://latex.codecogs.com/png.latex?r"> 값을 <strong>실제로(actually)</strong> 그리고 <strong>빠르게</strong> 찾아낼 수 있었을까요? 본 포스트에서는 선형대수학의 <strong>고윳값 문제(Eigenvalue Problem)</strong>와 <strong>멱제곱법(Power Iteration)</strong>을 통해 이 계산적 한계를 돌파하는 과정과, 구글 행렬이 가진 놀라운 수학적 성질들을 증명해 보겠습니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="고유벡터-공식화-eigenvector-formulation" class="level1">
+<h1>2. 고유벡터 공식화 (Eigenvector Formulation)</h1>
+<ul>
+<li><p>가장 먼저 주목해야 할 점은 우리가 풀어야 할 방정식 <img src="https://latex.codecogs.com/png.latex?r%20=%20Ar">이 지닌 수학적 형태입니다.</p></li>
+<li><p>선형대수학에서 행렬 <img src="https://latex.codecogs.com/png.latex?A">의 <strong>고윳값(Eigenvalue) <img src="https://latex.codecogs.com/png.latex?%5Clambda"></strong>와 <strong>고유벡터(Eigenvector) <img src="https://latex.codecogs.com/png.latex?v"></strong>의 관계는 다음과 같이 정의됩니다. <img src="https://latex.codecogs.com/png.latex?%5Clambda%20v%20=%20Av"></p></li>
+<li><p>우리의 PageRank 방정식인 <img src="https://latex.codecogs.com/png.latex?r%20=%20Ar">은 이 정의와 완벽하게 일치합니다. 즉, <img src="https://latex.codecogs.com/png.latex?1%20%5Ccdot%20r%20=%20Ar"> 이므로, <strong>PageRank 벡터 <img src="https://latex.codecogs.com/png.latex?r">은 행렬 <img src="https://latex.codecogs.com/png.latex?A">의 고윳값 <img src="https://latex.codecogs.com/png.latex?%5Clambda%20=%201">에 대응하는 고유벡터</strong>라는 중요한 관찰(Observation)을 할 수 있습니다.</p></li>
+<li><p>질문은 다음과 같이 바뀝니다: <em>“이 고유벡터 <img src="https://latex.codecogs.com/png.latex?r">이 행렬 <img src="https://latex.codecogs.com/png.latex?A">의 <strong>주 지배적 고유벡터(Dominant or Principal Eigenvector)</strong>인가?”</em> 결론부터 말씀드리면 <strong>“그렇다(Yes!)”</strong>입니다. 지배적 고유벡터란 절댓값이 가장 큰 고윳값에 대응하는 고유벡터를 의미하며, 이를 찾는 가장 효율적인 수치해석적 알고리즘이 바로 <strong>멱제곱법(Power Iteration)</strong>입니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="멱제곱법-power-iteration" class="level1">
+<h1>3. 멱제곱법 (Power Iteration)</h1>
+<ul>
+<li>멱제곱법은 행렬을 벡터에 반복적으로 곱함으로써, 결국 가장 지배적인 고유벡터 방향으로 벡터가 수렴하게 만드는 직관적이고 강력한 알고리즘입니다.</li>
+</ul>
+<section id="알고리즘의-동작-과정" class="level2">
+<h2 class="anchored" data-anchor-id="알고리즘의-동작-과정">3.1 알고리즘의 동작 과정</h2>
+<ul>
+<li>PageRank를 구하기 위한 Power Iteration의 단계는 다음과 같습니다.
+<ul>
+<li><ol type="1">
+<li><strong>초기화 (Initialize):</strong></li>
+</ol>
+<ul>
+<li>서퍼들이 모든 웹 페이지에 균등하게 퍼져있다고 가정하여 초기 분포 벡터 <img src="https://latex.codecogs.com/png.latex?r%5E%7B(0)%7D">를 설정합니다. <img src="https://latex.codecogs.com/png.latex?r%5E%7B(0)%7D%20=%20%5Cleft(%5Cfrac%7B1%7D%7Bn%7D,%20%5Cfrac%7B1%7D%7Bn%7D,%20%5Cdots,%20%5Cfrac%7B1%7D%7Bn%7D%5Cright)%5E%5Ctop"></li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>반복 연산 (Iterate):</strong></li>
+</ol>
+<ul>
+<li>다음 시점의 점수 벡터는 현재 벡터에 구글 행렬 <img src="https://latex.codecogs.com/png.latex?A">를 곱하여 얻습니다. 이를 <img src="https://latex.codecogs.com/png.latex?t=0,%201,%20%5Cdots,%20T">에 대해 반복합니다. <img src="https://latex.codecogs.com/png.latex?r%5E%7B(t+1)%7D%20=%20A%20r%5E%7B(t)%7D"></li>
+<li>참고: <img src="https://latex.codecogs.com/png.latex?A">는 열의 합이 1인 열 확률 행렬(Column-stochastic matrix)이므로, 연산을 반복해도 벡터 <img src="https://latex.codecogs.com/png.latex?r">의 모든 원소의 합은 항상 1로 유지됩니다.</li>
+</ul></li>
+<li><ol start="3" type="1">
+<li><strong>종료 조건 (Stop):</strong></li>
+</ol>
+<ul>
+<li>연산 전후의 벡터 차이 크기(Norm)가 허용 오차보다 충분히 작아지면(수렴하면) 반복을 중단합니다. <img src="https://latex.codecogs.com/png.latex?%5C%7Cr%5E%7B(t+1)%7D%20-%20r%5E%7B(t)%7D%5C%7C%20%3C%20%5Cepsilon"></li>
+</ul></li>
+</ul></li>
+<li>이 과정은 <strong>무작위 서퍼들의 이동(movement of random surfers)을 시뮬레이션</strong>하는 것과 정확히 같습니다. 초기 분포 <img src="https://latex.codecogs.com/png.latex?r%5E%7B(0)%7D">에서 시작하여 링크를 따라 무작위 이동을 반복하다 보면, 결국 장기적인 극한 상태(Long-term, converged distribution)인 정상 분포(Stationary distribution)에 도달하게 됩니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="멱제곱법의-수학적-증명-finding-the-principal-eigenvector" class="level1">
+<h1>4. 멱제곱법의 수학적 증명 (Finding the Principal Eigenvector)</h1>
+<ul>
+<li><p>멱제곱법이 왜 항상 지배적 고유벡터로 수렴하는지 그 원리를 수학적으로 전개해 보겠습니다.</p></li>
+<li><p>행렬 <img src="https://latex.codecogs.com/png.latex?A">가 <img src="https://latex.codecogs.com/png.latex?n">개의 고윳값 <img src="https://latex.codecogs.com/png.latex?%5Clambda_1,%20%5Clambda_2,%20%5Cdots,%20%5Clambda_n">을 가지며, 이들의 절댓값 크기가 다음과 같이 정렬되어 있다고 가정합시다. (여기서 <img src="https://latex.codecogs.com/png.latex?%5Clambda_1">이 지배적 고윳값입니다.) <img src="https://latex.codecogs.com/png.latex?%7C%5Clambda_1%7C%20%3E%20%7C%5Clambda_2%7C%20%5Cge%20%5Cdots%20%5Cge%20%7C%5Clambda_n%7C"></p></li>
+<li><p>그리고 각 고윳값에 대응하는 선형 독립인 고유벡터들을 <img src="https://latex.codecogs.com/png.latex?v_1,%20v_2,%20%5Cdots,%20v_n">이라고 합니다.</p></li>
+<li><p>초기 상태 벡터 <img src="https://latex.codecogs.com/png.latex?x_0"> (우리의 경우 <img src="https://latex.codecogs.com/png.latex?r%5E%7B(0)%7D">)는 이 고유벡터들의 선형 결합(Linear combination)으로 표현할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?x_0%20=%20c_1v_1%20+%20c_2v_2%20+%20%5Cdots%20+%20c_nv_n"></p></li>
+<li><p>이제 행렬 <img src="https://latex.codecogs.com/png.latex?A">를 <img src="https://latex.codecogs.com/png.latex?k">번 반복해서 곱하는 Power Iteration을 수식으로 적용해 봅니다 (<img src="https://latex.codecogs.com/png.latex?x_k%20=%20A%5Ek%20x_0">). <img src="https://latex.codecogs.com/png.latex?Av_i%20=%20%5Clambda_i%20v_i">의 성질에 의해 다음이 성립합니다. <img src="https://latex.codecogs.com/png.latex?x_k%20=%20c_1%5Clambda_1%5Ekv_1%20+%20c_2%5Clambda_2%5Ekv_2%20+%20%5Cdots%20+%20c_n%5Clambda_n%5Ekv_n"></p></li>
+<li><p>이 식에서 가장 지배적인 고윳값인 <img src="https://latex.codecogs.com/png.latex?%5Clambda_1%5Ek">를 괄호 밖으로 묶어냅니다(Factoring out). <img src="https://latex.codecogs.com/png.latex?x_k%20=%20%5Clambda_1%5Ek%20%5Cleft(%20c_1v_1%20+%20c_2%5Cleft(%5Cfrac%7B%5Clambda_2%7D%7B%5Clambda_1%7D%5Cright)%5Ek%20v_2%20+%20%5Cdots%20+%20c_n%5Cleft(%5Cfrac%7B%5Clambda_n%7D%7B%5Clambda_1%7D%5Cright)%5Ek%20v_n%20%5Cright)"></p></li>
+<li><p>가정에서 <img src="https://latex.codecogs.com/png.latex?%7C%5Clambda_1%7C%20%3E%20%7C%5Clambda_i%7C"> (<img src="https://latex.codecogs.com/png.latex?i%20%3E%201">) 이므로, 두 고윳값의 비율 <img src="https://latex.codecogs.com/png.latex?%5Cleft%7C%20%5Cfrac%7B%5Clambda_i%7D%7B%5Clambda_1%7D%20%5Cright%7C">은 1보다 작습니다.</p></li>
+<li><p>따라서, 반복 횟수 <img src="https://latex.codecogs.com/png.latex?k%20%5Crightarrow%20%5Cinfty">로 갈수록, <img src="https://latex.codecogs.com/png.latex?i%20%3E%201">인 모든 항의 <img src="https://latex.codecogs.com/png.latex?%5Cleft(%5Cfrac%7B%5Clambda_i%7D%7B%5Clambda_1%7D%5Cright)%5Ek"> 값은 <strong>0으로 수렴(goes to 0)</strong>하게 됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Clim_%7Bk%20%5Cto%20%5Cinfty%7D%20x_k%20%5Capprox%20%5Clambda_1%5Ek%20c_1v_1"></p>
+<ul>
+<li>결국 초기 벡터에 섞여 있던 다른 고유벡터 성분들은 연산이 반복될수록 소멸하고, 오직 <strong>가장 지배적인 고유벡터 <img src="https://latex.codecogs.com/png.latex?v_1">의 방향성만이 남게 되는 것</strong>입니다. 이것이 멱제곱법이 작동하는 수학적 원리입니다.</li>
+</ul>
+<hr>
+</section>
+<section id="구글-행렬의-강력한-수학적-성질-properties" class="level1">
+<h1>5. 구글 행렬의 강력한 수학적 성질 (Properties)</h1>
+<ul>
+<li>멱제곱법이 성공하려면 행렬 <img src="https://latex.codecogs.com/png.latex?A">가 특정 조건들을 만족해야 합니다. 구글 행렬 <img src="https://latex.codecogs.com/png.latex?A">는 이 조건들을 완벽하게 충족시키는 4가지 강력한 수학적 성질을 지니고 있습니다.</li>
+</ul>
+<section id="성질-1-모든-고윳값은-lambda-le-1-이다." class="level2">
+<h2 class="anchored" data-anchor-id="성질-1-모든-고윳값은-lambda-le-1-이다.">5.1 성질 1: 모든 고윳값은 <img src="https://latex.codecogs.com/png.latex?%7C%5Clambda%7C%20%5Cle%201"> 이다.</h2>
+<ul>
+<li><p>구글 행렬 <img src="https://latex.codecogs.com/png.latex?A">는 확률 행렬(Stochastic matrix)입니다. 선형대수학의 노름(Norm) 성질을 이용해 이를 증명할 수 있습니다.</p></li>
+<li><p>행렬 노름의 기본 성질에 따라 <img src="https://latex.codecogs.com/png.latex?%5C%7CAv%5C%7C%20%5Cle%20%5C%7CA%5C%7C%20%5C%7Cv%5C%7C">가 성립합니다.</p></li>
+<li><p>여기에 Induced 1-norm (각 열의 절댓값 합 중 최댓값, <img src="https://latex.codecogs.com/png.latex?%5C%7CA%5C%7C_1%20=%20%5Cmax_j%20%5Csum_i%20%7Ca_%7Bij%7D%7C">)을 적용해 보겠습니다. <img src="https://latex.codecogs.com/png.latex?A">의 모든 열의 합은 확률이므로 1입니다. 따라서 <img src="https://latex.codecogs.com/png.latex?%5C%7CA%5C%7C_1%20=%201">입니다.</p></li>
+<li><p>고윳값 방정식 <img src="https://latex.codecogs.com/png.latex?%5Clambda%20v%20=%20Av">의 양변에 1-norm을 취하면: <img src="https://latex.codecogs.com/png.latex?%7C%5Clambda%7C%20%5C%7Cv%5C%7C_1%20=%20%5C%7C%5Clambda%20v%5C%7C_1%20=%20%5C%7CAv%5C%7C_1%20%5Cle%20%5C%7CA%5C%7C_1%20%5C%7Cv%5C%7C_1%20=%201%20%5Ccdot%20%5C%7Cv%5C%7C_1"></p></li>
+<li><p>양변에서 <img src="https://latex.codecogs.com/png.latex?%5C%7Cv%5C%7C_1">을 약분하면, 최종적으로 <strong><img src="https://latex.codecogs.com/png.latex?%7C%5Clambda%7C%20%5Cle%201"></strong> 이라는 결론이 도출됩니다.</p></li>
+</ul>
+</section>
+<section id="성질-2-lambda-1은-지배적-고윳값이다." class="level2">
+<h2 class="anchored" data-anchor-id="성질-2-lambda-1은-지배적-고윳값이다.">5.2 성질 2: <img src="https://latex.codecogs.com/png.latex?%5Clambda%20=%201">은 지배적 고윳값이다.</h2>
+<ul>
+<li><p>성질 1에서 고윳값의 최댓값이 1을 넘지 못함을 알았습니다. 그렇다면 실제로 <img src="https://latex.codecogs.com/png.latex?%5Clambda%20=%201">인 고윳값이 존재할까요?</p></li>
+<li><p>행렬 <img src="https://latex.codecogs.com/png.latex?A">의 각 열의 합이 1이라는 사실은, 모든 원소가 1인 전치 벡터 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7B1%7D%5E%5Ctop">를 곱했을 때 자기 자신이 나온다는 것을 의미합니다. <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7B1%7D%5E%5Ctop%20A%20=%20%5Cmathbf%7B1%7D%5E%5Ctop"></p></li>
+<li><p>양변을 전치(Transpose)하면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?A%5E%5Ctop%20%5Cmathbf%7B1%7D%20=%20%5Cmathbf%7B1%7D%20=%201%20%5Ccdot%20%5Cmathbf%7B1%7D"></p></li>
+<li><p>이 식은 전치 행렬 <img src="https://latex.codecogs.com/png.latex?A%5E%5Ctop">가 <img src="https://latex.codecogs.com/png.latex?%5Clambda=1">을 고윳값으로, 원소가 모두 1인 벡터 <img src="https://latex.codecogs.com/png.latex?%5Cmathbf%7B1%7D">을 고유벡터로 가진다는 것을 뜻합니다.</p></li>
+<li><p>행렬과 그 전치 행렬은 항상 동일한 고윳값을 가지므로(A matrix and its transpose have the same eigenvalue), 원래 행렬 <strong><img src="https://latex.codecogs.com/png.latex?A"> 역시 <img src="https://latex.codecogs.com/png.latex?%5Clambda%20=%201">을 고윳값으로 가집니다.</strong> 성질 1과 결합하면, <img src="https://latex.codecogs.com/png.latex?%5Clambda%20=%201">은 단순한 고윳값이 아니라 최댓값, 즉 <strong>지배적 고윳값(Dominant eigenvalue)</strong>임이 증명됩니다.</p></li>
+</ul>
+</section>
+<section id="성질-3-4-단순성과-양수성-페론-프로베니우스-정리" class="level2">
+<h2 class="anchored" data-anchor-id="성질-3-4-단순성과-양수성-페론-프로베니우스-정리">5.3 성질 3 &amp; 4: 단순성과 양수성 (페론-프로베니우스 정리)</h2>
+<ul>
+<li>우리가 앞서 도입한 ‘순간이동(Teleportation)’ 개념 덕분에 구글 행렬 <img src="https://latex.codecogs.com/png.latex?A">의 모든 원소는 0보다 큰 엄격한 양수(Strictly positive)가 됩니다 (<img src="https://latex.codecogs.com/png.latex?a_%7Bij%7D%20%3E%200">).</li>
+<li>이러한 엄격한 양수 행렬에 대해서는 선형대수학의 위대한 정리인 <strong>페론-프로베니우스 정리(Perron-Frobenius Theorem)</strong>가 적용됩니다. 이 정리에 의해 다음 두 가지 성질이 자동적으로 보장됩니다.</li>
+</ul>
+<section id="성질-3" class="level3">
+<h3 class="anchored" data-anchor-id="성질-3">5.3.1 성질 3</h3>
+<ul>
+<li><strong>Property 3: <img src="https://latex.codecogs.com/png.latex?%5Clambda%20=%201">은 단순 고윳값(Simple eigenvalue)이다.</strong>
+<ul>
+<li>즉, <img src="https://latex.codecogs.com/png.latex?%5Clambda=1">과 동일한 크기를 가진 다른 고윳값은 존재하지 않으며, 나머지 모든 고윳값 <img src="https://latex.codecogs.com/png.latex?%5Clambda_i">는 <img src="https://latex.codecogs.com/png.latex?%7C%5Clambda_i%7C%20%3C%201">을 엄격하게 만족합니다. (이는 멱제곱법에서 분모가 0이 되거나 다른 항이 소멸하지 않는 문제를 원천 차단합니다.)</li>
+</ul></li>
+</ul>
+</section>
+<section id="성질-4" class="level3">
+<h3 class="anchored" data-anchor-id="성질-4">5.3.2 성질 4</h3>
+<ul>
+<li><strong>Property 4: 대응하는 고유벡터 <img src="https://latex.codecogs.com/png.latex?v"> (즉, <img src="https://latex.codecogs.com/png.latex?r">)는 엄격한 양수(Strictly positive)이다.</strong>
+<ul>
+<li>PageRank의 모든 점수가 0보다 큼(<img src="https://latex.codecogs.com/png.latex?r_i%20%3E%200">)을 수학적으로 보장해 줍니다. 누군가의 중요도가 0이나 음수가 되는 오류가 발생하지 않습니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="마무리-이론과-실무의-완벽한-조화" class="level1">
+<h1>6. 마무리: 이론과 실무의 완벽한 조화</h1>
+<ul>
+<li><p>멱제곱법(Power Iteration)으로 <img src="https://latex.codecogs.com/png.latex?r%20=%20Ar"> 방정식을 풀기 위해서는 두 가지 핵심 조건이 필요했습니다.</p>
+<ul>
+<li><ol type="1">
+<li>찾고자 하는 해 <img src="https://latex.codecogs.com/png.latex?r">이 행렬 <img src="https://latex.codecogs.com/png.latex?A">의 지배적 고유벡터여야 합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>지배적 고윳값은 다른 고윳값과 구별되는 단순 고윳값(Simple)이어야 합니다 (<img src="https://latex.codecogs.com/png.latex?%7C%5Clambda_1%7C%20%3E%20%7C%5Clambda_2%7C">).</li>
+</ol></li>
+</ul></li>
+<li><p>우리가 확인했듯, <strong>순간이동 개념이 포함된 구글 행렬(Google Matrix)은 위 두 조건을 완벽하게 충족</strong>합니다!</p></li>
+<li><p>실제 환경에서는 행렬이 반드시 대각화 가능(Diagonalizable)할 필요조차 없습니다. 검색 엔진의 랭킹을 매기기 위해서는 모든 고유벡터가 필요한 것이 아니라, <strong>오직 가장 지배적인 단 하나의 고유벡터 <img src="https://latex.codecogs.com/png.latex?r">만 필요</strong>하기 때문입니다.</p></li>
+<li><p>결론적으로 PageRank 모델은 웹의 투표 구조를 반영하는 탁월한 직관뿐만 아니라, <strong>거대한 스케일에서도 안정적이고 빠르게 수렴할 수밖에 없는 견고한 수학적 토대</strong>를 갖추었기에 역사상 가장 성공적인 데이터 마이닝 알고리즘이 될 수 있었습니다.</p></li>
+</ul>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.3/</guid>
+  <pubDate>Mon, 20 Apr 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 14. Link Analysis (Part 4)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.4/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="서론-구글-행렬google-matrix의-역설" class="level1">
+<h1>1. 서론: 구글 행렬(Google Matrix)의 역설</h1>
+<ul>
+<li>이전 포스트에서 우리는 멱제곱법(Power Iteration)을 활용해 PageRank 벡터 <img src="https://latex.codecogs.com/png.latex?r">을 계산하는 원리를 살펴보고, 이를 위해 수학적으로 수렴성이 보장된 구글 행렬 <img src="https://latex.codecogs.com/png.latex?A">를 도출했습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?A%20=%20%5Cbeta%20M%20+%20(1-%5Cbeta)%5Cleft%5B%5Cfrac%7B1%7D%7Bn%7D%5Cright%5D_%7Bn%20%5Ctimes%20n%7D"></p>
+<ul>
+<li><p>하지만 이 수식을 실제 구글 검색 엔진에 그대로 적용하려고 하면 치명적인 컴퓨팅 한계에 직면하게 됩니다.</p></li>
+<li><p>웹 페이지 간의 링크 연결 구조를 나타내는 전이 행렬 <img src="https://latex.codecogs.com/png.latex?M">은 0이 압도적으로 많은 <strong>희소 행렬(Sparse Matrix)</strong>입니다. 반면, 무작위 순간이동을 나타내는 두 번째 항 때문에 최종 산출된 <strong>구글 행렬 <img src="https://latex.codecogs.com/png.latex?A">는 모든 원소가 0이 아닌 조밀 행렬(Dense Matrix)</strong>이 되어버립니다.</p></li>
+<li><p>전 세계 웹 페이지 수 <img src="https://latex.codecogs.com/png.latex?n">이 수백억 개 단위임을 감안할 때, <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20n"> 크기의 조밀 행렬을 메모리(RAM)는 물론이고 하드 디스크에 명시적으로 생성하고 저장하는 것조차 불가능합니다. 본 포스트에서는 이 공간 복잡도의 한계를 수학적 트릭과 자료구조 최적화를 통해 어떻게 극복했는지 살펴봅니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="수식의-재구성-rearranging-the-equation" class="level1">
+<h1>2. 수식의 재구성 (Rearranging the Equation)</h1>
+<ul>
+<li>행렬 <img src="https://latex.codecogs.com/png.latex?A">를 메모리에 올릴 수 없다면, 애초에 <img src="https://latex.codecogs.com/png.latex?A">를 명시적으로 만들지 않고 멱제곱법 연산(<img src="https://latex.codecogs.com/png.latex?r%20=%20Ar">)을 수행해야 합니다. 이를 위해 PageRank 방정식을 다시 전개해 봅니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?r%20=%20A%20r"> <img src="https://latex.codecogs.com/png.latex?r%20=%20%5Cleft(%20%5Cbeta%20M%20+%20(1-%5Cbeta)%5Cleft%5B%5Cfrac%7B1%7D%7Bn%7D%5Cright%5D_%7Bn%20%5Ctimes%20n%7D%20%5Cright)%20r"> <img src="https://latex.codecogs.com/png.latex?r%20=%20%5Cbeta%20M%20r%20+%20(1-%5Cbeta)%5Cleft%5B%5Cfrac%7B1%7D%7Bn%7D%5Cright%5D_%7Bn%20%5Ctimes%20n%7D%20r"></p>
+<ul>
+<li>여기서 랭크 벡터 <img src="https://latex.codecogs.com/png.latex?r">은 모든 원소의 합이 1인 확률 벡터입니다 (<img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bi=1%7D%5En%20r_i%20=%201">).</li>
+<li>따라서 모든 원소가 <img src="https://latex.codecogs.com/png.latex?1/n">인 <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20n"> 행렬과 <img src="https://latex.codecogs.com/png.latex?r"> 벡터를 곱하면, 단순히 모든 원소가 <img src="https://latex.codecogs.com/png.latex?1/n">인 <img src="https://latex.codecogs.com/png.latex?n">차원 열 벡터가 결과로 나옵니다. 이를 수식으로 깔끔하게 정리하면 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?r%20=%20%5Cbeta%20M%20r%20+%20%5Cleft%5B%5Cfrac%7B1-%5Cbeta%7D%7Bn%7D%5Cright%5D_n"></p>
+<ul>
+<li>이 재구성된 방정식의 의미는 엄청납니다. 이제 우리는 거대한 조밀 행렬 <img src="https://latex.codecogs.com/png.latex?A">와 벡터의 곱셈을 수행할 필요가 없습니다. 연산의 핵심(Core operation)이 <strong>희소 행렬 <img src="https://latex.codecogs.com/png.latex?M">과 벡터 <img src="https://latex.codecogs.com/png.latex?r">의 곱셈(Sparse matrix-vector multiplication)</strong>으로 바뀌었기 때문입니다.</li>
+</ul>
+<hr>
+</section>
+<section id="희소-행렬-인코딩-sparse-matrix-encoding" class="level1">
+<h1>3. 희소 행렬 인코딩 (Sparse Matrix Encoding)</h1>
+<ul>
+<li><p>수식에서 <img src="https://latex.codecogs.com/png.latex?%5Cbeta%20M%20r"> 연산만을 수행하면 되므로, 행렬 <img src="https://latex.codecogs.com/png.latex?M"> 전체를 <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20n"> 형태로 저장할 필요가 없습니다. 대부분의 공간을 차지하는 0을 제외하고, 0이 아닌 실제 연결(Nonzero entries) 데이터만 인코딩하여 저장합니다.</p></li>
+<li><p>이렇게 하면 필요한 저장 공간은 웹 페이지 수의 제곱(<img src="https://latex.codecogs.com/png.latex?n%5E2">)이 아니라, <strong>실제 존재하는 웹 링크의 총개수에 대략적으로 비례(Proportional with the number of links)</strong>하게 줄어듭니다.</p></li>
+<li><p>일반적으로 이를 구현하기 위해 아래 그림과 같이 각 페이지(Source node)가 나가는 링크의 개수(Degree)와 도착지 페이지 번호(Destination nodes)만을 리스트 형태로 묶어서 디스크에 저장합니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.4/images/sparse_matrix_encoding_table.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 희소 행렬(Sparse Matrix) 인코딩 구조 예시 표. Source node(출발 페이지 번호), Degree(해당 페이지에서 나가는 링크의 총개수), 그리고 Destination nodes(실제 링크가 연결된 도착 페이지 번호 리스트)로 구성되어 있습니다. 예를 들어, 0번 노드는 3개의 링크를 가지며 1, 5, 7번 노드로 연결됨을 보여줌으로써 메모리 낭비 없이 희소 행렬을 압축 저장하는 구조를 직관적으로 나타냅니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>이렇게 압축을 하더라도 수십억 개의 노드를 가진 거대한 그래프 정보는 여전히 메인 메모리(RAM)에 한 번에 올라가지 못할 수 있지만, 디스크(Disk)에는 충분히 저장할 수 있는 수준이 됩니다.</li>
+</ul>
+<hr>
+</section>
+<section id="pagerank-연산을-위한-기본-알고리즘" class="level1">
+<h1>4. PageRank 연산을 위한 기본 알고리즘</h1>
+<ul>
+<li><p>이제 디스크에 저장된 희소 행렬 데이터를 활용하여 멱제곱법(Power Iteration)의 단일 스텝을 수행하는 알고리즘을 설계해 보겠습니다.</p></li>
+<li><p><strong>기본 가정(Assumption):</strong> 새롭게 계산되어 업데이트될 PageRank 벡터인 <img src="https://latex.codecogs.com/png.latex?r%5E%7Bnew%7D"> (크기 <img src="https://latex.codecogs.com/png.latex?n">) 하나 정도는 메인 메모리(RAM)에 충분히 올릴 수 있다고 가정합니다. 반면, 거대한 희소 행렬 <img src="https://latex.codecogs.com/png.latex?M">과 이전 단계의 랭크 벡터 <img src="https://latex.codecogs.com/png.latex?r%5E%7Bold%7D">는 하드 디스크에 저장되어 있습니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.4/images/basic_algorithm_memory_flow.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: PageRank 연산의 기본 알고리즘 메모리 흐름도. 하드 디스크에 저장된 <img src="https://latex.codecogs.com/png.latex?r%5E%7Bold%7D"> 값과 희소 인코딩된 전이 행렬 M(source, degree, destination 형태)을 순차적으로 읽어 들인 후, 메모리 상에 존재하는 <img src="https://latex.codecogs.com/png.latex?r%5E%7Bnew%7D"> 벡터의 해당 destination 인덱스에 점수를 업데이트(<img src="https://latex.codecogs.com/png.latex?+=">)하는 데이터 스트림의 흐름을 묘사합니다.</figcaption>
+</figure>
+</div>
+<section id="알고리즘-의사코드-pseudocode" class="level2">
+<h2 class="anchored" data-anchor-id="알고리즘-의사코드-pseudocode">4.1 알고리즘 의사코드 (Pseudocode)</h2>
+<ul>
+<li>매 반복(Iteration) 단계마다 다음의 과정을 거쳐 <img src="https://latex.codecogs.com/png.latex?r%5E%7Bnew%7D">를 업데이트합니다.
+<ul>
+<li><ol type="1">
+<li><strong>초기화:</strong> 메모리 내의 <img src="https://latex.codecogs.com/png.latex?r%5E%7Bnew%7D"> 벡터의 모든 원소를 상수항에 해당하는 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1-%5Cbeta%7D%7Bn%7D"> 로 초기화합니다. <img src="https://latex.codecogs.com/png.latex?r%5E%7Bnew%7D_j%20=%20%5Cfrac%7B1-%5Cbeta%7D%7Bn%7D%20%5Cquad%20%5Ctext%7Bfor%20all%20%7D%20j"></li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>디스크 순차 탐색:</strong> 각 페이지 <img src="https://latex.codecogs.com/png.latex?i">에 대하여 디스크에서 다음 정보들을 메모리로 순차적으로 읽어 들입니다.</li>
+</ol>
+<ul>
+<li>출발지 노드 번호: <img src="https://latex.codecogs.com/png.latex?i"></li>
+<li>외부 링크 개수: <img src="https://latex.codecogs.com/png.latex?d_i"></li>
+<li>도착지 노드 목록: <img src="https://latex.codecogs.com/png.latex?dest_1,%20%5Cdots,%20dest_%7Bd_i%7D"></li>
+<li>노드 <img src="https://latex.codecogs.com/png.latex?i">의 이전 PageRank 점수: <img src="https://latex.codecogs.com/png.latex?r%5E%7Bold%7D(i)"></li>
+</ul></li>
+<li><ol start="3" type="1">
+<li><strong>점수 분배 (메모리 업데이트):</strong> 노드 <img src="https://latex.codecogs.com/png.latex?i">가 가진 <img src="https://latex.codecogs.com/png.latex?r%5E%7Bold%7D(i)"> 점수를 외부 링크 수 <img src="https://latex.codecogs.com/png.latex?d_i">로 나눈 뒤 감쇠 계수 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">를 곱하여, 모든 도착지 노드 <img src="https://latex.codecogs.com/png.latex?dest_j">의 <img src="https://latex.codecogs.com/png.latex?r%5E%7Bnew%7D"> 누적합 공간에 더해줍니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BFor%20%7D%20j%20=%201,%20%5Cdots,%20d_i%20:"> <img src="https://latex.codecogs.com/png.latex?r%5E%7Bnew%7D(dest_j)%20%5Cmathrel%7B+%7D=%20%5Cbeta%20%5Cfrac%7Br%5E%7Bold%7D(i)%7D%7Bd_i%7D"></li>
+</ol></li>
+</ul></li>
+</ul>
+</section>
+<section id="알고리즘의-장점과-한계" class="level2">
+<h2 class="anchored" data-anchor-id="알고리즘의-장점과-한계">4.2 알고리즘의 장점과 한계</h2>
+<ul>
+<li><p>이 방식의 가장 큰 장점은 <strong>매 반복(Iteration)마다 하드 디스크를 단 한 번만 순차적으로 스캔(Only one full disk access)</strong>하면 된다는 점입니다. 랜덤 액세스(Random access) 없이 순차 읽기(Sequential read)를 수행하므로 디스크 I/O 비용이 대폭 감소합니다.</p></li>
+<li><p>하지만 웹 규모가 지속적으로 커짐에 따라, <img src="https://latex.codecogs.com/png.latex?r%5E%7Bnew%7D"> 벡터조차 단일 컴퓨터의 메모리 용량을 초과하게 되었고 한 대의 서버로 디스크를 읽는 것의 물리적 한계에 부딪혔습니다.</p></li>
+<li><p>이러한 “여전히 느린(Still slow?)” 문제를 해결하고 PageRank 계산을 수백, 수천 대의 컴퓨터에 분산시키기 위해 구글이 개발한 프레임워크가 바로, 오늘날 빅데이터 처리의 근간이 된 <strong>맵리듀스(MapReduce)</strong>입니다. (실제로 MapReduce는 초기에 PageRank를 계산하기 위한 목적으로 설계되었습니다.)</p></li>
+</ul>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/14.Link-Analysis-1/14.4/</guid>
+  <pubDate>Mon, 20 Apr 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>[Optimization] 14. Smooth Approximation of Nonsmooth Optimization</title>
   <dc:creator>유성현 </dc:creator>
@@ -2656,595 +3311,6 @@
   <category>Optimization</category>
   <guid>https://shsha0110.github.io/posts/Optimization/11.Accelerated-and-Projection-free-Methods/11.1/</guid>
   <pubDate>Tue, 07 Apr 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] 11. Accelerated and Projection-free Methods (Part 2)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/11.Accelerated-and-Projection-free-Methods/11.2/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="서론-수렴-속도의-간극gap과-가속화의-필요성" class="level1">
-<h1>1. 서론: 수렴 속도의 간극(Gap)과 가속화의 필요성</h1>
-<ul>
-<li><p>이전 포스트에서 우리는 1차 오라클(First-order oracle)을 사용하는 최적화 알고리즘의 <strong>수렴 속도 하한(Lower bound)</strong>에 대해 살펴보았습니다. 특히, <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활한(smooth) 볼록 함수의 경우 알고리즘이 도달할 수 있는 이론적 최적 수렴 속도는 <img src="https://latex.codecogs.com/png.latex?O(1/T%5E2)">임을 확인했습니다.</p></li>
-<li><p>하지만 우리가 알고 있는 표준 경사하강법(Gradient Descent)의 수렴 속도는 <img src="https://latex.codecogs.com/png.latex?O(1/T)">에 불과합니다. 즉, 이론적 하한과 실제 알고리즘 성능 사이에 <strong>명백한 간극(Gap)</strong>이 존재합니다.</p></li>
-<li><p>그렇다면 이 하한에 도달하여 수렴 속도를 극대화할 수 있는 더 나은 알고리즘이 존재할까요? Nesterov (1983, 2004)는 이 질문에 대한 해답으로 <strong>가속 경사하강법(Accelerated Gradient Descent)</strong>을 제안했습니다. 이 방법은 모멘텀(Momentum)이라는 물리적 직관을 도입하여 하한인 <img src="https://latex.codecogs.com/png.latex?O(1/T%5E2)"> 속도를 완벽히 달성합니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="모멘텀momentum의-직관과-업데이트-규칙" class="level1">
-<h1>2. 모멘텀(Momentum)의 직관과 업데이트 규칙</h1>
-<ul>
-<li><p>Nesterov 가속화의 핵심은 이전 스텝의 이동 정보를 현재 스텝에 반영하는 <strong>모멘텀(Momentum)</strong>에 있습니다.</p></li>
-<li><p>표준 경사하강법은 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활 함수에 대해 주어진 점 <img src="https://latex.codecogs.com/png.latex?x_t">에서 다음 업데이트를 수행합니다: <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20x_t%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%5Cnabla%20f(x_t)"></p></li>
-<li><p>반면, 모멘텀 기법은 직전 스텝에서 이동했던 방향 벡터인 <img src="https://latex.codecogs.com/png.latex?x_t%20-%20x_%7Bt-1%7D">을 재사용합니다. 즉, 새로운 점 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D">을 결정할 때 현재 점 <img src="https://latex.codecogs.com/png.latex?x_t">뿐만 아니라 과거의 점 <img src="https://latex.codecogs.com/png.latex?x_%7Bt-1%7D">의 정보까지 함께 고려하는 것입니다.</p></li>
-<li><p>알고리즘은 <img src="https://latex.codecogs.com/png.latex?x_t">에서 그래디언트를 바로 구하는 대신, 모멘텀 방향을 따라 앞으로 약간 더 이동한 <strong>중간 지점 <img src="https://latex.codecogs.com/png.latex?y_t"></strong>를 먼저 계산합니다. 가중치 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cgamma_t%20%3E%200">에 대해 <img src="https://latex.codecogs.com/png.latex?y_t">는 다음과 같이 정의됩니다: <img src="https://latex.codecogs.com/png.latex?y_t%20=%20x_t%20+%20%5Cgamma_t(x_t%20-%20x_%7Bt-1%7D)"></p></li>
-<li><p>그런 다음, 이 새로운 탐색 지점 <img src="https://latex.codecogs.com/png.latex?y_t">에서의 1차 미분 정보(그래디언트)를 계산하여 최종적인 경사하강법 업데이트를 수행합니다: <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20y_t%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%5Cnabla%20f(y_t)"></p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/11.Accelerated-and-Projection-free-Methods/11.2/images/nesterov_momentum_diagram.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 11.3: 모멘텀을 활용한 경사하강법의 기하학적 도식. 이전 점 <img src="https://latex.codecogs.com/png.latex?x_%7Bt-1%7D">에서 <img src="https://latex.codecogs.com/png.latex?x_t">로 이동해 온 관성을 유지하여 붉은 선분을 따라 <img src="https://latex.codecogs.com/png.latex?y_t">로 전진합니다. 이후 <img src="https://latex.codecogs.com/png.latex?y_t"> 지점에서 계산된 그래디언트의 역방향(<img src="https://latex.codecogs.com/png.latex?-%5Cnabla%20f(y_t)">)을 따라 최종 목적지인 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D">로 이동하는 궤적을 보여줍니다. 기존 GD(검은색 궤적) 대비 탐색 반경을 효율적으로 넓힙니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>이를 종합한 Nesterov 가속 경사하강법 알고리즘은 다음과 같습니다.</li>
-</ul>
-<section id="algorithm-1-nesterovs-accelerated-gradient-descent" class="level3">
-<h3 class="anchored" data-anchor-id="algorithm-1-nesterovs-accelerated-gradient-descent">Algorithm 1: Nesterov”s accelerated gradient descent</h3>
-<ul>
-<li><strong>초기화:</strong> <img src="https://latex.codecogs.com/png.latex?x_1%20%5Cin%20%5Ctext%7Bdom%7D(f)"></li>
-<li><strong>설정:</strong> <img src="https://latex.codecogs.com/png.latex?x_0%20=%20x_1"></li>
-<li><strong>반복 (<img src="https://latex.codecogs.com/png.latex?t%20=%201,%20%5Cdots,%20T">):</strong>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cgamma_t%20%3E%200"> 에 대해 중간점 계산: <img src="https://latex.codecogs.com/png.latex?y_t%20=%20x_t%20+%20%5Cgamma_t(x_t%20-%20x_%7Bt-1%7D)"></li>
-<li>경사하강 업데이트: <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20y_t%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%5Cnabla%20f(y_t)"></li>
-</ul></li>
-<li><strong>반환:</strong> <img src="https://latex.codecogs.com/png.latex?x_%7BT+1%7D"></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="평활한-볼록-함수의-수렴성-증명-smooth-convex-functions" class="level1">
-<h1>3. 평활한 볼록 함수의 수렴성 증명 (Smooth Convex Functions)</h1>
-<ul>
-<li>가장 놀라운 점은 <img src="https://latex.codecogs.com/png.latex?%5Cgamma_t">를 적절히 조절하는 것만으로 오라클 하한을 달성할 수 있다는 수학적 사실입니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>정리 11.4</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5Cmathbb%7BR%7D">가 <img src="https://latex.codecogs.com/png.latex?%5Cell_2"> 노름에서 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활한 볼록 함수라고 가정합시다. 매 반복 <img src="https://latex.codecogs.com/png.latex?t%20%5Cge%201">마다 모멘텀 파라미터를 다음과 같이 설정하면:</p>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cgamma_t%20=%20%5Cfrac%7Bt-2%7D%7Bt+1%7D"></p>
-<p>알고리즘의 출력은 최적해 <img src="https://latex.codecogs.com/png.latex?x%5E*">에 대해 다음 수렴 속도를 보장합니다:</p>
-<p><img src="https://latex.codecogs.com/png.latex?f(x_T)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B2%5Cbeta%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2%7D%7BT%5E2%7D"></p>
-</blockquote>
-<section id="상세-증명-과정-proof" class="level3">
-<h3 class="anchored" data-anchor-id="상세-증명-과정-proof">상세 증명 과정 (Proof)</h3>
-<ul>
-<li><p>이 증명은 텔레스코핑 합(Telescoping sum)을 구성할 수 있는 영리한 대수적 조작과 볼록 함수의 성질을 결합하여 이루어집니다.</p></li>
-<li><p><strong>1. 보조 변수 설정</strong></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?t%20%5Cge%200">에 대해 스텝 사이즈 스케일링 계수 <img src="https://latex.codecogs.com/png.latex?%5Clambda_t%20=%20%5Cfrac%7B2%7D%7Bt+1%7D">를 정의합니다. 그러면 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cgamma_t">는 다음 관계식을 만족합니다: <img src="https://latex.codecogs.com/png.latex?%5Cgamma_t%20=%20%5Cfrac%7B%5Clambda_t(1-%5Clambda_%7Bt-1%7D)%7D%7B%5Clambda_%7Bt-1%7D%7D"></li>
-<li>또한, 진행 상황을 추적하기 위한 가상의 보조 수열 <img src="https://latex.codecogs.com/png.latex?v_%7Bt+1%7D">을 다음과 같이 정의합니다: <img src="https://latex.codecogs.com/png.latex?v_%7Bt+1%7D%20=%20x_t%20+%20%5Cfrac%7B1%7D%7B%5Clambda_t%7D(x_%7Bt+1%7D%20-%20x_t)%20=%20%5Cfrac%7B1%7D%7B%5Clambda_t%7Dx_%7Bt+1%7D%20+%20%5Cleft(1%20-%20%5Cfrac%7B1%7D%7B%5Clambda_t%7D%5Cright)x_t"></li>
-<li>이 정의를 정리하면 모멘텀 항을 재작성할 수 있습니다: <img src="https://latex.codecogs.com/png.latex?%5Cgamma_t(x_t%20-%20x_%7Bt-1%7D)%20=%20%5Cgamma_t%5Cleft(%5Cfrac%7B1%7D%7B%5Clambda_%7Bt-1%7D%7D%20-%201%5Cright)%5E%7B-1%7D(v_t%20-%20x_t)%20=%20%5Clambda_t(v_t%20-%20x_t)"></li>
-<li>따라서 <img src="https://latex.codecogs.com/png.latex?y_t">는 <img src="https://latex.codecogs.com/png.latex?x_t">와 <img src="https://latex.codecogs.com/png.latex?v_t">의 볼록 결합(Convex combination)으로 표현됩니다: <img src="https://latex.codecogs.com/png.latex?y_t%20=%20x_t%20+%20%5Cgamma_t(x_t%20-%20x_%7Bt-1%7D)%20=%20(1-%5Clambda_t)x_t%20+%20%5Clambda_t%20v_t"></li>
-</ul></li>
-<li><p><strong>2. <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활성과 볼록성 적용</strong></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?f">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활하므로 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D">과 <img src="https://latex.codecogs.com/png.latex?y_t">에 대해 하강 보조정리(Descent Lemma)가 성립합니다. 임의의 <img src="https://latex.codecogs.com/png.latex?z%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">를 도입하여 수식을 확장합니다: <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20%5Cle%20f(y_t)%20+%20%5Cnabla%20f(y_t)%5E%5Ctop(x_%7Bt+1%7D%20-%20y_t)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%5C%7Cx_%7Bt+1%7D%20-%20y_t%5C%7C_2%5E2"></li>
-<li>볼록성의 1차 조건인 <img src="https://latex.codecogs.com/png.latex?f(y_t)%20+%20%5Cnabla%20f(y_t)%5E%5Ctop(z%20-%20y_t)%20%5Cle%20f(z)">를 이용하여 <img src="https://latex.codecogs.com/png.latex?f(y_t)">를 상한 처리합니다. 이때 알고리즘의 업데이트 식 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(y_t)%20=%20-%5Cbeta(x_%7Bt+1%7D%20-%20y_t)">를 대입하여 정리하면 다음을 얻습니다: <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20%5Cle%20f(z)%20+%20%5Cbeta(x_%7Bt+1%7D%20-%20y_t)%5E%5Ctop(z%20-%20x_%7Bt+1%7D)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%5C%7Cx_%7Bt+1%7D%20-%20y_t%5C%7C_2%5E2"></li>
-</ul></li>
-<li><p><strong>3. 최적해 <img src="https://latex.codecogs.com/png.latex?x%5E*">와 현재 해 <img src="https://latex.codecogs.com/png.latex?x_t">에 대한 부등식 결합</strong></p>
-<ul>
-<li>위 식에 <img src="https://latex.codecogs.com/png.latex?z%20=%20x%5E*">와 <img src="https://latex.codecogs.com/png.latex?z%20=%20x_t">를 각각 대입하여 두 개의 부등식을 만듭니다:
-<ul>
-<li><ol type="1">
-<li><img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cbeta(x_%7Bt+1%7D%20-%20y_t)%5E%5Ctop(x%5E*%20-%20x_%7Bt+1%7D)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%5C%7Cx_%7Bt+1%7D%20-%20y_t%5C%7C_2%5E2"></li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x_t)%20%5Cle%20%5Cbeta(x_%7Bt+1%7D%20-%20y_t)%5E%5Ctop(x_t%20-%20x_%7Bt+1%7D)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%5C%7Cx_%7Bt+1%7D%20-%20y_t%5C%7C_2%5E2"></li>
-</ol></li>
-</ul></li>
-<li>이제 1)식에 <img src="https://latex.codecogs.com/png.latex?%5Clambda_t">를 곱하고, 2)식에 <img src="https://latex.codecogs.com/png.latex?(1-%5Clambda_t)">를 곱하여 더합니다.</li>
-<li>좌변은 다음과 같이 묶입니다: <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x%5E*)%20-%20(1-%5Clambda_t)(f(x_t)%20-%20f(x%5E*))"></li>
-<li>우변을 정리하기 위해 앞서 정의한 <img src="https://latex.codecogs.com/png.latex?y_t">와 <img src="https://latex.codecogs.com/png.latex?v_%7Bt+1%7D">의 선형 결합 성질을 이용해 완전제곱식 형태로 묶어주면 다음과 같이 매우 깔끔하게 정리됩니다: <img src="https://latex.codecogs.com/png.latex?%5Cdots%20=%20%5Cfrac%7B%5Cbeta%5Clambda_t%5E2%7D%7B2%7D%5C%7Cv_t%20-%20x%5E*%5C%7C_2%5E2%20-%20%5Cfrac%7B%5Cbeta%5Clambda_t%5E2%7D%7B2%7D%5C%7Cv_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2"></li>
-</ul></li>
-<li><p><strong>4. 텔레스코핑 합(Telescoping Sum) 완성</strong></p>
-<ul>
-<li>양변을 <img src="https://latex.codecogs.com/png.latex?%5Clambda_t%5E2">로 나누어 리야푸노프 함수(Lyapunov function) 형태의 부등식을 만듭니다: <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B%5Clambda_t%5E2%7D(f(x_%7Bt+1%7D)%20-%20f(x%5E*))%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%5C%7Cv_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cle%20%5Cfrac%7B1-%5Clambda_t%7D%7B%5Clambda_t%5E2%7D(f(x_t)%20-%20f(x%5E*))%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%5C%7Cv_t%20-%20x%5E*%5C%7C_2%5E2"></li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Clambda_t%20=%20%5Cfrac%7B2%7D%7Bt+1%7D">의 정의에 의해 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1-%5Clambda_t%7D%7B%5Clambda_t%5E2%7D%20%5Cle%20%5Cfrac%7B1%7D%7B%5Clambda_%7Bt-1%7D%5E2%7D">가 성립합니다. 이를 계속해서 <img src="https://latex.codecogs.com/png.latex?t=1">까지 연쇄적으로 축소(Telescoping)시킵니다: <img src="https://latex.codecogs.com/png.latex?%5Cle%20%5Cfrac%7B1%7D%7B%5Clambda_%7Bt-1%7D%5E2%7D(f(x_t)%20-%20f(x%5E*))%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%5C%7Cv_t%20-%20x%5E*%5C%7C_2%5E2"> <img src="https://latex.codecogs.com/png.latex?%5Cdots%20%5Cle%20%5Cfrac%7B1-%5Clambda_1%7D%7B%5Clambda_1%5E2%7D(f(x_1)%20-%20f(x%5E*))%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%5C%7Cv_1%20-%20x%5E*%5C%7C_2%5E2"></li>
-<li>초기값 <img src="https://latex.codecogs.com/png.latex?%5Clambda_1%20=%201">이므로 첫 번째 항은 <img src="https://latex.codecogs.com/png.latex?0">이 되어 사라지고, 초기 보조 벡터 <img src="https://latex.codecogs.com/png.latex?v_1%20=%20x_1">이므로 최종적으로 우변은 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cbeta%7D%7B2%7D%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"> 만 남습니다.</li>
-</ul></li>
-<li><p>결과적으로 다음을 얻습니다: <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B%5Cbeta%5Clambda_t%5E2%7D%7B2%7D%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"></p></li>
-<li><p><img src="https://latex.codecogs.com/png.latex?%5Clambda_T%20%5Capprox%202/T"> 이므로, <img src="https://latex.codecogs.com/png.latex?f(x_T)%20-%20f(x%5E*)%20=%20O(1/T%5E2)">가 되어 오라클 하한과 완벽하게 일치합니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></p></li>
-<li><p>이 정리에 따르면 오차 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon"> 이내로 도달하기 위해 요구되는 반복 횟수는 표준 경사하강법의 <img src="https://latex.codecogs.com/png.latex?O(1/%5Cepsilon)">에서 <img src="https://latex.codecogs.com/png.latex?O(1/%5Csqrt%7B%5Cepsilon%7D)">으로 대폭 감소합니다.</p></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="강볼록-함수의-수렴성-strongly-convex-functions" class="level1">
-<h1>4. 강볼록 함수의 수렴성 (Strongly Convex Functions)</h1>
-<ul>
-<li>함수가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활할 뿐만 아니라 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-강볼록(Strongly convex)한 경우, 모멘텀 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cgamma_t">를 상수로 고정하여 선형 수렴 속도를 더욱 끌어올릴 수 있습니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>정리 11.5</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5Cmathbb%7BR%7D">가 <img src="https://latex.codecogs.com/png.latex?%5Cell_2"> 노름에서 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활하며 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-강볼록한 볼록 함수라고 합시다. 조건수를 <img src="https://latex.codecogs.com/png.latex?%5Ckappa%20=%20%5Cbeta/%5Calpha">라 할 때, 파라미터를 다음과 같이 고정합니다:</p>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cgamma_t%20=%20%5Cfrac%7B%5Csqrt%7B%5Ckappa%7D-1%7D%7B%5Csqrt%7B%5Ckappa%7D+1%7D"></p>
-<p>이때 Nesterov 가속 알고리즘은 다음의 수렴 속도를 만족합니다:</p>
-<p><img src="https://latex.codecogs.com/png.latex?f(x_T)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B%5Calpha+%5Cbeta%7D%7B2%7D%5Cleft(%5Cfrac%7B%5Csqrt%7B%5Ckappa%7D-1%7D%7B%5Csqrt%7B%5Ckappa%7D+1%7D%5Cright)%5E%7B(T-1)/2%7D%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"></p>
-</blockquote>
-<ul>
-<li><strong>해석:</strong> 이전 포스트(하한 정리)에서 살펴본 강볼록 함수의 오라클 복잡도 하한 기준 베이스가 <img src="https://latex.codecogs.com/png.latex?%5Cleft(%5Cfrac%7B%5Csqrt%7B%5Ckappa%7D-1%7D%7B%5Csqrt%7B%5Ckappa%7D+1%7D%5Cright)%5E2"> 이었습니다. 정리 11.5에 나타난 수렴 속도는 이 하한선을 정확히 따라가고 있음을 보여주며, Nesterov 가속화가 평활성뿐만 아니라 강볼록성 조건에서도 <strong>이론적으로 완벽한 최적 알고리즘(Optimal algorithm)</strong>임을 입증합니다.</li>
-</ul>
-
-
-
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/11.Accelerated-and-Projection-free-Methods/11.2/</guid>
-  <pubDate>Tue, 07 Apr 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] 11. Accelerated and Projection-free Methods (Part 3)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/11.Accelerated-and-Projection-free-Methods/11.3/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="서론-사영-경사하강법pgd의-한계점" class="level1">
-<h1>1. 서론: 사영 경사하강법(PGD)의 한계점</h1>
-<ul>
-<li>이전까지 우리는 평활한(smooth) 함수를 최소화할 때 사영 경사하강법(Projected Gradient Descent, PGD)이 <img src="https://latex.codecogs.com/png.latex?O(1/T)">의 수렴 속도를 달성함을 확인했습니다. 그러나 실무적인 관점에서 PGD는 다음과 같은 두 가지 주요한 한계점을 가집니다.
-<ul>
-<li><ol type="1">
-<li><strong>사영(Projection) 연산의 높은 비용:</strong> 실행 가능 영역(feasible set) <img src="https://latex.codecogs.com/png.latex?C"> 위로 해를 사영하는 단계는 그 자체로 하나의 최적화 문제를 푸는 것과 같습니다. 집합 <img src="https://latex.codecogs.com/png.latex?C">가 다면체(polyhedron)와 같이 단순한 형태라 할지라도, 투영 연산은 계산 비용이 높은 이차계획법(Quadratic Program, QP)을 요구합니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5Cell_2">-노름 기반 평활성의 한계:</strong> 기존의 경사하강법 분석은 <img src="https://latex.codecogs.com/png.latex?%5Cell_2">-노름 기준의 평활성에 강하게 의존합니다. 만약 함수가 <img src="https://latex.codecogs.com/png.latex?%5Cell_1">-노름에 대해서 아주 작은 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">로 평활하더라도, 이를 <img src="https://latex.codecogs.com/png.latex?%5Cell_2">-노름 기준으로 변환하면 차원 <img src="https://latex.codecogs.com/png.latex?d">에 비례하여 평활성 파라미터가 증폭됩니다. <img src="https://latex.codecogs.com/png.latex?%7C%7C%5Cnabla%20f(x)%20-%20%5Cnabla%20f(y)%7C%7C_2%20%5Cle%20%5Csqrt%7Bd%7D%7C%7C%5Cnabla%20f(x)%20-%20%5Cnabla%20f(y)%7C%7C_%5Cinfty%20%5Cle%20%5Csqrt%7Bd%7D%5Cbeta%7C%7Cx%20-%20y%7C%7C_1%20%5Cle%20d%5Cbeta%7C%7Cx%20-%20y%7C%7C_2"></li>
-</ol>
-<ul>
-<li>결과적으로 알고리즘의 수렴 속도가 문제의 차원 <img src="https://latex.codecogs.com/png.latex?d">에 크게 영향을 받게 되어 “차원 독립적(dimension-free)”이라는 좋은 특성을 잃게 됩니다.</li>
-</ul></li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="동기-lasso-정규화-문제-constrained-formulation" class="level1">
-<h1>2. 동기: LASSO 정규화 문제 (Constrained Formulation)</h1>
-<ul>
-<li><p>PGD의 사영 연산이 왜 문제가 되는지 LASSO 회귀 모델의 사례를 통해 구체적으로 살펴봅시다. 주어진 <img src="https://latex.codecogs.com/png.latex?n">개의 데이터 포인트 <img src="https://latex.codecogs.com/png.latex?(x_1,%20y_1),%20%5Cdots,%20(x_n,%20y_n)">에 대해 회귀식을 구성할 때, 페널티 항을 더한 라그랑주(Lagrangian) 형태의 LASSO는 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%5Cmin_%5Cbeta%20%5Cfrac%7B1%7D%7Bn%7D%20%7C%7Cy%20-%20X%5Cbeta%7C%7C_2%5E2%20+%20%5Clambda%20%7C%7C%5Cbeta%7C%7C_1"></p>
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?y%20=%20(y_1,%20%5Cdots,%20y_n)%5E%5Ctop">이고 <img src="https://latex.codecogs.com/png.latex?X">의 각 행은 <img src="https://latex.codecogs.com/png.latex?x_i%5E%5Ctop">입니다.</li>
-</ul></li>
-<li><p>이 문제는 정규화 정도를 결정하는 파라미터 <img src="https://latex.codecogs.com/png.latex?t">를 사용하는 “제약 조건(Constrained) 형태”로 동일하게 변환할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bminimize%20%7D%20%5Cfrac%7B1%7D%7Bn%7D%20%7C%7Cy%20-%20X%5Cbeta%7C%7C_2%5E2"> <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bsubject%20to%20%7D%20%7C%7C%5Cbeta%7C%7C_1%20%5Cle%20t"></p></li>
-<li><p>이 경우 제약 집합은 <img src="https://latex.codecogs.com/png.latex?C%20=%20%5C%7B%5Cbeta%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20:%20%7C%7C%5Cbeta%7C%7C_1%20%5Cle%20t%5C%7D"> 형태의 다면체(polytope)가 됩니다. PGD를 적용하려면 매 반복마다 이 다면체 위로 사영(QP)을 수행해야 하므로 병목 현상이 발생합니다. 반면, 다면체 위에서 임의의 선형 함수를 최적화하는 것은 선형계획법(Linear Program, LP)이므로 훨씬 빠르고 효율적으로 해결할 수 있습니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="사영-없는-기법-frank-wolfe-algorithm" class="level1">
-<h1>3. 사영 없는 기법: Frank-Wolfe Algorithm</h1>
-<ul>
-<li>사영 연산의 한계를 극복하기 위해 제안된 것이 바로 <strong>조건부 경사하강법(Conditional Gradient Method)</strong>, 흔히 <strong>Frank-Wolfe 알고리즘</strong>이라 불리는 방법론입니다 (Frank &amp; Wolfe, 1956).</li>
-</ul>
-<section id="algorithm-2-frank-wolfe-algorithm" class="level3">
-<h3 class="anchored" data-anchor-id="algorithm-2-frank-wolfe-algorithm">Algorithm 2: Frank-Wolfe algorithm</h3>
-<ul>
-<li><p><strong>초기화:</strong> <img src="https://latex.codecogs.com/png.latex?x_1%20%5Cin%20C"></p></li>
-<li><p><strong>반복 (<img src="https://latex.codecogs.com/png.latex?t%20=%201,%20%5Cdots,%20T-1">):</strong></p>
-<ul>
-<li><strong>선형 최적화:</strong> <img src="https://latex.codecogs.com/png.latex?v_t%20%5Cin%20%5Ctext%7Bargmin%7D_%7Bv%20%5Cin%20C%7D%20%5Cnabla%20f(x_t)%5E%5Ctop%20v"></li>
-<li><strong>볼록 결합 업데이트:</strong> <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20(1%20-%20%5Clambda_t)x_t%20+%20%5Clambda_t%20v_t"> (단, <img src="https://latex.codecogs.com/png.latex?0%20%3C%20%5Clambda_t%20%3C%201">)</li>
-</ul></li>
-<li><p><strong>반환:</strong> <img src="https://latex.codecogs.com/png.latex?x_T"></p></li>
-<li><p>이 알고리즘의 핵심은 제약 집합 <img src="https://latex.codecogs.com/png.latex?C"> 내에서 목적 함수의 1차 선형 근사(그래디언트와의 내적)를 최소화하는 극단점(extreme point) <img src="https://latex.codecogs.com/png.latex?v_t">를 찾는 것입니다. <img src="https://latex.codecogs.com/png.latex?C">가 다면체라면 이는 단순한 LP를 푸는 것으로 귀결됩니다. QP를 푸는 PGD와 극명히 대조되며 “사영이 필요 없는(projection-free)” 알고리즘으로 불립니다.</p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/11.Accelerated-and-Projection-free-Methods/11.3/images/conditional_gradient_diagram.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 11.4: 조건부 경사하강법의 업데이트 궤적. 현재 점 <img src="https://latex.codecogs.com/png.latex?x_t">에서 그래디언트의 역방향(<img src="https://latex.codecogs.com/png.latex?-%5Cnabla%20f(x_t)">)을 직접 따르지 않고, 해당 방향으로 제약 집합 <img src="https://latex.codecogs.com/png.latex?C"> 내부에서 가장 멀리 갈 수 있는 꼭짓점 <img src="https://latex.codecogs.com/png.latex?v_t">를 구합니다. 그런 다음 기존 위치 <img src="https://latex.codecogs.com/png.latex?x_t">와 새로운 위치 <img src="https://latex.codecogs.com/png.latex?v_t">를 잇는 선분 위에서 적절한 스텝 사이즈 <img src="https://latex.codecogs.com/png.latex?%5Clambda_t">만큼 이동하여 새로운 내부점 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D">을 생성합니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>위 도식에서 알 수 있듯, 이동 방향 <img src="https://latex.codecogs.com/png.latex?v_t%20-%20x_t">는 정확히 <img src="https://latex.codecogs.com/png.latex?-%5Cnabla%20f(x_t)"> 방향과 일치하지는 않지만 , <img src="https://latex.codecogs.com/png.latex?C"> 내부에서의 안전한 하강 경로를 제공합니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="frank-wolfe-알고리즘의-수렴성-이론" class="level1">
-<h1>4. Frank-Wolfe 알고리즘의 수렴성 이론</h1>
-<ul>
-<li>먼저 일반적인 노름(Norm)에 대한 평활성을 정의합니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>정의 11.6:</strong> 함수 <img src="https://latex.codecogs.com/png.latex?f">가 특정 노름 <img src="https://latex.codecogs.com/png.latex?%7C%7C%5Ccdot%7C%7C">에 대해 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활하다는 것은, 임의의 <img src="https://latex.codecogs.com/png.latex?x,%20y%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">에 대해 다음을 만족한다는 의미입니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%7C%7C%5Cnabla%20f(x)%20-%20%5Cnabla%20f(y)%7C%7C_*%20%5Cle%20%5Cbeta%20%7C%7Cx%20-%20y%7C%7C"></p>
-<p>여기서 <img src="https://latex.codecogs.com/png.latex?%7C%7C%5Ccdot%7C%7C_*">는 쌍대 노름(dual norm)입니다.</p>
-</blockquote>
-<blockquote class="blockquote">
-<p><strong>정리 11.7 (수렴성 증명)</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활한 볼록 함수 <img src="https://latex.codecogs.com/png.latex?f">를 임의의 노름에 대해 최적화할 때 , Frank-Wolfe 알고리즘에서 스텝 사이즈를 <img src="https://latex.codecogs.com/png.latex?%5Clambda_t%20=%20%5Cfrac%7B2%7D%7Bt+1%7D">로 설정하면 <img src="https://latex.codecogs.com/png.latex?t%20%5Cge%202">에 대해 다음이 성립합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?f(x_t)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B2%5Cbeta%20R%5E2%7D%7Bt+1%7D"></p>
-<p>단, <img src="https://latex.codecogs.com/png.latex?x%5E*">는 최적해, <img src="https://latex.codecogs.com/png.latex?R%20=%20%5Csup_%7Bx,y%20%5Cin%20C%7D%20%7C%7Cx%20-%20y%7C%7C">는 제약 집합의 직경.</p>
-</blockquote>
-<section id="증명-proof" class="level3">
-<h3 class="anchored" data-anchor-id="증명-proof"><strong>증명 (Proof):</strong></h3>
-<ul>
-<li>평활성의 정의에 따른 하강 보조정리(Descent Lemma)를 적용하면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20%5Cle%20f(x_t)%20+%20%5Cnabla%20f(x_t)%5E%5Ctop%20(x_%7Bt+1%7D%20-%20x_t)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cx_%7Bt+1%7D%20-%20x_t%7C%7C%5E2"></li>
-<li>알고리즘의 업데이트 식 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20-%20x_t%20=%20%5Clambda_t(v_t%20-%20x_t)">를 대입합니다. <img src="https://latex.codecogs.com/png.latex?=%20f(x_t)%20+%20%5Clambda_t%20%5Cnabla%20f(x_t)%5E%5Ctop%20(v_t%20-%20x_t)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cx_%7Bt+1%7D%20-%20x_t%7C%7C%5E2"></li>
-<li><img src="https://latex.codecogs.com/png.latex?v_t">는 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x_t)%5E%5Ctop%20v">를 최소화하도록 선택되었으므로 최적해 <img src="https://latex.codecogs.com/png.latex?x%5E*">에 대해서도 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x_t)%5E%5Ctop%20v_t%20%5Cle%20%5Cnabla%20f(x_t)%5E%5Ctop%20x%5E*">가 성립합니다. 또한 볼록성의 1차 조건 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x_t)%5E%5Ctop%20(x%5E*%20-%20x_t)%20%5Cle%20f(x%5E*)%20-%20f(x_t)">를 적용합니다. <img src="https://latex.codecogs.com/png.latex?%5Cle%20f(x_t)%20+%20%5Clambda_t%20(f(x%5E*)%20-%20f(x_t))%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cx_%7Bt+1%7D%20-%20x_t%7C%7C%5E2"></li>
-<li>집합의 직경 정의에 의해 <img src="https://latex.codecogs.com/png.latex?%7C%7Cx_%7Bt+1%7D%20-%20x_t%7C%7C%20=%20%5Clambda_t%20%7C%7Cv_t%20-%20x_t%7C%7C%20%5Cle%20%5Clambda_t%20R"> 이므로, <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x%5E*)%20%5Cle%20(1%20-%20%5Clambda_t)(f(x_t)%20-%20f(x%5E*))%20+%20%5Cfrac%7B%5Cbeta%20%5Clambda_t%5E2%20R%5E2%7D%7B2%7D"> <img src="https://latex.codecogs.com/png.latex?%5Cle%20%5Cfrac%7Bt-1%7D%7Bt+1%7D(f(x_t)%20-%20f(x%5E*))%20+%20%5Cfrac%7B2%5Cbeta%20R%5E2%7D%7B(t+1)%5E2%7D"></li>
-<li>이 점화식에 <img src="https://latex.codecogs.com/png.latex?t=1">부터 귀납법을 적용하면 (<img src="https://latex.codecogs.com/png.latex?f(x_2)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B2%5Cbeta%20R%5E2%7D%7B3%7D">), <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7Bt%7D%7B(t+1)%5E2%7D%202%5Cbeta%20R%5E2%20%5Cle%20%5Cfrac%7B1%7D%7Bt+2%7D%5Cbeta%20R%5E2"> 가 도출되어 수렴 속도 <img src="https://latex.codecogs.com/png.latex?O(1/T)">가 증명됩니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="ell_p-제약-최적화-문제에서의-활용" class="level1">
-<h1>5. <img src="https://latex.codecogs.com/png.latex?%5Cell_p">-제약 최적화 문제에서의 활용</h1>
-<ul>
-<li>다음과 같은 <img src="https://latex.codecogs.com/png.latex?%5Cell_p"> 노름 제약 문제를 고려해 봅시다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bminimize%20%7D%20f(x)%20%5Cquad%20%5Ctext%7Bsubject%20to%20%7D%20%7C%7Cx%7C%7C_p%20%5Cle%20b">
-<ul>
-<li>단, <img src="https://latex.codecogs.com/png.latex?p%20%5Cge%201"></li>
-</ul></li>
-<li>이때 Frank-Wolfe의 서브 문제는 다음과 같이 정리됩니다. <img src="https://latex.codecogs.com/png.latex?v_t%20%5Cin%20%5Ctext%7Bargmin%7D_%7B%7C%7Cv%7C%7C_p%20%5Cle%20b%7D%20%5Cnabla%20f(x_t)%5E%5Ctop%20v%20=%20-b%20%5Ccdot%20%5Cpartial%20%7C%7C%5Cnabla%20f(x_t)%7C%7C_q">
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?q">는 <img src="https://latex.codecogs.com/png.latex?1/p%20+%201/q%20=%201">을 만족하는 쌍대 지수(dual exponent)입니다.</li>
-</ul></li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?p=1"> 인 경우 (<img src="https://latex.codecogs.com/png.latex?q=%5Cinfty">):</strong> <img src="https://latex.codecogs.com/png.latex?v_t%20=%20-b%20%5Ccdot%20%5Ctext%7Bsign%7D(%5Cnabla_%7Bi_t%7D%20f(x_t))%20e_%7Bi_t%7D">
-<ul>
-<li>단, <img src="https://latex.codecogs.com/png.latex?i_t%20%5Cin%20%5Ctext%7Bargmax%7D_%7Bi%7D%20%7C%5Cnabla_i%20f(x_t)%7C">, <img src="https://latex.codecogs.com/png.latex?e_i">는 표준 기저 벡터.</li>
-<li>이는 그래디언트의 절댓값이 가장 큰 <strong>단 하나의 좌표(coordinate) 방향으로만 이동</strong>함을 의미하며, 결과적으로 해의 희소성(sparsity)을 극대화하는 <strong>좌표 하강법(Coordinate Descent)</strong>의 아이디어와 직결됩니다.</li>
-</ul></li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?p%20%5Cge%201"> 인 경우:</strong> <img src="https://latex.codecogs.com/png.latex?(v_t)_i%20=%20-%5Calpha%20%5Ccdot%20%5Ctext%7Bsign%7D(%5Cnabla_i%20f(x_t))%20%7C%5Cnabla_i%20f(x_t)%7C%5E%7Bp-1%7D">
-<ul>
-<li>단, <img src="https://latex.codecogs.com/png.latex?%5Calpha">는 <img src="https://latex.codecogs.com/png.latex?%7C%7Cv_t%7C%7C_q%20=%20b">를 보장하는 정규화 상수.</li>
-<li>각 좌표축으로의 이동량이 그래디언트 크기에 기반하여 분배됩니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="머신러닝-응용-저랭크-행렬-완성-low-rank-matrix-completion" class="level1">
-<h1>6. 머신러닝 응용: 저랭크 행렬 완성 (Low-Rank Matrix Completion)</h1>
-<ul>
-<li><p>사용자(n)-영화(p) 평점 행렬과 같이 부분적으로만 관측된 행렬 <img src="https://latex.codecogs.com/png.latex?A%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bn%20%5Ctimes%20p%7D">의 누락된 값을 추정하는 추천 시스템 문제를 생각해 봅시다. 실제 행렬 <img src="https://latex.codecogs.com/png.latex?A%5E*">가 소수의 특징에 의해 결정된다면 <img src="https://latex.codecogs.com/png.latex?A%5E*%20=%20U%20V%5E%5Ctop">의 형태를 띠며 랭크가 <img src="https://latex.codecogs.com/png.latex?k"> 이하라는 가정을 할 수 있습니다 (단, <img src="https://latex.codecogs.com/png.latex?k%20%3C%20n,%20p"> ).</p></li>
-<li><p>이 제약을 원래 형태인 비볼록(non-convex) 문제로 풀면 몹시 어렵습니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bminimize%20%7D%20%5Cfrac%7B1%7D%7B2%7D%20%7C%7CA%20-%20X%7C%7C_F%5E2%20%5Cquad%20%5Ctext%7Bsubject%20to%20%7D%20%5Ctext%7Brank%7D(X)%20%5Cle%20k"></p></li>
-<li><p>따라서 이를 볼록(convex) 함수인 <strong>핵 노름(Nuclear norm, <img src="https://latex.codecogs.com/png.latex?%7C%7C%5Ccdot%7C%7C_%7Bnuc%7D">)</strong>으로 완화(relaxation)합니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bminimize%20%7D%20%5Cfrac%7B1%7D%7B2%7D%20%7C%7CA%20-%20X%7C%7C_F%5E2%20%5Cquad%20%5Ctext%7Bsubject%20to%20%7D%20%7C%7CX%7C%7C_%7Bnuc%7D%20%5Cle%20k"></p></li>
-<li><p>이 볼록 최적화 문제 를 풀기 위해 두 가지 접근법을 비교해 볼 수 있습니다.</p>
-<ul>
-<li><ol type="1">
-<li><strong>PGD:</strong> 매 스텝마다 행렬을 핵 노름 제약 <img src="https://latex.codecogs.com/png.latex?C%20=%20%5C%7BX%20:%20%7C%7CX%7C%7C_%7Bnuc%7D%20%5Cle%20k%5C%7D"> 위로 투영해야 합니다. 이는 전체 특이값 분해(Full SVD) 연산을 강제하므로 계산 비용이 대단히 높습니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>Frank-Wolfe:</strong> FW 업데이트의 서브 문제는 목적 함수가 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BTr%7D((A-X_t)%5E%5Ctop%20V)"> 꼴의 선형 최적화로 변환됩니다. <img src="https://latex.codecogs.com/png.latex?V_t%20%5Cin%20%5Ctext%7Bargmin%7D%20%5C%7B%5Ctext%7BTr%7D((A-X_t)%5E%5Ctop%20V)%20:%20%7C%7CV%7C%7C_%7Bnuc%7D%20%5Cle%20k%5C%7D"></li>
-</ol>
-<ul>
-<li>놀랍게도 이는 단순히 행렬 <img src="https://latex.codecogs.com/png.latex?(X_t%20-%20A)">의 <strong>최상위 좌/우 특이 벡터(top singular vectors) 하나씩만을 계산하는 것과 동치</strong>입니다. 따라서 무거운 SVD 대신 훨씬 가벼운 <strong>거듭제곱법(Power Method)</strong>만을 적용하여 빠르게 <img src="https://latex.codecogs.com/png.latex?V_t">를 찾을 수 있어 실행 속도가 극적으로 향상됩니다.</li>
-</ul></li>
-</ul></li>
-</ul>
-
-
-
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/11.Accelerated-and-Projection-free-Methods/11.3/</guid>
-  <pubDate>Tue, 07 Apr 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Data Mining] 11. Dimensionality Reduction (Part 1)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.1/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="들어가며-introduction" class="level1">
-<h1>1. 들어가며 (Introduction)</h1>
-<p>데이터 마이닝과 머신러닝에서 고차원 데이터를 다루는 것은 “차원의 저주(Curse of Dimensionality)”를 피하고 연산 효율성을 높이기 위해 필수적입니다. 이번 포스트에서는 차원 축소의 가장 강력하고 널리 쓰이는 선형대수학적 도구인 <strong>특이값 분해(Singular Value Decomposition, SVD)</strong>에 대해 깊이 있게 다루어 보겠습니다.</p>
-<p>특히 SVD가 단순한 수학적 테크닉을 넘어 추천 시스템 등의 실제 응용에서 어떤 직관적인 의미(Latent Factor)를 가지는지, 그리고 첨부된 시각 자료들을 통해 각 행렬과 수식의 성분들이 구체적으로 무엇을 지시하는지 상세히 살펴보겠습니다.</p>
-<hr>
-</section>
-<section id="특이값-분해svd의-수학적-기초" class="level1">
-<h1>2. 특이값 분해(SVD)의 수학적 기초</h1>
-<section id="svd의-정의와-차원" class="level2">
-<h2 class="anchored" data-anchor-id="svd의-정의와-차원">2.1. SVD의 정의와 차원</h2>
-<p>임의의 실수 행렬 <img src="https://latex.codecogs.com/png.latex?M%5Cin%5Cmathbb%7BR%7D%5E%7Bm%5Ctimes%20n%7D">이 주어졌을 때, SVD는 이 행렬을 세 개의 행렬의 곱으로 분해(Factorization)하는 방법입니다. 수식으로는 다음과 같이 표현됩니다:</p>
-<p><img src="https://latex.codecogs.com/png.latex?M%5Capprox%20U%5CSigma%20V%5E%7B%5Ctop%7D"></p>
-<p>여기서 우리가 확보하고자 하는 잠재 요인(Latent Factor)의 개수를 <img src="https://latex.codecogs.com/png.latex?r">이라고 할 때, 각 행렬의 차원은 다음과 같이 결정됩니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.1/images/svd_matrix_factorization.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: SVD의 행렬 분해 도식. <img src="https://latex.codecogs.com/png.latex?m%20%5Ctimes%20n"> 크기의 원본 데이터 행렬 <img src="https://latex.codecogs.com/png.latex?M">이 세 가지 행렬의 곱으로 근사되는 모습을 보여줍니다. 왼쪽의 <img src="https://latex.codecogs.com/png.latex?M"> 행렬은 세로가 더 긴 직사각형 형태(<img src="https://latex.codecogs.com/png.latex?m%20%3E%20n">)를 띠고 있으며, 이는 <img src="https://latex.codecogs.com/png.latex?m%20%5Ctimes%20r"> 크기의 세로로 긴 직교 행렬 <img src="https://latex.codecogs.com/png.latex?U">, <img src="https://latex.codecogs.com/png.latex?r%20%5Ctimes%20r"> 크기의 정방형 대각 행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma">, 그리고 <img src="https://latex.codecogs.com/png.latex?r%20%5Ctimes%20n"> 크기의 가로로 긴 직교 행렬 <img src="https://latex.codecogs.com/png.latex?V%5ET">의 순차적 곱으로 분해됩니다. 각 행렬 위아래에 표시된 화살표와 차원 기호(<img src="https://latex.codecogs.com/png.latex?m,%20n,%20r">)를 통해, 차원 축소 과정에서 잠재 요인의 수인 <img src="https://latex.codecogs.com/png.latex?r">이 내부 연산의 형태를 어떻게 결정하는지 명확하게 확인할 수 있습니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><strong><img src="https://latex.codecogs.com/png.latex?M"></strong>: <img src="https://latex.codecogs.com/png.latex?m%5Ctimes%20n"> 크기의 원본 데이터 행렬</li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?U"></strong>: <img src="https://latex.codecogs.com/png.latex?m%5Ctimes%20r"> 크기의 좌측 특이 벡터(Left Singular Vectors) 행렬</li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?%5CSigma"></strong>: <img src="https://latex.codecogs.com/png.latex?r%5Ctimes%20r"> 크기의 특이값(Singular Values) 대각 행렬</li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?V%5E%7B%5Ctop%7D"></strong>: <img src="https://latex.codecogs.com/png.latex?r%5Ctimes%20n"> 크기의 우측 특이 벡터(Right Singular Vectors) 행렬의 전치</li>
-</ul>
-</section>
-<section id="복원-오차-reconstruction-error와-frobenius-norm" class="level2">
-<h2 class="anchored" data-anchor-id="복원-오차-reconstruction-error와-frobenius-norm">2.2. 복원 오차 (Reconstruction Error)와 Frobenius Norm</h2>
-<p>우리는 원본 행렬 <img src="https://latex.codecogs.com/png.latex?M">을 더 작은 랭크 <img src="https://latex.codecogs.com/png.latex?r">을 가진 행렬들의 곱으로 “근사(approximate)”합니다. 이때 원본과 근사 행렬 간의 오차를 <strong>복원 오차(Reconstruction Error)</strong>라고 하며, 수학적으로는 Frobenius 노름(norm)을 사용하여 정의합니다:</p>
-<p><img src="https://latex.codecogs.com/png.latex?Error=%7C%7CM-U%5CSigma%20V%5E%7B%5Ctop%7D%7C%7C_%7BF%7D"></p>
-<p>행렬 <img src="https://latex.codecogs.com/png.latex?A">의 Frobenius 노름은 행렬 내 모든 원소의 제곱합에 루트를 씌운 값으로 정의됩니다 (<img src="https://latex.codecogs.com/png.latex?%7C%7CA%7C%7C_%7BF%7D=%5Csqrt%7B%5Csum_%7Bi,k%7Da_%7Bik%7D%5E%7B2%7D%7D">). 만약 잠재 요인의 수 <img src="https://latex.codecogs.com/png.latex?r">이 원본 행렬의 랭크 이상이 된다면 (<img src="https://latex.codecogs.com/png.latex?r%5Cge%5Ctext%7Brank%7D(M)">), 복원 오차는 0이 되어 완벽한 복원이 가능해집니다.</p>
-</section>
-<section id="분해-행렬들의-주요-성질" class="level2">
-<h2 class="anchored" data-anchor-id="분해-행렬들의-주요-성질">2.3. 분해 행렬들의 주요 성질</h2>
-<p>SVD를 구성하는 세 행렬 <img src="https://latex.codecogs.com/png.latex?U">, <img src="https://latex.codecogs.com/png.latex?%5CSigma">, <img src="https://latex.codecogs.com/png.latex?V">는 매우 특별하고 유용한 성질을 가집니다:</p>
-<ol type="1">
-<li><strong>직교성 (Orthonormality)</strong>: <img src="https://latex.codecogs.com/png.latex?U">와 <img src="https://latex.codecogs.com/png.latex?V">의 열벡터들은 서로 직교하며 그 크기가 1인 정규 직교 기저를 이룹니다 (<img src="https://latex.codecogs.com/png.latex?U%5E%7B%5Ctop%7DU=I,%5Cquad%20V%5E%7B%5Ctop%7DV=I">).</li>
-<li><strong>특이값의 비음성과 정렬</strong>: <img src="https://latex.codecogs.com/png.latex?%5CSigma">는 대각 행렬이며, 대각 원소 <img src="https://latex.codecogs.com/png.latex?%5Csigma_i">를 특이값이라 부릅니다. 이들은 항상 0 이상이며, 가장 중요한 정보부터 내림차순으로 정렬됩니다 (<img src="https://latex.codecogs.com/png.latex?%5Csigma_%7B1%7D%5Cge%5Csigma_%7B2%7D%5Cge%5Cdots%5Cge0">).</li>
-<li><strong>보편성</strong>: 정방행렬에만 국한된 고유값 분해와 달리, SVD는 어떤 형태의 실수 행렬에 대해서도 항상 적용 가능합니다.</li>
-</ol>
-<hr>
-</section>
-</section>
-<section id="svd의-다른-관점-rank-1-행렬들의-합" class="level1">
-<h1>3. SVD의 다른 관점: Rank-1 행렬들의 합</h1>
-<p>SVD를 전체 행렬 곱셈이 아니라, 벡터 단위의 외적(Outer product) 합으로 바라보면 기하학적 의미가 훨씬 명확해집니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?M%5Capprox%20U%5CSigma%20V%5E%7B%5Ctop%7D=%5Csum_%7Bi=1%7D%5E%7Br%7D%5Csigma_%7Bi%7Du_%7Bi%7Dv_%7Bi%7D%5E%7B%5Ctop%7D"></p>
-<p>이 수식은 원본 데이터가 <img src="https://latex.codecogs.com/png.latex?r">개의 독립적인 Rank-1 행렬(<img src="https://latex.codecogs.com/png.latex?u_i%20v_i%5E%5Ctop">)들의 선형 결합으로 구성됨을 의미합니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.1/images/svd_outer_product.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: SVD를 랭크-1 행렬들의 합으로 시각화한 도식. 하늘색의 원본 행렬 <img src="https://latex.codecogs.com/png.latex?A">가 여러 개의 외적(Outer Product) 행렬의 합으로 근사되는 과정을 보여줍니다. 수식 <img src="https://latex.codecogs.com/png.latex?%5Csigma_1%20u_1%20v_1%5E%5Ctop">에 대응하는 짙은 갈색(Dark Brown) 블록은 가장 큰 특이값 <img src="https://latex.codecogs.com/png.latex?%5Csigma_1">이 적용된 데이터 내 가장 주요한 첫 번째 잠재 개념을 나타냅니다. 그 옆의 <img src="https://latex.codecogs.com/png.latex?%5Csigma_2%20u_2%20v_2%5E%5Ctop">에 대응하는 연두색(Light Green) 블록은 두 번째로 중요한 개념 패턴을 상징합니다. 각기 다른 색상과 블록이 덧셈 기호(<img src="https://latex.codecogs.com/png.latex?+">)로 연결되어, 독립적인 잠재 요인들이 중첩되어 원본 행렬을 재구성함을 직관적으로 설명합니다.</figcaption>
-</figure>
-</div>
-<p>각 항 <img src="https://latex.codecogs.com/png.latex?%5Csigma_i%20u_i%20v_i%5E%5Ctop">는 <img src="https://latex.codecogs.com/png.latex?i">번째 중간 개념(Intermediate concept)이 원본 데이터에 미치는 영향을 나타냅니다. 특이값 <img src="https://latex.codecogs.com/png.latex?%5Csigma_i">는 내림차순 정렬되므로, 우리는 상위 몇 개의 항만을 취함으로써 데이터를 효과적으로 압축(차원 축소)하고 노이즈를 걸러낼 수 있습니다.</p>
-<hr>
-</section>
-<section id="직관적-이해-추천-시스템-user-movie-matrix" class="level1">
-<h1>4. 직관적 이해: 추천 시스템 (User-Movie Matrix)</h1>
-<p>SVD가 실생활 데이터에서 어떤 물리적/직관적 의미를 갖는지 파악하기 위해, 행을 “사용자(User)”로, 열을 “영화(Movie)”로 가지는 평점 행렬에 적용해 보겠습니다.</p>
-<section id="잠재-요인latent-factor의-추출" class="level2">
-<h2 class="anchored" data-anchor-id="잠재-요인latent-factor의-추출">4.1. 잠재 요인(Latent Factor)의 추출</h2>
-<p>원본 행렬에 SVD를 적용하면, 눈에 보이지 않던 <strong>“잠재 요인(Latent Factor)”</strong> 혹은 <strong>“개념(Concept)”</strong> 축이 공간상에 새롭게 도출됩니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.1/images/svd_user_movie_example.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: User-Movie 매트릭스에 SVD를 적용한 전체 구조. 좌측의 이산적인 평가 점수 매트릭스는 초록색 텍스트로 표기된 “SciFi” 및 “Romnce” 성향의 사용자 그룹으로 나눌 수 있습니다. 이 매트릭스에 SVD를 적용(<img src="https://latex.codecogs.com/png.latex?="> 기호 우측)하면, 보라색과 연두색 블록으로 구분된 <img src="https://latex.codecogs.com/png.latex?U">, <img src="https://latex.codecogs.com/png.latex?%5CSigma">, <img src="https://latex.codecogs.com/png.latex?V%5ET"> 행렬로 분해됩니다. 가장 우측의 3D 산점도 그래프는 3차원의 원본 데이터 분포(<img src="https://latex.codecogs.com/png.latex?D=3">)가 SVD를 통해 추출된 빨간색 화살표 축을 따라 2차원 평면(<img src="https://latex.codecogs.com/png.latex?d=2">, 노란색 평면)으로 투영 및 축소되는 기하학적 “Concepts(잠재 차원)” 발견 과정을 보여줍니다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="행렬-성분의-직관적-의미" class="level2">
-<h2 class="anchored" data-anchor-id="행렬-성분의-직관적-의미">4.2. 행렬 성분의 직관적 의미</h2>
-<p>분해된 각 행렬을 수치적으로 뜯어보면, 각 성분이 매우 구체적이고 해석 가능한 역할을 수행함을 알 수 있습니다.</p>
-<section id="행렬-sigma-개념의-강도-strength-of-concept" class="level3">
-<h3 class="anchored" data-anchor-id="행렬-sigma-개념의-강도-strength-of-concept">1) 행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma">: 개념의 강도 (Strength of Concept)</h3>
-<p><img src="https://latex.codecogs.com/png.latex?%5CSigma">의 대각 원소는 도출된 각 잠재 개념이 전체 데이터 내에서 얼마나 지배적이고 강한 영향력을 가지는지를 나타냅니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.1/images/strength_of_concept.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 4: 특이값 대각 행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma">의 의미 강조. 행렬 중앙의 대각 행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma">에서 첫 번째 원소인 “12.4”가 파란색 원으로 강조되어 있습니다. 이는 첫 번째 특이값 <img src="https://latex.codecogs.com/png.latex?%5Csigma_1">을 나타내며, 파란색 화살표와 텍스트가 설명하듯 “SciFi”라는 첫 번째 잠재 개념의 “강도(strength)”를 의미합니다. 뒤이은 9.5, 1.3의 값보다 12.4가 크다는 것은, 해당 User-Movie 데이터셋 전체의 분산을 설명하는 데 있어 SciFi 장르적 특성이 가장 압도적이고 중요한 기반 패턴으로 작용함을 수학적으로 증명합니다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="행렬-u-사용자-개념-유사도-user-to-concept-similarity" class="level3">
-<h3 class="anchored" data-anchor-id="행렬-u-사용자-개념-유사도-user-to-concept-similarity">2) 행렬 <img src="https://latex.codecogs.com/png.latex?U">: 사용자-개념 유사도 (User-to-concept Similarity)</h3>
-<p><img src="https://latex.codecogs.com/png.latex?U"> 행렬은 특정 사용자가 각 잠재 개념과 얼마나 강력한 유사도(선호도)를 가지는지를 수치화합니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.1/images/user_to_concept_similarity.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 5: 사용자-개념 행렬 <img src="https://latex.codecogs.com/png.latex?U">의 수치 해석. 행렬 분해 결과 중 가운데에 위치한 <img src="https://latex.codecogs.com/png.latex?U"> 행렬 상단의 첫 번째 열이 파란색 선과 화살표를 통해 “SciFi-concept”으로 명명되었음을 보여줍니다. 특히 좌측 상단의 첫 번째 값인 “0.13”이 초록색 타원으로 강조되어 있습니다. 이는 “Matrix”라는 SciFi 영화에 높은 평점(1)을 준 첫 번째 사용자가, 분해 알고리즘에 의해 도출된 추상적 개념인 “SciFi-concept”과 0.13만큼의 긍정적인 연관성/유사도(User-to-concept similarity)를 가지고 있음을 의미합니다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="행렬-v-영화-개념-유사도-movie-to-concept-similarity" class="level3">
-<h3 class="anchored" data-anchor-id="행렬-v-영화-개념-유사도-movie-to-concept-similarity">3) 행렬 <img src="https://latex.codecogs.com/png.latex?V">: 영화-개념 유사도 (Movie-to-concept Similarity)</h3>
-<p>마지막으로 <img src="https://latex.codecogs.com/png.latex?V"> 행렬(수식상 <img src="https://latex.codecogs.com/png.latex?V%5E%7B%5Ctop%7D">)은 각 열(영화)이 도출된 잠재 개념 축 위에서 어떤 좌표를 가지는지, 즉 영화의 성향을 나타냅니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.1/images/movie_to_concept_similarity.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 6: 영화-개념 행렬 <img src="https://latex.codecogs.com/png.latex?V%5ET">의 매핑. 좌측 원본 행렬에 그어진 긴 파란색 사선은 영화 “Matrix”를 평가한 열(Column) 벡터 전체를 가리킵니다. 이 벡터가 SVD 분해 후 우측 하단의 <img src="https://latex.codecogs.com/png.latex?V%5ET"> 행렬 첫 번째 열로 매핑되며, 파란색 원으로 둘러싸인 “0.56”이라는 값을 산출합니다. 파란색 꺾인 화살표가 “SciFi-concept” 행에서 이 값으로 이어지는데, 이는 <img src="https://latex.codecogs.com/png.latex?V"> 행렬이 “Movie-to-concept” 유사도를 의미하며 영화 Matrix가 SciFi 특성을 0.56만큼 강력하게 띠고 있음을 구체적으로 보여줍니다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="종합-예시-원본-평점의-재구성" class="level3">
-<h3 class="anchored" data-anchor-id="종합-예시-원본-평점의-재구성">4) 종합 예시: 원본 평점의 재구성</h3>
-<p>위 세 가지 성질을 종합하면 원본 매트릭스의 특정 평점이 어떻게 수학적으로 예측 및 재구성되는지 명확히 추적할 수 있습니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.1/images/entire_intuition.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 7: SVD 분해 결과를 통한 데이터 해석 종합. 좌측 원본 행렬에서 하단의 Romance 영화(Amelie 등)에 높은 평점을 준 사용자의 평가값인 “2”와 “1”이 파란색 원으로 강조되어 있습니다. 이와 동시에 가운데 <img src="https://latex.codecogs.com/png.latex?%5CSigma"> 행렬의 세 번째 개념 강도 “1.3”과, 가장 우측 <img src="https://latex.codecogs.com/png.latex?V%5ET"> 행렬에서 두 번째 행의 음수 값 “-0.80”이 파란색 원으로 연결되어 강조됩니다. 이는 특정 사용자의 복합적인 영화 취향(What concept?)이 단순히 하나의 장르에 국한되지 않고, 여러 잠재 요인들(특이값과 각 행렬의 가중치들)의 양수 및 음수 연산(내적)의 총합으로 세밀하게 복원될 수 있음을 보여주는 종합적인 직관을 제공합니다.</figcaption>
-</figure>
-</div>
-<hr>
-</section>
-</section>
-</section>
-<section id="svd의-계산-알고리즘-및-유도-derivation" class="level1">
-<h1>5. SVD의 계산 알고리즘 및 유도 (Derivation)</h1>
-<p>그렇다면 어떻게 <img src="https://latex.codecogs.com/png.latex?M">으로부터 직교행렬 <img src="https://latex.codecogs.com/png.latex?U,%20V">와 대각행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma">를 계산할 수 있을까요? SVD의 해는 대칭행렬의 고유값 분해(Eigendecomposition) 문제로 환원시켜 구할 수 있습니다.</p>
-<p><strong>[Step 1] 원본 행렬과 그 전치 행렬의 곱 유도</strong> 먼저 행렬 분해 가정 <img src="https://latex.codecogs.com/png.latex?M=U%5CSigma%20V%5E%7B%5Ctop%7D">에서 양변을 전치(Transpose)합니다: <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7D=(U%5CSigma%20V%5E%7B%5Ctop%7D)%5E%7B%5Ctop%7D=(V%5E%7B%5Ctop%7D)%5E%7B%5Ctop%7D%5CSigma%5E%7B%5Ctop%7DU%5E%7B%5Ctop%7D=V%5CSigma%5E%7B%5Ctop%7DU%5E%7B%5Ctop%7D"></p>
-<p>이제 <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7D">에 <img src="https://latex.codecogs.com/png.latex?M">을 곱하여 정방형의 대칭행렬 <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7DM">을 만듭니다: <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7DM=(V%5CSigma%5E%7B%5Ctop%7DU%5E%7B%5Ctop%7D)(U%5CSigma%20V%5E%7B%5Ctop%7D)"></p>
-<p>행렬 결합 법칙을 적용하고, 직교행렬의 성질(<img src="https://latex.codecogs.com/png.latex?U%5E%7B%5Ctop%7DU=I">)과 대각행렬의 성질(<img src="https://latex.codecogs.com/png.latex?%5CSigma%5E%7B%5Ctop%7D=%5CSigma">)을 이용하면 식이 단순해집니다. <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7DM=V%5CSigma%5E%7B%5Ctop%7D(U%5E%7B%5Ctop%7DU)%5CSigma%20V%5E%7B%5Ctop%7D=V%5CSigma%5CSigma%20V%5E%7B%5Ctop%7D=V%5CSigma%5E%7B2%7DV%5E%7B%5Ctop%7D"></p>
-<p><strong>[Step 2] 고유값 분해와의 연결</strong> 도출된 <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7DM=V%5CSigma%5E%7B2%7DV%5E%7B%5Ctop%7D">의 양변 우측에 다시 직교행렬 <img src="https://latex.codecogs.com/png.latex?V">를 곱해봅니다: <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7DMV=V%5CSigma%5E%7B2%7DV%5E%7B%5Ctop%7DV%20=%20V%5CSigma%5E%7B2%7D"></p>
-<p>이 식을 <img src="https://latex.codecogs.com/png.latex?V">의 <img src="https://latex.codecogs.com/png.latex?i">번째 열벡터인 <img src="https://latex.codecogs.com/png.latex?v_i">에 대해 전개하면 아래와 같은 표준 고유값 문제를 얻습니다: <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7DMv_%7Bi%7D=%5Csigma_%7Bi%7D%5E%7B2%7Dv_%7Bi%7D"></p>
-<p>즉, SVD의 해답은 다음과 같이 계산됩니다: * 우측 특이 벡터 행렬 <strong><img src="https://latex.codecogs.com/png.latex?V"></strong>: 대칭행렬 <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7DM">의 고유벡터(Eigenvectors)들입니다. * 대각 행렬 <strong><img src="https://latex.codecogs.com/png.latex?%5CSigma"></strong>: <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7DM">의 고유값들에 제곱근을 취한 값(<img src="https://latex.codecogs.com/png.latex?%5Csigma_i%5E2%20=%20%5CSigma_%7Bii%7D%5E2">)입니다. * 좌측 특이 벡터 행렬 <strong><img src="https://latex.codecogs.com/png.latex?U"></strong>: 동일한 논리로 <img src="https://latex.codecogs.com/png.latex?MM%5E%7B%5Ctop%7D">의 고유벡터를 구함으로써 도출합니다.</p>
-<hr>
-</section>
-<section id="pca와-svd의-얕고도-깊은-관계" class="level1">
-<h1>6. PCA와 SVD의 얕고도 깊은 관계</h1>
-<p>데이터 마이닝에서 가장 잘 알려진 차원 축소 기법인 주성분 분석(PCA)과 SVD는 본질적으로 수학적 동치에 가까운 깊은 관계를 맺고 있습니다.</p>
-<ol type="1">
-<li><strong>결과적 동치성</strong>: 앞선 유도 과정에서 보았듯 SVD의 <img src="https://latex.codecogs.com/png.latex?V">는 <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7DM">(데이터의 형태에 비례하는 공분산 행렬)의 고유벡터 행렬입니다. 즉, PCA에서 도출하고자 하는 “주성분(Principal components)” 벡터들이 곧 SVD의 우측 특이 벡터 행렬 <img src="https://latex.codecogs.com/png.latex?V">와 완전히 동일합니다.</li>
-<li><strong>데이터 전처리의 제약</strong>: PCA를 수학적 정의에 맞게 적용하려면 반드시 데이터의 각 피처별 평균을 0으로 맞추는 중심화(Column-centering)가 선행되어야 공분산 행렬이 성립합니다. 하지만 SVD 연산 자체는 행렬 평균 중심화 여부와 상관없이 항상 가능합니다.</li>
-<li><strong>현실적 연산량의 한계 극복</strong>: 실제 수십억 개의 행을 가진 거대한 빅데이터에서 <img src="https://latex.codecogs.com/png.latex?M%5E%7B%5Ctop%7DM"> 형태의 거대한 공분산 행렬을 직접 구축하고 고유값 분해(Eigendecomposition)를 수행하는 것은 치명적으로 느리고 메모리를 파괴합니다.</li>
-<li><strong>표준적인 해결책</strong>: 이 때문에 현대의 머신러닝 라이브러리들은 PCA 알고리즘 내부적으로 공분산 행렬을 직접 연산하지 않고, 고효율 최적화된 알고리즘으로 <strong>SVD를 곧바로 풀어 <img src="https://latex.codecogs.com/png.latex?V">를 획득하는 우회 방식</strong>을 산업 표준으로 채택하고 있습니다.</li>
-</ol>
-<hr>
-</section>
-<section id="요약-summary" class="level1">
-<h1>7. 요약 (Summary)</h1>
-<ul>
-<li><strong>SVD의 의의</strong>: SVD는 행렬을 직교행렬 <img src="https://latex.codecogs.com/png.latex?U,%20V">와 대각행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma">로 쪼개어 데이터에 내재된 은닉 구조(잠재 개념)를 발견하고 압축하는 선형대수의 핵심 도구입니다.</li>
-<li><strong>해석의 직관성</strong>: 사용자-영화 추천 시스템에서 확인했듯, <img src="https://latex.codecogs.com/png.latex?U"> 행렬은 사용자 취향을, <img src="https://latex.codecogs.com/png.latex?V"> 행렬은 아이템 특성을, <img src="https://latex.codecogs.com/png.latex?%5CSigma">는 그 개념의 영향력을 의미하여 매우 뛰어난 해석력을 부여합니다.</li>
-<li><strong>PCA와의 연결</strong>: <img src="https://latex.codecogs.com/png.latex?M%5E%5Ctop%20M"> 공분산 행렬의 고유벡터 문제로 치환 가능하여 PCA와 본질적으로 동일한 목적을 지니며, 실제 컴퓨팅 환경에서 고효율 차원 축소 파이프라인의 코어 역할을 담당합니다.</li>
-</ul>
-
-
-
-</section>
-
- ]]></description>
-  <category>Data Mining</category>
-  <guid>https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.1/</guid>
-  <pubDate>Mon, 06 Apr 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Data Mining] 11. Dimensionality Reduction (Part 2)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.2/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="들어가며-introduction" class="level1">
-<h1>1. 들어가며 (Introduction)</h1>
-<p>지난 포스트에서는 특이값 분해(SVD)의 수학적 정의와 분해된 각 행렬(<img src="https://latex.codecogs.com/png.latex?U,%20%5CSigma,%20V">)이 데이터 마이닝 관점에서 가지는 직관적인 의미를 다루었습니다. 이번 포스트에서는 SVD를 <strong>실제 차원 축소(Dimensionality Reduction)</strong>에 어떻게 적용하는지 그 기하학적 메커니즘을 상세히 살펴봅니다.</p>
-<p>데이터의 노이즈를 제거하고 핵심 정보만을 남기는 <strong>최적 하위 랭크 근사(Best Low-Rank Approximation)</strong>의 수학적 원리를 이해하고, 추천 시스템 환경에서 겹치는 평가 기록이 전혀 없는 두 사용자 간의 유사도를 구하는 “잠재 공간 쿼리(Querying in Concept Space)” 기법까지 9장의 상세한 시각 자료와 함께 연결하여 학습해 보겠습니다.</p>
-<hr>
-</section>
-<section id="기하학적-직관-데이터의-투영projection" class="level1">
-<h1>2. 기하학적 직관: 데이터의 투영(Projection)</h1>
-<p>차원 축소의 핵심은 데이터를 표현하는 데 필요한 “좌표축의 수”를 줄이는 것입니다. 추천 시스템(User-Movie Matrix)을 예로 들어 기하학적인 상황을 상상해 봅시다. 특정 개념(예: Sci-Fi)에 속하는 2개의 영화가 있고, 여러 사용자가 이 영화들에 내린 평점을 2차원 평면상에 점으로 찍어본다고 가정해 보겠습니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.2/images/svd_projection_concept.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: 2차원 평면에서의 사용자 평점 분포와 첫 번째 우측 특이 벡터 <img src="https://latex.codecogs.com/png.latex?v_1">의 시각화. 검은색 점들은 개별 사용자의 평가 좌표(Movie 1 rating, Movie 2 rating)를 나타냅니다. 붉은색 굵은 화살표인 <img src="https://latex.codecogs.com/png.latex?v_1">은 데이터가 가장 길게 퍼져 있는 방향을 통과하는 선형 축(첫 번째 우측 특이 벡터)을 보여주며, 초록색 실선은 특정 사용자의 2차원 데이터가 이 새로운 1차원 축 <img src="https://latex.codecogs.com/png.latex?v_1"> 위로 직교 투영(Orthogonal Projection)되어 초록색 빈 원으로 맵핑되는 과정을 나타냅니다.</figcaption>
-</figure>
-</div>
-<p>데이터 점들은 평면 전체에 무작위로 흩어져 있지 않고 특정한 선형적 추세(Trend)를 따라 길게 늘어서 있습니다. 이때 SVD를 통해 얻은 <strong>첫 번째 우측 특이 벡터 <img src="https://latex.codecogs.com/png.latex?v_1"></strong>은 바로 <strong>데이터의 분산(Variance)이 가장 큰 방향</strong>을 정확히 가리킵니다. 원래는 한 사용자의 위치를 설명하기 위해 <img src="https://latex.codecogs.com/png.latex?(x,%20y)"> 좌표 2개가 필요했지만, 데이터 점들을 <img src="https://latex.codecogs.com/png.latex?v_1"> 축 위로 투영시키면, <img src="https://latex.codecogs.com/png.latex?v_1"> 선상에서의 위치라는 <strong>단 1개의 좌표</strong>만으로도 해당 사용자의 특성을 꽤 정확하게 설명할 수 있게 됩니다. 이것이 차원 축소의 본질입니다.</p>
-<hr>
-</section>
-<section id="svd를-이용한-실제-차원-축소-연산" class="level1">
-<h1>3. SVD를 이용한 실제 차원 축소 연산</h1>
-<section id="잠재-공간으로의-매핑-수식-유도" class="level2">
-<h2 class="anchored" data-anchor-id="잠재-공간으로의-매핑-수식-유도">3.1. 잠재 공간으로의 매핑 수식 유도</h2>
-<p>그렇다면 사용자들을 새로운 “개념 축(Concept Axis)” 위로 투영한 좌표값은 행렬 연산으로 어떻게 구할 수 있을까요?</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.2/images/svd_v_matrix_axes.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: <img src="https://latex.codecogs.com/png.latex?V"> 행렬의 열 벡터가 새로운 축(Axis)으로 작용함을 보여주는 도식. <img src="https://latex.codecogs.com/png.latex?V%5ET"> 행렬(파란색 박스)의 첫 번째 행 벡터가 공간상의 첫 번째 우측 특이 벡터 <img src="https://latex.codecogs.com/png.latex?v_1"> 축(파란색 화살표)을 정의함을 나타냅니다. 원본 매트릭스의 차원을 새로운 잠재 공간으로 변환해 주는 기저(Basis) 역할을 합니다.</figcaption>
-</figure>
-</div>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.2/images/svd_variance_v1.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: 특이값 <img src="https://latex.codecogs.com/png.latex?%5CSigma">와 분산의 관계. <img src="https://latex.codecogs.com/png.latex?%5CSigma"> 행렬의 첫 번째 값인 12.4(초록색 원)가 기하학적으로는 새로 투영된 <img src="https://latex.codecogs.com/png.latex?v_1"> 축 위에서 데이터가 퍼져 있는 정도, 즉 가장 큰 “분산(variance/spread)”과 직결됨을 보여줍니다. 특이값이 클수록 해당 축이 더 많은 정보량을 담고 있음을 의미합니다.</figcaption>
-</figure>
-</div>
-<p>원본 행렬 <img src="https://latex.codecogs.com/png.latex?M">을 <img src="https://latex.codecogs.com/png.latex?M%20=%20U%5CSigma%20V%5E%7B%5Ctop%7D">로 분해했을 때, 데이터 <img src="https://latex.codecogs.com/png.latex?M">을 새로운 직교 기저 행렬 <img src="https://latex.codecogs.com/png.latex?V">의 공간으로 투영하는 연산은 <img src="https://latex.codecogs.com/png.latex?M">에 <img src="https://latex.codecogs.com/png.latex?V">를 곱하는 것입니다. <img src="https://latex.codecogs.com/png.latex?MV%20=%20(U%5CSigma%20V%5E%7B%5Ctop%7D)V%20=%20U%5CSigma%20(V%5E%7B%5Ctop%7DV)"> <img src="https://latex.codecogs.com/png.latex?V">는 직교 행렬이므로 <img src="https://latex.codecogs.com/png.latex?V%5E%7B%5Ctop%7DV%20=%20I"> (항등 행렬)가 성립합니다. 따라서 다음과 같이 정리됩니다. <img src="https://latex.codecogs.com/png.latex?MV%20=%20U%5CSigma"></p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.2/images/svd_user_projection.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 4: <img src="https://latex.codecogs.com/png.latex?U%5CSigma"> 연산이 의미하는 투영 좌표. <img src="https://latex.codecogs.com/png.latex?U"> 행렬과 <img src="https://latex.codecogs.com/png.latex?%5CSigma"> 행렬을 곱한 결과(초록색 박스 안의 값들, 예: 1.61, 5.08 등)가 바로 투영된 “Sci-Fi” 축 상에서의 각 사용자의 새로운 1차원 좌표값(Projection of users)이 됨을 기하학적 투영점(초록색 원)과 연결하여 명확히 보여줍니다.</figcaption>
-</figure>
-</div>
-<p>즉, <img src="https://latex.codecogs.com/png.latex?U%5CSigma"> 행렬의 각 행(Row)은 사용자들이 새로운 잠재 개념 공간에서 가지는 투영 좌표를 의미하게 됩니다.</p>
-</section>
-<section id="특이값-절삭-truncating-singular-values" class="level2">
-<h2 class="anchored" data-anchor-id="특이값-절삭-truncating-singular-values">3.2. 특이값 절삭 (Truncating Singular Values)</h2>
-<p>완벽한 복원이 아닌 “차원 축소”를 수행하려면, <strong>가장 작은 특이값들을 0으로 만드는 절삭(Truncation)</strong> 과정을 거칩니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.2/images/svd_truncation_step.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 5: SVD 특이값 절삭(Truncation) 연산 과정. 대각 행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma">에서 가장 작은 특이값인 “1.3”을 제거(빨간색 X표)함에 따라, 무의미해진 <img src="https://latex.codecogs.com/png.latex?U"> 행렬의 마지막 열과 <img src="https://latex.codecogs.com/png.latex?V%5ET"> 행렬의 마지막 행도 함께 삭제되는 과정을 보여줍니다. 이를 통해 가장 중요한 패턴들만 남기게 됩니다.</figcaption>
-</figure>
-</div>
-<ol type="1">
-<li><img src="https://latex.codecogs.com/png.latex?%5CSigma">에서 크기가 작은 하위 특이값을 0으로 지웁니다.</li>
-<li>대응하는 <img src="https://latex.codecogs.com/png.latex?U">의 열과 <img src="https://latex.codecogs.com/png.latex?V%5E%7B%5Ctop%7D">의 행들도 연산에서 배제(Truncate)됩니다.</li>
-<li>그 결과 노이즈가 제거된 근사 복원 행렬 <img src="https://latex.codecogs.com/png.latex?B">를 얻게 됩니다.</li>
-</ol>
-<hr>
-</section>
-</section>
-<section id="최적-하위-랭크-근사-best-low-rank-approximation" class="level1">
-<h1>4. 최적 하위 랭크 근사 (Best Low-Rank Approximation)</h1>
-<section id="복원-오차와-근사-행렬" class="level2">
-<h2 class="anchored" data-anchor-id="복원-오차와-근사-행렬">4.1. 복원 오차와 근사 행렬</h2>
-<p>일부 특이값을 버렸기 때문에 복원된 행렬 <img src="https://latex.codecogs.com/png.latex?B">는 원본 행렬 <img src="https://latex.codecogs.com/png.latex?M">과 완벽히 일치하지 않습니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.2/images/svd_reconstructed_matrix.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 6: 원본 행렬과 재구성된 근사 행렬 <img src="https://latex.codecogs.com/png.latex?B">의 비교. 왼쪽의 이산적인 정수 평점(1, 3, 5 등)으로 이루어진 원본 행렬 <img src="https://latex.codecogs.com/png.latex?M">이, 절삭 과정을 거친 후 계산된 오른쪽의 실수형 재구성 행렬 <img src="https://latex.codecogs.com/png.latex?B">(Reconstructed data matrix, 예: 0.92, 2.91 등)와 근사(≈)함을 보여줍니다. 작은 값들이 손실되었지만 전체적인 데이터 구조는 보존되어 있습니다.</figcaption>
-</figure>
-</div>
-<p>이 둘 사이의 정보 손실량, 즉 <strong>복원 오차(Reconstruction Error)</strong>는 Frobenius Norm의 제곱(<img src="https://latex.codecogs.com/png.latex?%7C%7CM-B%7C%7C_%7BF%7D%5E%7B2%7D%20=%20%5Csum%20(M_%7Bik%7D%20-%20B_%7Bik%7D)%5E%7B2%7D">)으로 측정합니다. Eckart-Young-Mirsky 정리에 따르면, SVD를 통해 상위 <img src="https://latex.codecogs.com/png.latex?r">개의 특이값만 남긴 행렬 <img src="https://latex.codecogs.com/png.latex?B">는 주어진 랭크 <img src="https://latex.codecogs.com/png.latex?r">에서 원본 행렬 <img src="https://latex.codecogs.com/png.latex?M">과의 오차를 가장 최소화하는 최적의 근사 행렬입니다.</p>
-</section>
-<section id="에너지energy-보존과-잠재-쿼리-준비" class="level2">
-<h2 class="anchored" data-anchor-id="에너지energy-보존과-잠재-쿼리-준비">4.2. “에너지(Energy)” 보존과 잠재 쿼리 준비</h2>
-<p>특이값 <img src="https://latex.codecogs.com/png.latex?%5Csigma_i">는 해당 잠재 요인이 담고 있는 데이터의 “에너지(분산)”를 뜻하며, 총 에너지는 특이값의 제곱합(<img src="https://latex.codecogs.com/png.latex?%5Csum%20%5Csigma_%7Bi%7D%5E%7B2%7D">)입니다. 보통 총 에너지의 90% 이상을 보존하도록 <img src="https://latex.codecogs.com/png.latex?r">을 정합니다. 앞선 예시에서 1.3을 버려도 99% 이상의 에너지가 보존되었습니다. 버려진 에너지는 무작위적인 노이즈일 확률이 높아, 차원 축소는 일반화(Generalization) 성능을 높입니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.2/images/svd_query_truncation_prep.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 7: 개념 기반 쿼리(Querying)를 위한 절삭 행렬 준비 완료. 영화 라벨(Matrix, Alien 등)과 장르 라벨(SciFi, Romnce)이 명시된 원본 행렬을 바탕으로, 노이즈 요인(빨간색 X표)을 완벽히 제거한 상태의 <img src="https://latex.codecogs.com/png.latex?U">, <img src="https://latex.codecogs.com/png.latex?%5CSigma">, <img src="https://latex.codecogs.com/png.latex?V%5ET"> 행렬을 통해 새로운 추천 예측을 수행할 준비가 되었음을 보여줍니다.</figcaption>
-</figure>
-</div>
-<hr>
-</section>
-</section>
-<section id="활용-잠재-개념을-이용한-쿼리-querying-using-concepts" class="level1">
-<h1>5. 활용: 잠재 개념을 이용한 쿼리 (Querying Using Concepts)</h1>
-<p>차원이 축소된 행렬 공간은 추천 시스템에서 새로운 사용자나 평가 기록이 적은 사용자를 평가할 때 매우 강력한 힘을 발휘합니다.</p>
-<section id="새로운-사용자의-영화-추천-예측" class="level2">
-<h2 class="anchored" data-anchor-id="새로운-사용자의-영화-추천-예측">5.1. 새로운 사용자의 영화 추천 예측</h2>
-<p>새로운 사용자 <img src="https://latex.codecogs.com/png.latex?q">가 “Matrix” 영화에만 5점을 주고, 나머지는 보지 않았다고 가정합시다 (<img src="https://latex.codecogs.com/png.latex?q%20=%20%5B5,%200,%200,%200,%200%5D">).</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.2/images/svd_new_user_query.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 8: 새로운 사용자 <img src="https://latex.codecogs.com/png.latex?q">를 잠재 개념 공간으로 맵핑하는 연산 과정. 새로운 유저의 평점 벡터 <img src="https://latex.codecogs.com/png.latex?q">에 “Movie-to-concept similarities” 행렬 <img src="https://latex.codecogs.com/png.latex?V">를 곱하는 내적 연산을 통해, 해당 유저가 “SciFi-concept”에서 2.8, 두 번째 개념에서 0.6이라는 잠재적인 장르 선호도 좌표를 획득하게 되는 과정을 명확히 보여줍니다.</figcaption>
-</figure>
-</div>
-<p><strong>Step 1: 잠재 개념 공간 매핑</strong> <img src="https://latex.codecogs.com/png.latex?q%20%5Ctimes%20V"> 연산을 통해 사용자가 첫 번째 잠재 개념(Sci-Fi)에 <img src="https://latex.codecogs.com/png.latex?2.8">, 두 번째 개념에 <img src="https://latex.codecogs.com/png.latex?0.6">의 선호도를 가짐을 파악했습니다.</p>
-<p><strong>Step 2: 예측 평점 복원</strong> 이 개념 선호도 점수에 다시 <img src="https://latex.codecogs.com/png.latex?V%5E%7B%5Ctop%7D">를 곱하면, <img src="https://latex.codecogs.com/png.latex?(qV)V%5E%7B%5Ctop%7D%20=%20%5B1.64,%201.64,%201.64,%20-0.162,%20-0.162%5D"> 라는 예측 결과를 얻습니다. 사용자가 보지 않았던 다른 Sci-Fi 영화(Alien, Serenity 등)들에 <img src="https://latex.codecogs.com/png.latex?1.64">라는 높은 양수 평점이 예측되므로 이를 추천할 수 있습니다.</p>
-</section>
-<section id="데이터-희소성-및-영점-겹침zero-overlap-문제-해결" class="level2">
-<h2 class="anchored" data-anchor-id="데이터-희소성-및-영점-겹침zero-overlap-문제-해결">5.2. 데이터 희소성 및 영점 겹침(Zero-Overlap) 문제 해결</h2>
-<p>SVD 기반 차원 축소의 가장 혁신적인 성과는 데이터 희소성 문제를 해결한다는 것입니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.2/images/svd_zero_overlap.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 9: 영점 겹침(Zero ratings in common) 상황에서의 유사도 도출. 사용자 <img src="https://latex.codecogs.com/png.latex?d">는 영화 평점이 [0 4 5 0 0], 사용자 <img src="https://latex.codecogs.com/png.latex?q">는 [5 0 0 0 0]으로 공통 평가 항목이 전혀 없어 원본 공간에서는 유사도가 0입니다. 하지만 점선을 따라 이들을 잠재 개념 공간으로 매핑하면 각각 [5.2, 0.4]와 [2.8, 0.6]이라는 좌표를 갖게 되며, 같은 SciFi 개념을 선호하므로 내적 시 유사도가 0이 아닌 강력한 양수 값을 띠게 되는 마법을 시각화합니다.</figcaption>
-</figure>
-</div>
-<p>위 그림처럼, 사용자 <img src="https://latex.codecogs.com/png.latex?d">와 사용자 <img src="https://latex.codecogs.com/png.latex?q">는 공통으로 시청한 영화가 단 하나도 없기 때문에 전통적인 코사인 유사도를 사용하면 유사도가 0이 됩니다. 하지만 이들을 차원 축소된 잠재 개념 공간(Concept Space)으로 매핑하여 내적하면 강력한 양수(<img src="https://latex.codecogs.com/png.latex?5.2%20%5Ctimes%202.8%20+%20%5Cdots%20%3E%200">) 관계가 성립합니다. 표면적으로 본 영화는 달랐지만, 심층적인 “Sci-Fi 선호”라는 잠재 성향이 같았기 때문입니다.</p>
-<hr>
-</section>
-</section>
-<section id="요약-summary" class="level1">
-<h1>6. 요약 (Summary)</h1>
-<ul>
-<li><strong>기하학적 투영과 차원 축소</strong>: SVD는 분산이 가장 큰 축(<img src="https://latex.codecogs.com/png.latex?V">)을 찾아내 데이터를 투영(<img src="https://latex.codecogs.com/png.latex?U%5CSigma">)하고, 하위 특이값 요소들을 제거(Truncation)함으로써 노이즈 없는 차원 축소를 실현합니다.</li>
-<li><strong>최적 하위 랭크 근사</strong>: 보존되는 에너지율(통상 90% 이상)을 기준으로 <img src="https://latex.codecogs.com/png.latex?r">을 결정하면, 수학적으로 Frobenius Norm 오차가 최소화된 최적의 근사 행렬을 구축할 수 있습니다.</li>
-<li><strong>잠재 공간 쿼리의 위력</strong>: 공통 평가 기록이 없는 희소(Sparse) 데이터 환경에서도, 데이터를 잠재 공간으로 투영(<img src="https://latex.codecogs.com/png.latex?qV">)하면 숨겨진 선호도 유사성을 찾아내어 훌륭한 추천(Prediction)을 수행할 수 있습니다.</li>
-</ul>
-
-
-
-</section>
-
- ]]></description>
-  <category>Data Mining</category>
-  <guid>https://shsha0110.github.io/posts/Data Mining/11.Dimensionality-Reduction-2/11.2/</guid>
-  <pubDate>Mon, 06 Apr 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>
 </rss>

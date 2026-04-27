@@ -667,9 +667,145 @@
   <pubDate>Mon, 20 Apr 2026 15:00:00 GMT</pubDate>
 </item>
 <item>
-  <title>[Optimization] 14. Smooth Approximation of Nonsmooth Optimization</title>
+  <title>[Optimization] 13. Smooth Approximation of Nonsmooth Optimization (Part 1)</title>
   <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/13.Smooth-Approximation-of-Nonsmooth-Optimization/</link>
+  <link>https://shsha0110.github.io/posts/Optimization/13.Smooth-Approximation-of-Nonsmooth-Optimization/13.1/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="들어가며" class="level1">
+<h1>들어가며</h1>
+<ul>
+<li><p>머신러닝과 최적화 이론에서 자주 등장하는 <img src="https://latex.codecogs.com/png.latex?L_1"> 노름이나 Hinge Loss와 같은 함수들은 특정 지점에서 미분이 불가능한 비매끄러운(Nonsmooth) 형태를 가집니다. 이러한 함수에 일반적인 Subgradient Method를 적용하면 수렴 속도가 <img src="https://latex.codecogs.com/png.latex?O(1/%5Csqrt%7BT%7D)">로 제한된다는 단점이 있습니다.</p></li>
+<li><p>이번 포스트에서는 미분 불가능한 함수를 부드러운 함수로 근사하는 <strong>평활화 근사(Smooth Approximation)</strong> 기법을 다루며 , 이를 통해 비매끄러운 목적 함수의 최적화 문제를 어떻게 효율적으로 해결할 수 있는지 살펴봅니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="평활화-근사-smooth-approximation" class="level1">
+<h1>1. 평활화 근사 (Smooth Approximation)</h1>
+<section id="p-q-평활화-가능-함수의-정의" class="level2">
+<h2 class="anchored" data-anchor-id="p-q-평활화-가능-함수의-정의">1.1. <img src="https://latex.codecogs.com/png.latex?(p,%20q)">-평활화 가능 함수의 정의</h2>
+<ul>
+<li>어떤 볼록 함수 <img src="https://latex.codecogs.com/png.latex?f">가 임의의 <img src="https://latex.codecogs.com/png.latex?%5Cmu%20%3E%200">에 대하여 다음 두 가지 조건을 만족하는 볼록 함수 <img src="https://latex.codecogs.com/png.latex?f_%5Cmu">를 가질 때, 함수 <img src="https://latex.codecogs.com/png.latex?f">는 <strong><img src="https://latex.codecogs.com/png.latex?(p,%20q)">-smoothable</strong> 하다고 정의합니다:
+<ul>
+<li><ol type="1">
+<li><img src="https://latex.codecogs.com/png.latex?f_%5Cmu">는 <img src="https://latex.codecogs.com/png.latex?(p/%5Cmu)">-smooth 함수입니다. (즉, 기울기가 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bp%7D%7B%5Cmu%7D">-Lipschitz 연속임을 의미합니다.)</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>모든 <img src="https://latex.codecogs.com/png.latex?x">에 대하여 <img src="https://latex.codecogs.com/png.latex?f_%5Cmu(x)%20%5Cle%20f(x)%20%5Cle%20f_%5Cmu(x)%20+%20q%5Cmu"> 를 만족합니다.</li>
+</ol></li>
+</ul></li>
+<li>이 정의는 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cmu">를 조절함에 따라 원래 함수와의 오차(<img src="https://latex.codecogs.com/png.latex?q%5Cmu">)와 곡률의 상한(<img src="https://latex.codecogs.com/png.latex?p/%5Cmu">) 간의 트레이드오프를 형성함을 보여줍니다.</li>
+</ul>
+</section>
+<section id="example-1-l_1-노름과-huber-함수" class="level2">
+<h2 class="anchored" data-anchor-id="example-1-l_1-노름과-huber-함수">1.2. Example 1: <img src="https://latex.codecogs.com/png.latex?L_1"> 노름과 Huber 함수</h2>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?L_1"> 노름의 부드러운 근사로 널리 알려진 <strong>Huber 함수</strong> <img src="https://latex.codecogs.com/png.latex?L_%5Cmu(z)">는 다음과 같이 정의됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AL_%5Cmu(z)%20=%20%5Cbegin%7Bcases%7D%0A%5Cfrac%7Bz%5E2%7D%7B2%5Cmu%7D,%20&amp;%20%5Ctext%7Bif%20%7D%20%7Cz%7C%20%5Cle%20%5Cmu%20%5C%5C%0A%7Cz%7C%20-%20%5Cfrac%7B%5Cmu%7D%7B2%7D,%20&amp;%20%5Ctext%7Botherwise%7D%0A%5Cend%7Bcases%7D%0A"></p>
+<ul>
+<li><p>이 함수는 모든 실수 <img src="https://latex.codecogs.com/png.latex?z">에 대하여 다음 부등식을 만족합니다: <img src="https://latex.codecogs.com/png.latex?L_%5Cmu(z)%20%5Cle%20%7Cz%7C%20%5Cle%20L_%5Cmu(z)%20+%20%5Cfrac%7B%5Cmu%7D%7B2%7D"></p></li>
+<li><p>또한 <img src="https://latex.codecogs.com/png.latex?L_%5Cmu">의 2차 도함수 상한을 고려할 때 이 함수는 <img src="https://latex.codecogs.com/png.latex?(1/%5Cmu)">-smooth 합니다. 따라서 1차원 절댓값 함수 <img src="https://latex.codecogs.com/png.latex?%7C%5Ccdot%7C">는 <img src="https://latex.codecogs.com/png.latex?(1,%201/2)">-smoothable 합니다.</p></li>
+<li><p>이를 다차원 공간 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5Ed">로 확장하여 <img src="https://latex.codecogs.com/png.latex?f_%5Cmu(x)%20=%20%5Csum_%7Bi=1%7D%5Ed%20L_%5Cmu(x_i)">로 정의하면 , <img src="https://latex.codecogs.com/png.latex?f_%5Cmu"> 역시 <img src="https://latex.codecogs.com/png.latex?(1/%5Cmu)">-smooth 하며, 각 차원별로 오차가 누적되어 다음을 만족합니다: <img src="https://latex.codecogs.com/png.latex?f_%5Cmu(x)%20%5Cle%20%5C%7Cx%5C%7C_1%20%5Cle%20f_%5Cmu(x)%20+%20%5Cfrac%7Bd%5Cmu%7D%7B2%7D"></p></li>
+<li><p>결과적으로 <img src="https://latex.codecogs.com/png.latex?L_1"> 노름 <img src="https://latex.codecogs.com/png.latex?%5C%7C%5Ccdot%5C%7C_1">은 <strong><img src="https://latex.codecogs.com/png.latex?(1,%20d/2)">-smoothable</strong> 합니다.</p></li>
+</ul>
+</section>
+<section id="example-2-l_2-노름" class="level2">
+<h2 class="anchored" data-anchor-id="example-2-l_2-노름">1.3. Example 2: <img src="https://latex.codecogs.com/png.latex?L_2"> 노름</h2>
+<ul>
+<li>다차원 벡터 <img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">에 대한 <img src="https://latex.codecogs.com/png.latex?L_2"> 노름 <img src="https://latex.codecogs.com/png.latex?g(x)%20=%20%5C%7Cx%5C%7C_2">는 다음과 같은 함수로 근사할 수 있습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?f_%5Cmu(x)%20=%20%5Csqrt%7B%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2%7D%20-%20%5Cmu"></p>
+<ul>
+<li><p>이 함수에 대한 오차 바운드는 삼각 부등식을 통해 다음처럼 도출됩니다: <img src="https://latex.codecogs.com/png.latex?f_%5Cmu(x)%20%5Cle%20%5C%7Cx%5C%7C_2%20%5Cle%20f_%5Cmu(x)%20+%20%5Cmu"></p></li>
+<li><p>매끄러움(Smoothness)을 증명하기 위해 그래디언트와 헤시안을 계산해보겠습니다:</p>
+<ul>
+<li><strong>1차 미분:</strong> <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f_%5Cmu(x)%20=%20%5Cfrac%7Bx%7D%7B%5Csqrt%7B%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2%7D%7D"></li>
+<li><strong>2차 미분:</strong> <img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20f_%5Cmu(x)%20=%20%5Cfrac%7B1%7D%7B%5Csqrt%7B%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2%7D%7DI%20-%20%5Cfrac%7B1%7D%7B(%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2)%5E%7B3/2%7D%7Dxx%5E%5Ctop"></li>
+</ul></li>
+<li><p>여기서 두 번째 항인 <img src="https://latex.codecogs.com/png.latex?xx%5E%5Ctop"> 기반의 행렬은 양의 준정부호(Positive Semi-Definite) 행렬이므로 빼는 효과를 가져와 다음 부등식이 성립합니다. <img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20f_%5Cmu(x)%20%5Cle%20%5Cfrac%7B1%7D%7B%5Csqrt%7B%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2%7D%7DI%20%5Cle%20%5Cfrac%7B1%7D%7B%5Cmu%7DI"></p></li>
+<li><p>따라서 <img src="https://latex.codecogs.com/png.latex?f_%5Cmu">는 <img src="https://latex.codecogs.com/png.latex?(1/%5Cmu)">-smooth 하며, <img src="https://latex.codecogs.com/png.latex?%5C%7C%5Ccdot%5C%7C_2">는 차원 수 <img src="https://latex.codecogs.com/png.latex?d">에 의존하지 않는 <strong><img src="https://latex.codecogs.com/png.latex?(1,%201)">-smoothable</strong> 함수입니다.</p></li>
+</ul>
+</section>
+<section id="립시츠-함수의-moreau-yosida-평활화-smoothing-lipschitz-functions" class="level2">
+<h2 class="anchored" data-anchor-id="립시츠-함수의-moreau-yosida-평활화-smoothing-lipschitz-functions">1.4. 립시츠 함수의 Moreau-Yosida 평활화 (Smoothing Lipschitz functions)</h2>
+<ul>
+<li><p>어떤 상수 <img src="https://latex.codecogs.com/png.latex?L%20%3E%200">에 대해 <img src="https://latex.codecogs.com/png.latex?f">가 <img src="https://latex.codecogs.com/png.latex?L">-Lipschitz 볼록 함수라고 가정해봅시다. 이 함수는 항상 <img src="https://latex.codecogs.com/png.latex?(1,%20L%5E2/2)">-smoothable 함을 증명할 수 있습니다.</p></li>
+<li><p>이를 위해 임의의 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20%3E%200">에 대하여 <strong>Moreau-Yosida smoothing</strong>을 다음과 같이 정의합니다. <img src="https://latex.codecogs.com/png.latex?f_%5Ceta(x)%20:=%20%5Cinf_u%20%5Cleft%5C%7B%20f(u)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p></li>
+<li><p>이 함수가 올바른 근사임을 보이기 위해 오차의 상하한을 확인합니다.</p>
+<ul>
+<li><ol type="1">
+<li><strong>상한 (Upper Bound):</strong> <img src="https://latex.codecogs.com/png.latex?u%20=%20x">를 대입하면 <img src="https://latex.codecogs.com/png.latex?f_%5Ceta(x)%20%5Cle%20f(x)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%5C%7Cx%20-%20x%5C%7C_2%5E2%20=%20f(x)"> 가 성립합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>하한 (Lower Bound):</strong> Subgradient <img src="https://latex.codecogs.com/png.latex?g_x%20%5Cin%20%5Cpartial%20f(x)">의 성질을 이용하면 <img src="https://latex.codecogs.com/png.latex?f(u)%20-%20f(x)%20%5Cge%20g_x%5E%5Ctop(u%20-%20x)">를 얻을 수 있습니다. <img src="https://latex.codecogs.com/png.latex?f_%5Ceta(x)%20-%20f(x)%20=%20%5Cinf_u%20%5Cleft%5C%7B%20f(u)%20-%20f(x)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"> <img src="https://latex.codecogs.com/png.latex?%5Cge%20%5Cinf_u%20%5Cleft%5C%7B%20g_x%5E%5Ctop(u%20-%20x)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D%20=%20-%5Cfrac%7B%5Ceta%7D%7B2%7D%5C%7Cg_x%5C%7C_2%5E2"></li>
+</ol></li>
+</ul></li>
+<li><p>결과적으로 <img src="https://latex.codecogs.com/png.latex?f_%5Ceta">는 <img src="https://latex.codecogs.com/png.latex?(1/%5Ceta)">-smooth 함수가 됩니다.</p></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="비매끄러운-함수의-평활화-기반-최적화" class="level1">
+<h1>2. 비매끄러운 함수의 평활화 기반 최적화</h1>
+<section id="문제-정의-및-알고리즘" class="level2">
+<h2 class="anchored" data-anchor-id="문제-정의-및-알고리즘">2.1. 문제 정의 및 알고리즘</h2>
+<ul>
+<li>다음과 같은 최적화 문제를 고려해봅시다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bminimize%7D%20%5Cquad%20g(x)%20+%20h(x)">
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?g">는 볼록 함수이면서 <img src="https://latex.codecogs.com/png.latex?(p,q)">-smoothable 하고, <img src="https://latex.codecogs.com/png.latex?h">는 단순한 볼록 함수입니다.</li>
+</ul></li>
+<li>이 문제를 직접 푸는 대신, 앞서 배운 평활화 함수를 사용하여 다음의 <strong>근사 문제(Approximate problem)</strong>를 풉니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bminimize%7D%20%5Cquad%20g_%5Cmu(x)%20+%20h(x)"></li>
+<li>이때 <img src="https://latex.codecogs.com/png.latex?g_%5Cmu">는 <img src="https://latex.codecogs.com/png.latex?(p/%5Cmu)">-smooth하며 <img src="https://latex.codecogs.com/png.latex?g_%5Cmu%20%5Cle%20g%20%5Cle%20g_%5Cmu%20+%20q%5Cmu">를 만족합니다. 목적 함수가 부드러운 텀과 일반 볼록 텀의 합이 되었으므로, <strong>Nesterov 가속 기울기 하강법 (Accelerated Gradient Descent)</strong>을 적용하여 효율적으로 최소화할 수 있습니다.</li>
+</ul>
+</section>
+<section id="수렴-속도-증명-theorem-14.3" class="level2">
+<h2 class="anchored" data-anchor-id="수렴-속도-증명-theorem-14.3">2.2. 수렴 속도 증명 (Theorem 14.3)</h2>
+<blockquote class="blockquote">
+<p><strong>정리:</strong> Nesterov 알고리즘을 <img src="https://latex.codecogs.com/png.latex?T-1">번 반복하여 얻은 결과를 <img src="https://latex.codecogs.com/png.latex?x_T">라고 할 때, 다음 오차 상한이 성립합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?g(x_T)%20+%20h(x_T)%20-%20%5Cmin_x%20%5C%7Bg(x)%20+%20h(x)%5C%7D%20%5Cle%20q%5Cmu%20+%20%5Cfrac%7Bp%7D%7B%5Cmu%20T%5E2%7D%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"></p>
+</blockquote>
+<section id="증명-proof" class="level3">
+<h3 class="anchored" data-anchor-id="증명-proof"><strong>증명 (Proof):</strong></h3>
+<ul>
+<li><p><img src="https://latex.codecogs.com/png.latex?x%5E*">를 원래 목적함수 <img src="https://latex.codecogs.com/png.latex?g+h">의 최적해(minimizer)라고 합시다. Nesterov 알고리즘의 일반적인 수렴 보장에 의해, 근사 목적 함수에 대한 수렴 바운드는 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?g_%5Cmu(x_T)%20+%20h(x_T)%20-%20g_%5Cmu(x%5E*)%20-%20h(x%5E*)%20%5Cle%20%5Cfrac%7Bp%7D%7B%5Cmu%20T%5E2%7D%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"></p></li>
+<li><p>평활화 함수의 오차 바운드 조건 <img src="https://latex.codecogs.com/png.latex?g_%5Cmu%20%5Cle%20g%20%5Cle%20g_%5Cmu%20+%20q%5Cmu">에 따라 다음 두 부등식을 얻습니다:</p>
+<ul>
+<li><ol type="1">
+<li><img src="https://latex.codecogs.com/png.latex?g_%5Cmu(x_T)%20%5Cge%20g(x_T)%20-%20q%5Cmu"></li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><img src="https://latex.codecogs.com/png.latex?g_%5Cmu(x%5E*)%20%5Cle%20g(x%5E*)"></li>
+</ol></li>
+</ul></li>
+<li><p>이 부등식들을 위의 수렴 식에 대입하면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?g_%5Cmu(x_T)%20+%20h(x_T)%20-%20g_%5Cmu(x%5E*)%20-%20h(x%5E*)%20%5Cge%20g(x_T)%20-%20q%5Cmu%20+%20h(x_T)%20-%20g(x%5E*)%20-%20h(x%5E*)"></p></li>
+<li><p>항들을 이항하여 정리하면 원하는 최종 부등식을 얻습니다. <img src="https://latex.codecogs.com/png.latex?g(x_T)%20+%20h(x_T)%20-%20g(x%5E*)%20-%20h(x%5E*)%20%5Cle%20q%5Cmu%20+%20%5Cfrac%7Bp%7D%7B%5Cmu%20T%5E2%7D%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"></p></li>
+<li><p><strong>최적화 결과 해석:</strong></p>
+<ul>
+<li>이 바운드를 최소화하기 위해 <img src="https://latex.codecogs.com/png.latex?%5Cmu">를 반복 횟수 <img src="https://latex.codecogs.com/png.latex?T">에 반비례하도록 <img src="https://latex.codecogs.com/png.latex?%5Cmu%20=%201/T">로 설정하면, 최종 오차는 다음과 같이 스케일링됩니다. <img src="https://latex.codecogs.com/png.latex?g(x_T)%20+%20h(x_T)%20-%20%5Cmin_x%20%5C%7Bg(x)%20+%20h(x)%5C%7D%20=%20O(1/T)"></li>
+<li>이는 기존의 기본적인 Subgradient Method가 가지는 수렴 속도인 <img src="https://latex.codecogs.com/png.latex?O(1/%5Csqrt%7BT%7D)">를 크게 개선한 결과입니다.</li>
+</ul></li>
+</ul>
+
+
+
+</section>
+</section>
+</section>
+
+ ]]></description>
+  <category>Optimization</category>
+  <guid>https://shsha0110.github.io/posts/Optimization/13.Smooth-Approximation-of-Nonsmooth-Optimization/13.1/</guid>
+  <pubDate>Sun, 19 Apr 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Optimization] 13. Smooth Approximation of Nonsmooth Optimization (Part 2)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Optimization/13.Smooth-Approximation-of-Nonsmooth-Optimization/13.2/</link>
   <description><![CDATA[ 
 
 
@@ -679,262 +815,133 @@
 <section id="들어가며-introduction" class="level1">
 <h1>들어가며 (Introduction)</h1>
 <ul>
-<li><p>머신러닝과 통계학, 계량경제학의 수많은 문제(예: Lasso 회귀의 <img src="https://latex.codecogs.com/png.latex?L_1"> 정규화, SVM의 Hinge Loss 등)는 <strong>비매끄러운(Nonsmooth) 목적 함수</strong>를 포함하고 있습니다. 이러한 비매끄러운 볼록 최적화(Nonsmooth Convex Optimization) 문제는 전통적인 Subgradient Descent를 사용할 경우 수렴 속도가 <img src="https://latex.codecogs.com/png.latex?O(1/%5Csqrt%7BT%7D)">로 매우 느리다는 치명적인 단점이 있습니다.</p></li>
-<li><p>이러한 한계를 극복하기 위한 강력한 수학적 기법이 바로 <strong>평활화 근사(Smooth Approximation)</strong>입니다. 본 포스트에서는 미분 불가능한 함수를 미분 가능한 부드러운 함수로 근사하는 방법, 이를 통해 Nesterov의 가속 기울기 하강법(Accelerated Gradient Descent)을 적용하여 <img src="https://latex.codecogs.com/png.latex?O(1/T)">의 빠른 수렴 속도를 달성하는 과정, 그리고 최적화 이론의 근간이 되는 <strong>Fenchel 켤레(Fenchel Conjugate)</strong>와 <strong>Moreau 분해(Moreau Decomposition)</strong>의 개념과 증명 과정을 상세히 다룹니다.</p></li>
+<li><p>이전 포스트에서는 비매끄러운 목적 함수를 다루기 위해 <img src="https://latex.codecogs.com/png.latex?L_1,%20L_2"> 노름을 부드럽게 근사하는 <strong>평활화 근사(Smooth Approximation)</strong> 기법을 살펴보았습니다. 이번 포스트는 그 연장선으로, 현대 볼록 최적화(Convex Optimization)와 쌍대성(Duality) 이론의 가장 핵심적인 도구인 <strong>Fenchel 켤레(Fenchel Conjugate)</strong>와 이를 기반으로 한 <strong>Moreau 분해(Moreau Decomposition)</strong>에 대해 깊이 있게 다룹니다.</p></li>
+<li><p>Fenchel 켤레는 주어진 함수를 ’기울기(Gradient) 공간’으로 매핑하여 분석할 수 있게 해 주며, Moreau 분해는 임의의 공간에 존재하는 벡터를 원 함수와 그 켤레 함수의 Proximal 연산의 합으로 우아하게 분리해 냅니다. 본 포스트에서는 각 정리의 수학적 유도 과정을 단계별로 상세히 짚어봅니다.</p></li>
 </ul>
 <hr>
 </section>
-<section id="평활화-근사-smooth-approximation" class="level1">
-<h1>1. 평활화 근사 (Smooth Approximation)</h1>
-<section id="p-q-평활화-가능-함수-smoothable-function의-정의" class="level2">
-<h2 class="anchored" data-anchor-id="p-q-평활화-가능-함수-smoothable-function의-정의">1.1. <img src="https://latex.codecogs.com/png.latex?(p,%20q)">-평활화 가능 함수 (Smoothable Function)의 정의</h2>
+<section id="fenchel-켤레의-정의와-fenchel-young-부등식" class="level1">
+<h1>1. Fenchel 켤레의 정의와 Fenchel-Young 부등식</h1>
+<section id="fenchel-켤레-fenchel-conjugate" class="level2">
+<h2 class="anchored" data-anchor-id="fenchel-켤레-fenchel-conjugate">1.1. Fenchel 켤레 (Fenchel Conjugate)</h2>
 <ul>
-<li><p>어떤 볼록 함수 <img src="https://latex.codecogs.com/png.latex?f">가 미분 불가능한 뾰족한 점(Kink)을 가지고 있더라도, 우리가 임의의 오차 범위 내에서 이를 부드러운 함수로 근사할 수 있다면 최적화가 훨씬 수월해집니다. 이를 수학적으로 다음과 같이 정의합니다.</p></li>
-<li><p>볼록 함수 <img src="https://latex.codecogs.com/png.latex?f">가 다음 조건을 만족할 때, <strong><img src="https://latex.codecogs.com/png.latex?(p,%20q)">-smoothable</strong> 하다고 정의합니다:</p>
+<li>함수 <img src="https://latex.codecogs.com/png.latex?f:%20%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5Cmathbb%7BR%7D"> 의 Fenchel 켤레 함수 <img src="https://latex.codecogs.com/png.latex?f%5E*">는 다음과 같이 정의됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Csup_%7Bx%20%5Cin%20%5Ctext%7Bdom%7D(f)%7D%20%5C%7By%5E%5Ctop%20x%20-%20f(x)%5C%7D"></p>
 <ul>
-<li>임의의 <img src="https://latex.codecogs.com/png.latex?%5Cmu%20%3E%200">에 대하여, 다음 두 가지 조건을 만족하는 볼록 함수 <img src="https://latex.codecogs.com/png.latex?f_%5Cmu">가 존재해야 합니다.</li>
-<li><ol type="1">
-<li><img src="https://latex.codecogs.com/png.latex?f_%5Cmu">는 <img src="https://latex.codecogs.com/png.latex?(p/%5Cmu)">-smooth 함수입니다. (즉, <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f_%5Cmu">가 <img src="https://latex.codecogs.com/png.latex?p/%5Cmu">-Lipschitz 연속임을 의미합니다.)</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li>모든 <img src="https://latex.codecogs.com/png.latex?x">에 대하여 다음 부등식을 만족해야 합니다. <img src="https://latex.codecogs.com/png.latex?f_%5Cmu(x)%20%5Cle%20f(x)%20%5Cle%20f_%5Cmu(x)%20+%20q%5Cmu"></li>
-</ol></li>
-</ul></li>
-<li><p>위 정의의 직관적인 의미는 매개변수 <img src="https://latex.codecogs.com/png.latex?%5Cmu">를 작게 만들수록 <img src="https://latex.codecogs.com/png.latex?f_%5Cmu">는 원래 함수 <img src="https://latex.codecogs.com/png.latex?f">에 극도로 가까워지지만(오차 <img src="https://latex.codecogs.com/png.latex?q%5Cmu"> 감소), 그 대가로 함수의 곡률 혹은 그래디언트의 변화율 제한(Smoothness constant <img src="https://latex.codecogs.com/png.latex?p/%5Cmu">)은 커진다는 트레이드오프를 보여줍니다.</p></li>
+<li>이 정의가 갖는 가장 중요한 특징은, 켤레 함수 내부의 <img src="https://latex.codecogs.com/png.latex?y%5E%5Ctop%20x%20-%20f(x)"> 텀이 <img src="https://latex.codecogs.com/png.latex?y">에 대한 선형(Linear) 함수라는 점입니다. 볼록 함수이든 아니든, 선형 함수들의 상한(Supremum)을 취하는 연산은 그 결과물이 항상 <strong>볼록 함수(Convex Function)</strong>가 되도록 보장합니다.</li>
 </ul>
 </section>
-<section id="example-1-l_1-노름-norm" class="level2">
-<h2 class="anchored" data-anchor-id="example-1-l_1-노름-norm">1.2. Example 1: <img src="https://latex.codecogs.com/png.latex?L_1"> 노름 (Norm)</h2>
+<section id="fenchel-young-부등식-lemma-14.4" class="level2">
+<h2 class="anchored" data-anchor-id="fenchel-young-부등식-lemma-14.4">1.2. Fenchel-Young 부등식 (Lemma 14.4)</h2>
 <ul>
-<li>가장 대표적인 비매끄러운 함수인 <img src="https://latex.codecogs.com/png.latex?L_1"> 노름 <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%7Cx%7C">를 평활화해 보겠습니다. 이를 위해 머신러닝의 Robust Regression에서도 자주 쓰이는 <strong>Huber 함수</strong> <img src="https://latex.codecogs.com/png.latex?L_%5Cmu(z)">를 도입합니다.</li>
+<li>켤레 함수의 상한 연산 정의로부터, 최적화 이론 전반에서 널리 쓰이는 매우 직관적인 부등식이 즉각적으로 유도됩니다. 임의의 <img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Ctext%7Bdom%7D(f)">와 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Ctext%7Bdom%7D(f%5E*)">에 대하여 다음이 성립합니다.</li>
 </ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0AL_%5Cmu(z)%20=%20%5Cbegin%7Bcases%7D%0A%5Cfrac%7Bz%5E2%7D%7B2%5Cmu%7D,%20&amp;%20%5Ctext%7Bif%20%7D%20%7Cz%7C%20%5Cle%20%5Cmu%20%5C%5C%0A%7Cz%7C%20-%20%5Cfrac%7B%5Cmu%7D%7B2%7D,%20&amp;%20%5Ctext%7Botherwise%7D%0A%5Cend%7Bcases%7D%0A"></p>
-<section id="평활화-조건-증명" class="level3">
-<h3 class="anchored" data-anchor-id="평활화-조건-증명"><strong>[평활화 조건 증명]</strong></h3>
+<p><img src="https://latex.codecogs.com/png.latex?f(x)%20+%20f%5E*(y)%20%5Cge%20y%5E%5Ctop%20x"></p>
+<section id="증명" class="level3">
+<h3 class="anchored" data-anchor-id="증명"><strong>[증명]</strong></h3>
 <ul>
-<li><ol type="1">
-<li><strong>오차 바운드(Approximation Bound):</strong></li>
-</ol>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%7Cz%7C%20%5Cle%20%5Cmu">일 때: <img src="https://latex.codecogs.com/png.latex?L_%5Cmu(z)%20=%20%5Cfrac%7Bz%5E2%7D%7B2%5Cmu%7D">. 여기서 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bz%5E2%7D%7B2%5Cmu%7D%20%5Cle%20%5Cfrac%7B%5Cmu%7Cz%7C%7D%7B2%5Cmu%7D%20=%20%5Cfrac%7B%7Cz%7C%7D%7B2%7D%20%5Cle%20%7Cz%7C"> 이며, <img src="https://latex.codecogs.com/png.latex?%7Cz%7C%20-%20L_%5Cmu(z)%20=%20%7Cz%7C%20-%20%5Cfrac%7Bz%5E2%7D%7B2%5Cmu%7D%20%5Cle%20%5Cfrac%7B%5Cmu%7D%7B2%7D"> (완전제곱식 유도에 의해 최대치 도달).</li>
-<li><img src="https://latex.codecogs.com/png.latex?%7Cz%7C%20%3E%20%5Cmu">일 때: <img src="https://latex.codecogs.com/png.latex?L_%5Cmu(z)%20=%20%7Cz%7C%20-%20%5Cfrac%7B%5Cmu%7D%7B2%7D">. 따라서 <img src="https://latex.codecogs.com/png.latex?%7Cz%7C%20-%20L_%5Cmu(z)%20=%20%5Cfrac%7B%5Cmu%7D%7B2%7D">.</li>
-<li>결론적으로 모든 <img src="https://latex.codecogs.com/png.latex?z">에 대해 <img src="https://latex.codecogs.com/png.latex?L_%5Cmu(z)%20%5Cle%20%7Cz%7C%20%5Cle%20L_%5Cmu(z)%20+%20%5Cfrac%7B%5Cmu%7D%7B2%7D">가 성립합니다.</li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>Smoothness:</strong> - <img src="https://latex.codecogs.com/png.latex?L_%5Cmu(z)">의 도함수는 구간 경계에서 연속이며 기울기의 최대 변화율은 원점 부근의 이차함수 영역에서 발생하며 그 값은 <img src="https://latex.codecogs.com/png.latex?1/%5Cmu">입니다.</li>
-</ol>
-<ul>
-<li>따라서 <img src="https://latex.codecogs.com/png.latex?L_%5Cmu">는 <img src="https://latex.codecogs.com/png.latex?(1/%5Cmu)">-smooth 합니다.</li>
-</ul></li>
-<li>이로써 1차원 절댓값 함수 <img src="https://latex.codecogs.com/png.latex?%7C%5Ccdot%7C">는 <strong><img src="https://latex.codecogs.com/png.latex?(1,%201/2)">-smoothable</strong> 함을 알 수 있습니다.</li>
-</ul>
-</section>
-<section id="다차원-공간으로의-확장" class="level3">
-<h3 class="anchored" data-anchor-id="다차원-공간으로의-확장"><strong>[다차원 공간으로의 확장]</strong></h3>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">일 때 <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5C%7Cx%5C%7C_1%20=%20%5Csum_%7Bi=1%7D%5Ed%20%7Cx_i%7C"> 입니다. 이에 대한 평활화 함수를 <img src="https://latex.codecogs.com/png.latex?f_%5Cmu(x)%20=%20%5Csum_%7Bi=1%7D%5Ed%20L_%5Cmu(x_i)">로 정의하면:
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?f_%5Cmu">는 여전히 각 축에 독립적이므로 <img src="https://latex.codecogs.com/png.latex?(1/%5Cmu)">-smooth 합니다.</li>
-<li>각 차원마다 최대 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cmu%7D%7B2%7D">의 오차가 발생하므로, 전체 오차는 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bd%5Cmu%7D%7B2%7D">가 됩니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Ctherefore"> 부등식 <img src="https://latex.codecogs.com/png.latex?f_%5Cmu(x)%20%5Cle%20%5C%7Cx%5C%7C_1%20%5Cle%20f_%5Cmu(x)%20+%20%5Cfrac%7Bd%5Cmu%7D%7B2%7D">가 성립하며, <img src="https://latex.codecogs.com/png.latex?%5C%7C%20%5Ccdot%20%5C%7C_1">은 <strong><img src="https://latex.codecogs.com/png.latex?(1,%20d/2)">-smoothable</strong> 합니다.</li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/13.Smooth-Approximation-of-Nonsmooth-Optimization/images/huber_3d_l1.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: 2차원 공간에서 <img src="https://latex.codecogs.com/png.latex?L_1"> 노름의 Huber 평활화 함수의 3D 표면 그래프. 뾰족한 골짜기 형태의 L1 노름과 달리, 원점 및 각 축을 따라 미분 불가능했던 V자 형태의 꺾임이 이차함수 곡면으로 부드럽게 곡면 처리되어 연속적인 기울기를 가지는 모습을 보여줍니다.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="example-2-l_2-노름-norm" class="level2">
-<h2 class="anchored" data-anchor-id="example-2-l_2-노름-norm">1.3. Example 2: <img src="https://latex.codecogs.com/png.latex?L_2"> 노름 (Norm)</h2>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?g(x)%20=%20%5C%7Cx%5C%7C_2"> 역시 원점 <img src="https://latex.codecogs.com/png.latex?x=0">에서 뾰족한 원추(Cone) 형태를 띠어 미분 불가능합니다. 이를 부드럽게 만들기 위해 다음과 같은 쌍곡선 형태의 함수를 도입합니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?f_%5Cmu(x)%20=%20%5Csqrt%7B%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2%7D%20-%20%5Cmu"></p>
-<section id="평활화-조건-증명-1" class="level3">
-<h3 class="anchored" data-anchor-id="평활화-조건-증명-1"><strong>[평활화 조건 증명]</strong></h3>
-<ul>
-<li><ol type="1">
-<li><strong>오차 바운드 (Approximation Bound):</strong></li>
-</ol>
-<ul>
-<li>삼각부등식 혹은 단순 대수 비교를 통해 <img src="https://latex.codecogs.com/png.latex?%5Csqrt%7B%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2%7D%20%5Cle%20%5C%7Cx%5C%7C_2%20+%20%5Cmu"> 임을 알 수 있습니다. (양변 제곱시 우변에 <img src="https://latex.codecogs.com/png.latex?2%5Cmu%5C%7Cx%5C%7C_2%20%5Cge%200"> 항이 남음)</li>
-<li>또한 <img src="https://latex.codecogs.com/png.latex?%5Csqrt%7B%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2%7D%20%5Cge%20%5C%7Cx%5C%7C_2"> 임은 자명합니다.</li>
-<li>따라서 부등식 <img src="https://latex.codecogs.com/png.latex?f_%5Cmu(x)%20%5Cle%20%5C%7Cx%5C%7C_2%20%5Cle%20f_%5Cmu(x)%20+%20%5Cmu"> 가 성립합니다.</li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>Smoothness (Hessian 바운드 도출):</strong></li>
-</ol>
-<ul>
-<li>1차 미분 (Gradient): <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f_%5Cmu(x)%20=%20%5Cfrac%7Bx%7D%7B%5Csqrt%7B%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2%7D%7D"></li>
-<li>2차 미분 (Hessian): 몫의 미분법을 적용합니다. <img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20f_%5Cmu(x)%20=%20%5Cfrac%7B1%7D%7B%5Csqrt%7B%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2%7D%7DI%20-%20%5Cfrac%7B1%7D%7B(%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2)%5E%7B3/2%7D%7D%20x%20x%5E%5Ctop"></li>
-<li>Hessian 행렬이 양의 정부호(Positive Definite)임과 동시에 상한을 구해보면, 뒤의 항이 <img src="https://latex.codecogs.com/png.latex?x%20x%5E%5Ctop"> 형태의 Rank-1 행렬이므로 언제나 빼주는 효과를 가집니다. 즉, <img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20f_%5Cmu(x)%20%5Cpreceq%20%5Cfrac%7B1%7D%7B%5Csqrt%7B%5C%7Cx%5C%7C_2%5E2%20+%20%5Cmu%5E2%7D%7DI%20%5Cpreceq%20%5Cfrac%7B1%7D%7B%5Csqrt%7B%5Cmu%5E2%7D%7DI%20=%20%5Cfrac%7B1%7D%7B%5Cmu%7DI"></li>
-<li>Hessian의 최대 고윳값이 <img src="https://latex.codecogs.com/png.latex?1/%5Cmu"> 이하이므로 <img src="https://latex.codecogs.com/png.latex?f_%5Cmu">는 <img src="https://latex.codecogs.com/png.latex?(1/%5Cmu)">-smooth 합니다.</li>
-</ul></li>
-<li>결과적으로 <img src="https://latex.codecogs.com/png.latex?%5C%7C%5Ccdot%5C%7C_2">는 <strong><img src="https://latex.codecogs.com/png.latex?(1,%201)">-smoothable</strong> 합니다. (<img src="https://latex.codecogs.com/png.latex?L_1"> 노름과 달리 차원 <img src="https://latex.codecogs.com/png.latex?d">가 오차 상수에 곱해지지 않는다는 강력한 이점이 있습니다.)</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/13.Smooth-Approximation-of-Nonsmooth-Optimization/images/smooth_3d_l2.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: 2차원 공간에서 <img src="https://latex.codecogs.com/png.latex?L_2"> 노름의 평활화 함수의 3D 표면 그래프. 원추형(Cone) 형태의 원래 L2 노름 함수가 원점 부근에서 둥글고 매끄러운 밥그릇 형태(bowl-shape)로 완만하게 깎여, 원점에서의 특이점(Singularity)이 제거된 미분 가능한 상태를 시각적으로 나타냅니다.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="lipschitz-함수의-moreau-yosida-평활화" class="level2">
-<h2 class="anchored" data-anchor-id="lipschitz-함수의-moreau-yosida-평활화">1.4. Lipschitz 함수의 Moreau-Yosida 평활화</h2>
-<ul>
-<li>일반적인 <img src="https://latex.codecogs.com/png.latex?L">-Lipschitz 볼록 함수 <img src="https://latex.codecogs.com/png.latex?f">에 대해서도 계통적인 평활화 방법이 존재합니다. 임의의 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20%3E%200">에 대하여 <strong>Moreau-Yosida 평활화(Moreau Envelope)</strong> <img src="https://latex.codecogs.com/png.latex?f_%5Ceta(x)">를 다음과 같이 정의합니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?f_%5Ceta(x)%20:=%20%5Cinf_u%20%5Cleft%5C%7B%20f(u)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%5C%7Cu%20-%20x%5C%7C_2%5E2%20%5Cright%5C%7D"></p>
-<ul>
-<li>이 함수는 본래 함수를 아래로 볼록한 이차 함수들을 이용해 ’인프 컨볼루션(Inf-convolution)’한 결과물입니다.</li>
-<li><strong>Smoothness:</strong> <img src="https://latex.codecogs.com/png.latex?f_%5Ceta">는 도함수로 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f_%5Ceta(x)%20=%20%5Cfrac%7B1%7D%7B%5Ceta%7D(x%20-%20%5Ctext%7Bprox%7D_%7B%5Ceta%20f%7D(x))">를 가지며, Proximal 연산자의 비팽창성(Non-expansiveness)에 의해 <img src="https://latex.codecogs.com/png.latex?(1/%5Ceta)">-smooth 속성을 갖습니다.</li>
-<li><strong>오차 바운드 (강의 자료 빈칸 보충):</strong> - 상한: <img src="https://latex.codecogs.com/png.latex?u=x">를 대입하면 <img src="https://latex.codecogs.com/png.latex?f_%5Ceta(x)%20%5Cle%20f(x)%20+%200%20=%20f(x)">가 되어 쉽게 도출됩니다.
-<ul>
-<li>하한: <img src="https://latex.codecogs.com/png.latex?u%5E*">가 위 infimum의 해라고 할 때, <img src="https://latex.codecogs.com/png.latex?f">가 <img src="https://latex.codecogs.com/png.latex?L">-Lipschitz 이므로 <img src="https://latex.codecogs.com/png.latex?f(x)%20-%20f(u%5E*)%20%5Cle%20L%5C%7Cx%20-%20u%5E*%5C%7C">가 성립합니다. <img src="https://latex.codecogs.com/png.latex?f_%5Ceta(x)%20=%20f(u%5E*)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%5C%7Cu%5E*%20-%20x%5C%7C_2%5E2%20%5Cge%20f(x)%20-%20L%5C%7Cu%5E*%20-%20x%5C%7C_2%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%5C%7Cu%5E*%20-%20x%5C%7C_2%5E2">
-<ul>
-<li>우변의 식은 <img src="https://latex.codecogs.com/png.latex?%5C%7Cu%5E*%20-%20x%5C%7C_2">에 대한 이차방정식으로 볼 수 있으며, 최솟값은 <img src="https://latex.codecogs.com/png.latex?%5C%7Cu%5E*%20-%20x%5C%7C_2%20=%20%5Ceta%20L">일 때 발생하고, 그 최솟값은 <img src="https://latex.codecogs.com/png.latex?f(x)%20-%20%5Cfrac%7B%5Ceta%20L%5E2%7D%7B2%7D">가 됩니다.</li>
-</ul></li>
-<li>따라서, <img src="https://latex.codecogs.com/png.latex?f(x)%20-%20%5Cfrac%7B%5Ceta%20L%5E2%7D%7B2%7D%20%5Cle%20f_%5Ceta(x)%20%5Cimplies%20f_%5Ceta(x)%20%5Cle%20f(x)%20%5Cle%20f_%5Ceta(x)%20+%20%5Cfrac%7BL%5E2%7D%7B2%7D%5Ceta"> 가 성립합니다.</li>
-</ul></li>
-<li>결과적으로 임의의 <img src="https://latex.codecogs.com/png.latex?L">-Lipschitz 함수는 위 연산을 통해 <strong><img src="https://latex.codecogs.com/png.latex?(1,%20L%5E2/2)">-smoothable</strong> 하다는 것을 증명할 수 있습니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="비매끄러운-함수의-평활화-기반-최적화-smooth-optimization" class="level1">
-<h1>2. 비매끄러운 함수의 평활화 기반 최적화 (Smooth Optimization)</h1>
-<section id="문제-정의-및-근사-알고리즘" class="level2">
-<h2 class="anchored" data-anchor-id="문제-정의-및-근사-알고리즘">2.1. 문제 정의 및 근사 알고리즘</h2>
-<ul>
-<li>우리가 풀고자 하는 목적 함수가 다음과 같다고 가정합시다. <img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bx%7D%20%5Cquad%20g(x)%20+%20h(x)">
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?g">는 볼록하면서 <strong><img src="https://latex.codecogs.com/png.latex?(p,%20q)">-smoothable</strong> 한 함수이고, <img src="https://latex.codecogs.com/png.latex?h">는 단순한(proximal 연산이 쉬운) 볼록 함수입니다.</li>
-</ul></li>
-<li>직접 이 문제를 푸는 대신, 앞서 배운 <img src="https://latex.codecogs.com/png.latex?g_%5Cmu(x)">로 치환한 근사(approximate) 문제를 정의합니다. <img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bx%7D%20%5Cquad%20F_%5Cmu(x)%20:=%20g_%5Cmu(x)%20+%20h(x)"></li>
-<li>이때 <img src="https://latex.codecogs.com/png.latex?g_%5Cmu">는 <img src="https://latex.codecogs.com/png.latex?(p/%5Cmu)">-smooth 함수이므로, 우리는 기존의 Subgradient 메서드 대신 <strong>Nesterov’s Accelerated Gradient Descent (FISTA 등)</strong>를 이 문제에 바로 적용할 수 있습니다.</li>
-</ul>
-</section>
-<section id="수렴-속도와-최적의-mu-설정-강의-12페이지-빈칸-보충" class="level2">
-<h2 class="anchored" data-anchor-id="수렴-속도와-최적의-mu-설정-강의-12페이지-빈칸-보충">2.2. 수렴 속도와 최적의 <img src="https://latex.codecogs.com/png.latex?%5Cmu"> 설정 (강의 12페이지 빈칸 보충)</h2>
-<ul>
-<li>Nesterov 가속 기울기 하강법을 <img src="https://latex.codecogs.com/png.latex?T-1">번 반복하여 얻은 출력값을 <img src="https://latex.codecogs.com/png.latex?x_T">라고 합시다. 정리(Theorem)에 따르면, 근사 문제에 대한 수렴 바운드는 다음과 같습니다. (여기서 <img src="https://latex.codecogs.com/png.latex?R%20=%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2">로 둡니다.)</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?g(x_T)%20+%20h(x_T)%20-%20%5Cmin_x%20%5C%7Bg(x)%20+%20h(x)%5C%7D%20%5Cle%20q%5Cmu%20+%20%5Cfrac%7Bp%7D%7B%5Cmu%20T%5E2%7D%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"></p>
-<ul>
-<li>이 식의 우변은 두 항의 합으로 이루어져 있습니다.
-<ul>
-<li><ol type="1">
-<li><img src="https://latex.codecogs.com/png.latex?q%5Cmu">: 평활화 근사로 인해 본질적으로 발생한 구조적 오차입니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bp%7D%7B%5Cmu%20T%5E2%7D%20R%5E2">: 최적화 알고리즘이 목표치에 수렴하지 못해 남은 최적화 오차입니다. <img src="https://latex.codecogs.com/png.latex?%5Cmu">가 작을수록 함수가 더 뾰족해져(그래디언트 상수가 커져) 수렴이 느려집니다.</li>
-</ol></li>
-</ul></li>
-</ul>
-<section id="최적의-평활화-파라미터-mu-도출-과정" class="level3">
-<h3 class="anchored" data-anchor-id="최적의-평활화-파라미터-mu-도출-과정"><strong>[최적의 평활화 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cmu%5E*"> 도출 과정]</strong></h3>
-<ul>
-<li><p>오차 상한을 최소화하는 최적의 <img src="https://latex.codecogs.com/png.latex?%5Cmu">를 찾기 위해 우변의 식을 <img src="https://latex.codecogs.com/png.latex?%5Cmu">에 대해 미분하여 0으로 둡니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%7D%7B%5Cpartial%20%5Cmu%7D%20%5Cleft(%20q%5Cmu%20+%20%5Cfrac%7Bp%20R%5E2%7D%7B%5Cmu%20T%5E2%7D%20%5Cright)%20=%20q%20-%20%5Cfrac%7Bp%20R%5E2%7D%7B%5Cmu%5E2%20T%5E2%7D%20=%200"> <img src="https://latex.codecogs.com/png.latex?%5Cmu%5E2%20=%20%5Cfrac%7Bp%20R%5E2%7D%7Bq%20T%5E2%7D%20%5Cimplies%20%5Cmu%5E*%20=%20%5Cfrac%7BR%20%5Csqrt%7Bp%7D%7D%7BT%20%5Csqrt%7Bq%7D%7D"></p></li>
-<li><p>이 최적의 <img src="https://latex.codecogs.com/png.latex?%5Cmu%5E*">를 다시 원래의 수렴 바운드 식에 대입해 봅시다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BError%20Bound%7D%20=%20q%20%5Cleft(%20%5Cfrac%7BR%20%5Csqrt%7Bp%7D%7D%7BT%20%5Csqrt%7Bq%7D%7D%20%5Cright)%20+%20%5Cfrac%7Bp%20R%5E2%7D%7BT%5E2%7D%20%5Cleft(%20%5Cfrac%7BT%20%5Csqrt%7Bq%7D%7D%7BR%20%5Csqrt%7Bp%7D%7D%20%5Cright)"> <img src="https://latex.codecogs.com/png.latex?=%20%5Cfrac%7BR%20%5Csqrt%7Bpq%7D%7D%7BT%7D%20+%20%5Cfrac%7BR%20%5Csqrt%7Bpq%7D%7D%7BT%7D%20=%20%5Cfrac%7B2%20R%20%5Csqrt%7Bpq%7D%7D%7BT%7D%20=%20O%5Cleft(%5Cfrac%7B1%7D%7BT%7D%5Cright)"></p></li>
-<li><p><strong>이 결과는 매우 경이롭습니다.</strong> 비매끄러운 함수에 대해 표준 Subgradient Method를 사용하면 오차율이 <img src="https://latex.codecogs.com/png.latex?O(1/%5Csqrt%7BT%7D)">로 감소하지만, 위와 같이 함수 구조를 활용하여 Smooth Approximation을 거친 후 Nesterov 가속을 적용하면 속도가 <strong><img src="https://latex.codecogs.com/png.latex?O(1/T)">로 비약적으로 향상</strong>됩니다.</p></li>
+<li>켤레 함수의 정의 <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Csup_%7Bz%7D%20%5C%7By%5E%5Ctop%20z%20-%20f(z)%5C%7D"> 에 의해, 특정 <img src="https://latex.codecogs.com/png.latex?x">를 대입한 값은 항상 상한값보다 작거나 같습니다. <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20%5Cge%20y%5E%5Ctop%20x%20-%20f(x)"></li>
+<li>이를 이항하면 <img src="https://latex.codecogs.com/png.latex?f(x)%20+%20f%5E*(y)%20%5Cge%20y%5E%5Ctop%20x"> 가 자명하게 도출됩니다.</li>
 </ul>
 <hr>
 </section>
 </section>
 </section>
-<section id="fenchel-켤레-fenchel-conjugate" class="level1">
-<h1>3. Fenchel 켤레 (Fenchel Conjugate)</h1>
+<section id="핵심-예제-다양한-함수의-fenchel-켤레-유도" class="level1">
+<h1>2. 핵심 예제: 다양한 함수의 Fenchel 켤레 유도</h1>
 <ul>
-<li>최적화의 쌍대성(Duality)을 다룰 때 가장 중요한 도구가 Fenchel 켤레 함수입니다. 기하학적으로 이는 주어진 기울기 <img src="https://latex.codecogs.com/png.latex?y">를 가지는 접선(hyperplane)과 원래 함수 <img src="https://latex.codecogs.com/png.latex?f(x)"> 사이의 최대 수직 거리(Maximum gap)를 의미합니다.</li>
+<li>주요 함수들에 대한 Fenchel 켤레를 직접 유도해 보겠습니다. 이 예제들은 머신러닝의 손실 함수나 정규화 텀을 분석할 때 빈번하게 등장합니다.</li>
 </ul>
-<section id="정의와-fenchel-young-부등식" class="level2">
-<h2 class="anchored" data-anchor-id="정의와-fenchel-young-부등식">3.1. 정의와 Fenchel-Young 부등식</h2>
+<section id="example-14.5-선형-함수-affine-function" class="level2">
+<h2 class="anchored" data-anchor-id="example-14.5-선형-함수-affine-function">Example 14.5: 선형 함수 (Affine Function)</h2>
 <ul>
-<li>함수 <img src="https://latex.codecogs.com/png.latex?f:%20%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5Cmathbb%7BR%7D"> 의 Fenchel 켤레 <img src="https://latex.codecogs.com/png.latex?f%5E*">는 다음과 같이 정의됩니다. <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Csup_%7Bx%20%5Cin%20%5Ctext%7Bdom%7D(f)%7D%20%5C%7By%5E%5Ctop%20x%20-%20f(x)%5C%7D"></li>
-<li><img src="https://latex.codecogs.com/png.latex?y%5E%5Ctop%20x%20-%20f(x)">는 주어진 <img src="https://latex.codecogs.com/png.latex?x">에 대해 <img src="https://latex.codecogs.com/png.latex?y">의 선형(Linear) 함수이고, 선형 함수들의 상한(Supremum) 연산은 항상 볼록성(Convexity)을 보존합니다. 따라서 <strong>원래 함수 <img src="https://latex.codecogs.com/png.latex?f">가 볼록 함수가 아니더라도, 켤레 함수 <img src="https://latex.codecogs.com/png.latex?f%5E*">는 항상 무조건 볼록 함수(Convex Function)</strong>가 됩니다.</li>
-</ul>
-<section id="fenchel-young-inequality" class="level3">
-<h3 class="anchored" data-anchor-id="fenchel-young-inequality"><strong>[Fenchel-Young Inequality]</strong></h3>
-<ul>
-<li>정의에 의해 <img src="https://latex.codecogs.com/png.latex?%5Csup"> 연산을 사용하므로, 임의의 <img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Ctext%7Bdom%7D(f)">와 <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Ctext%7Bdom%7D(f%5E*)">에 대하여 다음 부등식이 자명하게 성립합니다. <img src="https://latex.codecogs.com/png.latex?f(x)%20+%20f%5E*(y)%20%5Cge%20y%5E%5Ctop%20x"></li>
+<li><img src="https://latex.codecogs.com/png.latex?f(x)%20=%20c%5E%5Ctop%20x%20+%20d"> 인 경우: <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Csup_%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5C%7B%20y%5E%5Ctop%20x%20-%20c%5E%5Ctop%20x%20-%20d%20%5C%7D%20=%20%5Csup_%7Bx%7D%20%5C%7B%20(y-c)%5E%5Ctop%20x%20%5C%7D%20-%20d"></li>
+<li>만약 <img src="https://latex.codecogs.com/png.latex?y%20%5Cneq%20c"> 라면, <img src="https://latex.codecogs.com/png.latex?x">를 <img src="https://latex.codecogs.com/png.latex?(y-c)"> 방향으로 무한히 키워서 값을 <img src="https://latex.codecogs.com/png.latex?+%5Cinfty">로 만들 수 있습니다. 오직 <img src="https://latex.codecogs.com/png.latex?y=c"> 일 때만 상한이 유한한 값 <img src="https://latex.codecogs.com/png.latex?-d">를 가집니다. <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Cbegin%7Bcases%7D%20-d,%20&amp;%20%5Ctext%7Bif%20%7D%20y%20=%20c%20%5C%5C%20+%5Cinfty,%20&amp;%20%5Ctext%7Botherwise%7D%20%5Cend%7Bcases%7D"></li>
 </ul>
 </section>
-</section>
-<section id="다양한-함수의-켤레-함수-유도-derivations" class="level2">
-<h2 class="anchored" data-anchor-id="다양한-함수의-켤레-함수-유도-derivations">3.2. 다양한 함수의 켤레 함수 유도 (Derivations)</h2>
+<section id="example-14.6-로지스틱-함수-logistic-function" class="level2">
+<h2 class="anchored" data-anchor-id="example-14.6-로지스틱-함수-logistic-function">Example 14.6: 로지스틱 함수 (Logistic Function)</h2>
 <ul>
-<li>강의 자료에 결과만 제시된 주요 예시들의 중간 유도 과정을 상세히 풀어보겠습니다.</li>
-</ul>
-<section id="example-a-affine-function-선형-함수" class="level3">
-<h3 class="anchored" data-anchor-id="example-a-affine-function-선형-함수">Example A: Affine Function (선형 함수)</h3>
+<li><img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Clog(1+e%5Ex)"> (<img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D">) 인 경우:
 <ul>
-<li><img src="https://latex.codecogs.com/png.latex?f(x)%20=%20c%5E%5Ctop%20x%20+%20d"> 라면, <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Csup_%7Bx%7D%20%5C%7B%20y%5E%5Ctop%20x%20-%20c%5E%5Ctop%20x%20-%20d%20%5C%7D%20=%20%5Csup_%7Bx%7D%20%5C%7B%20(y%20-%20c)%5E%5Ctop%20x%20-%20d%20%5C%7D"></li>
-<li>만약 <img src="https://latex.codecogs.com/png.latex?y%20%5Cneq%20c"> 라면 <img src="https://latex.codecogs.com/png.latex?x">를 그 방향으로 무한히 키워 상한을 <img src="https://latex.codecogs.com/png.latex?%5Cinfty">로 만들 수 있습니다. <img src="https://latex.codecogs.com/png.latex?y%20=%20c"> 일 때만 상한이 <img src="https://latex.codecogs.com/png.latex?-d">가 됩니다. <img src="https://latex.codecogs.com/png.latex?%5Ctherefore%20f%5E*(y)%20=%20%5Cbegin%7Bcases%7D%20-d,%20&amp;%20%5Ctext%7Bif%20%7D%20y%20=%20c%20%5C%5C%20+%5Cinfty,%20&amp;%20%5Ctext%7Botherwise%7D%20%5Cend%7Bcases%7D"></li>
+<li>최댓값을 찾기 위해 미분하여 0으로 둡니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bd%7D%7Bdx%7D%20(yx%20-%20%5Clog(1+e%5Ex))%20=%20y%20-%20%5Cfrac%7Be%5Ex%7D%7B1+e%5Ex%7D%20=%200%20%5Cimplies%20e%5Ex%20=%20%5Cfrac%7By%7D%7B1-y%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?e%5Ex%20%3E%200"> 이므로 <img src="https://latex.codecogs.com/png.latex?y">의 범위는 <img src="https://latex.codecogs.com/png.latex?0%20%3C%20y%20%3C%201"> 로 제한됩니다. 이를 대입하여 정리하면 다음과 같은 엔트로피 형태의 식을 얻습니다. <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Cbegin%7Bcases%7D%20y%20%5Clog%20y%20+%20(1-y)%20%5Clog(1-y),%20&amp;%20%5Ctext%7Bif%20%7D%200%20%3C%20y%20%3C%201%20%5C%5C%200,%20&amp;%20%5Ctext%7Bif%20%7D%20y%20%5Cin%20%5C%7B0,1%5C%7D%20%5C%5C%20+%5Cinfty,%20&amp;%20%5Ctext%7Botherwise%7D%20%5Cend%7Bcases%7D"></li>
+</ul></li>
 </ul>
 </section>
-<section id="example-b-logistic-function" class="level3">
-<h3 class="anchored" data-anchor-id="example-b-logistic-function">Example B: Logistic Function</h3>
+<section id="example-14.7-이차-함수-quadratic-function" class="level2">
+<h2 class="anchored" data-anchor-id="example-14.7-이차-함수-quadratic-function">Example 14.7: 이차 함수 (Quadratic Function)</h2>
 <ul>
-<li><img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Clog(1+e%5Ex)"> (<img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D">) 에 대하여, 상한을 구하기 위해 미분합니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bd%7D%7Bdx%7D%20(yx%20-%20%5Clog(1+e%5Ex))%20=%20y%20-%20%5Cfrac%7Be%5Ex%7D%7B1+e%5Ex%7D%20=%200%20%5Cimplies%20y(1+e%5Ex)%20=%20e%5Ex%20%5Cimplies%20e%5Ex%20=%20%5Cfrac%7By%7D%7B1-y%7D"></li>
-<li>로그의 성질 상 <img src="https://latex.codecogs.com/png.latex?e%5Ex%20%3E%200"> 이므로 <img src="https://latex.codecogs.com/png.latex?0%20%3C%20y%20%3C%201"> 구간에서만 정의됩니다. <img src="https://latex.codecogs.com/png.latex?x%20=%20%5Clog%5Cleft(%5Cfrac%7By%7D%7B1-y%7D%5Cright)">를 목적식에 다시 대입합니다. <img src="https://latex.codecogs.com/png.latex?y%20%5Clog%5Cleft(%5Cfrac%7By%7D%7B1-y%7D%5Cright)%20-%20%5Clog%5Cleft(1%20+%20%5Cfrac%7By%7D%7B1-y%7D%5Cright)%20=%20y%20%5Clog%20y%20-%20y%20%5Clog(1-y)%20-%20%5Clog%5Cleft(%5Cfrac%7B1%7D%7B1-y%7D%5Cright)"> <img src="https://latex.codecogs.com/png.latex?=%20y%20%5Clog%20y%20-%20y%20%5Clog(1-y)%20+%20%5Clog(1-y)%20=%20y%20%5Clog%20y%20+%20(1-y)%20%5Clog(1-y)"></li>
-<li><img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5C%7B0,%201%5C%7D">일 때는 극한에 의해 <img src="https://latex.codecogs.com/png.latex?0">이 도출됩니다.</li>
+<li>양의 정부호(Positive Definite) 행렬 <img src="https://latex.codecogs.com/png.latex?Q">에 대해 <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Cfrac%7B1%7D%7B2%7Dx%5E%5Ctop%20Q%20x%20+%20p%5E%5Ctop%20x"> 인 경우: <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Csup_%7Bx%7D%20%5C%7B%20y%5E%5Ctop%20x%20-%20%5Cfrac%7B1%7D%7B2%7Dx%5E%5Ctop%20Q%20x%20-%20p%5E%5Ctop%20x%20%5C%7D">
+<ul>
+<li>내부 식을 <img src="https://latex.codecogs.com/png.latex?x">에 대해 미분하면 <img src="https://latex.codecogs.com/png.latex?y%20-%20Qx%20-%20p%20=%200"> 이 되므로, 최적해는 <img src="https://latex.codecogs.com/png.latex?x%20=%20Q%5E%7B-1%7D(y-p)"> 가 됩니다. 이를 다시 대입하면: <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Cfrac%7B1%7D%7B2%7D(y-p)%5E%5Ctop%20Q%5E%7B-1%7D(y-p)"></li>
+<li>이때 켤레 함수의 기울기 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f%5E*(y)%20=%20Q%5E%7B-1%7D(y-p)"> 인데, 원래 함수의 기울기가 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x)%20=%20Qx%20+%20p"> 임을 고려하면 <strong><img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f%5E*(y)%20=%20(%5Cnabla%20f)%5E%7B-1%7D(y)"></strong> 라는 역함수 관계가 성립함을 알 수 있습니다.</li>
+</ul></li>
 </ul>
 </section>
-<section id="example-c-quadratic-function-이차-함수" class="level3">
-<h3 class="anchored" data-anchor-id="example-c-quadratic-function-이차-함수">Example C: Quadratic Function (이차 함수)</h3>
+<section id="example-14.8-14.9-negative-entropy와-log-determinant" class="level2">
+<h2 class="anchored" data-anchor-id="example-14.8-14.9-negative-entropy와-log-determinant">Example 14.8 &amp; 14.9: Negative Entropy와 Log Determinant</h2>
 <ul>
-<li><img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Cfrac%7B1%7D%7B2%7Dx%5E%5Ctop%20Q%20x%20+%20p%5E%5Ctop%20x"> (단, <img src="https://latex.codecogs.com/png.latex?Q%20%5Csucc%200">)</li>
-<li>상한을 구하기 위해 <img src="https://latex.codecogs.com/png.latex?x">에 대해 미분하여 0으로 둡니다. <img src="https://latex.codecogs.com/png.latex?%5Cnabla_x%20(y%5E%5Ctop%20x%20-%20%5Cfrac%7B1%7D%7B2%7Dx%5E%5Ctop%20Q%20x%20-%20p%5E%5Ctop%20x)%20=%20y%20-%20Qx%20-%20p%20=%200%20%5Cimplies%20x%20=%20Q%5E%7B-1%7D(y%20-%20p)"></li>
-<li>이를 다시 식에 대입하면, <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20y%5E%5Ctop%20Q%5E%7B-1%7D(y-p)%20-%20%5Cfrac%7B1%7D%7B2%7D%20(y-p)%5E%5Ctop%20Q%5E%7B-1%7D%20Q%20Q%5E%7B-1%7D(y-p)%20-%20p%5E%5Ctop%20Q%5E%7B-1%7D(y-p)"> <img src="https://latex.codecogs.com/png.latex?=%20(y-p)%5E%5Ctop%20Q%5E%7B-1%7D(y-p)%20-%20%5Cfrac%7B1%7D%7B2%7D(y-p)%5E%5Ctop%20Q%5E%7B-1%7D(y-p)%20=%20%5Cfrac%7B1%7D%7B2%7D(y-p)%5E%5Ctop%20Q%5E%7B-1%7D(y-p)"></li>
-<li>흥미로운 점은 여기서 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f%5E*(y)%20=%20Q%5E%7B-1%7D(y-p)"> 인데, <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x)%20=%20Qx%20+%20p"> 이므로, <strong>켤레 함수의 그래디언트는 원래 함수 그래디언트의 역함수</strong> 즉, <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f%5E*(y)%20=%20(%5Cnabla%20f)%5E%7B-1%7D(y)"> 의 관계를 가짐을 알 수 있습니다.</li>
+<li><strong>음의 엔트로피:</strong> <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Csum_%7Bi=1%7D%5Ed%20x_i%20%5Clog%20x_i"> (<img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D_%7B++%7D%5Ed">). 미분하여 도출한 <img src="https://latex.codecogs.com/png.latex?x_i%20=%20e%5E%7By_i%20-%201%7D">을 대입하면 <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Csum_%7Bi=1%7D%5Ed%20e%5E%7By_i%20-%201%7D"> 이 됩니다.</li>
+<li><strong>Log Determinant:</strong> <img src="https://latex.codecogs.com/png.latex?f(X)%20=%20-%5Clog%20%5Cdet%20X"> (<img src="https://latex.codecogs.com/png.latex?X%20%5Cin%20%5Cmathbb%7BS%7D_%7B++%7D%5Ed">). <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20%5Clog%20%5Cdet%20X%20=%20X%5E%7B-1%7D"> 성질을 이용해 <img src="https://latex.codecogs.com/png.latex?X%20=%20-Y%5E%7B-1%7D"> 에서 상한을 가지며, 결과적으로 <img src="https://latex.codecogs.com/png.latex?f%5E*(Y)%20=%20-d%20-%20%5Clog%20%5Cdet(-Y)"> 가 됩니다.</li>
 </ul>
+<hr>
 </section>
-<section id="example-d-negative-entropy" class="level3">
-<h3 class="anchored" data-anchor-id="example-d-negative-entropy">Example D: Negative Entropy</h3>
+</section>
+<section id="켤레-함수의-주요-성질과-biconjugate" class="level1">
+<h1>3. 켤레 함수의 주요 성질과 Biconjugate</h1>
+<section id="기본-연산-성질" class="level2">
+<h2 class="anchored" data-anchor-id="기본-연산-성질">3.1. 기본 연산 성질</h2>
 <ul>
-<li><img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Csum_%7Bi=1%7D%5Ed%20x_i%20%5Clog%20x_i"> (<img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D_%7B++%7D%5Ed">)</li>
-<li>각 축 <img src="https://latex.codecogs.com/png.latex?i">에 대해 독립적으로 분리할 수 있습니다. 상한을 찾기 위해 미분하면: <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%7D%7B%5Cpartial%20x_i%7D%20(y_i%20x_i%20-%20x_i%20%5Clog%20x_i)%20=%20y_i%20-%20(%5Clog%20x_i%20+%201)%20=%200%20%5Cimplies%20%5Clog%20x_i%20=%20y_i%20-%201%20%5Cimplies%20x_i%20=%20e%5E%7By_i%20-%201%7D"></li>
-<li>최적의 <img src="https://latex.codecogs.com/png.latex?x_i">를 원래 식에 대입합니다. <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bi=1%7D%5Ed%20%5Cleft(%20y_i%20e%5E%7By_i%20-%201%7D%20-%20e%5E%7By_i%20-%201%7D(y_i%20-%201)%20%5Cright)%20=%20%5Csum_%7Bi=1%7D%5Ed%20e%5E%7By_i%20-%201%7D(y_i%20-%20y_i%20+%201)%20=%20%5Csum_%7Bi=1%7D%5Ed%20e%5E%7By_i%20-%201%7D"></li>
-</ul>
-</section>
-<section id="example-e-log-determinant" class="level3">
-<h3 class="anchored" data-anchor-id="example-e-log-determinant">Example E: Log Determinant</h3>
+<li>Fenchel 켤레는 다음과 같은 대수적 연산 성질을 가집니다.
 <ul>
-<li><img src="https://latex.codecogs.com/png.latex?f(X)%20=%20-%5Clog%20%5Cdet%20X"> (<img src="https://latex.codecogs.com/png.latex?X%20%5Cin%20%5Cmathbb%7BS%7D_%7B++%7D%5Ed">, 즉 양의 정부호 대칭 행렬)</li>
-<li>행렬 내적 <img src="https://latex.codecogs.com/png.latex?X%20%5Ccdot%20Y%20=%20%5Ctext%7Btr%7D(Y%5E%5Ctop%20X)"> 를 이용합니다. <img src="https://latex.codecogs.com/png.latex?f%5E*(Y)%20=%20%5Csup_%7BX%20%5Cin%20%5Cmathbb%7BS%7D_%7B++%7D%5Ed%7D%20%5C%7B%20%5Ctext%7Btr%7D(Y%5E%5Ctop%20X)%20+%20%5Clog%20%5Cdet%20X%20%5C%7D"></li>
-<li><img src="https://latex.codecogs.com/png.latex?X">에 대해 미분하여 0이 되는 지점을 찾습니다. (행렬 미분 공식 <img src="https://latex.codecogs.com/png.latex?%5Cnabla_X%20%5Clog%5Cdet%20X%20=%20X%5E%7B-1%7D"> 활용) <img src="https://latex.codecogs.com/png.latex?Y%20+%20X%5E%7B-1%7D%20=%200%20%5Cimplies%20X%20=%20-Y%5E%7B-1%7D"></li>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?X">가 양의 정부호여야 하므로 <img src="https://latex.codecogs.com/png.latex?Y">는 음의 정부호행렬(<img src="https://latex.codecogs.com/png.latex?-%5Cmathbb%7BS%7D_%7B++%7D%5Ed">)이어야 합니다. <img src="https://latex.codecogs.com/png.latex?X%20=%20-Y%5E%7B-1%7D">을 대입합니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Btr%7D(Y%5E%5Ctop%20(-Y%5E%7B-1%7D))%20+%20%5Clog%20%5Cdet%20(-Y%5E%7B-1%7D)%20=%20%5Ctext%7Btr%7D(-I)%20-%20%5Clog%20%5Cdet%20(-Y)%20=%20-d%20-%20%5Clog%20%5Cdet%20(-Y)"></li>
-</ul>
-</section>
-</section>
-<section id="fenchel-켤레의-주요-성질-properties" class="level2">
-<h2 class="anchored" data-anchor-id="fenchel-켤레의-주요-성질-properties">3.3. Fenchel 켤레의 주요 성질 (Properties)</h2>
-<ul>
-<li><strong>Separability (분해성):</strong> <img src="https://latex.codecogs.com/png.latex?f(x_1,%20x_2)%20=%20f_1(x_1)%20+%20f_2(x_2)%20%5Cimplies%20f%5E*(y_1,%20y_2)%20=%20f_1%5E*(y_1)%20+%20f_2%5E*(y_2)"></li>
-<li><strong>Affine Transformation:</strong> <img src="https://latex.codecogs.com/png.latex?g(x)%20=%20f(x)%20+%20c%5E%5Ctop%20x%20+%20d%20%5Cimplies%20g%5E*(y)%20=%20f%5E*(y-c)%20-%20d"></li>
-<li><strong>Translation:</strong> <img src="https://latex.codecogs.com/png.latex?g(x)%20=%20f(x-b)%20%5Cimplies%20g%5E*(y)%20=%20b%5E%5Ctop%20y%20+%20f%5E*(y)"></li>
+<li><strong>분리성 (Separability):</strong> <img src="https://latex.codecogs.com/png.latex?f(x_1,%20x_2)%20=%20f_1(x_1)%20+%20f_2(x_2)%20%5Cimplies%20f%5E*(y_1,%20y_2)%20=%20f_1%5E*(y_1)%20+%20f_2%5E*(y_2)"></li>
+<li><strong>기울기 이동 (Affine Shift):</strong> <img src="https://latex.codecogs.com/png.latex?g(x)%20=%20f(x)%20+%20c%5E%5Ctop%20x%20+%20d%20%5Cimplies%20g%5E*(y)%20=%20f%5E*(y-c)%20-%20d"></li>
+<li><strong>평행 이동 (Translation):</strong> <img src="https://latex.codecogs.com/png.latex?g(x)%20=%20f(x-b)%20%5Cimplies%20g%5E*(y)%20=%20b%5E%5Ctop%20y%20+%20f%5E*(y)"></li>
 <li><strong>Inf-convolution:</strong> <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Cinf_%7Bu+v=x%7D%20%5C%7Bg(u)%20+%20h(v)%5C%7D%20%5Cimplies%20f%5E*(y)%20=%20g%5E*(y)%20+%20h%5E*(y)"></li>
+</ul></li>
+</ul>
+</section>
+<section id="닫힌-함수와-켤레의-볼록성-lemma-14.10" class="level2">
+<h2 class="anchored" data-anchor-id="닫힌-함수와-켤레의-볼록성-lemma-14.10">3.2. 닫힌 함수와 켤레의 볼록성 (Lemma 14.10)</h2>
+<ul>
+<li><strong>“임의의 닫힌(Closed) 함수 <img src="https://latex.codecogs.com/png.latex?f">의 켤레 함수 <img src="https://latex.codecogs.com/png.latex?f%5E*">는 닫힌 볼록 함수이다.”</strong></li>
+<li><strong>증명 스케치:</strong> <img src="https://latex.codecogs.com/png.latex?h_x(y)%20=%20y%5E%5Ctop%20x%20-%20f(x)"> 라고 합시다. <img src="https://latex.codecogs.com/png.latex?h_x">의 에피그래프(epigraph, 함수의 그래프 위쪽 영역) <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bepi%7D(h_x)">는 닫혀 있습니다. <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Csup_%7Bx%7D%20h_x(y)"> 이므로, <img src="https://latex.codecogs.com/png.latex?f%5E*">의 에피그래프는 모든 <img src="https://latex.codecogs.com/png.latex?h_x"> 에피그래프들의 교집합입니다. 임의의 여러 닫힌 집합들의 교집합은 항상 닫힌 집합이므로, <img src="https://latex.codecogs.com/png.latex?f%5E*"> 역시 닫혀있습니다.</li>
+</ul>
+</section>
+<section id="biconjugate와-볼록성-lemma-14.11-14.13" class="level2">
+<h2 class="anchored" data-anchor-id="biconjugate와-볼록성-lemma-14.11-14.13">3.3. Biconjugate와 볼록성 (Lemma 14.11 &amp; 14.13)</h2>
+<ul>
+<li>켤레 연산을 두 번 연속 적용한 <img src="https://latex.codecogs.com/png.latex?f%5E%7B**%7D"> 를 Biconjugate라고 합니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>[Lemma 14.11] 일반 함수에 대해 <img src="https://latex.codecogs.com/png.latex?f%5E%7B**%7D%20%5Cle%20f"> 이다.</strong></p>
+</blockquote>
+<ul>
+<li>이는 미니맥스 정리(Minimax Theorem)와 유사한 논리로 증명됩니다. <img src="https://latex.codecogs.com/png.latex?%5Csup">과 <img src="https://latex.codecogs.com/png.latex?%5Cinf">의 순서를 바꿀 때 성립하는 부등식 <img src="https://latex.codecogs.com/png.latex?%5Cinf%20%5Csup%20%5Cge%20%5Csup%20%5Cinf"> 를 이용하면,</li>
+<li><img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Cinf_z%20%5Csup_y%20%5C%7By%5E%5Ctop%20(x-z)%20+%20f(z)%5C%7D%20%5Cge%20%5Csup_y%20%5Cinf_z%20%5C%7By%5E%5Ctop%20(x-z)%20+%20f(z)%5C%7D%20=%20f%5E%7B**%7D(x)"> 가 도출됩니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>[Lemma 14.13] 닫힌 볼록 함수에 대해서는 <img src="https://latex.codecogs.com/png.latex?f%5E%7B**%7D%20=%20f"> 이다.</strong></p>
+</blockquote>
+<ul>
+<li>이 정리는 볼록 최적화의 심장과도 같습니다.</li>
+<li><strong>증명 직관:</strong> 이미 <img src="https://latex.codecogs.com/png.latex?f%5E%7B**%7D%20%5Cle%20f"> 임을 알기 때문에 , 귀류법을 사용하여 <img src="https://latex.codecogs.com/png.latex?f%5E%7B**%7D(%5Cbar%7Bx%7D)%20%3C%20f(%5Cbar%7Bx%7D)"> 인 어떤 점 <img src="https://latex.codecogs.com/png.latex?%5Cbar%7Bx%7D">가 존재한다고 가정합니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?f">가 닫힌 볼록 함수이므로 에피그래프 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bepi%7D(f)">는 닫힌 볼록 집합입니다. 점 <img src="https://latex.codecogs.com/png.latex?(%5Cbar%7Bx%7D,%20f%5E%7B**%7D(%5Cbar%7Bx%7D))">는 이 집합 바깥에 존재하게 됩니다.</li>
+<li><strong>초평면 분리 정리 (Strict point-to-convex set separation, Theorem 14.12)</strong> 에 의해, 에피그래프 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bepi%7D(f)">와 점 <img src="https://latex.codecogs.com/png.latex?(%5Cbar%7Bx%7D,%20f%5E%7B**%7D(%5Cbar%7Bx%7D))"> 사이를 엄격하게 가르는(Strictly separating) 초평면(Hyperplane)을 하나 그을 수 있습니다.</li>
+<li>이 초평면의 계수들을 바탕으로 식을 재배열하여 <img src="https://latex.codecogs.com/png.latex?%5Cinf_%7B(x,t)%7D"> 연산을 취하면, 결국 모순(<img src="https://latex.codecogs.com/png.latex?0%20%3E%200">)이 발생함을 수학적으로 증명할 수 있습니다. 따라서 가정이 틀렸고 <img src="https://latex.codecogs.com/png.latex?f%5E%7B**%7D%20=%20f"> 여야만 합니다.</li>
 </ul>
 <hr>
 </section>
 </section>
-<section id="subdifferential의-역관계와-moreau-분해-moreau-decomposition" class="level1">
-<h1>4. Subdifferential의 역관계와 Moreau 분해 (Moreau Decomposition)</h1>
-<section id="biconjugate와-closedness" class="level2">
-<h2 class="anchored" data-anchor-id="biconjugate와-closedness">4.1. Biconjugate와 Closedness</h2>
+<section id="subdifferential의-역관계와-moreau-분해" class="level1">
+<h1>4. Subdifferential의 역관계와 Moreau 분해</h1>
+<section id="subdifferential의-역관계-theorem-14.14" class="level2">
+<h2 class="anchored" data-anchor-id="subdifferential의-역관계-theorem-14.14">4.1. Subdifferential의 역관계 (Theorem 14.14)</h2>
 <ul>
-<li>어떤 닫힌 함수(Closed function, 하위수준 집합이 닫혀있는 함수) <img src="https://latex.codecogs.com/png.latex?f">에 대하여 켤레 <img src="https://latex.codecogs.com/png.latex?f%5E*"> 역시 닫힌 볼록 함수입니다. v만약 <img src="https://latex.codecogs.com/png.latex?f">의 켤레를 다시 한 번 더 켤레시킨 <strong>Biconjugate <img src="https://latex.codecogs.com/png.latex?f%5E%7B**%7D"></strong> 를 구한다면, 항상 <img src="https://latex.codecogs.com/png.latex?f%5E%7B**%7D%20%5Cle%20f"> 가 성립합니다. 특히 <strong><img src="https://latex.codecogs.com/png.latex?f">가 닫힌 볼록 함수라면 <img src="https://latex.codecogs.com/png.latex?f%5E%7B**%7D%20=%20f"></strong>가 성립합니다.</li>
-</ul>
-</section>
-<section id="subdifferential의-역관계-inverse-of-subdifferential" class="level2">
-<h2 class="anchored" data-anchor-id="subdifferential의-역관계-inverse-of-subdifferential">4.2. Subdifferential의 역관계 (Inverse of subdifferential)</h2>
-<ul>
-<li><p>이차 함수 예제에서 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f%5E*(y)%20=%20(%5Cnabla%20f)%5E%7B-1%7D(y)"> 였던 직관이 미분 불가능한 영역(Subdifferential, <img src="https://latex.codecogs.com/png.latex?%5Cpartial%20f">)으로 완벽히 확장됩니다.</p></li>
-<li><p><strong>[정리]</strong> <img src="https://latex.codecogs.com/png.latex?f">가 닫힌 볼록 함수일 때, 다음 세 명제는 완벽하게 동치(Equivalent)입니다.</p>
+<li><p>이차 함수 예제에서 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f%5E*(y)%20=%20(%5Cnabla%20f)%5E%7B-1%7D(y)"> 의 역함수 관계를 확인했습니다. 이 성질은 미분 불가능한 점의 Subdifferential <img src="https://latex.codecogs.com/png.latex?%5Cpartial%20f(x)"> 영역으로 완벽하게 일반화됩니다.</p></li>
+<li><p>닫힌 볼록 함수 <img src="https://latex.codecogs.com/png.latex?f">에 대하여 다음 세 명제는 <strong>완벽하게 동치(Equivalent)</strong>입니다.</p>
 <ul>
 <li><ol type="1">
 <li><img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Cpartial%20f(x)"></li>
@@ -943,62 +950,71 @@
 <li><img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cpartial%20f%5E*(y)"></li>
 </ol></li>
 <li><ol start="3" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?y%5E%5Ctop%20x%20=%20f(x)%20+%20f%5E*(y)"> (Fenchel-Young equality 성립)</li>
+<li><img src="https://latex.codecogs.com/png.latex?y%5E%5Ctop%20x%20=%20f(x)%20+%20f%5E*(y)"></li>
 </ol></li>
 </ul></li>
+<li><p><strong>[증명 포인트]</strong></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20%5Cpartial%20f(x)"> 라면 Subgradient 정의상 <img src="https://latex.codecogs.com/png.latex?0%20%5Cin%20-y%20+%20%5Cpartial%20f(x)"> 가 성립하며, 이는 <img src="https://latex.codecogs.com/png.latex?x">가 함수 <img src="https://latex.codecogs.com/png.latex?-y%5E%5Ctop%20z%20+%20f(z)"> 를 최소화하는 지점임을 의미합니다. 이를 켤레 함수의 정의 <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Csup%20(-y%5E%5Ctop%20z%20+%20f(z))"> 에 대입하면 바로 최댓값이 <img src="https://latex.codecogs.com/png.latex?y%5E%5Ctop%20x%20-%20f(x)"> 가 되므로 (3)번 명제가 성립합니다. <img src="https://latex.codecogs.com/png.latex?f%20=%20f%5E%7B**%7D"> 이므로 역방향 유도도 대칭적으로 성립합니다.</li>
+</ul></li>
 </ul>
 </section>
-<section id="moreau-분해-moreau-decomposition" class="level2">
-<h2 class="anchored" data-anchor-id="moreau-분해-moreau-decomposition">4.3. Moreau 분해 (Moreau Decomposition)</h2>
+<section id="moreau-분해-정리-moreau-decomposition-theorem-14.15" class="level2">
+<h2 class="anchored" data-anchor-id="moreau-분해-정리-moreau-decomposition-theorem-14.15">4.2. Moreau 분해 정리 (Moreau Decomposition, Theorem 14.15)</h2>
 <ul>
-<li>Proximal 연산자와 Fenchel 켤레는 아주 우아한 관계로 엮여있습니다. 어떤 닫힌 볼록 함수 <img src="https://latex.codecogs.com/png.latex?f">에 대하여 임의의 벡터 <img src="https://latex.codecogs.com/png.latex?x">는 언제나 다음과 같이 직교성질을 띠는 두 부분으로 완벽하게 분해될 수 있습니다.</li>
+<li>위의 동치 조건을 활용하면, 임의의 벡터 <img src="https://latex.codecogs.com/png.latex?x">를 함수와 그 켤레 함수의 Proximal 연산으로 쪼갤 수 있습니다.</li>
 </ul>
+<blockquote class="blockquote">
+<p><strong>정리:</strong> 닫힌 볼록 함수 <img src="https://latex.codecogs.com/png.latex?f">에 대하여, 임의의 <img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20%5Cmathbb%7BR%7D%5Ed"> 는 다음과 같이 분해된다.</p>
 <p><img src="https://latex.codecogs.com/png.latex?x%20=%20%5Ctext%7Bprox%7D_f(x)%20+%20%5Ctext%7Bprox%7D_%7Bf%5E*%7D(x)"></p>
+</blockquote>
+<section id="완벽한-증명-과정" class="level3">
+<h3 class="anchored" data-anchor-id="완벽한-증명-과정"><strong>[완벽한 증명 과정]</strong></h3>
 <ul>
-<li><strong>[강의 26페이지 빈칸 보충: 선형 부분공간에서의 투영(Projection)]</strong>
-<ul>
-<li>Moreau 분해의 직관을 극대화하기 위해 <img src="https://latex.codecogs.com/png.latex?V%20%5Csubseteq%20%5Cmathbb%7BR%7D%5Ed">가 선형 부분공간(Linear subspace)이고, <img src="https://latex.codecogs.com/png.latex?f%20=%20I_V"> (V에 속하면 0, 아니면 <img src="https://latex.codecogs.com/png.latex?%5Cinfty">인 지시형 함수)인 경우를 살펴보겠습니다.</li>
-</ul></li>
 <li><ol type="1">
-<li><strong>켤레 함수 유도:</strong> <img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Csup_%7Bx%20%5Cin%20V%7D%20%5C%7B%20y%5E%5Ctop%20x%20%5C%7D"></li>
-</ol>
-<ul>
-<li>만약 <img src="https://latex.codecogs.com/png.latex?y">가 <img src="https://latex.codecogs.com/png.latex?V">에 수직하지 않다면, 즉 <img src="https://latex.codecogs.com/png.latex?y%20%5Cnotin%20V%5E%5Cperp">라면, <img src="https://latex.codecogs.com/png.latex?y%5E%5Ctop%20x%20%5Cneq%200">인 <img src="https://latex.codecogs.com/png.latex?x%20%5Cin%20V">가 존재하여 스칼라를 무한대로 곱해 상한을 <img src="https://latex.codecogs.com/png.latex?%5Cinfty">로 만들 수 있습니다. <img src="https://latex.codecogs.com/png.latex?y%20%5Cin%20V%5E%5Cperp">인 경우에만 내적이 항상 0이 됩니다. <img src="https://latex.codecogs.com/png.latex?%5Ctherefore%20f%5E*(y)%20=%20I_%7BV%5E%5Cperp%7D(y)"> (직교 부분공간의 지시형 함수)</li>
-</ul></li>
+<li><img src="https://latex.codecogs.com/png.latex?u%20=%20%5Ctext%7Bprox%7D_f(x)"> 라고 정의합시다.</li>
+</ol></li>
 <li><ol start="2" type="1">
-<li><strong>Proximal 연산자 계산:</strong></li>
-</ol>
-<ul>
-<li>지시형 함수의 Proximal 연산은 해당 집합으로의 유클리디안 투영(Projection)과 정확히 동일합니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bprox%7D_f(x)%20=%20%5Ctext%7Bargmin%7D_u%20%5Cleft%5C%7B%20I_V(u)%20+%20%5Cfrac%7B1%7D%7B2%7D%5C%7Cu-x%5C%7C_2%5E2%20%5Cright%5C%7D%20=%20%5Ctext%7Bproj%7D_V(x)"></li>
-<li>마찬가지로 켤레 함수에 대해서는, <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bprox%7D_%7Bf%5E*%7D(x)%20=%20%5Ctext%7Bargmin%7D_u%20%5Cleft%5C%7B%20I_%7BV%5E%5Cperp%7D(u)%20+%20%5Cfrac%7B1%7D%7B2%7D%5C%7Cu-x%5C%7C_2%5E2%20%5Cright%5C%7D%20=%20%5Ctext%7Bproj%7D_%7BV%5E%5Cperp%7D(x)"></li>
-</ul></li>
+<li>Proximal 연산의 최적성 조건(Optimality condition)에 의해 <img src="https://latex.codecogs.com/png.latex?x%20-%20u%20%5Cin%20%5Cpartial%20f(u)"> 가 성립합니다.</li>
+</ol></li>
 <li><ol start="3" type="1">
-<li><strong>결론:</strong></li>
-</ol>
+<li>방금 배운 Subdifferential 역관계 (Theorem 14.14)를 적용하면, 위치를 바꾸어 <img src="https://latex.codecogs.com/png.latex?u%20%5Cin%20%5Cpartial%20f%5E*(x%20-%20u)"> 라고 쓸 수 있습니다.</li>
+</ol></li>
+<li><ol start="4" type="1">
+<li>이제 <img src="https://latex.codecogs.com/png.latex?v%20=%20x%20-%20u"> 로 치환해봅시다. 그러면 식은 <img src="https://latex.codecogs.com/png.latex?x%20-%20v%20%5Cin%20%5Cpartial%20f%5E*(v)"> 가 됩니다.</li>
+</ol></li>
+<li><ol start="5" type="1">
+<li>이는 다시 <img src="https://latex.codecogs.com/png.latex?f%5E*"> 에 대한 Proximal 최적성 조건과 동일하므로, <img src="https://latex.codecogs.com/png.latex?v%20=%20%5Ctext%7Bprox%7D_%7Bf%5E*%7D(x)"> 가 됩니다.</li>
+</ol></li>
+<li><ol start="6" type="1">
+<li>최종적으로 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bprox%7D_f(x)%20+%20%5Ctext%7Bprox%7D_%7Bf%5E*%7D(x)%20=%20u%20+%20v%20=%20u%20+%20(x%20-%20u)%20=%20x"> 가 성립합니다.</li>
+</ol></li>
+</ul>
+</section>
+</section>
+<section id="example-14.16-선형-부분공간에서의-투영-orthogonal-projection" class="level2">
+<h2 class="anchored" data-anchor-id="example-14.16-선형-부분공간에서의-투영-orthogonal-projection">Example 14.16: 선형 부분공간에서의 투영 (Orthogonal Projection)</h2>
 <ul>
-<li>Moreau 분해 정리에 이 둘을 대입하면 다음 결과를 얻습니다. <img src="https://latex.codecogs.com/png.latex?x%20=%20%5Ctext%7Bproj%7D_V(x)%20+%20%5Ctext%7Bproj%7D_%7BV%5E%5Cperp%7D(x)"></li>
-<li>이는 선형대수학에서 배우는 직교 투영 정리(Orthogonal Projection Theorem)가 Moreau 분해의 특수한 형태였음을 보여주는 아름다운 결과입니다.</li>
+<li>Moreau 분해의 아름다움을 가장 잘 보여주는 직관적인 예시입니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?V">가 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5Ed"> 내의 선형 부분공간이고, <img src="https://latex.codecogs.com/png.latex?f%20=%20I_V"> (V 안에서는 0, 밖에서는 <img src="https://latex.codecogs.com/png.latex?%5Cinfty">인 지시함수)라고 합시다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?f%5E*(y)%20=%20%5Csup_%7Bx%20%5Cin%20V%7D%20%5C%7B%20y%5E%5Ctop%20x%20%5C%7D%20=%20I_%7BV%5E%5Cperp%7D(y)"> (직교 여공간 <img src="https://latex.codecogs.com/png.latex?V%5E%5Cperp">의 지시함수)</li>
+<li>지시함수의 Proximal 연산자는 해당 공간으로의 유클리드 투영(Projection)과 같습니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bprox%7D_f(x)%20=%20%5Ctext%7Bproj%7D_V(x)"></li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bprox%7D_%7Bf%5E*%7D(x)%20=%20%5Ctext%7Bproj%7D_%7BV%5E%5Cperp%7D(x)"></li>
 </ul></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="요약-summary" class="level1">
-<h1>5. 요약 (Summary)</h1>
-<ul>
-<li>비매끄러운 최적화 목적함수는 <strong>Smooth Approximation</strong> 기법(<img src="https://latex.codecogs.com/png.latex?L_1">의 Huber, <img src="https://latex.codecogs.com/png.latex?L_2">의 쌍곡선, 일반 Lipschitz의 Moreau-Yosida envelope)을 통해 미분가능하고 그래디언트가 부드러운 형태로 변환할 수 있습니다.</li>
-<li>이렇게 근사된 함수에 Nesterov의 Accelerated Gradient Descent를 적용하고 평활화 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cmu">를 목표 스텝 <img src="https://latex.codecogs.com/png.latex?T">에 맞추어 최적화(<img src="https://latex.codecogs.com/png.latex?%5Cmu%20%5Cpropto%201/T">)하면, 이론적으로 <strong><img src="https://latex.codecogs.com/png.latex?O(1/T)">라는 놀라운 수렴 속도</strong>를 얻게 됩니다.</li>
-<li>최적화 쌍대성의 핵심인 <strong>Fenchel Conjugate</strong>는 원래 함수와 기울기 사이의 최대 갭을 반환하며, 원래 함수의 볼록 여부와 상관없이 항상 볼록함수라는 성질을 지닙니다.</li>
-<li><strong>Moreau Decomposition</strong> 정리를 통해 임의의 벡터는 원 함수와 켤레 함수의 Proximal 연산자(또는 Projection) 합으로 완벽히 분해(<img src="https://latex.codecogs.com/png.latex?x%20=%20%5Ctext%7Bprox%7D_f(x)%20+%20%5Ctext%7Bprox%7D_%7Bf%5E*%7D(x)">) 됨을 확인했습니다.</li>
+<li>이를 Moreau 분해 식에 대입하면 선형대수학의 대원칙인 <strong>직교 투영 정리(Orthogonal Projection Theorem)</strong>를 얻게 됩니다. <img src="https://latex.codecogs.com/png.latex?x%20=%20%5Ctext%7Bproj%7D_V(x)%20+%20%5Ctext%7Bproj%7D_%7BV%5E%5Cperp%7D(x)"></li>
+<li>즉, 비선형/비매끄러운 함수에 대한 최적화 기법(Proximal operator)이 본질적으로 선형 공간의 직교 분해를 완벽하게 일반화한 형태라는 것을 보여주는 강력한 결과입니다.</li>
 </ul>
 
 
 
+</section>
 </section>
 
  ]]></description>
   <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/13.Smooth-Approximation-of-Nonsmooth-Optimization/</guid>
+  <guid>https://shsha0110.github.io/posts/Optimization/13.Smooth-Approximation-of-Nonsmooth-Optimization/13.2/</guid>
   <pubDate>Sun, 19 Apr 2026 15:00:00 GMT</pubDate>
 </item>
 <item>
@@ -3180,137 +3196,6 @@
   <category>Data Mining</category>
   <guid>https://shsha0110.github.io/posts/Data Mining/12.Recommender-Systems-1/12.4/</guid>
   <pubDate>Wed, 08 Apr 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] 11. Accelerated and Projection-free Methods (Part 1)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/11.Accelerated-and-Projection-free-Methods/11.1/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="서론-최적화-알고리즘의-한계점-탐구" class="level1">
-<h1>1. 서론: 최적화 알고리즘의 한계점 탐구</h1>
-<ul>
-<li>이번 포스트에서는 최적화 알고리즘, 특히 1차 미분 정보(Gradient)를 활용하는 방법론들이 과연 “얼마나 빠르게 수렴할 수 있는가?”에 대한 근본적인 질문을 다룹니다. 본 강의 노트는 크게 세 가지 주제를 목표로 합니다:
-<ul>
-<li><ol type="1">
-<li>1차 오라클 방법론의 반복 복잡도 하한(Lower bounds on iteration complexity)</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li>가속화 기법: 모멘텀을 활용한 경사하강법 (Accelerated method)</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li>사영 없는 기법: Frank-Wolfe 알고리즘 (Projection-free method)</li>
-</ol></li>
-</ul></li>
-<li>이 중 본 포스트에서는 알고리즘의 성능 한계를 규명하는 <strong>1차 오라클 복잡도의 하한(Lower Bounds)</strong>에 집중하여 상세히 알아봅니다.</li>
-</ul>
-<hr>
-</section>
-<section id="기존-경사하강법의-수렴-속도-리뷰" class="level1">
-<h1>2. 기존 경사하강법의 수렴 속도 리뷰</h1>
-<ul>
-<li>하한을 논하기 전에, 우리가 이미 알고 있는 기본적인 경사(Gradient) 및 서브경사(Subgradient) 방법론들의 수렴 속도를 되짚어 볼 필요가 있습니다.
-<ul>
-<li><strong>Lipschitz 연속 함수 (Subgradient Method):</strong> 일반적인 립시츠 연속(Lipschitz continuous) 함수에 대해 서브경사 방법론은 <img src="https://latex.codecogs.com/png.latex?O(1/%5Csqrt%7BT%7D)">의 수렴 속도를 보장합니다. 즉, 오차를 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon"> 이하로 줄이기 위해서는 <img src="https://latex.codecogs.com/png.latex?O(1/%5Cepsilon%5E2)"> 번의 반복(iteration)이 필요합니다.</li>
-<li><strong>평활한 볼록 함수 (Gradient Descent):</strong> 함수가 평활(Smooth)한 특성을 가질 때, 표준 경사하강법은 <img src="https://latex.codecogs.com/png.latex?O(1/T)">의 수렴 속도를 달성하며, 오차 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon"> 도달을 위해 <img src="https://latex.codecogs.com/png.latex?O(1/%5Cepsilon)"> 번의 반복을 요구합니다.</li>
-<li><strong>평활하고 강볼록한 함수 (Gradient Descent):</strong> 함수가 평활하면서 동시에 강볼록(Strongly convex)하다면, 경사하강법은 어떤 상수 <img src="https://latex.codecogs.com/png.latex?0%20%3C%20%5Cgamma%20%3C%201">에 대해 <img src="https://latex.codecogs.com/png.latex?O(%5Cgamma%5ET)">라는 선형 수렴(Linear convergence) 속도를 보입니다. 이때 오차 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon">을 달성하기 위한 반복 횟수는 기하급수적으로 줄어들어 <img src="https://latex.codecogs.com/png.latex?O(%5Clog(1/%5Cepsilon))">이 됩니다.</li>
-</ul></li>
-<li>여기서 자연스러운 질문이 떠오릅니다. <strong>“과연 이보다 더 빠르고 효율적인 알고리즘을 찾을 수 있을까?”</strong> 이 질문에 답하기 위해 우리는 “오라클 복잡도(Oracle Complexity)”라는 개념을 도입합니다.</li>
-</ul>
-<hr>
-</section>
-<section id="차-오라클-복잡도-first-order-oracle-complexity" class="level1">
-<h1>3. 1차 오라클 복잡도 (First-Order Oracle Complexity)</h1>
-<ul>
-<li>최적화 문제 <img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bx%20%5Cin%20C%7D%20f(x)">를 풀 때, 알고리즘은 목적 함수 <img src="https://latex.codecogs.com/png.latex?f">의 전체 형태를 미리 알지 못합니다. 대신 특정 점 <img src="https://latex.codecogs.com/png.latex?x">에서의 정보만을 국소적으로 확인할 수 있는데, 이 정보를 제공하는 블랙박스를 <strong>1차 오라클(First-order oracle)</strong>이라고 부릅니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/11.Accelerated-and-Projection-free-Methods/11.1/images/oracle_info_diagram.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 11.1: 1차 오라클의 동작 구조를 나타낸 도식. 알고리즘이 탐색 지점 <img src="https://latex.codecogs.com/png.latex?x_t">를 쿼리(Query)로 전달하면, 블랙박스 형태의 오라클은 해당 지점에서의 목적 함수 값 <img src="https://latex.codecogs.com/png.latex?f(x_t)">와 1차 미분 정보인 그래디언트 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x_t)"> (또는 미분 불가능한 경우 서브그래디언트 <img src="https://latex.codecogs.com/png.latex?g_t%20%5Cin%20%5Cpartial%20f(x_t)">)를 반환하는 상호작용 과정을 보여준다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>1차 오라클은 입력값 <img src="https://latex.codecogs.com/png.latex?x">에 대해 다음 두 가지를 반환합니다:
-<ul>
-<li><ol type="1">
-<li>함수 값: <img src="https://latex.codecogs.com/png.latex?f(x)"></li>
-</ol></li>
-<li><ol start="2" type="1">
-<li>1차 정보: 그래디언트 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x)"> 또는 서브그래디언트 <img src="https://latex.codecogs.com/png.latex?g_t%20%5Cin%20%5Cpartial%20f(x)"></li>
-</ol></li>
-</ul></li>
-<li><strong>오라클 복잡도(Oracle complexity)</strong>란, 주어진 오차 범위 내의 최적해를 찾기 위해 알고리즘이 이 블랙박스 오라클을 <strong>총 몇 번 호출해야 하는가</strong>를 세는 척도입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/11.Accelerated-and-Projection-free-Methods/11.1/images/algorithm_history_diagram.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 11.2: 오라클 기반 알고리즘의 반복(Iteration) 과정. 알고리즘은 과거 방문했던 점들 <img src="https://latex.codecogs.com/png.latex?x_1,%20x_2,%20%5Cdots,%20x_t">와 각 점들에서 오라클로부터 확보한 함수 값 <img src="https://latex.codecogs.com/png.latex?f(x_i)"> 및 그래디언트 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x_i)">들의 기록(History) 전체를 분석하여, 다음 탐색 지점인 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D">을 어디로 결정할지 계산하는 구조를 시각화하였다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>오라클 기반 알고리즘은 위 그림과 같이 과거의 탐색 기록과 확보한 1차 정보를 바탕으로 새로운 해 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D">을 선택해 나갑니다.</li>
-</ul>
-<hr>
-</section>
-<section id="반복-복잡도의-이론적-하한-lower-bounds" class="level1">
-<h1>4. 반복 복잡도의 이론적 하한 (Lower Bounds)</h1>
-<ul>
-<li><p>과연 1차 정보만을 사용할 때 수학적으로 돌파할 수 없는 절대적인 한계선은 어디일까요? Nemirovski와 Yudin(1983)은 이 오라클 복잡도의 하한(Lower bound)을 증명했습니다.</p></li>
-<li><p>이 정리를 전개하기 위해, 분석 대상이 되는 알고리즘은 초기점 <img src="https://latex.codecogs.com/png.latex?x_1%20=%200">에서 시작하며, 다음 스텝 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D">은 <strong>이전까지 얻은 모든 그래디언트들의 생성 공간(Span) 안에 존재</strong>한다고 가정합니다: <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20%5Cin%20%5Ctext%7Bspan%7D%5C%7Bg_1,%20%5Cdots,%20g_t%5C%7D"></p>
-<ul>
-<li>단, <img src="https://latex.codecogs.com/png.latex?g_s%20%5Cin%20%5Cpartial%20f(x_s)"></li>
-</ul></li>
-<li><p>목적 함수의 성질에 따라 세 가지 핵심 정리로 나뉘어 하한이 제시됩니다.</p></li>
-</ul>
-<section id="lipschitz-연속-볼록-함수에-대한-하한" class="level2">
-<h2 class="anchored" data-anchor-id="lipschitz-연속-볼록-함수에-대한-하한">4.1. Lipschitz 연속 볼록 함수에 대한 하한</h2>
-<blockquote class="blockquote">
-<p><strong>정리 11.1 (Convex &amp; L-Lipschitz continuous)</strong></p>
-<p>어떤 상수 <img src="https://latex.codecogs.com/png.latex?L%20%3E%200">에 대해 <img src="https://latex.codecogs.com/png.latex?L">-Lipschitz 연속성을 만족하는 볼록 함수 <img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5Cmathbb%7BR%7D">가 존재하여, 오라클 기반 알고리즘으로 생성된 <img src="https://latex.codecogs.com/png.latex?t%20%5Cle%20d"> 번의 반복 점 <img src="https://latex.codecogs.com/png.latex?x_1,%20%5Cdots,%20x_t">들은 다음 부등식을 무조건 만족합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cmin_%7B1%20%5Cle%20s%20%5Cle%20t%7D%20f(x_s)%20-%20%5Cmin_%7Bx%20%5Cin%20B_2(R)%7D%20f(x)%20%5Cge%20%5Cfrac%7BRL%7D%7B2(1+%5Csqrt%7Bt%7D)%7D"></p>
-<p>여기서 <img src="https://latex.codecogs.com/png.latex?B_2(R)%20=%20%5C%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%20:%20%5C%7Cx%5C%7C_2%20%5Cle%20R%5C%7D">이며 <img src="https://latex.codecogs.com/png.latex?R%20%3E%200">입니다.</p>
-</blockquote>
-<ul>
-<li><strong>해석:</strong> 아무리 알고리즘을 잘 설계해도, 단순히 Lipschitz 연속 조건만 있는 함수에 대해서는 <img src="https://latex.codecogs.com/png.latex?O(1/%5Csqrt%7Bt%7D)">의 속도 장벽을 깰 수 없습니다. 기존 서브경사 방법론이 이 하한을 정확히 달성하므로, 해당 조건에서는 이미 최적의 방법론임을 의미합니다.</li>
-</ul>
-</section>
-<section id="평활한-볼록-함수에-대한-하한" class="level2">
-<h2 class="anchored" data-anchor-id="평활한-볼록-함수에-대한-하한">4.2. 평활한 볼록 함수에 대한 하한</h2>
-<blockquote class="blockquote">
-<p><strong>정리 11.2 (Convex &amp; Smooth)</strong></p>
-<p>어떤 상수 <img src="https://latex.codecogs.com/png.latex?%5Cbeta%20%3E%200">에 대해 <img src="https://latex.codecogs.com/png.latex?%5Cell_2">-노름 기준 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활(smooth)한 특성을 갖는 볼록 함수 <img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5Cmathbb%7BR%7D">가 존재하여, 오라클 기반 알고리즘으로 생성된 <img src="https://latex.codecogs.com/png.latex?x_1,%20%5Cdots,%20x_t"> (단, <img src="https://latex.codecogs.com/png.latex?t%20%5Cle%20(d-1)/2">)는 다음을 만족합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cmin_%7B1%20%5Cle%20s%20%5Cle%20t%7D%20f(x_s)%20-%20%5Cmin_%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20f(x)%20%5Cge%20%5Cfrac%7B3%5Cbeta%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2%7D%7B32(t+1)%5E2%7D"></p>
-</blockquote>
-<ul>
-<li><strong>해석:</strong> 평활한 볼록 함수의 경우, 이론적인 최상의 수렴 속도는 <img src="https://latex.codecogs.com/png.latex?O(1/t%5E2)">입니다. 그런데 우리가 앞서 확인했듯 일반적인 경사하강법은 <img src="https://latex.codecogs.com/png.latex?O(1/t)">의 속도를 냅니다. 이 정리로 인해 기존 경사하강법은 <strong>최적이 아니며 개선의 여지가 있음</strong>이 드러납니다. 이를 극복하여 하한을 달성하는 기법이 바로 “가속 경사하강법(Nesterov Momentum)”입니다.</li>
-</ul>
-</section>
-<section id="평활하고-강볼록한-함수에-대한-하한" class="level2">
-<h2 class="anchored" data-anchor-id="평활하고-강볼록한-함수에-대한-하한">4.3. 평활하고 강볼록한 함수에 대한 하한</h2>
-<blockquote class="blockquote">
-<p><strong>정리 11.3 (Smooth &amp; Strongly Convex)</strong></p>
-<p>어떤 상수 <img src="https://latex.codecogs.com/png.latex?%5Cbeta%20%5Cge%20%5Calpha%20%3E%200">에 대해 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-평활하고 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-강볼록(strongly convex)한 함수 <img src="https://latex.codecogs.com/png.latex?f:%5Cmathbb%7BR%7D%5Ed%20%5Crightarrow%20%5Cmathbb%7BR%7D">가 존재하여, <img src="https://latex.codecogs.com/png.latex?t%20%5Cge%201">에서 오라클 기반 알고리즘으로 생성된 <img src="https://latex.codecogs.com/png.latex?x_t">는 다음을 만족합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?f(x_t)%20-%20%5Cmin_%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20f(x)%20%5Cge%20%5Cfrac%7B%5Calpha%7D%7B2%7D%5Cleft(%5Cfrac%7B%5Csqrt%7B%5Ckappa%7D-1%7D%7B%5Csqrt%7B%5Ckappa%7D+1%7D%5Cright)%5E%7B2(t-1)%7D%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"></p>
-<p>여기서 조건수 <img src="https://latex.codecogs.com/png.latex?%5Ckappa%20=%20%5Cbeta/%5Calpha"> 입니다.</p>
-</blockquote>
-<ul>
-<li><strong>해석:</strong> 강볼록 함수에서는 선형 수렴이 가능하지만, 그 수렴 비율(Rate)의 밑(Base)이 적어도 <img src="https://latex.codecogs.com/png.latex?%5Cleft(%5Cfrac%7B%5Csqrt%7B%5Ckappa%7D-1%7D%7B%5Csqrt%7B%5Ckappa%7D+1%7D%5Cright)%5E2"> 이상이어야 한다는 절대적 한계를 보여줍니다.</li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/11.Accelerated-and-Projection-free-Methods/11.1/</guid>
-  <pubDate>Tue, 07 Apr 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>
 </rss>

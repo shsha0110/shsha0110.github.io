@@ -1,0 +1,123 @@
+---
+title: "[Optimization] 13. Smooth Approximation of Nonsmooth Optimization (Part 1)"
+description: "Smooth approximation"
+author: "유성현"
+date: "2026-04-20"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 들어가며
+
+* 머신러닝과 최적화 이론에서 자주 등장하는 $L_1$ 노름이나 Hinge Loss와 같은 함수들은 특정 지점에서 미분이 불가능한 비매끄러운(Nonsmooth) 형태를 가집니다. 이러한 함수에 일반적인 Subgradient Method를 적용하면 수렴 속도가 $O(1/\sqrt{T})$로 제한된다는 단점이 있습니다. 
+
+* 이번 포스트에서는 미분 불가능한 함수를 부드러운 함수로 근사하는 **평활화 근사(Smooth Approximation)** 기법을 다루며 , 이를 통해 비매끄러운 목적 함수의 최적화 문제를 어떻게 효율적으로 해결할 수 있는지 살펴봅니다.
+
+---
+
+# 1. 평활화 근사 (Smooth Approximation)
+
+## 1.1. $(p, q)$-평활화 가능 함수의 정의
+
+* 어떤 볼록 함수 $f$가 임의의 $\mu > 0$에 대하여 다음 두 가지 조건을 만족하는 볼록 함수 $f_\mu$를 가질 때, 함수 $f$는 **$(p, q)$-smoothable** 하다고 정의합니다:
+  * 1. $f_\mu$는 $(p/\mu)$-smooth 함수입니다. (즉, 기울기가 $\frac{p}{\mu}$-Lipschitz 연속임을 의미합니다.)
+  * 2. 모든 $x$에 대하여 $f_\mu(x) \le f(x) \le f_\mu(x) + q\mu$ 를 만족합니다.
+
+* 이 정의는 파라미터 $\mu$를 조절함에 따라 원래 함수와의 오차($q\mu$)와 곡률의 상한($p/\mu$) 간의 트레이드오프를 형성함을 보여줍니다.
+
+## 1.2. Example 1: $L_1$ 노름과 Huber 함수
+
+* $L_1$ 노름의 부드러운 근사로 널리 알려진 **Huber 함수** $L_\mu(z)$는 다음과 같이 정의됩니다.
+
+$$
+L_\mu(z) = \begin{cases} 
+\frac{z^2}{2\mu}, & \text{if } |z| \le \mu \\
+|z| - \frac{\mu}{2}, & \text{otherwise}
+\end{cases}
+$$ 
+
+* 이 함수는 모든 실수 $z$에 대하여 다음 부등식을 만족합니다:
+$$L_\mu(z) \le |z| \le L_\mu(z) + \frac{\mu}{2}$$ 
+
+* 또한 $L_\mu$의 2차 도함수 상한을 고려할 때 이 함수는 $(1/\mu)$-smooth 합니다. 따라서 1차원 절댓값 함수 $|\cdot|$는 $(1, 1/2)$-smoothable 합니다. 
+
+* 이를 다차원 공간 $\mathbb{R}^d$로 확장하여 $f_\mu(x) = \sum_{i=1}^d L_\mu(x_i)$로 정의하면 , $f_\mu$ 역시 $(1/\mu)$-smooth 하며, 각 차원별로 오차가 누적되어 다음을 만족합니다:
+$$f_\mu(x) \le \|x\|_1 \le f_\mu(x) + \frac{d\mu}{2}$$ 
+* 결과적으로 $L_1$ 노름 $\|\cdot\|_1$은 **$(1, d/2)$-smoothable** 합니다.
+
+## 1.3. Example 2: $L_2$ 노름
+
+* 다차원 벡터 $x \in \mathbb{R}^d$에 대한 $L_2$ 노름 $g(x) = \|x\|_2$는 다음과 같은 함수로 근사할 수 있습니다.
+
+$$f_\mu(x) = \sqrt{\|x\|_2^2 + \mu^2} - \mu$$ 
+
+* 이 함수에 대한 오차 바운드는 삼각 부등식을 통해 다음처럼 도출됩니다:
+$$f_\mu(x) \le \|x\|_2 \le f_\mu(x) + \mu$$ 
+
+* 매끄러움(Smoothness)을 증명하기 위해 그래디언트와 헤시안을 계산해보겠습니다:
+  * **1차 미분:** $\nabla f_\mu(x) = \frac{x}{\sqrt{\|x\|_2^2 + \mu^2}}$ 
+  * **2차 미분:** $\nabla^2 f_\mu(x) = \frac{1}{\sqrt{\|x\|_2^2 + \mu^2}}I - \frac{1}{(\|x\|_2^2 + \mu^2)^{3/2}}xx^\top$ 
+
+* 여기서 두 번째 항인 $xx^\top$ 기반의 행렬은 양의 준정부호(Positive Semi-Definite) 행렬이므로 빼는 효과를 가져와 다음 부등식이 성립합니다.
+$$\nabla^2 f_\mu(x) \le \frac{1}{\sqrt{\|x\|_2^2 + \mu^2}}I \le \frac{1}{\mu}I$$ 
+
+* 따라서 $f_\mu$는 $(1/\mu)$-smooth 하며, $\|\cdot\|_2$는 차원 수 $d$에 의존하지 않는 **$(1, 1)$-smoothable** 함수입니다.
+
+## 1.4. 립시츠 함수의 Moreau-Yosida 평활화 (Smoothing Lipschitz functions)
+
+* 어떤 상수 $L > 0$에 대해 $f$가 $L$-Lipschitz 볼록 함수라고 가정해봅시다. 이 함수는 항상 $(1, L^2/2)$-smoothable 함을 증명할 수 있습니다.
+
+* 이를 위해 임의의 $\eta > 0$에 대하여 **Moreau-Yosida smoothing**을 다음과 같이 정의합니다.
+$$f_\eta(x) := \inf_u \left\{ f(u) + \frac{1}{2\eta}\|u - x\|_2^2 \right\}$$ 
+
+* 이 함수가 올바른 근사임을 보이기 위해 오차의 상하한을 확인합니다.
+  * 1. **상한 (Upper Bound):** $u = x$를 대입하면 $f_\eta(x) \le f(x) + \frac{1}{2\eta}\|x - x\|_2^2 = f(x)$ 가 성립합니다.
+  * 2. **하한 (Lower Bound):** Subgradient $g_x \in \partial f(x)$의 성질을 이용하면 $f(u) - f(x) \ge g_x^\top(u - x)$를 얻을 수 있습니다.
+     $$f_\eta(x) - f(x) = \inf_u \left\{ f(u) - f(x) + \frac{1}{2\eta}\|u - x\|_2^2 \right\}$$ 
+     $$\ge \inf_u \left\{ g_x^\top(u - x) + \frac{1}{2\eta}\|u - x\|_2^2 \right\} = -\frac{\eta}{2}\|g_x\|_2^2$$ 
+* 결과적으로 $f_\eta$는 $(1/\eta)$-smooth 함수가 됩니다.
+
+---
+
+# 2. 비매끄러운 함수의 평활화 기반 최적화
+
+## 2.1. 문제 정의 및 알고리즘
+
+* 다음과 같은 최적화 문제를 고려해봅시다.
+$$\text{minimize} \quad g(x) + h(x)$$ 
+  * 여기서 $g$는 볼록 함수이면서 $(p,q)$-smoothable 하고, $h$는 단순한 볼록 함수입니다. 
+
+* 이 문제를 직접 푸는 대신, 앞서 배운 평활화 함수를 사용하여 다음의 **근사 문제(Approximate problem)**를 풉니다.
+$$\text{minimize} \quad g_\mu(x) + h(x)$$ 
+* 이때 $g_\mu$는 $(p/\mu)$-smooth하며 $g_\mu \le g \le g_\mu + q\mu$를 만족합니다. 목적 함수가 부드러운 텀과 일반 볼록 텀의 합이 되었으므로, **Nesterov 가속 기울기 하강법 (Accelerated Gradient Descent)**을 적용하여 효율적으로 최소화할 수 있습니다.
+
+## 2.2. 수렴 속도 증명 (Theorem 14.3)
+
+> **정리:** Nesterov 알고리즘을 $T-1$번 반복하여 얻은 결과를 $x_T$라고 할 때, 다음 오차 상한이 성립합니다.
+> 
+> $$g(x_T) + h(x_T) - \min_x \{g(x) + h(x)\} \le q\mu + \frac{p}{\mu T^2} \|x_1 - x^*\|_2^2$$ 
+
+### **증명 (Proof):**
+* $x^*$를 원래 목적함수 $g+h$의 최적해(minimizer)라고 합시다. Nesterov 알고리즘의 일반적인 수렴 보장에 의해, 근사 목적 함수에 대한 수렴 바운드는 다음과 같습니다.
+$$g_\mu(x_T) + h(x_T) - g_\mu(x^*) - h(x^*) \le \frac{p}{\mu T^2} \|x_1 - x^*\|_2^2$$ 
+
+* 평활화 함수의 오차 바운드 조건 $g_\mu \le g \le g_\mu + q\mu$에 따라 다음 두 부등식을 얻습니다:
+  * 1. $g_\mu(x_T) \ge g(x_T) - q\mu$ 
+  * 2. $g_\mu(x^*) \le g(x^*)$ 
+
+* 이 부등식들을 위의 수렴 식에 대입하면 다음과 같습니다.
+$$g_\mu(x_T) + h(x_T) - g_\mu(x^*) - h(x^*) \ge g(x_T) - q\mu + h(x_T) - g(x^*) - h(x^*)$$ 
+
+* 항들을 이항하여 정리하면 원하는 최종 부등식을 얻습니다.
+$$g(x_T) + h(x_T) - g(x^*) - h(x^*) \le q\mu + \frac{p}{\mu T^2} \|x_1 - x^*\|_2^2$$ 
+
+* **최적화 결과 해석:**
+  * 이 바운드를 최소화하기 위해 $\mu$를 반복 횟수 $T$에 반비례하도록 $\mu = 1/T$로 설정하면, 최종 오차는 다음과 같이 스케일링됩니다.
+  $$g(x_T) + h(x_T) - \min_x \{g(x) + h(x)\} = O(1/T)$$ 
+  * 이는 기존의 기본적인 Subgradient Method가 가지는 수렴 속도인 $O(1/\sqrt{T})$를 크게 개선한 결과입니다.

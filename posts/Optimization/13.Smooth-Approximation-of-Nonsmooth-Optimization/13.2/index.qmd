@@ -1,0 +1,144 @@
+---
+title: "[Optimization] 13. Smooth Approximation of Nonsmooth Optimization (Part 2)"
+description: "Fenchel conjugate"
+author: "유성현"
+date: "2026-04-20"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 들어가며 (Introduction)
+
+* 이전 포스트에서는 비매끄러운 목적 함수를 다루기 위해 $L_1, L_2$ 노름을 부드럽게 근사하는 **평활화 근사(Smooth Approximation)** 기법을 살펴보았습니다. 이번 포스트는 그 연장선으로, 현대 볼록 최적화(Convex Optimization)와 쌍대성(Duality) 이론의 가장 핵심적인 도구인 **Fenchel 켤레(Fenchel Conjugate)**와 이를 기반으로 한 **Moreau 분해(Moreau Decomposition)**에 대해 깊이 있게 다룹니다.
+
+* Fenchel 켤레는 주어진 함수를 '기울기(Gradient) 공간'으로 매핑하여 분석할 수 있게 해 주며, Moreau 분해는 임의의 공간에 존재하는 벡터를 원 함수와 그 켤레 함수의 Proximal 연산의 합으로 우아하게 분리해 냅니다. 본 포스트에서는 각 정리의 수학적 유도 과정을 단계별로 상세히 짚어봅니다.
+
+---
+
+# 1. Fenchel 켤레의 정의와 Fenchel-Young 부등식
+
+## 1.1. Fenchel 켤레 (Fenchel Conjugate)
+* 함수 $f: \mathbb{R}^d \rightarrow \mathbb{R}$ 의 Fenchel 켤레 함수 $f^*$는 다음과 같이 정의됩니다.
+
+$$f^*(y) = \sup_{x \in \text{dom}(f)} \{y^\top x - f(x)\}$$
+
+* 이 정의가 갖는 가장 중요한 특징은, 켤레 함수 내부의 $y^\top x - f(x)$ 텀이 $y$에 대한 선형(Linear) 함수라는 점입니다. 볼록 함수이든 아니든, 선형 함수들의 상한(Supremum)을 취하는 연산은 그 결과물이 항상 **볼록 함수(Convex Function)**가 되도록 보장합니다.
+
+## 1.2. Fenchel-Young 부등식 (Lemma 14.4)
+* 켤레 함수의 상한 연산 정의로부터, 최적화 이론 전반에서 널리 쓰이는 매우 직관적인 부등식이 즉각적으로 유도됩니다. 임의의 $x \in \text{dom}(f)$와 $y \in \text{dom}(f^*)$에 대하여 다음이 성립합니다.
+
+$$f(x) + f^*(y) \ge y^\top x$$
+
+### **[증명]** 
+* 켤레 함수의 정의 $f^*(y) = \sup_{z} \{y^\top z - f(z)\}$ 에 의해, 특정 $x$를 대입한 값은 항상 상한값보다 작거나 같습니다.
+$$f^*(y) \ge y^\top x - f(x)$$
+* 이를 이항하면 $f(x) + f^*(y) \ge y^\top x$ 가 자명하게 도출됩니다.
+
+---
+
+# 2. 핵심 예제: 다양한 함수의 Fenchel 켤레 유도
+
+* 주요 함수들에 대한 Fenchel 켤레를 직접 유도해 보겠습니다. 이 예제들은 머신러닝의 손실 함수나 정규화 텀을 분석할 때 빈번하게 등장합니다.
+
+## Example 14.5: 선형 함수 (Affine Function)
+* $f(x) = c^\top x + d$ 인 경우:
+$$f^*(y) = \sup_{x \in \mathbb{R}^d} \{ y^\top x - c^\top x - d \} = \sup_{x} \{ (y-c)^\top x \} - d$$
+* 만약 $y \neq c$ 라면, $x$를 $(y-c)$ 방향으로 무한히 키워서 값을 $+\infty$로 만들 수 있습니다. 오직 $y=c$ 일 때만 상한이 유한한 값 $-d$를 가집니다.
+$$f^*(y) = \begin{cases} -d, & \text{if } y = c \\ +\infty, & \text{otherwise} \end{cases}$$
+
+## Example 14.6: 로지스틱 함수 (Logistic Function)
+* $f(x) = \log(1+e^x)$ ($x \in \mathbb{R}$) 인 경우:
+  * 최댓값을 찾기 위해 미분하여 0으로 둡니다.
+  $$\frac{d}{dx} (yx - \log(1+e^x)) = y - \frac{e^x}{1+e^x} = 0 \implies e^x = \frac{y}{1-y}$$
+  * $e^x > 0$ 이므로 $y$의 범위는 $0 < y < 1$ 로 제한됩니다. 이를 대입하여 정리하면 다음과 같은 엔트로피 형태의 식을 얻습니다.
+  $$f^*(y) = \begin{cases} y \log y + (1-y) \log(1-y), & \text{if } 0 < y < 1 \\ 0, & \text{if } y \in \{0,1\} \\ +\infty, & \text{otherwise} \end{cases}$$
+
+## Example 14.7: 이차 함수 (Quadratic Function)
+* 양의 정부호(Positive Definite) 행렬 $Q$에 대해 $f(x) = \frac{1}{2}x^\top Q x + p^\top x$ 인 경우:
+  $$f^*(y) = \sup_{x} \{ y^\top x - \frac{1}{2}x^\top Q x - p^\top x \}$$
+  * 내부 식을 $x$에 대해 미분하면 $y - Qx - p = 0$ 이 되므로, 최적해는 $x = Q^{-1}(y-p)$ 가 됩니다. 이를 다시 대입하면:
+  $$f^*(y) = \frac{1}{2}(y-p)^\top Q^{-1}(y-p)$$
+  * 이때 켤레 함수의 기울기 $\nabla f^*(y) = Q^{-1}(y-p)$ 인데, 원래 함수의 기울기가 $\nabla f(x) = Qx + p$ 임을 고려하면 **$\nabla f^*(y) = (\nabla f)^{-1}(y)$** 라는 역함수 관계가 성립함을 알 수 있습니다.
+
+## Example 14.8 & 14.9: Negative Entropy와 Log Determinant
+* **음의 엔트로피:** $f(x) = \sum_{i=1}^d x_i \log x_i$ ($x \in \mathbb{R}_{++}^d$). 미분하여 도출한 $x_i = e^{y_i - 1}$을 대입하면 $f^*(y) = \sum_{i=1}^d e^{y_i - 1}$ 이 됩니다.
+* **Log Determinant:** $f(X) = -\log \det X$ ($X \in \mathbb{S}_{++}^d$). $\nabla \log \det X = X^{-1}$ 성질을 이용해 $X = -Y^{-1}$ 에서 상한을 가지며, 결과적으로 $f^*(Y) = -d - \log \det(-Y)$ 가 됩니다.
+
+---
+
+# 3. 켤레 함수의 주요 성질과 Biconjugate
+
+## 3.1. 기본 연산 성질
+* Fenchel 켤레는 다음과 같은 대수적 연산 성질을 가집니다.
+  * **분리성 (Separability):** $f(x_1, x_2) = f_1(x_1) + f_2(x_2) \implies f^*(y_1, y_2) = f_1^*(y_1) + f_2^*(y_2)$ 
+  * **기울기 이동 (Affine Shift):** $g(x) = f(x) + c^\top x + d \implies g^*(y) = f^*(y-c) - d$ 
+  * **평행 이동 (Translation):** $g(x) = f(x-b) \implies g^*(y) = b^\top y + f^*(y)$ 
+  * **Inf-convolution:** $f(x) = \inf_{u+v=x} \{g(u) + h(v)\} \implies f^*(y) = g^*(y) + h^*(y)$ 
+
+## 3.2. 닫힌 함수와 켤레의 볼록성 (Lemma 14.10)
+* **"임의의 닫힌(Closed) 함수 $f$의 켤레 함수 $f^*$는 닫힌 볼록 함수이다."** 
+* **증명 스케치:** $h_x(y) = y^\top x - f(x)$ 라고 합시다. $h_x$의 에피그래프(epigraph, 함수의 그래프 위쪽 영역) $\text{epi}(h_x)$는 닫혀 있습니다. $f^*(y) = \sup_{x} h_x(y)$ 이므로, $f^*$의 에피그래프는 모든 $h_x$ 에피그래프들의 교집합입니다. 임의의 여러 닫힌 집합들의 교집합은 항상 닫힌 집합이므로, $f^*$ 역시 닫혀있습니다.
+
+## 3.3. Biconjugate와 볼록성 (Lemma 14.11 & 14.13)
+* 켤레 연산을 두 번 연속 적용한 $f^{**}$ 를 Biconjugate라고 합니다.
+
+> **[Lemma 14.11] 일반 함수에 대해 $f^{**} \le f$ 이다.** 
+
+* 이는 미니맥스 정리(Minimax Theorem)와 유사한 논리로 증명됩니다. $\sup$과 $\inf$의 순서를 바꿀 때 성립하는 부등식 $\inf \sup \ge \sup \inf$ 를 이용하면,
+* $f(x) = \inf_z \sup_y \{y^\top (x-z) + f(z)\} \ge \sup_y \inf_z \{y^\top (x-z) + f(z)\} = f^{**}(x)$ 가 도출됩니다.
+
+> **[Lemma 14.13] 닫힌 볼록 함수에 대해서는 $f^{**} = f$ 이다.** 
+
+* 이 정리는 볼록 최적화의 심장과도 같습니다.
+* **증명 직관:** 이미 $f^{**} \le f$ 임을 알기 때문에 , 귀류법을 사용하여 $f^{**}(\bar{x}) < f(\bar{x})$ 인 어떤 점 $\bar{x}$가 존재한다고 가정합니다.
+* $f$가 닫힌 볼록 함수이므로 에피그래프 $\text{epi}(f)$는 닫힌 볼록 집합입니다. 점 $(\bar{x}, f^{**}(\bar{x}))$는 이 집합 바깥에 존재하게 됩니다.
+* **초평면 분리 정리 (Strict point-to-convex set separation, Theorem 14.12)** 에 의해, 에피그래프 $\text{epi}(f)$와 점 $(\bar{x}, f^{**}(\bar{x}))$ 사이를 엄격하게 가르는(Strictly separating) 초평면(Hyperplane)을 하나 그을 수 있습니다.
+* 이 초평면의 계수들을 바탕으로 식을 재배열하여 $\inf_{(x,t)}$ 연산을 취하면, 결국 모순($0 > 0$)이 발생함을 수학적으로 증명할 수 있습니다. 따라서 가정이 틀렸고 $f^{**} = f$ 여야만 합니다.
+
+---
+
+# 4. Subdifferential의 역관계와 Moreau 분해
+
+## 4.1. Subdifferential의 역관계 (Theorem 14.14)
+* 이차 함수 예제에서 $\nabla f^*(y) = (\nabla f)^{-1}(y)$ 의 역함수 관계를 확인했습니다. 이 성질은 미분 불가능한 점의 Subdifferential $\partial f(x)$ 영역으로 완벽하게 일반화됩니다.
+
+* 닫힌 볼록 함수 $f$에 대하여 다음 세 명제는 **완벽하게 동치(Equivalent)**입니다.
+  * 1. $y \in \partial f(x)$ 
+  * 2. $x \in \partial f^*(y)$ 
+  * 3. $y^\top x = f(x) + f^*(y)$ 
+
+* **[증명 포인트]**
+  * $y \in \partial f(x)$ 라면 Subgradient 정의상 $0 \in -y + \partial f(x)$ 가 성립하며, 이는 $x$가 함수 $-y^\top z + f(z)$ 를 최소화하는 지점임을 의미합니다. 이를 켤레 함수의 정의 $f^*(y) = \sup (-y^\top z + f(z))$ 에 대입하면 바로 최댓값이 $y^\top x - f(x)$ 가 되므로 (3)번 명제가 성립합니다. $f = f^{**}$ 이므로 역방향 유도도 대칭적으로 성립합니다.
+
+## 4.2. Moreau 분해 정리 (Moreau Decomposition, Theorem 14.15)
+* 위의 동치 조건을 활용하면, 임의의 벡터 $x$를 함수와 그 켤레 함수의 Proximal 연산으로 쪼갤 수 있습니다.
+
+> **정리:** 닫힌 볼록 함수 $f$에 대하여, 임의의 $x \in \mathbb{R}^d$ 는 다음과 같이 분해된다.
+> 
+> $$x = \text{prox}_f(x) + \text{prox}_{f^*}(x)$$ 
+
+### **[완벽한 증명 과정]**
+* 1. $u = \text{prox}_f(x)$ 라고 정의합시다.
+* 2. Proximal 연산의 최적성 조건(Optimality condition)에 의해 $x - u \in \partial f(u)$ 가 성립합니다.
+* 3. 방금 배운 Subdifferential 역관계 (Theorem 14.14)를 적용하면, 위치를 바꾸어 $u \in \partial f^*(x - u)$ 라고 쓸 수 있습니다.
+* 4. 이제 $v = x - u$ 로 치환해봅시다. 그러면 식은 $x - v \in \partial f^*(v)$ 가 됩니다.
+* 5. 이는 다시 $f^*$ 에 대한 Proximal 최적성 조건과 동일하므로, $v = \text{prox}_{f^*}(x)$ 가 됩니다.
+* 6. 최종적으로 $\text{prox}_f(x) + \text{prox}_{f^*}(x) = u + v = u + (x - u) = x$ 가 성립합니다.
+
+## Example 14.16: 선형 부분공간에서의 투영 (Orthogonal Projection)
+* Moreau 분해의 아름다움을 가장 잘 보여주는 직관적인 예시입니다.
+* $V$가 $\mathbb{R}^d$ 내의 선형 부분공간이고, $f = I_V$ (V 안에서는 0, 밖에서는 $\infty$인 지시함수)라고 합시다.
+* $f^*(y) = \sup_{x \in V} \{ y^\top x \} = I_{V^\perp}(y)$ (직교 여공간 $V^\perp$의 지시함수) 
+* 지시함수의 Proximal 연산자는 해당 공간으로의 유클리드 투영(Projection)과 같습니다.
+  * $\text{prox}_f(x) = \text{proj}_V(x)$ 
+  * $\text{prox}_{f^*}(x) = \text{proj}_{V^\perp}(x)$ 
+
+* 이를 Moreau 분해 식에 대입하면 선형대수학의 대원칙인 **직교 투영 정리(Orthogonal Projection Theorem)**를 얻게 됩니다.
+$$x = \text{proj}_V(x) + \text{proj}_{V^\perp}(x)$$ 
+* 즉, 비선형/비매끄러운 함수에 대한 최적화 기법(Proximal operator)이 본질적으로 선형 공간의 직교 분해를 완벽하게 일반화한 형태라는 것을 보여주는 강력한 결과입니다.

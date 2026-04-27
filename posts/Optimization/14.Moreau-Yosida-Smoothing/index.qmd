@@ -1,0 +1,183 @@
+---
+title: "[Optimization] 14. Moreau-Yosida Smoothing and Lagrangian Duality"
+description: "Fenchel conjugate"
+author: "유성현"
+date: "2026-04-27"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. Introduction
+
+* 최적화 문제에서 목적 함수가 매끄럽지 않은(Non-smooth) 경우, 일반적인 경사하강법(Gradient Descent)을 직접 적용하기 어렵습니다. 이러한 문제를 해결하기 위한 대표적인 수학적 기법이 바로 **Moreau-Yosida Smoothing (Moreau Envelope)**입니다. 이 기법은 미분 불가능한 함수를 미분 가능한 형태로 근사하면서도 원래 함수의 최적해를 보존하는 놀라운 특성을 가집니다. 
+
+* 또한, 제약 조건이 있는 최적화 문제(Constrained Optimization)를 풀기 위해서는 문제를 다루기 쉬운 형태로 변환하는 도구가 필요합니다. 이를 위해 **라그랑주 쌍대성(Lagrangian Duality)**과 최적해의 필요충분조건인 **KKT 조건(Karush-Kuhn-Tucker Conditions)**을 도입합니다. 
+
+* 이 포스트에서는 매끄럽지 않은 볼록 최적화 문제를 해결하기 위한 Moreau-Yosida 평활화의 수학적 원리를 상세히 분석하고, 제약 조건이 있는 문제에서 쌍대성과 KKT 조건이 어떻게 유도되는지 처음부터 끝까지 논리적으로 재구성해보겠습니다.
+
+---
+
+# 2. Moreau-Yosida Smoothing
+
+## 2.1. 평활화의 정의 (Definition)
+
+* 주어진 함수 $f:\mathbb{R}^{d}\rightarrow\mathbb{R}$ 에 대하여, 매개변수 $\eta > 0$ 에 대한 **Moreau-Yosida Smoothing (혹은 Moreau Envelope)**은 다음과 같이 정의됩니다:
+
+$$f_{\eta}(x) := \inf_{u} \left\{ f(u) + \frac{1}{2\eta} ||u-x||_{2}^{2} \right\}$$ 
+
+* **직관적 의미 (Motivation):**
+  * 이 정의를 살펴보면, 원래의 함수 값 $f(u)$를 최소화하려 하면서 동시에 평가 포인트 $u$가 $x$에서 너무 멀어지지 않도록 $\frac{1}{2\eta}||u-x||_2^2$ 라는 페널티(Quadratic penalty)를 부여하고 있습니다. $\eta$가 작을수록 $x$ 주변에서 원래 함수의 형태를 강하게 따르게 되며, 페널티 항 덕분에 뾰족한(Non-smooth) 형태를 가진 함수라도 부드러운(Smooth) 형태를 갖게 됩니다.
+
+## 2.2. Moreau Envelope의 주요 수학적 성질
+
+* 볼록 함수에 대해 Moreau Envelope은 다음과 같은 매우 훌륭한 성질들을 가집니다.
+
+* **1. 볼록성 (Convexity)**
+  * **명제:** 함수 $f:\mathbb{R}^{d}\rightarrow\mathbb{R}$ 가 볼록(Convex)하면, 그 평활화 함수인 $f_{\eta}$ 도 볼록 함수입니다.
+  * *유도 과정:* $f_{\eta}(x)$는 $f$와 $\frac{1}{2\eta}||\cdot||_2^2$의 Infimal Convolution으로 볼 수 있습니다. 두 볼록 함수의 Infimal Convolution은 볼록성을 유지하므로 $f_\eta$도 볼록합니다.
+
+* **2. 펜첼 켤레 (Fenchel Conjugate)**
+  * **명제:** $f_{\eta}$ 의 펜첼 켤레 함수 $f_{\eta}^{*}$ 는 다음과 같이 주어집니다:
+      $$f_{\eta}^{*}(y) = f^{*}(y) + \frac{\eta}{2} ||y||_{2}^{2}$$ 
+  * *설명:* 원래 함수에 이차 함수를 Infimal Convolution 한 결과의 켤레 함수는, 각각의 켤레 함수를 단순히 더한 것과 같습니다. 이는 쌍대(Dual) 공간에서 평활화 연산이 목적 함수에 이차 정규화(Quadratic Regularization)를 더하는 것과 동치임을 보여줍니다.
+
+* **3. 평활성 (Smoothness)**
+  * **명제:** 함수 $f$ 가 볼록하면, 그 Moreau envelope $f_{\eta}$ 는 $l_{2}$ 노름 하에서 $(1/\eta)$-Smooth (미분 가능하며 그래디언트가 립시츠 연속) 합니다.
+
+* **4. 그래디언트와 근접 연산자 (Gradient of the Moreau Envelope)**
+  * **명제:** 볼록 함수 $f$ 에 대하여, Moreau envelope의 그래디언트는 근접 연산자(Proximal Operator)를 사용하여 다음과 같이 명시적으로 계산할 수 있습니다:
+      $$\nabla f_{\eta}(x) = \text{prox}_{f^{*}/\eta} \left( \frac{x}{\eta} \right) = \frac{1}{\eta} (x - \text{prox}_{\eta f}(x))$$ 
+  * *해석:* 미분 불가능한 함수 $f$의 최적화 문제를 풀 때 서브그래디언트(Subgradient) 대신 위 그래디언트를 사용할 수 있게 됩니다. 이는 Moreau 분해 정리(Moreau Decomposition) $x = \text{prox}_{\eta f}(x) + \eta \text{prox}_{f^*/\eta}(x/\eta)$ 로부터 직접 유도됩니다.
+
+## 2.3. 예시: $L_1$ 노름과 Huber Loss
+
+* Lasso 회귀 등에서 자주 쓰이는 절대값 함수(L1 노름)에 평활화를 적용해보겠습니다.
+* 함수 $f(x) = ||x||_{1}$ 에 대한 Moreau envelope은 각 차원에 대해 분리되어 계산됩니다.
+
+$$f_{\eta}(x) = \sum_{i=1}^{d} \frac{1}{\eta} L_{\eta}(x_{i})$$ 
+
+* 이때 $L_{\eta}$ 는 로버스트 통계학에서 널리 쓰이는 **Huber Loss** 함수입니다:
+
+$$L_{\eta}(c) = \begin{cases} \eta|c| - \eta^{2}/2, & \text{if } |c| \ge \eta \\ c^{2}/2, & \text{if } |c| \le \eta \end{cases}$$ 
+
+* *유도 과정의 핵심:* $\inf_u \{|u| + \frac{1}{2\eta}(u-x)^2\}$ 를 최소화하는 $u$는 Soft-thresholding operator 인 $u^* = \text{sgn}(x)\max(|x|-\eta, 0)$ 가 됩니다. 이를 목적식에 다시 대입하여 정리하면 정확히 위의 Huber Loss 형태가 도출됩니다.
+
+![Figure: Huber loss function(파란색 실선) 그래프. 원점 주변(-2~2 구간)에서는 이차 함수(빨간 점선)처럼 부드럽게(Smooth) 곡선을 그리며 변화하고, 그 범위를 벗어나면 선형 함수(초록 점선, 여기서는 거의 회색 점선으로 표시됨)처럼 기울기가 일정해집니다. 이는 특이점(비미분점)을 가진 L1 노름이 Moreau envelope을 통해 미분 가능한 부드러운 형태로 변환됨을 시각적으로 명확히 보여줍니다.](./images/huber_loss_function.png)
+
+## 2.4. 평활화된 목적 함수의 최적화와 Proximal Point Algorithm
+
+* Moreau-Yosida 평활화가 강력한 이유는, 평활화를 거친 함수 $f_{\eta}$ 의 최솟값이 원래 함수 $f$ 의 최솟값과 동일하기 때문입니다. 즉, 닫힌(Closed) 함수 $f$ 에 대해 다음 두 문제는 수학적으로 동치입니다.
+
+$$\text{minimize } f(x)$$ 
+$$\equiv \text{minimize } f_{\eta}(x) = \inf_{u} \left\{ f(u) + \frac{1}{2\eta} ||u-x||_{2}^{2} \right\}$$ 
+
+* $f_\eta$는 볼록하고 $(1/\eta)$-Smooth 하므로 , 여기에 스텝 사이즈 $\eta$ 로 **경사하강법(Gradient Descent)**을 적용해 볼 수 있습니다. 그래디언트 $\nabla f_\eta(x) = \frac{1}{\eta}(x - \text{prox}_{\eta f}(x))$  를 대입하면 다음과 같은 업데이트 규칙이 나옵니다:
+
+$$x_{t+1} = x_{t} - \eta \nabla f_{\eta}(x_{t}) = x_t - \eta \left( \frac{1}{\eta}(x_t - \text{prox}_{\eta f}(x_t)) \right) = \text{prox}_{\eta f}(x_{t})$$ 
+
+* 놀랍게도, 평활화된 목적 함수에 경사하강법을 적용한 결과가 **Proximal Point Algorithm**의 업데이트 규칙과 정확히 일치합니다!  이는 Proximal 방법론이 본질적으로 원래 함수를 평활화한 뒤 경사하강법을 수행하는 것과 같다는 깊은 통찰을 제공합니다.
+
+---
+
+# 3. Lagrangian Duality (라그랑주 쌍대성)
+
+* 복잡한 제약 조건을 가진 최적화 문제를 다루기 위해 **Primal Problem (원문제)** 구조를 다음과 같이 정의합니다.
+
+$$\text{minimize } f(x)$$ 
+$$\text{subject to } g_{i}(x) \le 0 \quad \text{for } i=1,...,m$$ 
+$$h_{j}(x) = 0 \quad \text{for } j=1,...,l$$ 
+
+* 벡터 함수 $g(x) = (g_1(x),...,g_m(x))^\top$, $h(x) = (h_1(x),...,h_l(x))^\top$ 를 이용해 간단히 $g(x) \le 0$, $h(x) = 0$ 로 표현할 수 있습니다. 원문제의 최적값을 $p^*$ 라고 합시다.
+
+## 3.1. 라그랑주 함수와 쌍대 함수
+
+* **라그랑주 함수 (Lagrangian Function):** 제약 조건을 목적 함수에 끌어올려 페널티 항으로 만듭니다.
+$$\mathcal{L}(x,\lambda,\mu) = f(x) + \lambda^{\top}g(x) + \mu^{\top}h(x) = f(x) + \sum_{i=1}^{m}\lambda_{i}g_{i}(x) + \sum_{j=1}^{l}\mu_{j}h_{j}(x)$$ 
+
+* $f$가 볼록, $g_i$가 볼록, $h_j$가 아핀(Affine)이고 $\lambda \ge 0$ 이라면, 주어진 $\lambda, \mu$ 에 대해 $\mathcal{L}$은 $x$에 대한 볼록 함수입니다. 반대로, 주어진 $x$ 에 대해 $\mathcal{L}$은 $\lambda, \mu$에 대한 아핀 함수입니다.
+
+* **라그랑주 쌍대 함수 (Lagrangian Dual Function):** 라그랑주 함수를 $x$ 에 대해 최소화한 함수입니다.
+$$q(\lambda,\mu) = \inf_{x} \mathcal{L}(x,\lambda,\mu) = \inf_{x} \{ f(x) + \lambda^{\top}g(x) + \mu^{\top}h(x) \}$$ 
+
+* **중요한 성질:** $f, g_i, h_j$ 의 형태(볼록성 여부 등)와 전혀 무관하게, 쌍대 함수 $q(\lambda,\mu)$ 는 항상 **오목 함수(Concave Function)**입니다. 이는 $q(\lambda,\mu)$ 가 아핀 함수들의 점별 하한(Point-wise minimum)으로 정의되기 때문입니다.
+
+## 3.2. 약쌍대성 (Weak Duality)
+
+* 쌍대 함수의 매우 중요한 역할은 원래 문제 최적값에 대한 **하한(Lower Bound)**을 제공한다는 점입니다.
+
+* **명제:** 임의의 실행 가능해(Feasible solution) $x$ 와 $\lambda \ge 0$ 에 대하여, $f(x) \ge q(\lambda,\mu)$ 가 성립합니다.
+* *유도:* 실행 가능해 $x$에 대해 $g(x) \le 0, h(x) = 0$ 이고 $\lambda \ge 0$ 이므로 $\lambda^\top g(x) + \mu^\top h(x) \le 0$ 입니다. 따라서 $q(\lambda,\mu) = \inf_{\tilde{x}} \mathcal{L}(\tilde{x},\lambda,\mu) \le \mathcal{L}(x,\lambda,\mu) = f(x) + \lambda^\top g(x) + \mu^\top h(x) \le f(x)$ 가 성립합니다.
+
+* 이를 바탕으로, 우리가 찾을 수 있는 '가장 타이트한 하한'을 찾는 문제를 **라그랑주 쌍대 문제 (Lagrangian Dual Problem)**라고 부르며 , 이는 쌍대 함수를 최대화하는 오목 최적화(Concave Maximization) 문제입니다. 
+
+> **Theorem: Weak Duality (약쌍대성)**
+> 
+> $$\min_{x\in C} f(x) \ge \max_{\lambda\ge 0} q(\lambda,\mu)$$ 
+> 
+> (단, $C$는 원문제의 제약 조건을 만족하는 실행 가능 영역 ). 약쌍대성은 목적/제약 함수의 볼록성과 무관하게 항상 성립합니다.
+
+## 3.3. 주요 예제 (LP, QP, Conic Programming)
+
+* 강의에서 언급된 다양한 문제 풀이 환경의 예시입니다.
+
+* **Linear Programming (선형 계획법)** 
+    * Primal: $\min c^\top x \quad \text{s.t.} \quad Ax = b, \; x \ge 0$ (여기서 $-x \le 0$ 을 부등식 제약으로 봅니다).
+* **Quadratic Programming (이차 계획법)** 
+    * Primal: $\min \frac{1}{2}x^\top Q x + p^\top x \quad \text{s.t.} \quad Ax = b$ ($Q \succ 0$ 로 역행렬 존재).
+* **Conic Programming (원뿔 계획법)** 
+    * Primal: $\min f(x) \quad \text{s.t.} \quad g_i(x) \le_{K_i} 0, \; h_j(x)=0$ ($K_i$는 Proper cone).
+    * $g_i(x) \le_{K_i} 0$ 은 $-g_i(x) \in K_i$ 를 의미합니다. 쌍대 원뿔(Dual cone)은 $K^* = \{y : y^\top x \ge 0 \; \forall x \in K\}$ 로 정의됩니다.
+    * 이때 라그랑주 승수 $\lambda_i$ 는 일반적인 $\ge 0$ 이 아니라, 쌍대 원뿔 공간에 속해야 합니다 ($\lambda_i \in K_i^*$). 쌍대 문제는 $\max q(\lambda,\mu)$ subject to $\lambda_i \ge_{K_i^*} 0$ 이 됩니다.
+* **Semidefinite Programming (SDP, 반정부호 계획법)** 
+    * Primal: $\min c^\top x \quad \text{s.t.} \quad \sum_{i=1}^d x_i A_i \ge_{\mathbb{S}_+^m} B$ (여기서 $\mathbb{S}_+^m$ 은 Positive Semidefinite Cone).
+
+## 3.4. 강쌍대성과 Slater's Condition
+
+* 언제 약쌍대성의 부등식이 등식($=$)으로 성립할까요?  즉, 원문제 최적값과 쌍대문제 최적값이 완벽하게 일치하는 조건(Zero Duality Gap)을 **강쌍대성(Strong Duality)**이라고 합니다. 이를 보장하기 위한 대표적인 충분조건이 바로 **Slater's Condition** 입니다.
+
+* **Definition: Slater's Condition (슬레이터 조건)** 
+  * 제약 함수 $g_1,...,g_k$ 가 아핀이고, $g_{k+1},...,g_m$ 이 비아핀(Non-affine) 볼록 함수라고 가정합시다. 실행 가능 영역 내의 어떤 점 $\bar{x}$ 가 존재하여 다음을 모두 만족하면 슬레이터 조건을 만족한다고 합니다:
+    * $g_i(\bar{x}) \le 0$ for $i=1,...,k$ (아핀 제약은 그냥 만족해도 됨) 
+    * $g_i(\bar{x}) < 0$ for $i=k+1,...,m$ (비아핀 부등식 제약은 **엄격하게(Strictly)** 만족해야 함) 
+    * $h_j(\bar{x}) = 0$ for $j=1,...,l$ (등식 제약) 
+
+* **Theorem: Strong Duality (강쌍대성 정리)** 
+  * 함수 $f$ 와 $g_i$ 들이 볼록하고, $h_j$ 가 아핀이라고 가정합시다. 만약 원문제의 최적값이 유한하게 존재하고 슬레이터 조건이 성립한다면, 강쌍대성이 성립합니다. 즉, 다음을 만족하는 쌍대 최적해 $\lambda^* \ge 0, \mu^*$ 가 존재합니다:
+  $$\min_{x\in C} f(x) = q(\lambda^*,\mu^*) = \max_{\lambda\ge 0} q(\lambda,\mu)$$ 
+
+---
+
+# 4. KKT 조건 (Karush-Kuhn-Tucker Conditions)
+
+* 볼록 공간 $C$ 상에서 미분 가능한 함수 $f$ 의 최적해 $x^*$ 는 $\nabla f(x^*)^{\top}(x - x^*) \ge 0 \quad \forall x \in C$ 를 만족합니다. 그러나 제약 집합 $C$ 의 구조가 임의적일 경우 이 조건을 직접 검증하기는 매우 어렵습니다. 이를 해결하기 위한 대안이자 최적화 이론의 가장 중요한 결과 중 하나가 바로 **KKT 조건**입니다.
+
+* 우리는 다음 조건(Convex Programming)을 만족하는 문제를 생각합니다:
+$\min f(x)$ s.t. $g_i(x) \le 0$, $h_j(x) = 0$ ($f, g_i$는 볼록, $h_j$는 아핀).
+
+## 4.1. KKT Conditions for Convex Constraints
+
+**Theorem (볼록 제약 문제에 대한 KKT 조건)** 
+* **(필요 조건, Necessity):** 슬레이터 조건이 만족된다고 가정합시다. 만약 $x^*$ 가 원문제의 최적해라면, 다음 식 `(**)` 를 만족하는 $\lambda^* \in \mathbb{R}_+^m$ 과 $\mu^* \in \mathbb{R}^l$ 이 반드시 존재합니다:
+    $$\nabla f(x^*) + \sum_{i=1}^{m}\lambda_{i}^{*}\nabla g_{i}(x^*) + \sum_{j=1}^{l}\mu_{j}^{*}\nabla h_{j}(x^*) = 0 \quad \textbf{\&} \quad \lambda_{i}^{*}g_{i}(x^*) = 0 \quad \text{for all } i\in[m]$$ 
+* **(충분 조건, Sufficiency):** 어떤 실행 가능해 $x^*$ 와 $\lambda^* \in \mathbb{R}_+^m$, $\mu^* \in \mathbb{R}^l$ 이 존재하여 위 조건 `(**)` 를 만족한다면, $x^*$ 는 문제의 글로벌 최적해입니다 (슬레이터 조건 불필요).
+
+* 식 `(**)` 의 좌변 첫 항이 0이 된다는 것은 라그랑지안 $\mathcal{L}(x, \lambda^*, \mu^*)$ 의 $x$ 에 대한 그래디언트가 0이 됨(Stationarity)을 뜻하고, 두 번째 식 $\lambda_i^* g_i(x^*) = 0$ 은 **상보적 여유성(Complementary Slackness)**을 의미합니다. 즉, 제약 조건이 활성화($g_i=0$)되지 않으면 라그랑주 승수는 0이 되어야($\lambda_i=0$) 페널티가 부여되지 않습니다.
+
+## 4.2. 선형 제약 조건에서의 KKT (Linear Constraints)
+
+* 제약 조건이 오직 선형(아핀)으로만 이루어진 경우는 KKT 조건의 성립 요건이 완화됩니다.
+
+$$\text{minimize } f(x)$$ 
+$$\text{subject to } Ax \le b, \quad Cx = d$$ 
+* (단, $A \in \mathbb{R}^{m\times d}, b \in \mathbb{R}^m, C \in \mathbb{R}^{l\times d}, d \in \mathbb{R}^l$) .
+
+* **Theorem (선형 제약 문제에 대한 KKT 조건)** 
+  * **(필요 조건, Necessity):** 모든 제약이 선형이므로 **슬레이터 조건(Strict Feasibility) 가정이 필요하지 않습니다.** $x^*$ 가 실행 가능해이고 로컬 최솟값이라면, 다음 조건 `(*)` 를 만족하는 $\lambda^* \ge 0, \mu^*$ 가 존재합니다:
+      $$\nabla f(x^*)^{\top} + {\lambda^{*}}^{\top}A + {\mu^{*}}^{\top}C = 0 \quad \textbf{\&} \quad {\lambda^{*}}^{\top}(Ax-b) = 0$$ 
+  * **(충분 조건, Sufficiency):** 만약 $f$ 가 볼록 함수이고 $x^*$ 가 실행 가능해이며 위 조건 `(*)` 를 만족하는 승수들이 존재하면, $x^*$ 는 (글로벌) 최적해입니다.

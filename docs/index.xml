@@ -10,7 +10,194 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>스흐의 공부 블로그</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Mon, 27 Apr 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Wed, 29 Apr 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>[Machine Learning] 12. Gradient Descent</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Machine Learing/12.Gradient-Descent-2/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-신경망-학습과-경사하강법-gradient-descent" class="level1">
+<h1>1. Introduction: 신경망 학습과 경사하강법 (Gradient Descent)</h1>
+<ul>
+<li><p>신경망(Neural Network) 모델을 학습시킨다는 것은 결국 목적 함수(Loss Function) <img src="https://latex.codecogs.com/png.latex?J(%5Ctheta)">의 값을 최소화하는 최적의 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 찾는 과정입니다. 이를 위해 우리는 경사하강법(Gradient Descent)을 사용하여 파라미터를 반복적으로 업데이트합니다.</p></li>
+<li><p>파라미터 업데이트 수식은 다음과 같이 정의됩니다: <img src="https://latex.codecogs.com/png.latex?%20%5Ctheta%20%5Cleftarrow%20%5Ctheta%20-%20%5Ceta%20%5Cnabla_%7B%5Ctheta%7D%20J(%5Ctheta)%20"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?%5Ceta">는 학습률(Learning rate)을 의미하며, <img src="https://latex.codecogs.com/png.latex?%5Cnabla_%7B%5Ctheta%7D%20J(%5Ctheta)">는 파라미터에 대한 손실 함수의 기울기(Gradient)입니다.</li>
+</ul></li>
+<li><p>이때 수많은 파라미터(가중치와 편향)에 대한 기울기를 어떻게 <strong>효율적으로</strong> 계산할 것인가가 딥러닝 최적화의 핵심 과제입니다. 역전파(Back-propagation)는 연쇄 법칙(Chain Rule)을 활용하여 이 기울기들을 매우 빠르고 체계적으로 연산하는 알고리즘입니다.</p></li>
+</ul>
+</section>
+<section id="모듈화와-순전파-modulation-forward-pass" class="level1">
+<h1>2. 모듈화와 순전파 (Modulation &amp; Forward Pass)</h1>
+<section id="신경망의-모듈적-관점-modulation" class="level2">
+<h2 class="anchored" data-anchor-id="신경망의-모듈적-관점-modulation">2.1. 신경망의 모듈적 관점 (Modulation)</h2>
+<ul>
+<li>복잡한 신경망은 사실 단순한 수학적 모듈(Module)들의 합성 함수(Composition of functions)로 이해할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?%20J%20=%20M_k(M_%7Bk-1%7D(%5Ccdots%20M_1(x)))%20"></li>
+<li>각 모듈 <img src="https://latex.codecogs.com/png.latex?M_i">는 선형 변환 계층(Linear layer), 활성화 함수(Activation function), 혹은 손실 함수(Loss function)가 될 수 있습니다.
+<ul>
+<li><strong>파라미터가 있는 모듈</strong>: 선형 계층 (가중치 <img src="https://latex.codecogs.com/png.latex?W">, 편향 <img src="https://latex.codecogs.com/png.latex?b"> 포함)</li>
+<li><strong>파라미터가 없는 모듈</strong>: ReLU, Sigmoid 등 활성화 함수</li>
+</ul></li>
+</ul>
+</section>
+<section id="순전파-forward-pass" class="level2">
+<h2 class="anchored" data-anchor-id="순전파-forward-pass">2.2. 순전파 (Forward Pass)</h2>
+<ul>
+<li>입력 <img src="https://latex.codecogs.com/png.latex?x">가 주어졌을 때, 최종 손실 <img src="https://latex.codecogs.com/png.latex?J">를 계산하기 위해 네트워크의 처음부터 끝까지 순차적으로 연산을 수행하는 과정을 순전파라고 합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20x%20=%20u%5E%7B%5B0%5D%7D%20%5Crightarrow%20u%5E%7B%5B1%5D%7D%20%5Crightarrow%20u%5E%7B%5B2%5D%7D%20%5Crightarrow%20%5Ccdots%20%5Crightarrow%20u%5E%7B%5Bk%5D%7D%20=%20J%20"></p>
+<ul>
+<li>순전파 과정의 핵심은 <strong>모든 중간 변수(Intermediate variables) <img src="https://latex.codecogs.com/png.latex?u%5E%7B%5Bi%5D%7D">를 메모리에 저장</strong>해둔다는 점입니다. <img src="https://latex.codecogs.com/png.latex?%20u%5E%7B%5B0%5D%7D%20=%20x%20"> <img src="https://latex.codecogs.com/png.latex?%20u%5E%7B%5Bi%5D%7D%20=%20M_i(u%5E%7B%5Bi-1%5D%7D)%20"> <img src="https://latex.codecogs.com/png.latex?%20u%5E%7B%5Bk%5D%7D%20=%20J%20"></li>
+<li>이렇게 저장된 값들은 이후 역전파 과정에서 국소적 미분(Local derivatives)을 계산할 때 필수적으로 사용됩니다.</li>
+</ul>
+</section>
+</section>
+<section id="역전파의-핵심-연쇄-법칙-chain-rule" class="level1">
+<h1>3. 역전파의 핵심: 연쇄 법칙 (Chain Rule)</h1>
+<ul>
+<li><p>역전파 알고리즘은 네트워크의 끝(출력)에서부터 시작(입력) 방향으로 거꾸로 이동하며 <strong>연쇄 법칙(Chain Rule)</strong>을 반복적으로 적용하는 과정입니다.</p></li>
+<li><p>간단한 예시를 들어보겠습니다:</p></li>
+<li><p>변수 <img src="https://latex.codecogs.com/png.latex?z%20%5Cin%20%5Cmathbb%7BR%7D%5Em">가 변수 <img src="https://latex.codecogs.com/png.latex?u%20%5Cin%20%5Cmathbb%7BR%7D%5En">를 거쳐 스칼라 손실 함수 <img src="https://latex.codecogs.com/png.latex?J">를 도출한다고 가정합시다. <img src="https://latex.codecogs.com/png.latex?%20u%20=%20g(z),%20%5Cquad%20J%20=%20f(u)%20"></p></li>
+<li><p>이때 <img src="https://latex.codecogs.com/png.latex?z_i">가 최종 손실 <img src="https://latex.codecogs.com/png.latex?J">에 미치는 영향(미분값)은 다변수 미적분학의 연쇄 법칙에 의해 다음과 같이 전개됩니다: <img src="https://latex.codecogs.com/png.latex?%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20z_i%7D%20=%20%5Csum_%7Bj=1%7D%5En%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20u_j%7D%20%5Cfrac%7B%5Cpartial%20u_j%7D%7B%5Cpartial%20z_i%7D%20"></p></li>
+</ul>
+<section id="역방향-함수-backward-function" class="level2">
+<h2 class="anchored" data-anchor-id="역방향-함수-backward-function">3.1. 역방향 함수 (Backward Function)</h2>
+<ul>
+<li><p>각 모듈은 상류에서 흘러들어온 기울기(Upstream gradient)를 하류 기울기(Downstream gradient)로 변환해주는 고유한 <strong>역방향 함수(Backward function)</strong>를 갖습니다.</p></li>
+<li><p>만약 상류 기울기가 <img src="https://latex.codecogs.com/png.latex?v%20=%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20u%7D"> 로 주어졌다면, 역방향 함수 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BB%7D">는 다음과 같이 정의됩니다: <img src="https://latex.codecogs.com/png.latex?%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20z%7D%20=%20%5Cmathcal%7BB%7D%5Bg,%20z%5D(v)%20"></p></li>
+<li><p>즉, <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BB%7D%5Bg,%20z%5D(v)">는 모듈 <img src="https://latex.codecogs.com/png.latex?g">와 입력 <img src="https://latex.codecogs.com/png.latex?z">에 대하여, 상류의 기울기 <img src="https://latex.codecogs.com/png.latex?v">를 받아 입력 <img src="https://latex.codecogs.com/png.latex?z">에 대한 기울기를 반환하는 오퍼레이터입니다.</p></li>
+</ul>
+</section>
+</section>
+<section id="구성-요소별-역방향-함수-유도-detailed-derivations" class="level1">
+<h1>4. 구성 요소별 역방향 함수 유도 (Detailed Derivations)</h1>
+<ul>
+<li>각 핵심 모듈에 대한 역방향 함수를 단계별로 유도해보겠습니다.</li>
+</ul>
+<section id="선형-계층-linear-layer" class="level2">
+<h2 class="anchored" data-anchor-id="선형-계층-linear-layer">4.1. 선형 계층 (Linear Layer)</h2>
+<ul>
+<li><p>선형 계층의 순전파 연산은 행렬 곱셈입니다: <img src="https://latex.codecogs.com/png.latex?%20u%20=%20Wz%20+%20b%20"></p></li>
+<li><p>상류에서 전달된 기울기를 <img src="https://latex.codecogs.com/png.latex?v%20=%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20u%7D"> 라고 합시다.</p></li>
+<li><p><strong>1. 입력 <img src="https://latex.codecogs.com/png.latex?z">에 대한 기울기:</strong></p>
+<ul>
+<li>선형 대수의 미분 법칙을 적용해보면, <img src="https://latex.codecogs.com/png.latex?u_i%20=%20%5Csum_j%20W_%7Bij%7D%20z_j%20+%20b_i"> 이므로 국소 미분 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20u_i%7D%7B%5Cpartial%20z_j%7D%20=%20W_%7Bij%7D"> 가 됩니다. 연쇄 법칙에 의해 이를 행렬 형태로 묶으면 아래와 같습니다. <img src="https://latex.codecogs.com/png.latex?%20%5Cmathcal%7BB%7D%5BMM,%20z%5D(v)%20=%20W%5E%5Ctop%20v%20"></li>
+</ul></li>
+<li><p><strong>2. 파라미터 <img src="https://latex.codecogs.com/png.latex?W">와 <img src="https://latex.codecogs.com/png.latex?b">에 대한 기울기:</strong></p>
+<ul>
+<li>가중치 행렬 <img src="https://latex.codecogs.com/png.latex?W">와 편향 벡터 <img src="https://latex.codecogs.com/png.latex?b"> 역시 딥러닝에서 학습되어야 하는 대상입니다. 동일한 원리로 국소 미분을 전개하면 다음과 같은 역방향 함수 결과를 얻습니다. <img src="https://latex.codecogs.com/png.latex?%20%5Cmathcal%7BB%7D%5BMM,%20W%5D(v)%20=%20v%20z%5E%5Ctop%20"> <img src="https://latex.codecogs.com/png.latex?%20%5Cmathcal%7BB%7D%5BMM,%20b%5D(v)%20=%20v%20">
+<ul>
+<li>참고: <img src="https://latex.codecogs.com/png.latex?v">는 열벡터 행태이므로 <img src="https://latex.codecogs.com/png.latex?v%20z%5E%5Ctop">는 외적(Outer product) 연산이 되어 <img src="https://latex.codecogs.com/png.latex?W">와 동일한 차원의 행렬 기울기가 생성됩니다.</li>
+</ul></li>
+</ul></li>
+</ul>
+</section>
+<section id="활성화-함수-activation-functions" class="level2">
+<h2 class="anchored" data-anchor-id="활성화-함수-activation-functions">4.2. 활성화 함수 (Activation Functions)</h2>
+<ul>
+<li><p>활성화 함수 <img src="https://latex.codecogs.com/png.latex?%5Csigma(z)">는 원소별(element-wise)로 적용됩니다. 원소별 연산의 자코비안은 대각 행렬이 되므로, 역전파는 단순히 요소별 곱셈(Hadamard product, <img src="https://latex.codecogs.com/png.latex?%5Codot">)으로 계산됩니다. <img src="https://latex.codecogs.com/png.latex?%20%5Cmathcal%7BB%7D%5B%5Csigma,%20z%5D(v)%20=%20%5Csigma'(z)%20%5Codot%20v%20"></p></li>
+<li><p><strong>예시: ReLU (Rectified Linear Unit)</strong> <img src="https://latex.codecogs.com/png.latex?%20%5Ctext%7BReLU%7D(z)%20=%20%5Cmax(0,%20z)%20"></p>
+<ul>
+<li>ReLU의 도함수는 <img src="https://latex.codecogs.com/png.latex?z%20%3E%200">일 때 1, <img src="https://latex.codecogs.com/png.latex?z%20%3C%200">일 때 0입니다. (순전파 때 저장해둔 <img src="https://latex.codecogs.com/png.latex?z"> 값을 여기서 사용합니다.) <img src="https://latex.codecogs.com/png.latex?%20%5Ctext%7BReLU%7D'(z)%20=%20%5Cbegin%7Bcases%7D%201,%20&amp;%20z%20%3E%200%20%5C%5C%200,%20&amp;%20z%20%3C%200%20%5Cend%7Bcases%7D%20"></li>
+</ul></li>
+</ul>
+</section>
+<section id="손실-함수-loss-functions" class="level2">
+<h2 class="anchored" data-anchor-id="손실-함수-loss-functions">4.3. 손실 함수 (Loss Functions)</h2>
+<ul>
+<li><strong>1. 평균 제곱 오차 (MSE Loss)</strong> <img src="https://latex.codecogs.com/png.latex?%20l_%7BMSE%7D%20%5Ctriangleq%20%5Cfrac%7B1%7D%7B2%7D(z%20-%20y)%5E2%20">
+<ul>
+<li>여기에 대한 역전파는 다음과 같이 유도됩니다: <img src="https://latex.codecogs.com/png.latex?%20%5Cmathcal%7BB%7D%5Bl_%7BMSE%7D,%20z%5D(v)%20=%20(z%20-%20y)%20%5Ccdot%20v%20"></li>
+</ul></li>
+<li><strong>2. 로지스틱 손실 (Logistic Loss / Binary Cross Entropy)</strong> <img src="https://latex.codecogs.com/png.latex?%20l_%7Blogistic%7D(t,%20y)%20%5Ctriangleq%20y%20%5Clog(1%20+%20%5Cexp(-t))%20+%20(1%20-%20y)%5Clog(1%20+%20%5Cexp(t))%20">
+<ul>
+<li>입력 <img src="https://latex.codecogs.com/png.latex?t">에 대한 미분 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20l_%7Blogistic%7D%7D%7B%5Cpartial%20t%7D">의 단계별 유도 과정은 다음과 같습니다:</li>
+<li>먼저, 시그모이드 함수 <img src="https://latex.codecogs.com/png.latex?%5Csigma(t)%20=%20%5Cfrac%7B1%7D%7B1+%5Cexp(-t)%7D%20=%20%5Cfrac%7B%5Cexp(t)%7D%7B1+%5Cexp(t)%7D"> 의 성질을 이용합니다.</li>
+<li>미분을 전개하면: <img src="https://latex.codecogs.com/png.latex?%20%5Cfrac%7B%5Cpartial%20l%7D%7B%5Cpartial%20t%7D%20=%20y%20%5Cleft(%20%5Cfrac%7B-%5Cexp(-t)%7D%7B1+%5Cexp(-t)%7D%20%5Cright)%20+%20(1-y)%20%5Cleft(%20%5Cfrac%7B%5Cexp(t)%7D%7B1+%5Cexp(t)%7D%20%5Cright)%20"></li>
+<li>식의 뒷부분 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cexp(t)%7D%7B1+%5Cexp(t)%7D"> 는 <img src="https://latex.codecogs.com/png.latex?%5Csigma(t)">와 같고, 앞부분은 <img src="https://latex.codecogs.com/png.latex?-(1-%5Csigma(t))">와 같습니다. 식을 정리하면 <img src="https://latex.codecogs.com/png.latex?y(%5Csigma(t)-1)%20+%20(1-y)%5Csigma(t)%20=%20%5Csigma(t)%20-%20y">가 됩니다. 즉, 예측 확률에서 실제 레이블을 뺀 아주 단순한 형태가 됩니다.</li>
+<li>결과적으로 강의 슬라이드의 역방향 함수 공식이 성립합니다: <img src="https://latex.codecogs.com/png.latex?%20%5Cmathcal%7BB%7D%5Bl_%7Blogistic%7D,%20t%5D(v)%20=%20%5Cleft(%20%5Cfrac%7B1%7D%7B1%20+%20%5Cexp(-t)%7D%20-%20y%20%5Cright)%20%5Ccdot%20v%20"></li>
+</ul></li>
+</ul>
+</section>
+</section>
+<section id="다층-퍼셉트론mlp의-역전파-알고리즘-통합" class="level1">
+<h1>5. 다층 퍼셉트론(MLP)의 역전파 알고리즘 통합</h1>
+<ul>
+<li>지금까지 구한 개별 모듈의 법칙을 연결하여 전체 MLP에 적용해 보겠습니다.</li>
+</ul>
+<section id="다층-신경망-세팅" class="level2">
+<h2 class="anchored" data-anchor-id="다층-신경망-세팅">5.1. 다층 신경망 세팅</h2>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?r">개의 층을 가진 MLP와 로지스틱 손실 함수를 가정합니다.</li>
+<li><strong>Forward Pass Equations:</strong>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?z%5E%7B%5B1%5D%7D%20=%20W%5E%7B%5B1%5D%7Dx%20+%20b%5E%7B%5B1%5D%7D">, <img src="https://latex.codecogs.com/png.latex?a%5E%7B%5B1%5D%7D%20=%20%5Csigma(z%5E%7B%5B1%5D%7D)"></li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cvdots"></li>
+<li><img src="https://latex.codecogs.com/png.latex?z%5E%7B%5Br%5D%7D%20=%20W%5E%7B%5Br%5D%7Da%5E%7B%5Br-1%5D%7D%20+%20b%5E%7B%5Br%5D%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?J%20=%20l_%7Blogistic%7D(z%5E%7B%5Br%5D%7D,%20y)"></li>
+</ul></li>
+</ul>
+</section>
+<section id="알고리즘-역방향-흐름-backward-pass" class="level2">
+<h2 class="anchored" data-anchor-id="알고리즘-역방향-흐름-backward-pass">5.2. 알고리즘: 역방향 흐름 (Backward Pass)</h2>
+<ul>
+<li><p>역전파 알고리즘은 마지막 출력층부터 시작하여 첫 번째 층까지 반복적으로 적용됩니다.</p></li>
+<li><p><strong>Step 1: 손실 함수 기울기 초기화</strong></p>
+<ul>
+<li>가장 상단의 그래디언트는 스스로에 대한 미분이므로 1에서 시작합니다 (<img src="https://latex.codecogs.com/png.latex?v%20=%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20J%7D%20=%201">). <img src="https://latex.codecogs.com/png.latex?%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20z%5E%7B%5Br%5D%7D%7D%20=%20%5Cmathcal%7BB%7D%5Bl_%7Blogistic%7D,%20z%5E%7B%5Br%5D%7D%5D(1)%20=%20%5Cleft(%20%5Cfrac%7B1%7D%7B1%20+%20%5Cexp(-z%5E%7B%5Br%5D%7D)%7D%20-%20y%20%5Cright)%20"></li>
+</ul></li>
+<li><p><strong>Step 2: 은닉층의 반복적 기울기 계산 (Iterative Computation)</strong></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?k%20=%20r-1"> 부터 <img src="https://latex.codecogs.com/png.latex?1"> 까지 거꾸로 이동하며 다음을 계산합니다.
+<ul>
+<li>선형 계층을 거슬러 올라가는 활성화 함수 단위의 기울기: <img src="https://latex.codecogs.com/png.latex?%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20a%5E%7B%5Bk%5D%7D%7D%20=%20%5Cmathcal%7BB%7D%5BMM,%20a%5E%7B%5Bk%5D%7D%5D%5Cleft(%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20z%5E%7B%5Bk+1%5D%7D%7D%20%5Cright)%20=%20%7BW%5E%7B%5Bk+1%5D%7D%7D%5E%5Ctop%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20z%5E%7B%5Bk+1%5D%7D%7D%20"></li>
+<li>활성화 함수를 거슬러 올라가는 <img src="https://latex.codecogs.com/png.latex?z"> 단위의 기울기: <img src="https://latex.codecogs.com/png.latex?%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20z%5E%7B%5Bk%5D%7D%7D%20=%20%5Cmathcal%7BB%7D%5B%5Csigma,%20z%5E%7B%5Bk%5D%7D%5D%5Cleft(%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20a%5E%7B%5Bk%5D%7D%7D%20%5Cright)%20=%20%5Csigma'(z%5E%7B%5Bk%5D%7D)%20%5Codot%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20a%5E%7B%5Bk%5D%7D%7D%20"></li>
+</ul></li>
+</ul></li>
+<li><p><strong>Step 3: 파라미터 업데이트를 위한 기울기 추출</strong></p>
+<ul>
+<li>각 층의 <img src="https://latex.codecogs.com/png.latex?W">와 <img src="https://latex.codecogs.com/png.latex?b">를 업데이트하기 위한 최종 기울기입니다. <img src="https://latex.codecogs.com/png.latex?%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20W%5E%7B%5Bk+1%5D%7D%7D%20=%20%5Cmathcal%7BB%7D%5BMM,%20W%5E%7B%5Bk+1%5D%7D%5D%5Cleft(%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20z%5E%7B%5Bk+1%5D%7D%7D%20%5Cright)%20=%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20z%5E%7B%5Bk+1%5D%7D%7D%20%7Ba%5E%7B%5Bk%5D%7D%7D%5E%5Ctop%20"> <img src="https://latex.codecogs.com/png.latex?%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20b%5E%7B%5Bk+1%5D%7D%7D%20=%20%5Cmathcal%7BB%7D%5BMM,%20b%5E%7B%5Bk+1%5D%7D%5D%5Cleft(%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20z%5E%7B%5Bk+1%5D%7D%7D%20%5Cright)%20=%20%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20z%5E%7B%5Bk+1%5D%7D%7D%20"></li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="summary-back-propagation-algorithm-algorithm-3" class="level1">
+<h1>6. Summary: Back-propagation Algorithm (Algorithm 3)</h1>
+<ul>
+<li>위 과정을 하나의 정형화된 수도코드(Pseudo-code)로 요약하면 다음과 같습니다.
+<ul>
+<li><ol type="1">
+<li><strong>Forward pass:</strong> 식을 통해 입력부터 최종 손실 <img src="https://latex.codecogs.com/png.latex?J">까지 연산하고, 모든 중간 변수 <img src="https://latex.codecogs.com/png.latex?a%5E%7B%5Bk%5D%7D">, <img src="https://latex.codecogs.com/png.latex?z%5E%7B%5Bk%5D%7D"> 및 <img src="https://latex.codecogs.com/png.latex?J">를 저장합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Backward pass (초기화):</strong> 가장 마지막 출력층 <img src="https://latex.codecogs.com/png.latex?z%5E%7B%5Br%5D%7D">에 대한 손실 <img src="https://latex.codecogs.com/png.latex?J">의 기울기를 구합니다. (<img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20J%7D%7B%5Cpartial%20z%5E%7B%5Br%5D%7D%7D%20=%20%5Cfrac%7B1%7D%7B1+%5Cexp(-z%5E%7B%5Br%5D%7D)%7D%20-%20y">).</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><strong>Loop:</strong> <img src="https://latex.codecogs.com/png.latex?k%20=%20r-1"> 부터 <img src="https://latex.codecogs.com/png.latex?0"> 까지 감소시키며 다음을 반복합니다.</li>
+</ol>
+<ul>
+<li>파라미터 <img src="https://latex.codecogs.com/png.latex?W%5E%7B%5Bk+1%5D%7D,%20b%5E%7B%5Bk+1%5D%7D">에 대한 기울기 계산</li>
+<li>(단, <img src="https://latex.codecogs.com/png.latex?k%20%5Cge%201">인 경우) 이전 계층으로 오차를 전파하기 위해 은닉층 노드 <img src="https://latex.codecogs.com/png.latex?a%5E%7B%5Bk%5D%7D,%20z%5E%7B%5Bk%5D%7D">에 대한 기울기 계산</li>
+</ul></li>
+</ul></li>
+<li>이 과정을 통해 구해진 파라미터 기울기 모음을 통해 첫 부분에서 언급한 경사하강법 업데이트가 완성됩니다.</li>
+</ul>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Machine Learning</category>
+  <guid>https://shsha0110.github.io/posts/Machine Learing/12.Gradient-Descent-2/</guid>
+  <pubDate>Wed, 29 Apr 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>[Data Mining] 15. Link Analysis (Part 1)</title>
   <dc:creator>유성현 </dc:creator>
@@ -561,7 +748,7 @@
 <item>
   <title>[Machine Learning] 11. Gradient Descent</title>
   <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Machine Learing/11.Gradient-Descent/</link>
+  <link>https://shsha0110.github.io/posts/Machine Learing/11.Gradient-Descent-1/</link>
   <description><![CDATA[ 
 
 
@@ -619,7 +806,7 @@
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Machine Learing/11.Gradient-Descent/images/learning_rate_comparison.png" class="img-fluid figure-img"></p>
+<p><img src="https://shsha0110.github.io/posts/Machine Learing/11.Gradient-Descent-1/images/learning_rate_comparison.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 2차 함수 형태의 볼록(convex) 함수 위에서 학습률 크기에 따른 이동 경로. 왼쪽 그림(Big learning rate)은 스텝이 너무 커서 계곡의 양쪽 벽을 크게 오가며 발산하거나 최적점을 지나치는 붉은 궤적을 보임. 오른쪽 그림(Small learning rate)은 스텝이 너무 작아 한쪽 벽을 타고 천천히 내려가면서 최적점에 도달하는 데 지나치게 많은 시간이 소요됨을 의미하는 조밀한 붉은 궤적을 보임.</figcaption>
 </figure>
 </div>
@@ -720,7 +907,7 @@
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Machine Learing/11.Gradient-Descent/images/sgd_oscillation.png" class="img-fluid figure-img"></p>
+<p><img src="https://shsha0110.github.io/posts/Machine Learing/11.Gradient-Descent-1/images/sgd_oscillation.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 타원형 등고선에서 바닥 중심점을 찾아가는 SGD의 궤적. 가파른 계곡 지형에서 중심축으로 수렴하는 대신 양 벽면을 튕기며 지그재그(zig-zag) 형태로 심하게 진동하며 전진하는 모습을 보여주어 비효율성을 시각화함.</figcaption>
 </figure>
 </div>
@@ -758,7 +945,7 @@
 </blockquote>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Machine Learing/11.Gradient-Descent/images/optimizers_comparison.png" class="img-fluid figure-img"></p>
+<p><img src="https://shsha0110.github.io/posts/Machine Learing/11.Gradient-Descent-1/images/optimizers_comparison.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 네 가지 최적화 알고리즘(SGD, Momentum, AdaGrad, Adam)이 가파른 타원형 손실 지형에서 목표로 수렴하는 과정 비교. SGD는 심하게 진동하고, Momentum은 부드러운 곡선을 그리며 관성에 의해 오버슈팅 후 회귀하며, AdaGrad는 최단 경로로 신속히 꺾이고, Adam은 모멘텀과 적응적 스텝의 특징을 합쳐 안정적이고 빠르게 중앙으로 향하는 모습이 나타남.</figcaption>
 </figure>
 </div>
@@ -782,7 +969,7 @@
 
  ]]></description>
   <category>Machine Learning</category>
-  <guid>https://shsha0110.github.io/posts/Machine Learing/11.Gradient-Descent/</guid>
+  <guid>https://shsha0110.github.io/posts/Machine Learing/11.Gradient-Descent-1/</guid>
   <pubDate>Mon, 27 Apr 2026 15:00:00 GMT</pubDate>
 </item>
 <item>
@@ -3223,138 +3410,6 @@
  ]]></description>
   <category>Optimization</category>
   <guid>https://shsha0110.github.io/posts/Optimization/12.Proximal-Gradient-Descent/12.3/</guid>
-  <pubDate>Sun, 12 Apr 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] 12. Proximal Gradient Descent (Part 4)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/12.Proximal-Gradient-Descent/12.4/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>1. Introduction</h1>
-<ul>
-<li><p>이전 포스트에서는 LASSO와 같이 미분 불가능한 항이 포함된 복합 최적화(Composite convex minimization) 문제를 풀기 위해 <strong>근접 경사 하강법(Proximal Gradient Descent)</strong>과 이를 LASSO에 적용한 <strong>ISTA(Iterative Shrinkage-Thresholding Algorithm)</strong>를 다루었습니다.</p></li>
-<li><p>ISTA는 준기울기 하강법(Subgradient method)의 <img src="https://latex.codecogs.com/png.latex?O(1/%5Cepsilon%5E2)"> 수렴 속도를 <img src="https://latex.codecogs.com/png.latex?O(1/%5Cepsilon)">으로 개선했지만, 여전히 <img src="https://latex.codecogs.com/png.latex?O(1/T)">의 수렴 속도를 가집니다. 이번 포스트에서는 <strong>Nesterov의 가속(Acceleration)</strong> 기법을 결합하여 수렴 속도를 최적의 하한(Oracle lower bound)인 <strong><img src="https://latex.codecogs.com/png.latex?O(1/T%5E2)"></strong>까지 끌어올리는 <strong>FISTA(Fast ISTA)</strong>의 알고리즘과 그 수학적 증명 과정을 매우 상세하게 살펴봅니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="가속화된-근접-경사-하강법-algorithm-1" class="level1">
-<h1>2. 가속화된 근접 경사 하강법 (Algorithm 1)</h1>
-<ul>
-<li>매끄러운 함수 <img src="https://latex.codecogs.com/png.latex?g">와 비매끄러운 함수 <img src="https://latex.codecogs.com/png.latex?h">의 합인 <img src="https://latex.codecogs.com/png.latex?g+h">를 최소화할 때, 기존의 근접 경사 하강법은 현재 점 <img src="https://latex.codecogs.com/png.latex?x_t">에서 직접 다음 점을 계산했습니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20%5Ctext%7Bprox%7D_%7Bh/%5Cbeta%7D%5Cleft(x_%7Bt%7D%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%5Cnabla%20g(x_%7Bt%7D)%5Cright)"></p>
-<ul>
-<li>하지만 가속화된 근접 경사 하강법은 <img src="https://latex.codecogs.com/png.latex?x_t">에서 직접 경사 하강을 적용하는 대신, 이전 스텝(<img src="https://latex.codecogs.com/png.latex?x_%7Bt-1%7D">에서 <img src="https://latex.codecogs.com/png.latex?x_t">)의 <strong>모멘텀(Momentum) 방향을 따라 조금 더 나아간 지점 <img src="https://latex.codecogs.com/png.latex?y_t"></strong>를 계산한 뒤, 이 <img src="https://latex.codecogs.com/png.latex?y_t">에서 근접 경사 하강을 수행합니다.</li>
-</ul>
-<section id="algorithm-1-accelerated-proximal-gradient-descent" class="level3">
-<h3 class="anchored" data-anchor-id="algorithm-1-accelerated-proximal-gradient-descent">Algorithm 1: Accelerated Proximal Gradient Descent</h3>
-<ul>
-<li><strong>Initialize:</strong> <img src="https://latex.codecogs.com/png.latex?x_1%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">, 그리고 <img src="https://latex.codecogs.com/png.latex?x_0%20=%20x_1">로 설정.</li>
-<li><strong>For</strong> <img src="https://latex.codecogs.com/png.latex?t%20=%201,%20%5Cdots,%20T"> <strong>do:</strong>
-<ul>
-<li><ol type="1">
-<li><img src="https://latex.codecogs.com/png.latex?y_t%20=%20x_t%20+%20%5Cgamma_t%20(x_t%20-%20x_%7Bt-1%7D)"> (단, <img src="https://latex.codecogs.com/png.latex?%5Cgamma_t%20%3E%200">는 모멘텀 가중치)</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20%5Ctext%7Bprox%7D_%7Bh/%5Cbeta%7D%5Cleft(y_t%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%5Cnabla%20g(y_t)%5Cright)"></li>
-</ol></li>
-</ul></li>
-<li><strong>Return</strong> <img src="https://latex.codecogs.com/png.latex?x_%7BT+1%7D"></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="수렴성-증명을-위한-핵심-보조정리" class="level1">
-<h1>3. 수렴성 증명을 위한 핵심 보조정리</h1>
-<ul>
-<li>FISTA의 수렴성을 증명하기 위해서는 근접 연산자의 특성을 나타내는 부등식이 필요합니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p>Lemma 13.1</p>
-<p>임의의 <img src="https://latex.codecogs.com/png.latex?x,%20z%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">에 대하여 다음이 성립합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B%5Ceta%7D(%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)%20-%20x)%5E%5Ctop%20(z%20-%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x))%20+%20h(z)%20%5Cge%20h(%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x))"></p>
-</blockquote>
-<section id="proof" class="level3">
-<h3 class="anchored" data-anchor-id="proof"><strong>[Proof]</strong></h3>
-<ul>
-<li>근접 연산자의 정의에 의해 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)%20=%20%5Carg%5Cmin_%7Bz%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20%5Cleft%5C%7B%20h(z)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta%7D%7C%7Cx%20-%20z%7C%7C_2%5E2%20%5Cright%5C%7D"> 입니다.</li>
-<li>최적성 조건(Optimality condition)에 따라, 최적해에서의 준미분(subgradient) <img src="https://latex.codecogs.com/png.latex?g%20%5Cin%20%5Cpartial%20h(%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x))"> 에 대해 다음이 성립해야 합니다. <img src="https://latex.codecogs.com/png.latex?%5Cleft(g%20+%20%5Cfrac%7B1%7D%7B%5Ceta%7D(%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)%20-%20x)%5Cright)%5E%5Ctop%20(z%20-%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x))%20%5Cge%200"></li>
-<li>이를 전개하면, <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B%5Ceta%7D(%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x)%20-%20x)%5E%5Ctop%20(z%20-%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x))%20+%20g%5E%5Ctop%20(z%20-%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x))%20%5Cge%200"></li>
-<li>한편, 함수 <img src="https://latex.codecogs.com/png.latex?h">는 볼록 함수이므로 1차 조건에 의해 <img src="https://latex.codecogs.com/png.latex?h(z)%20%5Cge%20h(%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x))%20+%20g%5E%5Ctop%20(z%20-%20%5Ctext%7Bprox%7D_%7B%5Ceta%20h%7D(x))"> 가 성립합니다.</li>
-<li>이 두 부등식을 더하면 보조정리가 증명됩니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="fista의-o1t2-수렴성-증명-theorem-13.2" class="level1">
-<h1>4. FISTA의 <img src="https://latex.codecogs.com/png.latex?O(1/T%5E2)"> 수렴성 증명 (Theorem 13.2)</h1>
-<blockquote class="blockquote">
-<p>Theorem 13.2</p>
-<p>목적 함수 <img src="https://latex.codecogs.com/png.latex?f%20=%20g%20+%20h"> 에서 <img src="https://latex.codecogs.com/png.latex?g">가 <img src="https://latex.codecogs.com/png.latex?l_2"> 노름 상에서 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smooth한 볼록 함수이고 <img src="https://latex.codecogs.com/png.latex?h">가 볼록 함수라고 가정합니다.</p>
-<p>학습률을 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20=%20%5Cfrac%7B1%7D%7B%5Cbeta%7D">, 모멘텀 파라미터를 <img src="https://latex.codecogs.com/png.latex?%5Cgamma_t%20=%20%5Cfrac%7Bt-2%7D%7Bt+1%7D">로 설정하면, Algorithm 1이 반환하는 <img src="https://latex.codecogs.com/png.latex?x_%7BT+1%7D">은 다음을 만족합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?f(x_%7BT+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B2%5Cbeta%7D%7B(T+1)%5E2%7D%20%7C%7Cx_1%20-%20x%5E*%7C%7C_2%5E2"></p>
-<p>(단, <img src="https://latex.codecogs.com/png.latex?x%5E*">는 최적해입니다.)</p>
-</blockquote>
-<section id="proof-1" class="level3">
-<h3 class="anchored" data-anchor-id="proof-1"><strong>[Proof]</strong></h3>
-<ul>
-<li>증명의 핵심은 Algorithm 1을 다루기 쉬운 <strong>동치 형태(Equivalent formulation)</strong>로 변환하는 것입니다. Nesterov 가속 증명에서 자주 쓰이는 보조 수열 <img src="https://latex.codecogs.com/png.latex?v_t">와 <img src="https://latex.codecogs.com/png.latex?%5Clambda_t">를 다음과 같이 정의합니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Clambda_t%20=%20%5Cfrac%7B2%7D%7Bt+1%7D"> <img src="https://latex.codecogs.com/png.latex?y_t%20=%20(1-%5Clambda_t)x_t%20+%20%5Clambda_t%20v_t"> <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20%5Ctext%7Bprox%7D_%7Bh/%5Cbeta%7D%5Cleft(y_t%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%5Cnabla%20g(y_t)%5Cright)"> <img src="https://latex.codecogs.com/png.latex?v_%7Bt+1%7D%20=%20x_t%20+%20%5Cfrac%7B1%7D%7B%5Clambda_t%7D(x_%7Bt+1%7D%20-%20x_t)"></p>
-<ul>
-<li><p>이 형태가 Algorithm 1과 완전히 동일한 이유는 <img src="https://latex.codecogs.com/png.latex?y_t%20=%20x_t%20+%20%5Clambda_t(v_t%20-%20x_t)"> 로 쓸 수 있고, <img src="https://latex.codecogs.com/png.latex?%5Clambda_t(v_t%20-%20x_t)">를 전개하면 <img src="https://latex.codecogs.com/png.latex?%5Cgamma_t(x_t%20-%20x_%7Bt-1%7D)">이 도출되기 때문입니다. 또한 <img src="https://latex.codecogs.com/png.latex?%5Clambda_1%20=%201">이며, <img src="https://latex.codecogs.com/png.latex?t%20%5Cge%202">에 대해 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1-%5Clambda_t%7D%7B%5Clambda_t%5E2%7D%20%5Cle%20%5Cfrac%7B1%7D%7B%5Clambda_%7Bt-1%7D%5E2%7D"> 가 성립합니다.</p></li>
-<li><p><strong>Step 1: 목적 함수의 상한 구하기</strong></p>
-<ul>
-<li>먼저 <img src="https://latex.codecogs.com/png.latex?g">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smooth 하므로 다음이 성립합니다. <img src="https://latex.codecogs.com/png.latex?g(x_%7Bt+1%7D)%20%5Cle%20g(y_t)%20+%20%5Cnabla%20g(y_t)%5E%5Ctop%20(x_%7Bt+1%7D%20-%20y_t)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cx_%7Bt+1%7D%20-%20y_t%7C%7C_2%5E2"></li>
-<li>다음으로, 비매끄러운 부분 <img src="https://latex.codecogs.com/png.latex?h">에 Lemma 13.1을 적용(<img src="https://latex.codecogs.com/png.latex?%5Ceta=1/%5Cbeta">)하면 임의의 <img src="https://latex.codecogs.com/png.latex?z">에 대해: <img src="https://latex.codecogs.com/png.latex?h(x_%7Bt+1%7D)%20%5Cle%20h(z)%20+%20%5Cnabla%20g(y_t)%5E%5Ctop%20(z%20-%20x_%7Bt+1%7D)%20+%20%5Cbeta(x_%7Bt+1%7D%20-%20y_t)%5E%5Ctop%20(z%20-%20x_%7Bt+1%7D)"></li>
-<li>이 두 부등식을 더하고, <img src="https://latex.codecogs.com/png.latex?g">의 볼록성(<img src="https://latex.codecogs.com/png.latex?g(y_t)%20+%20%5Cnabla%20g(y_t)%5E%5Ctop(z%20-%20y_t)%20%5Cle%20g(z)">)을 적용하면: <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20%5Cle%20f(z)%20+%20%5Cbeta(x_%7Bt+1%7D%20-%20y_t)%5E%5Ctop%20(z%20-%20x_%7Bt+1%7D)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cx_%7Bt+1%7D%20-%20y_t%7C%7C_2%5E2"></li>
-</ul></li>
-<li><p><strong>Step 2: 볼록 조합을 통한 부등식 결합</strong></p>
-<ul>
-<li>위 식에 <img src="https://latex.codecogs.com/png.latex?z%20=%20x%5E*">를 대입한 식과 <img src="https://latex.codecogs.com/png.latex?z%20=%20x_t">를 대입한 식을 만듭니다.
-<ul>
-<li><ol type="1">
-<li><img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cbeta(x_%7Bt+1%7D%20-%20y_t)%5E%5Ctop%20(x%5E*%20-%20x_%7Bt+1%7D)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cx_%7Bt+1%7D%20-%20y_t%7C%7C_2%5E2"></li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x_t)%20%5Cle%20%5Cbeta(x_%7Bt+1%7D%20-%20y_t)%5E%5Ctop%20(x_t%20-%20x_%7Bt+1%7D)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cx_%7Bt+1%7D%20-%20y_t%7C%7C_2%5E2"></li>
-</ol></li>
-</ul></li>
-<li>첫 번째 식에 <img src="https://latex.codecogs.com/png.latex?%5Clambda_t">를 곱하고, 두 번째 식에 <img src="https://latex.codecogs.com/png.latex?(1-%5Clambda_t)">를 곱하여 더합니다. <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x%5E*)%20-%20(1-%5Clambda_t)(f(x_t)%20-%20f(x%5E*))%20%5Cle%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20(x_%7Bt+1%7D%20-%20y_t)%5E%5Ctop%20(2%5Clambda_t%20x%5E*%20+%202(1-%5Clambda_t)x_t%20-%202x_%7Bt+1%7D)"></li>
-<li>우변을 완전제곱식 형태로 묶기 위해 정리하면 놀랍게도 다음과 같이 에너지가 분리됩니다. <img src="https://latex.codecogs.com/png.latex?=%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cy_t%20-%20(1-%5Clambda_t)x_t%20-%20%5Clambda_t%20x%5E*%7C%7C_2%5E2%20-%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cx_%7Bt+1%7D%20-%20(1-%5Clambda_t)x_t%20-%20%5Clambda_t%20x%5E*%7C%7C_2%5E2"></li>
-<li>여기에 우리가 앞서 정의한 <img src="https://latex.codecogs.com/png.latex?y_t%20-%20(1-%5Clambda_t)x_t%20=%20%5Clambda_t%20v_t"> 와 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20-%20(1-%5Clambda_t)x_t%20=%20%5Clambda_t%20v_%7Bt+1%7D"> 을 대입합니다. <img src="https://latex.codecogs.com/png.latex?=%20%5Cfrac%7B%5Cbeta%5Clambda_t%5E2%7D%7B2%7D%20%7C%7Cv_t%20-%20x%5E*%7C%7C_2%5E2%20-%20%5Cfrac%7B%5Cbeta%5Clambda_t%5E2%7D%7B2%7D%20%7C%7Cv_%7Bt+1%7D%20-%20x%5E*%7C%7C_2%5E2"></li>
-</ul></li>
-<li><p><strong>Step 3: 점화식 풀이 (Telescoping Sum)</strong></p>
-<ul>
-<li>양변을 <img src="https://latex.codecogs.com/png.latex?%5Clambda_t%5E2">로 나누어 정리합니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B%5Clambda_t%5E2%7D(f(x_%7Bt+1%7D)%20-%20f(x%5E*))%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cv_%7Bt+1%7D%20-%20x%5E*%7C%7C_2%5E2%20%5Cle%20%5Cfrac%7B1-%5Clambda_t%7D%7B%5Clambda_t%5E2%7D(f(x_t)%20-%20f(x%5E*))%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cv_t%20-%20x%5E*%7C%7C_2%5E2"></li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1-%5Clambda_t%7D%7B%5Clambda_t%5E2%7D%20%5Cle%20%5Cfrac%7B1%7D%7B%5Clambda_%7Bt-1%7D%5E2%7D"> 이므로, 이 부등식을 연쇄적으로 <img src="https://latex.codecogs.com/png.latex?t=1">까지 적용할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?%5Cle%20%5Cfrac%7B1%7D%7B%5Clambda_%7Bt-1%7D%5E2%7D(f(x_t)%20-%20f(x%5E*))%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cv_t%20-%20x%5E*%7C%7C_2%5E2%20%5Cle%20%5Cdots%20%5Cle%20%5Cfrac%7B1-%5Clambda_1%7D%7B%5Clambda_1%5E2%7D(f(x_1)%20-%20f(x%5E*))%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cv_1%20-%20x%5E*%7C%7C_2%5E2"></li>
-<li>초기 조건에서 <img src="https://latex.codecogs.com/png.latex?%5Clambda_1%20=%201">이므로 첫 번째 항은 <img src="https://latex.codecogs.com/png.latex?0">이 되고, <img src="https://latex.codecogs.com/png.latex?v_1%20=%20x_1">이므로 최종적으로 우변은 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cbeta%7D%7B2%7D%7C%7Cx_1%20-%20x%5E*%7C%7C_2%5E2"> 만 남게 됩니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B%5Clambda_T%5E2%7D%20(f(x_%7BT+1%7D)%20-%20f(x%5E*))%20%5Cle%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%7C%7Cx_1%20-%20x%5E*%7C%7C_2%5E2"></li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Clambda_T%20=%20%5Cfrac%7B2%7D%7BT+1%7D"> 을 대입하면 최종 정리가 도출됩니다. <img src="https://latex.codecogs.com/png.latex?f(x_%7BT+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B%5Cbeta%5Clambda_T%5E2%7D%7B2%7D%20%7C%7Cx_1%20-%20x%5E*%7C%7C_2%5E2%20=%20%5Cfrac%7B2%5Cbeta%7D%7B(T+1)%5E2%7D%20%7C%7Cx_1%20-%20x%5E*%7C%7C_2%5E2%20%5Cquad%20%5Cblacksquare"></li>
-</ul></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="conclusion-ista-vs-fista" class="level1">
-<h1>5. Conclusion: ISTA vs FISTA</h1>
-<ul>
-<li><p>위 증명을 통해 가속화된 근접 경사 하강법(FISTA)이 <img src="https://latex.codecogs.com/png.latex?O(1/T%5E2)">의 수렴 속도를 가짐을 완벽히 보였습니다. 이는 오차(error)를 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon"> 이하로 만들기 위해 <strong>ISTA는 <img src="https://latex.codecogs.com/png.latex?O(1/%5Cepsilon)">번의 반복이 필요한 반면, FISTA는 단 <img src="https://latex.codecogs.com/png.latex?O(1/%5Csqrt%7B%5Cepsilon%7D)">번의 반복만 필요함</strong>을 의미합니다.</p></li>
-<li><p>LASSO 문제에서 변수의 개수(Dimension)나 샘플의 수(Data samples)가 커질수록 이 반복 횟수의 차이는 연산 시간에 엄청난 격차를 만들어냅니다. 따라서 실무와 연구에서 LASSO 최적화를 수행할 때 기본적인 Subgradient나 ISTA 대신 <strong>FISTA</strong>를 표준적으로 사용하는 이유가 바로 여기에 있습니다.</p></li>
-</ul>
-
-
-
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/12.Proximal-Gradient-Descent/12.4/</guid>
   <pubDate>Sun, 12 Apr 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>

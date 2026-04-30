@@ -1,0 +1,150 @@
+---
+title: "[Machine Learning] 13. Regression"
+description: "Regression"
+author: "유성현"
+date: "2026-04-30"
+categories: [Machine Learning]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 1. Introduction: 회귀 분석(Regression)의 목적
+
+* 기계학습(Machine Learning)에서 해결하고자 하는 문제는 크게 분류(Classification)와 회귀(Regression)로 나눌 수 있습니다. 회귀 분석은 기계학습의 가장 기본적인 지도학습(Supervised Learning) 프레임워크 중 하나로, 우리가 예측하고자 하는 대상이 이산적인 범주(discrete categories)가 아닌 **연속적인 실수 값(real-valued quantity)**일 때 사용됩니다. 
+
+* 지도학습이므로 데이터셋 $S_n$은 다음과 같이 입력(input)과 정답(target)의 쌍으로 주어집니다.
+$$ S_n = \{(x^{(1)}, y^{(1)}), ..., (x^{(n)}, y^{(n)})\} $$
+
+* 여기서 목표는 임의의 $d$차원 입력 공간 $\mathbb{R}^d$에서 실수 공간 $\mathbb{R}$로 매핑하는 가설 함수(Hypothesis function) $h$를 찾는 것입니다.
+$$ h: \mathbb{R}^d \rightarrow \mathbb{R} $$
+
+# 2. 모델링과 손실 함수 (Loss Function)
+
+## 2.1. 제곱 오차 (Squared Error)
+* 가설 함수가 얼마나 좋은 예측을 하고 있는지 평가하려면 기준이 필요하며, 이를 **손실 함수(Loss function)**라고 부릅니다. 도메인에 대한 특별한 사전 정보가 없다면 회귀 문제에서는 일반적으로 **제곱 오차(Squared Error, SE)**를 사용합니다.
+
+$$ Loss(guess, actual) = (guess - actual)^2 $$
+
+* 제곱 오차를 사용하는 데에는 두 가지 중요한 동기(Motivation)가 있습니다.
+  * 1. **대칭적인 페널티:** 실제 값보다 높게 예측한 경우와 낮게 예측한 경우에 대해 동일한 양의 페널티를 부여합니다.
+  * 2. **수학적 정당성 (Gaussian Noise):** 데이터가 우리가 모르는 '진짜' 가설 함수에 의해 생성되었지만, 타겟 $y$값에 **가우시안 분포(Gaussian-distributed)를 따르는 노이즈**가 추가되었다고 가정할 때, 최대우도추정(Maximum Likelihood Estimation, MLE)을 수행하면 자연스럽게 오차의 제곱합을 최소화하는 문제로 귀결됩니다.
+
+## 2.2. 선형 가설 클래스 (Linear Hypothesis Class)
+* 본 포스트에서는 가설 함수 $h$가 입력 변수들의 선형 결합으로 표현되는 **선형 가설 클래스(Linear hypothesis class)**를 다룹니다.
+$$ h(x; \theta, \theta_0) = \theta^\top x + \theta_0 $$
+  - 여기서 $\theta$는 가중치(weights) 벡터, $\theta_0$는 편향(bias 또는 intercept)을 의미합니다. 
+
+* **[참고: 비선형 확장의 아이디어]**
+  * 입력 공간이 선형적으로 분리되거나 예측되지 않는다면 어떻게 할까요? 선형 모델의 틀을 유지하면서도 풍부한 표현력을 얻기 위해, 비선형 특성 변환(non-linear feature transformation) 함수 $\phi(x)$를 먼저 적용할 수 있습니다. 
+  $$ h(x) = \theta^\top \phi(x) + \theta_0 $$
+  * 이 식은 $x$에 대해서는 비선형(non-linear)이지만, 매개변수 $\theta$에 대해서는 여전히 선형(linear)이므로 기존의 최적화 기법을 그대로 적용할 수 있습니다.
+
+# 3. 최적화 문제로서의 회귀: OLS (Ordinary Least Squares)
+
+* 회귀 분석은 주어진 데이터셋 $D$에 대해 평균 제곱 오차(Mean Squared Error, MSE)를 최소화하는 파라미터 $\Pi = (\theta, \theta_0)$를 찾는 최적화 문제로 정의됩니다.
+
+$$ J(\theta, \theta_0) = \frac{1}{n} \sum_{i=1}^n \left( \theta^\top x^{(i)} + \theta_0 - y^{(i)} \right)^2 $$
+
+* 최종적으로 우리가 찾고자 하는 해(solution)는 다음과 같습니다.
+$$ \theta^*, \theta_0^* = \arg \min_{\theta, \theta_0} J(\theta, \theta_0) $$
+
+## 3.1. 해석적 해(Analytical Solution)를 위한 행렬화
+* 이 문제는 매우 흥미롭게도 미적분학의 최적화 기법을 사용해 **닫힌 형태(closed-form)의 공식**으로 정확한 해를 도출할 수 있습니다. 이를 **OLS (Ordinary Least Squares)**라고 부릅니다.
+
+* 수학적 편의를 위해, 모든 입력 데이터 $x^{(i)}$의 마지막 차원에 항상 '1'이라는 값을 갖는 추가 차원(feature)을 덧붙였다고 가정합시다. 이렇게 하면 $\theta_0$를 $\theta$ 벡터 안에 흡수시킬 수 있으므로 식에서 $\theta_0$를 명시적으로 분리하여 적을 필요가 사라집니다.
+
+* 데이터셋을 행렬 $X$와 $Y$로 표현해 보겠습니다. 각 열(column)이 하나의 데이터 샘플을 나타냅니다.
+$$ X = \begin{bmatrix} x_1^{(1)} & \dots & x_1^{(n)} \\ \vdots & \ddots & \vdots \\ x_d^{(1)} & \dots & x_d^{(n)} \end{bmatrix}_{d \times n}, \quad Y = \begin{bmatrix} y^{(1)} & \dots & y^{(n)} \end{bmatrix}_{1 \times n} $$
+
+* 일반적인 교과서나 구현체에서는 각 샘플을 행(row)으로 두는 것이 표준입니다. 따라서 $X$와 $Y$를 전치(transpose)하여 새로운 행렬 $W$와 벡터 $T$를 정의하겠습니다.
+$$ W = X^\top = \begin{bmatrix} x_1^{(1)} & \dots & x_d^{(1)} \\ \vdots & \ddots & \vdots \\ x_1^{(n)} & \dots & x_d^{(n)} \end{bmatrix}_{n \times d}, \quad T = Y^\top = \begin{bmatrix} y^{(1)} \\ \vdots \\ y^{(n)} \end{bmatrix}_{n \times 1} $$
+  - **차원 확인:** $W$는 $n \times d$ 행렬, $T$는 $n \times 1$ 열 벡터입니다.
+
+## 3.2. MSE 목적 함수의 벡터화 및 미분
+* 위의 행렬을 사용하여 목적 함수 $J(\theta)$를 벡터 내적 형태로 변환하면 다음과 같습니다.
+
+$$ J(\theta) = \frac{1}{n} (W\theta - T)^\top (W\theta - T) = \frac{1}{n} \sum_{i=1}^n \left( \left(\sum_{j=1}^d w_j \theta_j\right) - T_i \right)^2 $$
+
+* 최소값을 찾기 위해 행렬/미적분학의 성질을 이용하여 $J(\theta)$를 $\theta$에 대해 편미분(Gradient)하고, 그 결과를 0으로 둡니다.
+* 유도 과정을 단계별로 풀어서 설명하겠습니다.
+  * 1. **전개(Expansion):** 
+     $J(\theta) = \frac{1}{n} \left( \theta^\top W^\top W \theta - \theta^\top W^\top T - T^\top W \theta + T^\top T \right)$
+  * 2. **스칼라 속성 이용:** $\theta^\top W^\top T$는 스칼라 값이므로 그 전치인 $T^\top W \theta$와 같습니다.
+     $J(\theta) = \frac{1}{n} \left( \theta^\top W^\top W \theta - 2 \theta^\top W^\top T + T^\top T \right)$
+  * 3. **그래디언트 계산:** $\theta$에 대해 미분합니다. (이차 폼 미분 공식 $\nabla_x (x^\top A x) = 2Ax$ 및 $\nabla_x (b^\top x) = b$ 활용)
+     $$ \nabla_\theta J = \frac{1}{n} \left( 2 W^\top W \theta - 2 W^\top T \right) = \frac{2}{n} W^\top (W\theta - T) $$
+  * 4. **최적해 도출:** 미분값을 0으로 설정합니다.
+     $$ \frac{2}{n} W^\top (W\theta - T) = 0 $$
+     $$ W^\top W \theta - W^\top T = 0 $$
+     $$ W^\top W \theta = W^\top T $$
+     $$ \theta = (W^\top W)^{-1} W^\top T $$
+
+* 이로써 데이터를 통해 평균 제곱 오차를 최소화하는 $\theta$ 차원의 식을 직접(directly) 도출해냈습니다. 식의 차원을 검증해보면, $(d \times d)$ 역행렬과 $(d \times n)$ 행렬, 그리고 $(n \times 1)$ 행렬의 곱이므로 최종 $\theta$는 $(d \times 1)$ 차원을 가지며 완벽히 일치합니다.
+
+# 4. OLS의 한계와 릿지 회귀 (Ridge Regression)
+
+## 4.1. OLS에서 발생할 수 있는 문제점
+* 해석적 해 $\theta = (W^\top W)^{-1} W^\top T$는 완벽해 보이지만, 실제 데이터 분석에서는 두 가지 치명적인 문제에 직면할 수 있습니다.
+  * 1. **역행렬이 존재하지 않는 경우 (Non-invertibility):**
+     - 만약 데이터셋에 완전히 동일한 포인트가 중복되어 있거나(예: $x^{(1)} = x^{(2)} = (1, 2)^\top$), 변수들 간에 완벽한 선형 종속성(다중공선성)이 있다면 행렬 $(W^\top W)$는 특이 행렬(singular matrix)이 되어 역행렬을 구할 수 없습니다.
+  * 2. **과적합 (Overfitting):**
+     - OLS 목적 함수는 "주어진 학습 데이터"에 최대한 완벽하게 끼워 맞추는 데에만 집중합니다. 마진 극대화(Margin maximization) 논의에서 살펴보았듯, 가설이 훈련 데이터에 너무 과도하게 집착하지 않도록 제한하는 규칙화(Regularization) 메커니즘이 필요합니다.
+
+## 4.2. 릿지 회귀의 목적 함수
+* 위 두 가지 문제를 동시에 해결하기 위해, OLS 목적 함수에 $\lambda ||\theta||^2$ 형태의 **정규화 항(Regularization term)**을 추가한 **릿지 회귀(Ridge Regression)**를 도입합니다.
+$$ J_{ridge}(\theta, \theta_0) = \frac{1}{n} \sum_{i=1}^n \left( \theta^\top x^{(i)} + \theta_0 - y^{(i)} \right)^2 + \lambda ||\theta||^2 $$
+  - 여기서 $\lambda$는 데이터 적합도와 파라미터 제약 사이의 균형을 맞추는 트레이드오프(trade-off) 파라미터입니다.
+  - 큰 $\lambda$ 값은 파라미터 $\theta$ 값들이 0에 가까워지도록 강하게 압박(pressure)합니다. 데이터가 전혀 없는 상태에서 최선의 $\theta$ 값은 $0$ 벡터가 됩니다.
+  - **주의점:** 편향 항인 $\theta_0$는 정규화 페널티 대상에서 제외합니다. 직관적으로 $\theta_0$는 회귀 평면이 데이터의 전반적인 높이(level)에 맞게 '떠 있도록(floats)' 해주는 역할만 하므로, $y$값 스케일이 매우 큰 데이터라고 해서 맞추기 어렵게 만들 이유가 없습니다. 반면 나머지 $\theta$ 파라미터들은 회귀 평면의 '기울기(orientation)'를 제어하므로, 이 기울기가 너무 극단적(crazy)이지 않기를 바라는 것입니다.
+
+## 4.3. 릿지 회귀의 해석적 해 유도 (Advanced)
+* 원칙적으로는 $\theta_0$를 특별 취급해야 하지만, 수식 유도의 단순화를 위해 $\theta_0$를 일반 $\theta$처럼 취급하여 도출해 보겠습니다.
+
+* 목적 함수를 $\theta$에 대해 편미분하면 다음과 같습니다.
+$$ \nabla_\theta J_{ridge} = \frac{2}{n} W^\top (W\theta - T) + 2\lambda\theta $$
+
+* 이 그래디언트를 0으로 설정하고 $\theta$에 대해 풉니다.
+$$ \frac{2}{n} W^\top (W\theta - T) + 2\lambda\theta = 0 $$
+$$ \frac{1}{n} W^\top W \theta - \frac{1}{n} W^\top T + \lambda\theta = 0 $$
+$$ \frac{1}{n} W^\top W \theta + \lambda\theta = \frac{1}{n} W^\top T $$
+* 양변에 $n$을 곱해줍니다.
+$$ W^\top W \theta + n\lambda\theta = W^\top T $$
+* 행렬 형태로 묶어줍니다 (이때 스칼라 $\lambda$를 행렬식에 맞추기 위해 항등 행렬 $I$를 곱합니다).
+$$ (W^\top W + n\lambda I)\theta = W^\top T $$
+* 최종적으로 양변의 역행렬을 취합니다.
+$$ \theta_{ridge} = (W^\top W + n\lambda I)^{-1} W^\top T $$
+
+* 이 수식의 핵심은 **$\lambda > 0$일 때, $(W^\top W + n\lambda I)$ 행렬이 항상 가역적(invertible)이 된다**는 점입니다. 대각 성분에 양수 $n\lambda$가 더해지면서 행렬의 특이성이 해소됩니다.
+
+# 5. 오차의 근원: 구조적 오차와 추정 오차
+
+* 기계학습 모델이 테스트 데이터에서 예측 오류를 범할 때, 우리는 이를 두 가지 오차의 관점에서 분석할 수 있습니다. (이는 통계학에서의 Bias-Variance Trade-off 개념과 깊게 연결됩니다.)
+  * 1. **구조적 오차 (Structural error / Bias):** 
+     - 우리가 선택한 가설 클래스 $h \in H$ 자체의 한계 때문에 발생하는 오차입니다. 예를 들어, 실제 데이터가 사인 파형(sine wave)으로 생성되었는데, 우리가 1차원 직선(line)으로만 피팅하려고 할 때 발생합니다.
+  * 2. **추정 오차 (Estimation error / Variance):** 
+     - 가설 클래스 내에서 좋은 가설 $h \in H$를 선택할 만큼 데이터 양이 충분하지 않아 발생하는 오차입니다.
+
+* **$\lambda$의 영향:** 
+  * 정규화 파라미터 $\lambda$를 증가시키면, 모델의 표현력이 제한되어 구조적 오차(Bias)는 증가하는 경향이 있지만, 반대로 모델의 변동성이 줄어들어 추정 오차(Variance)는 감소합니다. 반대로 다항식 기저(polynomial basis)의 차수 $k$를 높이면 구조적 오차는 줄어들지만, 더 많은 데이터가 필요해지므로 추정 오차는 증가합니다.
+
+# 6. 경사 하강법 (Gradient Descent)을 통한 최적화
+
+* 해석적 해(Analytical solution)가 존재함에도 불구하고 실제 현대 기계학습에서는 다른 접근 방식을 자주 사용합니다. 
+* 가장 큰 이유는 계산 비용(Computational Cost)입니다. $d \times d$ 크기의 행렬 $(W^\top W)$의 역행렬을 구하는 연산은 시간 복잡도가 $O(d^3)$입니다. 차원수 $d$가 매우 큰 고차원 데이터의 경우, 해석적 해를 구하는 것은 현실적으로 불가능에 가깝습니다. (반면 데이터 개수 $n$이 큰 것은 행렬 곱셈 $W^\top W$ 단계에서 선형적으로 시간이 증가할 뿐이라 치명적이지 않습니다).
+
+* 따라서 우리는 대안으로 **경사하강법(Gradient Descent)**을 사용합니다.
+
+* 릿지 회귀의 목적 함수와 그 그래디언트는 다음과 같이 정의됩니다.
+$$ J_{ridge}(\theta, \theta_0) = \frac{1}{n} \sum_{i=1}^n \left( \theta^\top x^{(i)} + \theta_0 - y^{(i)} \right)^2 + \lambda ||\theta||^2 $$
+
+- $\theta$에 대한 편미분 (가중치 업데이트용):
+  $$ \nabla_\theta J = \frac{2}{n} \sum_{i=1}^n \left( \theta^\top x^{(i)} + \theta_0 - y^{(i)} \right)x^{(i)} + 2\lambda\theta $$
+
+- $\theta_0$에 대한 편미분 (편향 업데이트용):
+  $$ \frac{\partial J}{\partial \theta_0} = \frac{2}{n} \sum_{i=1}^n \left( \theta^\top x^{(i)} + \theta_0 - y^{(i)} \right) $$
+
+* 가장 다행인 점은, OLS와 릿지 회귀의 목적 함수가 모두 **볼록 함수(Convex function)**라는 사실입니다. 볼록 함수는 오직 단 하나의 전역 최솟값(global minimum)만을 가집니다. 따라서 충분히 작은 학습률(step size)을 사용한다면, 경사하강법은 반드시 최적해로 수렴(Gradient Descent Convergence Theorem)한다는 강력한 수학적 보장을 받습니다.

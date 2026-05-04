@@ -10,7 +10,811 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>스흐의 공부 블로그</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Wed, 29 Apr 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Sun, 03 May 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>[Deep Learning] 17. Deep Generative Models 1</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction-unsupervised-learning-generative-modeling" class="level1">
+<h1>1. Introduction: Unsupervised Learning &amp; Generative Modeling</h1>
+<ul>
+<li><p>머신러닝과 딥러닝의 학습 패러다임은 크게 데이터의 형태와 목적에 따라 지도 학습(Supervised Learning)과 비지도 학습(Unsupervised Learning)으로 나눌 수 있습니다.</p></li>
+<li><p>지도 학습이 정답(Label)이 존재하는 데이터 쌍 <img src="https://latex.codecogs.com/png.latex?(x,%20y)">를 이용하여 입력 <img src="https://latex.codecogs.com/png.latex?x">에서 출력 <img src="https://latex.codecogs.com/png.latex?y">로의 함수 매핑을 학습하는 것이라면, 비지도 학습은 레이블이 없는 순수 데이터 <img src="https://latex.codecogs.com/png.latex?x">만을 활용하여 데이터 내부에 숨겨진 구조(Hidden structure)를 찾아내는 것을 목표로 합니다. 지도 학습의 대표적인 예로는 분류(Classification), 회귀(Regression), 객체 탐지(Detection) 등이 있으며, 비지도 학습에는 군집화(Clustering), 차원 축소(Dimensionality reduction), 특징 학습(Feature learning), 그리고 밀도 추정(Density estimation)이 포함됩니다.</p></li>
+<li><p>본 포스트에서는 비지도 학습의 한 축을 담당하는 <strong>생성 모델(Generative Models)</strong>의 필요성과 근본적인 목적 함수, 그리고 잠재 표현(Latent representation)을 학습하는 <strong>오토인코더(Autoencoders)</strong>의 기본 구조를 상세히 다룹니다. 향후 전개될 VAE(Variational Autoencoder) 툴킷(확률론적 잠재 변수 표기법, KL 발산, 젠슨 부등식, ELBO 등)을 이해하기 위한 필수적인 토대가 될 것입니다.</p></li>
+</ul>
+<hr>
+<section id="why-generative-models" class="level2">
+<h2 class="anchored" data-anchor-id="why-generative-models">1.1. Why Generative Models?</h2>
+<ul>
+<li>생성 모델은 주어진 학습 데이터의 기저 분포 자체를 모델링(Model the data distribution itself)하는 고차원적인 비지도 학습 방법론입니다. 단순히 데이터를 분류하는 것을 넘어, 데이터가 어떻게 생성되었는지 그 원리를 학습함으로써 다음과 같은 다양한 영역에서 활용될 수 있습니다.
+<ul>
+<li><strong>현실적인 샘플 생성 (Realistic samples):</strong> 예술 작품 창작(Artwork), 초해상도(Super-resolution), 이미지 채색(Colorization) 등 고품질의 합성 데이터를 생성합니다.</li>
+<li><strong>데이터 증강 (Data augmentation):</strong> 데이터가 부족한 환경에서 학습 데이터의 분포를 따르는 새로운 데이터를 생성하여 모델의 일반화 성능을 높입니다.</li>
+<li><strong>특징 학습 (Feature learning):</strong> 생성 과정에서 데이터의 핵심적인 잠재 특징(Latent features)을 추출하고 학습할 수 있습니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+<section id="autoencoders-learning-hidden-structures" class="level2">
+<h2 class="anchored" data-anchor-id="autoencoders-learning-hidden-structures">1.2. Autoencoders: Learning Hidden Structures</h2>
+<ul>
+<li>오토인코더(Autoencoder)는 레이블 없이 데이터 <img src="https://latex.codecogs.com/png.latex?x">의 유의미한 특징을 추출하기 위해 고안된 대표적인 비지도 특징 학습(Feature learning) 모델입니다. 이 네트워크의 핵심 아이디어는 <strong>입력 데이터를 자신과 동일하게 복원하도록 신경망을 훈련</strong>시키는 데 있습니다.</li>
+</ul>
+<section id="architecture-of-autoencoder" class="level3">
+<h3 class="anchored" data-anchor-id="architecture-of-autoencoder">1.2.1. Architecture of Autoencoder</h3>
+<ul>
+<li>오토인코더는 크게 두 가지 핵심 모듈로 구성됩니다.
+<ul>
+<li><ol type="1">
+<li><strong>인코더(Encoder):</strong> 고차원의 입력 데이터 <img src="https://latex.codecogs.com/png.latex?x">를 저차원의 <strong>잠재 특징 벡터(Latent features) <img src="https://latex.codecogs.com/png.latex?z"></strong>로 압축합니다. 예를 들어, 이미지 데이터의 경우 4개의 합성곱 계층(4-layer conv)으로 구성된 네트워크가 사용될 수 있습니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>디코더(Decoder):</strong> 압축된 잠재 벡터 <img src="https://latex.codecogs.com/png.latex?z">를 바탕으로 원래의 입력 데이터와 동일한 차원을 갖는 <strong>복원된 데이터(Reconstructed data) <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D"></strong>를 생성합니다. 디코더 역시 4개의 업컨볼루션 계층(4-layer upconv)으로 구성될 수 있습니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/autoencoder_architecture.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 오토인코더(Autoencoder)의 구조 모식도. 하단의 원본 입력 데이터(Input data) <img src="https://latex.codecogs.com/png.latex?x">가 인코더(Encoder) 신경망을 통과하여 병목(Bottleneck) 구간인 잠재 특징(Features) <img src="https://latex.codecogs.com/png.latex?z">로 압축된다. 이후 압축된 <img src="https://latex.codecogs.com/png.latex?z">는 상단의 디코더(Decoder)를 거쳐 복원된 데이터(Reconstructed input data) <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D">로 재구성된다. 가장 상단에는 원본 <img src="https://latex.codecogs.com/png.latex?x">와 복원본 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D"> 사이의 차이를 나타내는 <img src="https://latex.codecogs.com/png.latex?L2"> 손실 함수 식 <img src="https://latex.codecogs.com/png.latex?%7C%7Cx%20-%20%5Chat%7Bx%7D%7C%7C%5E2">이 제시되어 있으며, 화살표는 데이터가 아래에서 위로 흐르는 순전파(Feed-forward) 과정과 손실 함수를 통한 역전파의 논리적 흐름을 보여준다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="mathematical-formulation-of-objective" class="level3">
+<h3 class="anchored" data-anchor-id="mathematical-formulation-of-objective">1.2.2. Mathematical Formulation of Objective</h3>
+<ul>
+<li>오토인코더의 학습 목적은 입력 데이터 <img src="https://latex.codecogs.com/png.latex?x">와 디코더를 통해 생성된 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D"> 간의 차이를 최소화하는 것입니다. 이를 위해 주로 <strong><img src="https://latex.codecogs.com/png.latex?L_2"> 손실 함수(Mean Squared Error)</strong>를 사용합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BL%7D%20=%20%7C%7Cx%20-%20%5Chat%7Bx%7D%7C%7C%5E2%0A"></p>
+<ul>
+<li><strong>[논리적 흐름 및 수학적 직관]</strong>
+<ul>
+<li>단순해 보이는 위 수식은 확률론적으로 깊은 의미를 지닙니다. 만약 디코더가 생성하는 픽셀 값의 오차 분포가 등분산 가우시안 분포(Isotropic Gaussian)를 따른다고 가정하면, 모델의 파라미터에 대한 음의 로그 우도(Negative Log-Likelihood)를 최소화하는 것은 정확히 <img src="https://latex.codecogs.com/png.latex?L_2"> 거리를 최소화하는 것과 수학적으로 동치입니다. 네트워크는 이 손실 함수를 최소화하는 방향으로 인코더와 디코더의 파라미터를 동시에 업데이트하며, 그 결과 병목 계층(Bottleneck)의 변수 <img src="https://latex.codecogs.com/png.latex?z">는 데이터 <img src="https://latex.codecogs.com/png.latex?x">를 복원하는 데 가장 필수적인 정보만을 압축하여 담게 됩니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="the-generative-modeling-objective" class="level2">
+<h2 class="anchored" data-anchor-id="the-generative-modeling-objective">1.3. The Generative Modeling Objective</h2>
+<ul>
+<li><p>생성 모델을 확률론적 관점에서 바라볼 때, 궁극적인 목표는 실제 데이터 분포와 가장 유사한 모델 분포를 찾는 것입니다.</p></li>
+<li><p>우리가 수집한 학습 데이터셋이 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(1)%7D,%20...,%20x%5E%7B(N)%7D"> 이고, 이들이 미지의 실제 데이터 분포 <img src="https://latex.codecogs.com/png.latex?p_%7Bdata%7D(x)">로부터 추출(i.i.d)되었다고 가정합시다 (<img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D%20%5Csim%20p_%7Bdata%7D(x)">). 우리는 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">로 정의된 모델 분포 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x)">가 주어졌을 때, 이 모델이 실제 현실의 사실적인 데이터에 높은 확률을 부여하도록 학습시키고자 합니다.</p></li>
+</ul>
+<section id="maximum-likelihood-estimation-mle" class="level3">
+<h3 class="anchored" data-anchor-id="maximum-likelihood-estimation-mle">1.3.1. Maximum Likelihood Estimation (MLE)</h3>
+<ul>
+<li>이를 달성하기 위한 가장 표준적인 접근법은 최대 우도 추정(Maximum Likelihood Estimation)입니다. 독립적으로 추출된 데이터 포인트들에 대해 결합 확률을 최대화하는 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 찾는 것은, 로그를 취하여 합산하는 문제로 변환할 수 있습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmax_%7B%5Ctheta%7D%20%5Csum_%7Bi=1%7D%5E%7BN%7D%20%5Clog%20p_%7B%5Ctheta%7D(x%5E%7B(i)%7D)%0A"></p>
+</section>
+<section id="the-intractability-problem" class="level3">
+<h3 class="anchored" data-anchor-id="the-intractability-problem">1.3.2 The Intractability Problem</h3>
+<ul>
+<li><p>간단한 분포 모델에서는 위 식의 <img src="https://latex.codecogs.com/png.latex?p_%7B%5Ctheta%7D(x)">를 직접 계산하는 것(Tractable)이 가능합니다. 하지만 이미지나 텍스트와 같이 복잡한 고차원 데이터를 모델링하기 위해 딥러닝 기반의 <strong>신경망 잠재 변수 모델(Neural latent-variable models)</strong>을 도입할 경우 치명적인 수학적 한계에 부딪히게 됩니다.</p></li>
+<li><p>잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">가 존재하는 모델에서 데이터의 주변부 확률(Marginal probability) <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x)">를 구하기 위해서는 모든 잠재 공간에 대해 적분을 수행해야 합니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ap_%5Ctheta(x)%20=%20%5Cint%20p_%5Ctheta(x%7Cz)%20p(z)%20dz%0A"></p>
+<ul>
+<li>고차원 공간에서 신경망으로 모델링된 복잡한 분포 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x%7Cz)">에 대한 적분은 분석적으로도 불가능하며, 수치적으로도 다루기 어려운 <strong>난해한 적분(Intractable integral)</strong> 문제가 됩니다.</li>
+</ul>
+</section>
+<section id="introduction-to-vae" class="level3">
+<h3 class="anchored" data-anchor-id="introduction-to-vae">1.3.3. Introduction to VAE</h3>
+<ul>
+<li>이러한 Intractable 문제를 해결하고 딥러닝 기반 모델에서 우도(Likelihood)를 극대화하기 위한 돌파구로 등장한 것이 바로 <strong>변분 오토인코더(Variational Autoencoder, VAE)</strong> 입니다. VAE는 직접적으로 <img src="https://latex.codecogs.com/png.latex?%5Clog%20p_%5Ctheta(x)">를 최대화하는 대신, 최적화가 가능한 형태의 <strong>계산 가능한 하한선(Tractable lower bound, ELBO)</strong>을 도출하여 이를 최대화하는 우회적이고 우아한 해법을 제시합니다. (ELBO의 구체적인 수학적 유도 과정과 최적화 기법은 이어지는 포스트에서 다루도록 하겠습니다.)</li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="autoencoders-representation-learning" class="level1">
+<h1>2. Autoencoders: Representation Learning</h1>
+<ul>
+<li><p>앞선 포스트에서 비지도 학습과 생성 모델의 궁극적인 목표를 살펴보았습니다. 이번 포스트에서는 본격적으로 <strong>오토인코더(Autoencoders)</strong>의 수학적 구조와 이를 확률론적으로 해석하는 과정을 다룹니다.</p></li>
+<li><p>오토인코더는 데이터의 고차원 구조를 저차원의 의미 있는 표현(Representation)으로 압축하고 다시 복원하는 과정을 통해 데이터의 기저 특징을 학습하는 비지도 학습 모델입니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/autoencoder_basic_structure.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 오토인코더(Autoencoder)의 구조 모식도. 가장 하단의 입력 데이터(Input) <img src="https://latex.codecogs.com/png.latex?x">가 인코더(Encoder) <img src="https://latex.codecogs.com/png.latex?f_%5Cphi">를 통과하여 압축된 형태인 잠재 코드(Code) <img src="https://latex.codecogs.com/png.latex?z">로 변환된다(<img src="https://latex.codecogs.com/png.latex?z%20=%20f_%5Cphi(x)">). 이후 압축된 <img src="https://latex.codecogs.com/png.latex?z">는 상단의 디코더(Decoder) <img src="https://latex.codecogs.com/png.latex?g_%5Ctheta">를 거쳐 복원된 데이터(Reconstruction) <img src="https://latex.codecogs.com/png.latex?%5Cwidehat%7Bx%7D">로 재구성된다(<img src="https://latex.codecogs.com/png.latex?%5Cwidehat%7Bx%7D%20=%20g_%5Ctheta(z)">). 화살표는 데이터가 입력 계층에서 재구성 계층으로 향하는 아래에서 위로의 흐름을 보여준다.</figcaption>
+</figure>
+</div>
+<hr>
+<section id="architecture-and-the-bottleneck" class="level2">
+<h2 class="anchored" data-anchor-id="architecture-and-the-bottleneck">2.1. Architecture and The Bottleneck</h2>
+<ul>
+<li>오토인코더는 입력 공간 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BX%7D">에서 잠재 공간(Latent space) <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BZ%7D">로, 그리고 다시 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BX%7D">로 매핑하는 두 개의 신경망으로 구성됩니다.
+<ul>
+<li><ol type="1">
+<li><strong>인코더 (Encoder), <img src="https://latex.codecogs.com/png.latex?f_%5Cphi">:</strong></li>
+</ol>
+<ul>
+<li>입력 데이터 <img src="https://latex.codecogs.com/png.latex?x">를 저차원의 잠재 코드(Latent code) <img src="https://latex.codecogs.com/png.latex?z">로 매핑합니다. <img src="https://latex.codecogs.com/png.latex?z%20=%20f_%5Cphi(x)"></li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>디코더 (Decoder), <img src="https://latex.codecogs.com/png.latex?g_%5Ctheta">:</strong></li>
+</ol>
+<ul>
+<li>잠재 코드 <img src="https://latex.codecogs.com/png.latex?z">를 받아 원래의 데이터와 같은 차원의 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D">로 복원(Reconstruction)합니다. <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D%20=%20g_%5Ctheta(z)"></li>
+</ul></li>
+</ul></li>
+<li>여기서 핵심적인 기하학적 제약은 <strong>잠재 공간의 차원이 입력 공간의 차원보다 작다(<img src="https://latex.codecogs.com/png.latex?dim(z)%20%3C%20dim(x)">)</strong>는 점입니다. 이러한 ‘병목(Bottleneck)’ 구조는 네트워크가 단순히 입력을 출력으로 복사하는 항등 함수(Identity function)를 학습하는 것을 방지합니다. 대신, 네트워크는 복원 오차를 최소화하기 위해 데이터 변동을 설명하는 가장 유용한 팩터(Useful factors of variation)만을 <img src="https://latex.codecogs.com/png.latex?z">에 담도록 강제됩니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/autoencoder_training.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 오토인코더의 학습 과정을 나타낸 도식. 하단의 초록색 박스인 입력(Input) <img src="https://latex.codecogs.com/png.latex?x">는 파란색 박스의 인코더(Encoder)를 거쳐 주황색 박스인 병목 구간의 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">로 압축된다. 점선 화살표는 원래의 입력 데이터 <img src="https://latex.codecogs.com/png.latex?x">와 디코더를 거쳐 나온 복원 결과물 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D"> 사이의 재구성 손실 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D_%7Brec%7D(x,%20%5Chat%7Bx%7D)">를 계산하여 인코더와 디코더의 파라미터를 동시에 업데이트하는 최적화 과정을 직관적으로 보여준다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+<section id="objective-function-and-applications" class="level2">
+<h2 class="anchored" data-anchor-id="objective-function-and-applications">2.2. Objective Function and Applications</h2>
+<ul>
+<li>오토인코더의 학습 목적 함수는 원본 데이터 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">와 이를 인코딩 후 디코딩한 결과 사이의 차이를 최소화하는 것입니다. 주로 <img src="https://latex.codecogs.com/png.latex?L_2"> 노름(Norm)의 제곱을 손실 함수로 사용합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20%5Cmin_%7B%5Ctheta,%20%5Cphi%7D%20%5Csum_%7Bi=1%7D%5EN%20%7C%7Cx%5E%7B(i)%7D%20-%20g_%5Ctheta(f_%5Cphi(x%5E%7B(i)%7D))%7C%7C_2%5E2%20"></p>
+<ul>
+<li>이러한 방식으로 학습된 오토인코더는 단순한 데이터 압축을 넘어 다양하게 활용됩니다.
+<ul>
+<li><strong>차원 축소 (Dimensionality reduction)</strong> 및 <strong>특징 학습 (Feature learning)</strong></li>
+<li><strong>노이즈 제거 (Denoising)</strong> 및 손상된 데이터 복원</li>
+<li><strong>사전 학습 (Pretraining):</strong> 학습된 인코더 부분을 떼어내어 분류기(Classifier) 등의 하위 지도 학습(Downstream supervised tasks)의 특징 추출기(Feature extractor)로 재사용할 수 있습니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+<section id="can-a-vanilla-autoencoder-generate" class="level2">
+<h2 class="anchored" data-anchor-id="can-a-vanilla-autoencoder-generate">2.3. Can a Vanilla Autoencoder Generate?</h2>
+<ul>
+<li><p>오토인코더가 데이터를 훌륭하게 압축하고 복원할 수 있다면, 이를 그대로 <strong>생성 모델(Generative Model)</strong>로 사용할 수 있을까요?</p></li>
+<li><p>이론적으로 인코더를 버리고, 잠재 공간에서 임의의 <img src="https://latex.codecogs.com/png.latex?z">를 샘플링한 뒤 디코더 <img src="https://latex.codecogs.com/png.latex?g_%5Ctheta(z)">를 통과시키면 새로운 데이터 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D">가 생성될 것 같지만, 결정론적(Deterministic) 오토인코더인 일반적인(Vanilla) 모델에서는 이 방식이 작동하지 않습니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20z%20%5Csim%20?%20%5Cquad%20%5Clongrightarrow%20%5Cquad%20%5Chat%7Bx%7D%20=%20g_%5Ctheta(z)%20"></p>
+<ul>
+<li>문제의 핵심은 <strong>“우리가 어떤 분포에서 <img src="https://latex.codecogs.com/png.latex?z">를 샘플링해야 하는가?”</strong>를 모른다는 점입니다. 결정론적 오토인코더는 학습 데이터에 대응하는 코드들을 매핑할 뿐, 잠재 공간 전체에 대해 알려진 확률 분포(Known distribution)를 정의하지 않습니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/decoder_generation_process.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 잠재 변수를 활용한 데이터 생성 과정 모식도. 좌측에서 특정 분포로부터 샘플링된 잠재 벡터 <img src="https://latex.codecogs.com/png.latex?z"> (<img src="https://latex.codecogs.com/png.latex?z%20%5Csim%20?">)가 중간의 디코더(Decoder) <img src="https://latex.codecogs.com/png.latex?g_%5Ctheta">로 입력된다. 디코더를 통과한 잠재 벡터는 변환 과정을 거쳐 우측의 새로운 데이터(Generated) <img src="https://latex.codecogs.com/png.latex?%5Cwidehat%7Bx%7D">로 생성된다. 좌측의 <img src="https://latex.codecogs.com/png.latex?z%20%5Csim%20?"> 기호는 유의미한 새로운 데이터를 생성하기 위해 잠재 공간의 어떤 분포에서 <img src="https://latex.codecogs.com/png.latex?z">를 추출해야 하는지에 대한 문제(Sampling)를 암시하고 있다.</figcaption>
+</figure>
+</div>
+<section id="the-holes-in-latent-space" class="level3">
+<h3 class="anchored" data-anchor-id="the-holes-in-latent-space">2.3.1. The “Holes” in Latent Space</h3>
+<ul>
+<li>잠재 공간 내부를 들여다보면 모델이 생성에 적합하지 않은 이유가 명확해집니다. 학습 데이터가 매핑된 잠재 공간은 연속적이지 않고, 매우 복잡한 부분집합(Complicated subset)만을 차지하게 됩니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/latent_space_holes.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 잠재 공간(Latent Space) 내의 ‘구멍(Hole)’ 문제를 나타낸 산점도. 가로축 <img src="https://latex.codecogs.com/png.latex?z_1">과 세로축 <img src="https://latex.codecogs.com/png.latex?z_2">로 구성된 2차원 공간 상에 인코딩된 학습 데이터들이 파란색 점들로 군집을 이루고 있다. 그러나 군집들 사이에는 데이터가 전혀 매핑되지 않은 빈 공간이 존재하며, 붉은 점선 원으로 ’hole’이라고 명시되어 있다. 만약 이 구멍 영역에서 무작위로 <img src="https://latex.codecogs.com/png.latex?z">를 샘플링하여 디코더에 통과시킬 경우, 학습 데이터와 동떨어진 비현실적인 이미지가 생성될 수밖에 없음을 기하학적으로 보여준다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>만약 우리가 무작위로 <img src="https://latex.codecogs.com/png.latex?z">를 샘플링할 때, 학습 데이터가 전혀 매핑되지 않은 빈 공간(Holes)에 도달하게 된다면 어떻게 될까요? 디코더는 이 영역의 벡터를 해석하는 방법을 배운 적이 없으므로, 완전히 비현실적이고 망가진 출력(Unrealistic outputs)을 생성하게 됩니다.</li>
+</ul>
+</section>
+<section id="vae-intuition" class="level3">
+<h3 class="anchored" data-anchor-id="vae-intuition">2.3.2. VAE Intuition</h3>
+<ul>
+<li>이러한 문제를 해결하기 위한 직관적인 아이디어가 바로 <strong>변분 오토인코더(VAE)</strong>의 출발점입니다. 인코딩된 잠재 코드들이 특정 단순한 사전 확률 분포(Prior distribution), 주로 표준 정규 분포 <img src="https://latex.codecogs.com/png.latex?p(z)%20=%20%5Cmathcal%7BN%7D(0,%20I)">를 따르도록 강제하여 잠재 공간을 연속적이고 빈틈없이 채우는 것입니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="reconstruction-loss-as-likelihood" class="level2">
+<h2 class="anchored" data-anchor-id="reconstruction-loss-as-likelihood">2.4. Reconstruction Loss as Likelihood</h2>
+<ul>
+<li><p>앞서 일반적인 오토인코더의 재구성 손실(Reconstruction loss)로 <img src="https://latex.codecogs.com/png.latex?L_2"> 제곱 오차 <img src="https://latex.codecogs.com/png.latex?%7C%7Cx%20-%20%5Chat%7Bx%7D%7C%7C_2%5E2">를 사용한다고 했습니다. 이를 확률론적 관점에서 재해석하면, <strong>왜 특정 데이터 형식에 특정 손실 함수를 써야 하는지</strong> 수학적인 당위성을 얻을 수 있습니다.</p></li>
+<li><p>디코더를 단순한 함수 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D%20=%20g_%5Ctheta(z)">가 아니라, 데이터 <img src="https://latex.codecogs.com/png.latex?x">에 대한 조건부 확률 분포 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x%7Cz)">로 취급해 봅시다.</p></li>
+</ul>
+<section id="continuous-data-gaussian-decoder" class="level3">
+<h3 class="anchored" data-anchor-id="continuous-data-gaussian-decoder">2.4.1. Continuous Data: Gaussian Decoder</h3>
+<ul>
+<li>데이터가 연속적인 실수 값(Continuous data)을 가질 때, 디코더의 출력 분포가 <img src="https://latex.codecogs.com/png.latex?g_%5Ctheta(z)">를 평균으로 하고 분산이 <img src="https://latex.codecogs.com/png.latex?%5Csigma%5E2%20I">인 등분산 가우시안(Isotropic Gaussian)을 따른다고 가정합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20p_%5Ctheta(x%7Cz)%20=%20%5Cmathcal%7BN%7D(g_%5Ctheta(z),%20%5Csigma%5E2%20I)%20"></p>
+<ul>
+<li>다변량 정규 분포의 확률 밀도 함수를 기반으로 이 모델의 음의 로그 우도(Negative Log-Likelihood, NLL)를 전개해 보겠습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20-%5Clog%20p_%5Ctheta(x%7Cz)%20=%20-%5Clog%20%5Cleft(%20%5Cfrac%7B1%7D%7B(2%5Cpi%5Csigma%5E2)%5E%7BD/2%7D%7D%20%5Cexp%5Cleft(-%5Cfrac%7B%7C%7Cx%20-%20g_%5Ctheta(z)%7C%7C_2%5E2%7D%7B2%5Csigma%5E2%7D%5Cright)%20%5Cright)%20"></p>
+<p><img src="https://latex.codecogs.com/png.latex?%20-%5Clog%20p_%5Ctheta(x%7Cz)%20=%20%5Cfrac%7B1%7D%7B2%5Csigma%5E2%7D%20%7C%7Cx%20-%20g_%5Ctheta(z)%7C%7C_2%5E2%20+%20%5Ctext%7Bconstant%7D%20"></p>
+<ul>
+<li>놀랍게도, 가우시안 로그 우도를 최대화(NLL을 최소화)하는 것은 오토인코더의 제곱 복원 오차(MSE-like loss)를 최소화하는 것과 정확히 동치입니다. 즉, 우리가 관성적으로 사용하던 <img src="https://latex.codecogs.com/png.latex?L_2"> 손실은 디코더의 출력이 가우시안 분포를 따른다는 확률론적 가정 하의 최대 우도 추정치였던 것입니다.</li>
+</ul>
+</section>
+<section id="binary-data-bernoulli-decoder" class="level3">
+<h3 class="anchored" data-anchor-id="binary-data-bernoulli-decoder">2.4.2. Binary Data: Bernoulli Decoder</h3>
+<ul>
+<li>만약 데이터가 0과 1로 이루어진 이진 픽셀(Binary data)이라면 가우시안 가정을 적용하는 것은 부적절합니다. 이 경우 디코더의 출력을 베르누이 분포의 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cpi_%5Ctheta(z)">(픽셀이 1일 확률)로 모델링합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20p_%5Ctheta(x%7Cz)%20=%20%5Ctext%7BBernoulli%7D(%5Cpi_%5Ctheta(z))%20"></p>
+<ul>
+<li>베르누이 분포에 대한 음의 로그 우도를 계산하면 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20-%5Clog%20p_%5Ctheta(x%7Cz)%20=%20-%5Csum_j%20%5Cleft%5B%20x_j%20%5Clog%20%5Cpi_j%20+%20(1%20-%20x_j)%20%5Clog(1%20-%20%5Cpi_j)%20%5Cright%5D%20"></p>
+<ul>
+<li><p>이는 딥러닝에서 분류 문제에 널리 쓰이는 이진 교차 엔트로피(Binary Cross-Entropy, BCE) 손실 함수와 정확히 일치합니다.</p></li>
+<li><p>결론적으로, 디코더에 어떤 확률 분포를 가정하느냐에 따라 오토인코더가 최적화해야 할 재구성 손실 함수의 형태가 수학적으로 자연스럽게 결정됩니다. 이러한 확률론적 접근은 결정론적 모델을 확률적 모델인 VAE로 확장하는 데 필수적인 수학적 징검다리가 됩니다.</p></li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="probabilistic-latent-variable-notation" class="level1">
+<h1>3. Probabilistic Latent-Variable Notation</h1>
+<ul>
+<li><p>이번 포스트에서는 본격적으로 변분 오토인코더(Variational Autoencoder, VAE)의 수학적 유도를 진행하기에 앞서, 확률론적 잠재 변수 생성 모델(Latent-variable generative model)의 전반적인 흐름과 필수적인 표기법(Notation)을 엄밀하게 정의합니다.</p></li>
+<li><p>생성 모델의 관점에서 데이터 <img src="https://latex.codecogs.com/png.latex?x">가 생성되는 과정은 다음과 같이 가정할 수 있습니다.</p>
+<ul>
+<li><ol type="1">
+<li>먼저, 우리가 미리 정의한 단순한 사전 확률 분포(Prior distribution) <img src="https://latex.codecogs.com/png.latex?p(z)">에서 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">를 샘플링합니다. 일반적으로 이 분포는 표준 정규 분포인 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BN%7D(0,%20I)">를 사용합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>그 다음, 샘플링된 <img src="https://latex.codecogs.com/png.latex?z">를 조건으로 하여 디코더(Decoder) 신경망이 정의하는 분포 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x%7Cz)">로부터 실제 데이터 <img src="https://latex.codecogs.com/png.latex?x">를 생성(샘플링)합니다.</li>
+</ol></li>
+</ul></li>
+<li><p>이러한 모델에서 데이터 <img src="https://latex.codecogs.com/png.latex?x">에 대한 주변부 우도(Marginal likelihood)는 잠재 공간에 대한 적분으로 표현됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20p_%5Ctheta(x)%20=%20%5Cint%20p(z)%20p_%5Ctheta(x%7Cz)%20dz%20"></p>
+<ul>
+<li>이 수식은 가능한 모든 잠재적 설명(All possible latent explanations <img src="https://latex.codecogs.com/png.latex?z">)을 고려했을 때, 데이터 <img src="https://latex.codecogs.com/png.latex?x">에 할당되는 최종적인 확률을 의미합니다. 하지만 딥러닝 기반의 신경망 디코더를 사용할 경우, 이 적분식은 분석적으로 풀 수 없는 난해한(Intractable) 문제가 됩니다.</li>
+</ul>
+<hr>
+<section id="vae-notation-cheat-sheet" class="level2">
+<h2 class="anchored" data-anchor-id="vae-notation-cheat-sheet">3.1. VAE Notation Cheat Sheet</h2>
+<ul>
+<li>앞으로 전개될 복잡한 수식들을 헷갈리지 않게 따라가기 위해, VAE에서 사용되는 핵심 확률 분포들의 표기법과 그 역할을 명확히 정리할 필요가 있습니다.
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?p(z)"></strong>: 잠재 변수에 대한 사전 확률 분포(Prior)로, 주로 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BN%7D(0,%20I)">로 설정됩니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x%7Cz)"></strong>: 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">가 주어졌을 때 데이터 <img src="https://latex.codecogs.com/png.latex?x">의 분포를 나타내며, 생성 네트워크(Generative network) 또는 디코더(Decoder), Likelihood 역할을 합니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x)"></strong>: 주변부 우도(Marginal likelihood)로, <img src="https://latex.codecogs.com/png.latex?%5Cint%20p(z)p_%5Ctheta(x%7Cz)dz"> 입니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(z%7Cx)"></strong>: 데이터 <img src="https://latex.codecogs.com/png.latex?x">가 주어졌을 때 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">의 ’참인 사후 확률(True posterior)’입니다. 하지만 이 값은 계산이 매우 어렵습니다(Usually intractable).</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)"></strong>: 계산이 불가능한 참인 사후 확률을 근사하기 위해 도입된 ’변분 사후 확률(Variational posterior)’로, 인코더(Encoder) 또는 인식 네트워크(Recognition network) 역할을 합니다.</li>
+</ul></li>
+</ul>
+<section id="사후-확률posterior이-intractable한-이유" class="level3">
+<h3 class="anchored" data-anchor-id="사후-확률posterior이-intractable한-이유">사후 확률(Posterior)이 Intractable한 이유</h3>
+<ul>
+<li>베이즈 정리(Bayes’ rule)를 사용하여 참인 사후 확률 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(z%7Cx)">를 전개해 보면 그 이유를 알 수 있습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20p_%5Ctheta(z%7Cx)%20=%20%5Cfrac%7Bp_%5Ctheta(x%7Cz)%20p(z)%7D%7Bp_%5Ctheta(x)%7D%20"></p>
+<ul>
+<li>분자는 우리가 설정한 디코더와 사전 확률이므로 계산할 수 있지만, 분모에 있는 주변부 우도 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x)">가 앞서 언급했듯 적분이 불가능한 형태이기 때문에 전체 사후 확률 역시 계산이 불가능해집니다. 이 문제를 우회하기 위해 우리는 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)">라는 인코더 네트워크를 도입하여 사후 확률을 근사하게 됩니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="training-path-vs.-generation-path" class="level2">
+<h2 class="anchored" data-anchor-id="training-path-vs.-generation-path">3.2. Training Path vs.&nbsp;Generation Path</h2>
+<ul>
+<li>VAE는 학습(Training)할 때와 생성(Generation)할 때 데이터가 흐르는 경로가 다릅니다. 앞서 정의한 표기법을 통해 두 경로를 비교해 보겠습니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/vae_training_generation.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 변분 오토인코더(VAE)의 ‘학습 및 재구성(Training / reconstruction)’ 과정과 ‘생성(Generation)’ 과정을 보여주는 다이어그램. 왼쪽의 학습 과정은 입력 데이터 <img src="https://latex.codecogs.com/png.latex?x">가 인코더 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)">를 거쳐 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">로 압축된 후, 디코더 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x%7Cz)">를 통해 재구성된 데이터 <img src="https://latex.codecogs.com/png.latex?%5Cwidehat%7Bx%7D">로 복원되는 흐름을 나타낸다. 오른쪽의 생성 과정은 사전에 정의된 표준 정규 분포 <img src="https://latex.codecogs.com/png.latex?p(z)%20=%20%5Cmathcal%7BN%7D(0,%20I)">에서 무작위로 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">를 샘플링하고, 이를 학습된 디코더 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x%7Cz)">에 통과시켜 완전히 새로운 데이터 ’new <img src="https://latex.codecogs.com/png.latex?x">’를 만들어내는 과정을 보여준다.</figcaption>
+</figure>
+</div>
+<section id="training-reconstruction-path" class="level3">
+<h3 class="anchored" data-anchor-id="training-reconstruction-path">3.2.1 Training / Reconstruction Path</h3>
+<ul>
+<li>학습 과정에서는 입력 데이터 <img src="https://latex.codecogs.com/png.latex?x">가 존재합니다.
+<ul>
+<li><ol type="1">
+<li>데이터 <img src="https://latex.codecogs.com/png.latex?x">가 인코더 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)">를 통과하여 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">에 대한 분포의 파라미터를 추정합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>이 분포에서 <img src="https://latex.codecogs.com/png.latex?z">를 샘플링합니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li>샘플링된 <img src="https://latex.codecogs.com/png.latex?z">가 디코더 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x%7Cz)">를 통과하여 복원된 데이터 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D">를 생성합니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+</section>
+<section id="generation-path" class="level3">
+<h3 class="anchored" data-anchor-id="generation-path">3.2.2 Generation Path</h3>
+<ul>
+<li>학습이 끝난 후 새로운 데이터를 생성할 때는 인코더가 필요하지 않습니다.
+<ul>
+<li><ol type="1">
+<li>우리가 이미 알고 있는 사전 확률 분포 <img src="https://latex.codecogs.com/png.latex?p(z)%20=%20%5Cmathcal%7BN%7D(0,%20I)">에서 순수하게 무작위로 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">를 샘플링합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>이 <img src="https://latex.codecogs.com/png.latex?z">를 학습된 디코더 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x%7Cz)">에 통과시켜 세상에 없던 완전히 새로운 데이터(new <img src="https://latex.codecogs.com/png.latex?x">)를 생성해 냅니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="mathematical-tools-we-need-preview" class="level2">
+<h2 class="anchored" data-anchor-id="mathematical-tools-we-need-preview">3.3. Mathematical Tools We Need (Preview)</h2>
+<ul>
+<li>결론적으로 VAE는 계산이 불가능한 목적 함수를 최적화하기 위해, 이를 우회하는 ’계산 가능한 하한선(ELBO)’을 최대화하는 방식을 취합니다. 이 ELBO를 유도하고 계산하기 위해 다음 포스트에서 다루게 될 세 가지 핵심 수학 도구는 다음과 같습니다.
+<ul>
+<li><ol type="1">
+<li><strong>KL Divergence (쿨백-라이블러 발산):</strong> 두 확률 분포 간의 차이를 측정하는 도구입니다. <img src="https://latex.codecogs.com/png.latex?%20D_%7BKL%7D(q_%5Cphi(z%7Cx)%20%7C%7C%20p(z))%20"></li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Jensen’s Inequality (젠슨 부등식):</strong> 볼록/오목 함수에서 기댓값과 함수의 순서를 바꿀 때 성립하는 부등식으로, 하한선(Lower bound)을 유도하는 핵심입니다. <img src="https://latex.codecogs.com/png.latex?%20%5Clog%20%5Cmathbb%7BE%7D%5BY%5D%20%5Cge%20%5Cmathbb%7BE%7D%5B%5Clog%20Y%5D%20"></li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><strong>Gaussian KL in closed form:</strong> 두 가우시안 분포 사이의 KL 발산을 적분 없이 닫힌 형태(Closed form)로 계산하는 공식입니다. <img src="https://latex.codecogs.com/png.latex?%20D_%7BKL%7D(%5Cmathcal%7BN%7D(%5Cmu,%20%5Ctext%7Bdiag%7D(%5Csigma%5E2))%20%7C%7C%20%5Cmathcal%7BN%7D(0,%20I))%20"></li>
+</ol></li>
+</ul></li>
+<li>이 세 가지 도구를 조합하면, 우리가 궁극적으로 최적화해야 할 VAE의 목적 함수인 <strong>ELBO (Evidence Lower Bound)</strong>를 다음과 같은 직관적인 두 항의 차이로 도출할 수 있습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20%5Ctext%7BELBO%7D%20=%20%5Ctext%7Breconstruction%7D%20-%20%5Ctext%7Blatent%20regularization%7D%20"></p>
+<hr>
+</section>
+</section>
+<section id="definition-of-kl-divergence" class="level1">
+<h1>4. Definition of KL Divergence</h1>
+<ul>
+<li>KL 발산은 한 확률 분포 <img src="https://latex.codecogs.com/png.latex?q">를 사용하여 다른 확률 분포 <img src="https://latex.codecogs.com/png.latex?p">를 근사할 때 발생하는 정보의 손실량을 측정하는 지표입니다. 데이터가 이산적인지 연속적인지에 따라 다음과 같이 정의됩니다.</li>
+</ul>
+<hr>
+<section id="discrete-case-이산형-분포" class="level2">
+<h2 class="anchored" data-anchor-id="discrete-case-이산형-분포">4.1 Discrete Case (이산형 분포)</h2>
+<ul>
+<li>두 유한 분포 <img src="https://latex.codecogs.com/png.latex?p">와 <img src="https://latex.codecogs.com/png.latex?q">가 공간 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BX%7D"> 상에 존재할 때, KL 발산은 다음과 같이 정의됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AD_%7BKL%7D(p%7C%7Cq)%20=%20%5Csum_%7Bx%20%5Cin%20%5Cmathcal%7BX%7D%7D%20p(x)%20%5Clog%20%5Cfrac%7Bp(x)%7D%7Bq(x)%7D%20=%20%5Cmathbb%7BE%7D_%7BX%20%5Csim%20p%7D%5Cleft%5B%20%5Clog%20%5Cfrac%7Bp(X)%7D%7Bq(X)%7D%20%5Cright%5D%0A"></p>
+</section>
+<section id="continuous-case-연속형-분포" class="level2">
+<h2 class="anchored" data-anchor-id="continuous-case-연속형-분포">4.2 Continuous Case (연속형 분포)</h2>
+<ul>
+<li>연속형 확률 분포 <img src="https://latex.codecogs.com/png.latex?p">와 <img src="https://latex.codecogs.com/png.latex?q">에 대해서는 합(Summation)이 적분(Integral)으로 대체됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AD_%7BKL%7D(p%7C%7Cq)%20=%20%5Cint%20p(x)%20%5Clog%20%5Cfrac%7Bp(x)%7D%7Bq(x)%7D%20dx%20=%20%5Cmathbb%7BE%7D_%7BX%20%5Csim%20p%7D%5Cleft%5B%20%5Clog%20%5Cfrac%7Bp(X)%7D%7Bq(X)%7D%20%5Cright%5D%0A"></p>
+<ul>
+<li>결국 두 경우 모두 대상 분포 <img src="https://latex.codecogs.com/png.latex?p">에서 추출한 샘플에 대해, 두 분포의 확률 밀도 비율의 로그값에 대한 기댓값(Expectation)을 구하는 것과 같습니다.</li>
+</ul>
+<hr>
+</section>
+<section id="important-properties-of-kl-divergence" class="level2">
+<h2 class="anchored" data-anchor-id="important-properties-of-kl-divergence">4.3. Important Properties of KL Divergence</h2>
+<ul>
+<li>KL 발산은 단순한 ‘거리’ 함수가 아니며, 머신러닝 최적화 과정에서 매우 중요한 기하학적 성질들을 가집니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/kl_divergence_distributions.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 두 확률 분포 <img src="https://latex.codecogs.com/png.latex?p">와 <img src="https://latex.codecogs.com/png.latex?q">의 차이를 보여주는 그래프. 가로축 <img src="https://latex.codecogs.com/png.latex?x">를 기준으로 파란색 곡선인 분포 <img src="https://latex.codecogs.com/png.latex?p">와 주황색 곡선인 분포 <img src="https://latex.codecogs.com/png.latex?q">가 서로 다른 형태(평균과 분산)를 띠며 나란히 위치해 있다. 이는 VAE 모델에서 인코더가 추정한 근사 사후 분포 <img src="https://latex.codecogs.com/png.latex?q">와 우리가 목표로 하는 실제 분포(또는 사전 분포) <img src="https://latex.codecogs.com/png.latex?p"> 간의 정보량 차이를 측정하는 쿨백-라이블러 발산(KL Divergence) 개념을 시각적으로 설명할 때 주로 활용된다.</figcaption>
+</figure>
+</div>
+<section id="non-negativity-비음성" class="level3">
+<h3 class="anchored" data-anchor-id="non-negativity-비음성">4.3.1 Non-negativity (비음성)</h3>
+<ul>
+<li>KL 발산의 값은 항상 0보다 크거나 같습니다. <img src="https://latex.codecogs.com/png.latex?%20D_%7BKL%7D(p%7C%7Cq)%20%5Cge%200%20"></li>
+<li>이 값이 정확히 0이 되는 조건(Equality iff)은 거의 모든 곳에서(almost everywhere) <img src="https://latex.codecogs.com/png.latex?p%20=%20q"> 일 때뿐입니다. 즉, 두 분포가 완벽히 일치할 때 정보 손실이 0이 됩니다.</li>
+</ul>
+</section>
+<section id="not-a-distance-거리-함수의-조건-위배" class="level3">
+<h3 class="anchored" data-anchor-id="not-a-distance-거리-함수의-조건-위배">4.3.2 Not a Distance (거리 함수의 조건 위배)</h3>
+<ul>
+<li>일반적으로 수학에서 말하는 ‘거리(Distance)’ 지표는 대칭성(<img src="https://latex.codecogs.com/png.latex?d(p,q)%20=%20d(q,p)">)을 만족해야 합니다. 하지만 KL 발산은 대칭성을 만족하지 않습니다. <img src="https://latex.codecogs.com/png.latex?%20D_%7BKL%7D(p%7C%7Cq)%20%5Cneq%20D_%7BKL%7D(q%7C%7Cp)%20"></li>
+<li>방향이 매우 중요하며(The direction matters), <img src="https://latex.codecogs.com/png.latex?p">를 기준으로 <img src="https://latex.codecogs.com/png.latex?q">를 평가하느냐, <img src="https://latex.codecogs.com/png.latex?q">를 기준으로 <img src="https://latex.codecogs.com/png.latex?p">를 평가하느냐에 따라 서로 다른 종류의 실수(Mistakes)에 페널티를 부여하게 됩니다.</li>
+</ul>
+</section>
+<section id="the-support-condition-서포트-조건" class="level3">
+<h3 class="anchored" data-anchor-id="the-support-condition-서포트-조건">4.3.3 The Support Condition (서포트 조건)</h3>
+<ul>
+<li>KL 발산 값이 무한대로 발산하지 않고 유한한 값(<img src="https://latex.codecogs.com/png.latex?D_%7BKL%7D(p%7C%7Cq)%20%3C%20%5Cinfty">)을 가지기 위해서는 매우 중요한 조건이 충족되어야 합니다.
+<ul>
+<li><strong>수학적 조건:</strong> <img src="https://latex.codecogs.com/png.latex?p">가 양의 확률을 가지는 모든 곳에서, <img src="https://latex.codecogs.com/png.latex?q"> 역시 반드시 0이 아닌 확률을 가져야 합니다.</li>
+<li><strong>동치 표현:</strong> <img src="https://latex.codecogs.com/png.latex?p">의 서포트가 <img src="https://latex.codecogs.com/png.latex?q">의 서포트의 부분집합이어야 합니다 (<img src="https://latex.codecogs.com/png.latex?supp(p)%20%5Csubseteq%20supp(q)">).</li>
+<li><strong>직관적 의미 (Plain language):</strong> 근사 분포 <img src="https://latex.codecogs.com/png.latex?q">는 원래 분포 <img src="https://latex.codecogs.com/png.latex?p">보다 더 넓게 퍼져 있을 수는 있지만, <img src="https://latex.codecogs.com/png.latex?p">에 질량(확률)이 존재하는 영역에 <img src="https://latex.codecogs.com/png.latex?q">가 ’구멍(Holes)’을 가지고 있어서는 안 됩니다. 만약 <img src="https://latex.codecogs.com/png.latex?p">의 데이터가 존재하는 공간을 <img src="https://latex.codecogs.com/png.latex?q">가 전혀 설명하지 못한다면(<img src="https://latex.codecogs.com/png.latex?q(x)=0">), 분모가 0이 되어 KL 발산 값은 무한대가 되어버립니다.</li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/kl_divergence_support_overlap.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 두 확률 분포 <img src="https://latex.codecogs.com/png.latex?p">와 <img src="https://latex.codecogs.com/png.latex?q">의 지지집합(Support)이 겹치는 정도에 따른 발산(Divergence) 값을 나타낸 다이어그램. 왼쪽과 가운데 그림처럼 파란색 분포 <img src="https://latex.codecogs.com/png.latex?p">와 주황색 분포 <img src="https://latex.codecogs.com/png.latex?q">가 전혀 겹치지 않거나 경계만 맞닿아 있을 경우, 두 분포 간의 정보량 차이를 측정하는 KL 발산(KL Divergence) 값은 무한대(Infinite)가 된다. 반면, 오른쪽 그림처럼 두 분포가 겹치는 영역이 존재할 경우 그 값은 유한한(Finite) 값을 갖는다. 이는 딥러닝 생성 모델이 실제 데이터 분포와 생성 모델의 분포 간 거리를 유의미하게 측정하고 학습하기 위해서는 두 분포 간의 오버랩(Overlap)이 필수적임을 기하학적으로 보여준다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+<section id="the-kl-term-used-in-vaes" class="level2">
+<h2 class="anchored" data-anchor-id="the-kl-term-used-in-vaes">4.4. The KL Term Used in VAEs</h2>
+<ul>
+<li>이러한 특성을 가진 KL 발산이 VAE 모델 내에서는 어떻게 활용될까요? VAE에서 가장 중요한 KL 항(The most important KL for VAEs)은 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%20D_%7BKL%7D(q_%5Cphi(z%7Cx)%20%7C%7C%20p(z))%20">
+<ul>
+<li><strong><img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)"></strong>: 우리가 학습시키는 인코더 분포(Encoder distribution)입니다.</li>
+<li><strong><img src="https://latex.codecogs.com/png.latex?p(z)%20=%20%5Cmathcal%7BN%7D(0,%20I)"></strong>: 생성 시에 샘플링하고자 하는 목표 사전 확률 분포(Prior we want to sample from during generation)입니다.</li>
+</ul></li>
+</ul>
+<section id="interpretation-해석" class="level3">
+<h3 class="anchored" data-anchor-id="interpretation-해석">Interpretation (해석)</h3>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/vae_kl_divergence_regularization.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 변분 오토인코더(VAE)의 잠재 공간 정규화(Regularization) 과정을 나타낸 다이어그램. 입력 데이터 <img src="https://latex.codecogs.com/png.latex?x">가 인코더 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)">를 통과하여 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">의 분포를 형성할 때, 이 분포가 목표하는 사전 분포인 표준 정규 분포 <img src="https://latex.codecogs.com/png.latex?p(z)%20=%20%5Cmathcal%7BN%7D(0,%20I)">에 가까워지도록(‘close to’) 강제하는 흐름을 보여준다. 이는 VAE 손실 함수의 쿨백-라이블러 발산(KL Divergence) 항을 기하학적으로 시각화한 것으로, 잠재 공간에 빈 공간이 생기지 않고 연속적으로 매핑되도록 만들어 안정적인 데이터 생성을 돕는 핵심 원리이다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><p>이 KL 항이 VAE의 목적 함수에 포함되어 최소화된다는 것은, <strong>인코더가 데이터를 압축하여 만들어낸 잠재 분포 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)">를 우리가 다루기 쉬운 단순한 사전 분포 <img src="https://latex.codecogs.com/png.latex?p(z)">에 가깝게 유지(Keeps the encoder’s latent distribution close to a simple prior)하도록 강제</strong>한다는 의미입니다.</p></li>
+<li><p>이를 통해 인코더는 잠재 공간(Latent space)의 구조를 일관되고 연속적으로 정돈하게 되며, 앞선 포스트에서 언급했던 “잠재 공간의 구멍(Holes in latent space)” 문제를 원천적으로 방지하여 디코더가 무작위 샘플링된 <img src="https://latex.codecogs.com/png.latex?z">에서도 현실적인 데이터를 생성할 수 있도록 만듭니다.</p></li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="convexity-and-jensens-inequality" class="level1">
+<h1>5. Convexity and Jensen’s Inequality</h1>
+<ul>
+<li>젠슨 부등식을 이해하기 위해서는 먼저 볼록 함수(Convex function)의 수학적 정의를 짚고 넘어가야 합니다.</li>
+</ul>
+<hr>
+<section id="definition-of-convex-function" class="level2">
+<h2 class="anchored" data-anchor-id="definition-of-convex-function">5.1 Definition of Convex Function</h2>
+<ul>
+<li>어떤 함수 <img src="https://latex.codecogs.com/png.latex?f:%20%5COmega%20%5Crightarrow%20%5Cmathbb%7BR%7D"> 가 볼록(Convex)하다는 것은, 정의역 내의 임의의 두 점 <img src="https://latex.codecogs.com/png.latex?x,%20y%20%5Cin%20%5COmega"> 와 <img src="https://latex.codecogs.com/png.latex?0%20%5Cle%20%5Clambda%20%5Cle%201"> 인 <img src="https://latex.codecogs.com/png.latex?%5Clambda">에 대하여 다음 부등식을 만족함을 의미합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20f(%5Clambda%20x%20+%20(1-%5Clambda)y)%20%5Cle%20%5Clambda%20f(x)%20+%20(1-%5Clambda)f(y)%20"></p>
+<ul>
+<li>이는 기하학적으로 함수의 그래프 상의 임의의 두 점을 연결한 선분(Chord)이 항상 그 두 점 사이의 함수 곡선(Curve)보다 크거나 같음(위쪽에 위치함)을 나타냅니다.</li>
+</ul>
+<hr>
+</section>
+<section id="jensens-inequality" class="level2">
+<h2 class="anchored" data-anchor-id="jensens-inequality">5.2 Jensen’s Inequality</h2>
+<ul>
+<li>함수 <img src="https://latex.codecogs.com/png.latex?f">가 볼록 함수일 때, 젠슨 부등식은 기댓값(Expectation) 연산과 함수 적용의 순서에 대한 강력한 성질을 제공합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20%5Cmathbb%7BE%7D%5Bf(X)%5D%20%5Cge%20f(%5Cmathbb%7BE%7D%5BX%5D)%20"></p>
+<ul>
+<li>즉, 볼록 함수에 대해 ’X의 함수값들의 평균(기댓값)’은 항상 ’X의 평균에 대한 함수값’보다 크거나 같습니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/convex_function_chord.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 볼록 함수(Convex Function)의 기하학적 성질을 나타낸 그래프. 가로축 <img src="https://latex.codecogs.com/png.latex?x">와 세로축 <img src="https://latex.codecogs.com/png.latex?f(x)"> 평면 상에 아래로 볼록한 형태의 곡선(curve)이 그려져 있으며, 곡선 위의 임의의 두 점 <img src="https://latex.codecogs.com/png.latex?x_1">과 <img src="https://latex.codecogs.com/png.latex?x_2">를 잇는 선분(chord)이 항상 곡선보다 위쪽에 위치함을 보여준다. 이러한 볼록 함수의 특징은 VAE 모델에서 계산 불가능한 우도(Likelihood)의 하한선인 ELBO(Evidence Lower Bound)를 유도할 때 핵심적으로 사용되는 옌센 부등식(Jensen’s Inequality)의 수학적 기반이 된다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+<section id="jensen-for-concave-logarithm" class="level2">
+<h2 class="anchored" data-anchor-id="jensen-for-concave-logarithm">5.3. Jensen for Concave Logarithm</h2>
+<ul>
+<li><p>VAE의 ELBO를 유도할 때, 우리는 가능도(Likelihood)를 극대화하기 위해 로그(log) 함수를 주로 다루게 됩니다. 중요한 점은 로그 함수가 볼록 함수가 아니라 <strong>오목 함수(Concave function)</strong>라는 것입니다.</p></li>
+<li><p>오목 함수 <img src="https://latex.codecogs.com/png.latex?g">에 대해서는 젠슨 부등식의 부등호 방향이 반대가 됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20%5Cmathbb%7BE%7D%5Bg(X)%5D%20%5Cle%20g(%5Cmathbb%7BE%7D%5BX%5D)%20"></p>
+<ul>
+<li>로그 함수 역시 오목 함수이므로, 다음의 부등식이 성립합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20%5Cmathbb%7BE%7D%5B%5Clog%20Y%5D%20%5Cle%20%5Clog%20%5Cmathbb%7BE%7D%5BY%5D%20"></p>
+<ul>
+<li>이를 우리가 자주 사용하게 될 형태로 좌우를 바꾸어 다시 쓰면 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20%5Clog%20%5Cmathbb%7BE%7D%5BY%5D%20%5Cge%20%5Cmathbb%7BE%7D%5B%5Clog%20Y%5D%20"></p>
+<ul>
+<li>이 수식이 바로 <strong>ELBO를 유도하는 수학적 핵심 단계(The key mathematical step in deriving the ELBO)</strong>입니다. 추후 우리는 이 식의 <img src="https://latex.codecogs.com/png.latex?Y"> 자리에 <img src="https://latex.codecogs.com/png.latex?Y(z)%20=%20%5Cfrac%7Bp_%5Ctheta(x,z)%7D%7Bq_%5Cphi(z%7Cx)%7D"> 라는 항을 대입하여 전개할 것입니다.</li>
+</ul>
+<hr>
+</section>
+<section id="applications-of-jensens-inequality" class="level2">
+<h2 class="anchored" data-anchor-id="applications-of-jensens-inequality">5.4. Applications of Jensen’s Inequality</h2>
+<ul>
+<li>젠슨 부등식은 생성 모델의 수학적 증명 곳곳에서 마법처럼 작용합니다. 강의 자료에 제시된 두 가지 핵심 적용 사례를 살펴보겠습니다.</li>
+</ul>
+<section id="proof-non-negativity-of-kl-divergence" class="level3">
+<h3 class="anchored" data-anchor-id="proof-non-negativity-of-kl-divergence">5.4.1 Proof: Non-negativity of KL divergence</h3>
+<ul>
+<li><p>이전 포스트에서 KL 발산 값은 항상 0 이상(<img src="https://latex.codecogs.com/png.latex?D_%7BKL%7D(p%7C%7Cq)%20%5Cge%200">)이라고 정의했습니다. 젠슨 부등식을 사용하면 이를 수학적으로 간단명료하게 증명할 수 있습니다.</p></li>
+<li><p>두 분포가 동일한 서포트(Common support)를 가진다고 가정하고 식을 전개합니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20D_%7BKL%7D(p%7C%7Cq)%20=%20%5Cmathbb%7BE%7D_%7BX%20%5Csim%20p%7D%5Cleft%5B%20-%5Clog%20%5Cfrac%7Bq(X)%7D%7Bp(X)%7D%20%5Cright%5D%20"></p>
+<ul>
+<li>여기서 함수 <img src="https://latex.codecogs.com/png.latex?-%5Clog"> 는 볼록(Convex) 함수입니다. 따라서 젠슨 부등식 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D%5Bf(X)%5D%20%5Cge%20f(%5Cmathbb%7BE%7D%5BX%5D)"> 를 적용하면 기댓값 기호가 함수 안으로 들어갈 수 있습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20D_%7BKL%7D(p%7C%7Cq)%20%5Cge%20-%5Clog%20%5Cmathbb%7BE%7D_%7BX%20%5Csim%20p%7D%5Cleft%5B%20%5Cfrac%7Bq(X)%7D%7Bp(X)%7D%20%5Cright%5D%20"></p>
+<ul>
+<li>기댓값의 정의에 따라 식을 적분 형태로 바꾸면 다음과 같이 계산됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20=%20-%5Clog%20%5Cint%20p(x)%20%5Cfrac%7Bq(x)%7D%7Bp(x)%7D%20dx%20=%20-%5Clog%20%5Cint%20q(x)%20dx%20"></p>
+<ul>
+<li>확률 밀도 함수의 총합(적분값)은 1이므로, <img src="https://latex.codecogs.com/png.latex?%5Cint%20q(x)%20dx%20=%201"> 입니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20=%20-%5Clog(1)%20=%200%20"></p>
+<ul>
+<li>따라서, <img src="https://latex.codecogs.com/png.latex?D_%7BKL%7D(p%7C%7Cq)%20%5Cge%200"> 이 증명됩니다. (등호는 거의 모든 곳에서 <img src="https://latex.codecogs.com/png.latex?p=q"> 일 때 성립합니다).</li>
+</ul>
+</section>
+<section id="preview-why-jensen-matters-for-vaes" class="level3">
+<h3 class="anchored" data-anchor-id="preview-why-jensen-matters-for-vaes">5.4.2 Preview: Why Jensen matters for VAEs</h3>
+<ul>
+<li>젠슨 부등식이 VAE에서 어떻게 ’하한(Lower bound)’을 만들어내는지 그 시작 과정을 살펴보겠습니다.
+<ul>
+<li><ol type="1">
+<li>먼저, 우리가 최대화하고 싶은 주변부 우도(Marginal likelihood) 식에서 출발합니다. <img src="https://latex.codecogs.com/png.latex?%20p_%5Ctheta(x)%20=%20%5Cint%20p_%5Ctheta(x,z)%20dz%20"></li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>이 식의 적분 안에 우리가 임의로 정의한 인코더의 변분 사후 확률 분포 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)">를 분모와 분자에 곱하여 삽입합니다. <img src="https://latex.codecogs.com/png.latex?%20p_%5Ctheta(x)%20=%20%5Cint%20q_%5Cphi(z%7Cx)%20%5Cfrac%7Bp_%5Ctheta(x,z)%7D%7Bq_%5Cphi(z%7Cx)%7D%20dz%20"></li>
+</ol></li>
+<li><ol start="3" type="1">
+<li>이는 분포 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)">에 대한 기댓값 형태로 다시 쓸 수 있습니다. <img src="https://latex.codecogs.com/png.latex?%20p_%5Ctheta(x)%20=%20%5Cmathbb%7BE%7D_%7Bz%20%5Csim%20q_%5Cphi(z%7Cx)%7D%5Cleft%5B%20%5Cfrac%7Bp_%5Ctheta(x,z)%7D%7Bq_%5Cphi(z%7Cx)%7D%20%5Cright%5D%20"></li>
+</ol></li>
+<li><ol start="4" type="1">
+<li>이제 양변에 <img src="https://latex.codecogs.com/png.latex?%5Clog"> 를 취하고, <img src="https://latex.codecogs.com/png.latex?%5Clog">가 오목(Concave) 함수라는 성질을 이용하여 앞서 배운 젠슨 부등식 <img src="https://latex.codecogs.com/png.latex?%5Clog%20%5Cmathbb%7BE%7D%5BY%5D%20%5Cge%20%5Cmathbb%7BE%7D%5B%5Clog%20Y%5D"> 를 적용합니다. <img src="https://latex.codecogs.com/png.latex?%20%5Clog%20p_%5Ctheta(x)%20%5Cge%20%5Cmathbb%7BE%7D_%7Bz%20%5Csim%20q_%5Cphi(z%7Cx)%7D%5Cleft%5B%20%5Clog%20%5Cfrac%7Bp_%5Ctheta(x,z)%7D%7Bq_%5Cphi(z%7Cx)%7D%20%5Cright%5D%20"></li>
+</ol></li>
+</ul></li>
+<li>바로 이 부등식의 우변이 우리가 찾던 <strong>ELBO (Evidence Lower Bound)</strong>입니다. 좌변인 데이터의 로그 우도를 직접 최대화하는 것은 불가능하지만, 이 부등식 덕분에 우리는 계산 가능한 우변의 식을 최대화함으로써 모델을 간접적으로 최적화할 수 있게 됩니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="introduction-the-need-for-gaussian-kl" class="level1">
+<h1>6. Introduction: The Need for Gaussian KL</h1>
+<section id="general-kl-between-two-gaussians" class="level2">
+<h2 class="anchored" data-anchor-id="general-kl-between-two-gaussians">6.1. General KL Between Two Gaussians</h2>
+<ul>
+<li>일반적인 <img src="https://latex.codecogs.com/png.latex?k">차원 다변량 정규 분포(Multivariate Gaussians) 두 개가 주어졌다고 가정해 봅시다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?p_0%20=%20%5Cmathcal%7BN%7D(%5Cmu_0,%20%5CSigma_0)"></li>
+<li><img src="https://latex.codecogs.com/png.latex?p_1%20=%20%5Cmathcal%7BN%7D(%5Cmu_1,%20%5CSigma_1)"></li>
+</ul></li>
+<li>이 두 분포 사이의 일반적인 KL 발산 식은 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AD_%7BKL%7D(p_0%20%7C%7C%20p_1)%20=%20%5Cfrac%7B1%7D%7B2%7D%20%5Cleft(%20%5Ctext%7BTr%7D(%5CSigma_1%5E%7B-1%7D%5CSigma_0)%20+%20(%5Cmu_1%20-%20%5Cmu_0)%5ET%5CSigma_1%5E%7B-1%7D(%5Cmu_1%20-%20%5Cmu_0)%20-%20k%20+%20%5Clog%20%5Cfrac%7B%5Cdet%20%5CSigma_1%7D%7B%5Cdet%20%5CSigma_0%7D%20%5Cright)%0A"></p>
+<ul>
+<li>위 수식은 행렬의 대각합(Trace, <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BTr%7D">), 역행렬(<img src="https://latex.codecogs.com/png.latex?%5CSigma%5E%7B-1%7D">), 행렬식(<img src="https://latex.codecogs.com/png.latex?%5Cdet">) 등을 포함하고 있어 다소 복잡해 보입니다. 하지만 VAE 아키텍처에서는 이 일반식을 그대로 사용할 필요 없이, <strong>특수한 경우(Special case)</strong>만을 적용하여 식을 극적으로 단순화할 수 있습니다.</li>
+</ul>
+<hr>
+</section>
+<section id="gaussian-kl-for-vaes" class="level2">
+<h2 class="anchored" data-anchor-id="gaussian-kl-for-vaes">6.2. Gaussian KL for VAEs</h2>
+<ul>
+<li>VAE에서 우리는 다음과 같은 두 가지 특수한 가우시안 분포 간의 KL 발산, <img src="https://latex.codecogs.com/png.latex?D_%7BKL%7D(q_%5Cphi(z%7Cx)%20%7C%7C%20p(z))"> 를 구해야 합니다.
+<ul>
+<li><ol type="1">
+<li><strong>목표 사전 분포 (Prior):</strong> <img src="https://latex.codecogs.com/png.latex?p(z)%20=%20%5Cmathcal%7BN%7D(0,%20I)"></li>
+</ol>
+<ul>
+<li>평균 벡터는 <img src="https://latex.codecogs.com/png.latex?%5Cmu%20=%200"> 이고, 공분산 행렬은 단위 행렬(Identity matrix, <img src="https://latex.codecogs.com/png.latex?I">)인 가장 단순한 형태의 표준 정규 분포입니다.</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>인코더 예측 분포 (Variational Posterior):</strong> <img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)%20=%20%5Cmathcal%7BN%7D(%5Cmu_%5Cphi(x),%20%5Ctext%7Bdiag%7D(%5Csigma_%5Cphi%5E2(x)))"></li>
+</ol>
+<ul>
+<li>평균 벡터는 <img src="https://latex.codecogs.com/png.latex?%5Cmu_%5Cphi(x)"> 이며, 공분산 행렬은 각 차원이 독립적이라고 가정한 대각 행렬(Diagonal matrix) <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bdiag%7D(%5Csigma_%5Cphi%5E2(x))"> 입니다.</li>
+</ul></li>
+</ul></li>
+<li>이 조건들을 위 2장의 일반식에 대입하면, 복잡했던 행렬 연산들이 각 차원 <img src="https://latex.codecogs.com/png.latex?j">에 대한 단순한 스칼라 합으로 분해됩니다. 최종적으로 도출되는 VAE의 KL 발산 식은 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AD_%7BKL%7D(q_%5Cphi(z%7Cx)%20%7C%7C%20p(z))%20=%20%5Cfrac%7B1%7D%7B2%7D%20%5Csum_%7Bj=1%7D%5Ek%20%5Cleft(%20%5Cmu_j%5E2%20+%20%5Csigma_j%5E2%20-%201%20-%20%5Clog%20%5Csigma_j%5E2%20%5Cright)%0A"></p>
+<section id="key-takeaways-from-the-closed-form-solution" class="level3">
+<h3 class="anchored" data-anchor-id="key-takeaways-from-the-closed-form-solution">Key Takeaways from the Closed-form Solution</h3>
+<ul>
+<li>이 수식이 갖는 딥러닝 최적화 관점에서의 의미는 매우 큽니다.
+<ul>
+<li><strong>No sampling needed:</strong> 복잡한 적분이나 무작위 샘플링 과정 없이 모델 파라미터로 곧바로 계산이 가능한 닫힌 형태(Closed-form solution)의 수식을 얻었습니다.</li>
+<li><strong>Implementation Detail:</strong> 실제 코드로 구현할 때 인코더 신경망은 <img src="https://latex.codecogs.com/png.latex?%5Csigma_%5Cphi%5E2(x)"> 를 직접 출력하기보다 수치적 안정성을 위해 <strong><img src="https://latex.codecogs.com/png.latex?%5Clog%20%5Csigma_%5Cphi%5E2(x)"> 를 출력</strong>하도록 설계하는 것이 일반적입니다. <img src="https://latex.codecogs.com/png.latex?%5Csigma%5E2">는 항상 양수여야 하지만, <img src="https://latex.codecogs.com/png.latex?%5Clog%20%5Csigma%5E2">는 실수 전체 범위를 가질 수 있어 활성화 함수 제약 없이 신경망의 출력값을 그대로 사용할 수 있기 때문입니다.</li>
+</ul></li>
+</ul>
+</section>
+</section>
+<section id="sanity-checks-for-gaussian-kl" class="level2">
+<h2 class="anchored" data-anchor-id="sanity-checks-for-gaussian-kl">6.3. Sanity Checks for Gaussian KL</h2>
+<ul>
+<li>도출된 수식이 실제로 어떻게 작동하여 인코더를 규제(Regularization)하는지, 개별 잠재 차원 <img src="https://latex.codecogs.com/png.latex?j">에 대한 항을 분석하여 직관적인 확인(Sanity checks)을 해보겠습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%20%5Ctext%7BCost%7D_j%20=%20%5Cfrac%7B1%7D%7B2%7D(%5Cmu_j%5E2%20+%20%5Csigma_j%5E2%20-%201%20-%20%5Clog%20%5Csigma_j%5E2)%20"></p>
+<ul>
+<li><ol type="1">
+<li><strong>Ideal Case (목표에 도달했을 때):</strong></li>
+</ol>
+<ul>
+<li>만약 인코더가 목표하는 표준 정규 분포와 정확히 일치하여 <img src="https://latex.codecogs.com/png.latex?%5Cmu_j%20=%200"> 이고 <img src="https://latex.codecogs.com/png.latex?%5Csigma_j%5E2%20=%201"> 이 되었다고 가정해 봅시다. <img src="https://latex.codecogs.com/png.latex?%20%5Cfrac%7B1%7D%7B2%7D(0%20+%201%20-%201%20-%20%5Clog%201)%20=%200%20"></li>
+<li>KL 발산 값이 0이 되며 페널티를 전혀 받지 않습니다.</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>Mean Penalty (평균이 벗어날 때):</strong></li>
+</ol>
+<ul>
+<li>수식 내의 <img src="https://latex.codecogs.com/png.latex?%5Cmu_j%5E2"> 항으로 인해, 평균 값의 절대값 <img src="https://latex.codecogs.com/png.latex?%7C%5Cmu_j%7C"> 이 커질수록(즉 0에서 멀어질수록) KL 발산 값은 포물선 형태로 급격히 증가(Increases KL)합니다.</li>
+</ul></li>
+<li><ol start="3" type="1">
+<li><strong>Variance Penalty (분산이 벗어날 때):</strong></li>
+</ol>
+<ul>
+<li>분산에 관련된 항은 <img src="https://latex.codecogs.com/png.latex?%5Csigma_j%5E2%20-%20%5Clog%20%5Csigma_j%5E2"> 입니다. 이 함수는 <img src="https://latex.codecogs.com/png.latex?%5Csigma_j%5E2%20=%201"> 일 때 최소값을 가집니다. 따라서 분산이 1보다 매우 작아지거나(Very small) 매우 커지면(Very large), 두 경우 모두 KL 발산 값이 증가(Increases KL)하며 모델에 페널티를 부여합니다.</li>
+</ul></li>
+<li><p>결론적으로, 이 KL 발산 항은 최적화 과정 내내 끊임없이 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)"> 형태의 분포를 밀어붙여(Pushes toward) 우리가 다루기 쉬운 형태인 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BN%7D(0,%20I)"> 에 가깝게 유지하도록 만드는 강력한 스프링 같은 역할을 수행합니다.</p></li>
+<li><p>이제 VAE의 목적 함수를 도출하기 위한 모든 퍼즐 조각이 모였습니다. 다음 포스트에서는 이 도구들을 결합하여 ELBO(Evidence Lower Bound)의 최종 형태를 완성해 보겠습니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/vae_latent_distribution_comparison.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: VAE의 잠재 공간 내 특정 차원 <img src="https://latex.codecogs.com/png.latex?z_j">에 대한 두 확률 분포 <img src="https://latex.codecogs.com/png.latex?p(z_j)">와 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi">를 비교한 그래프. 가로축 <img src="https://latex.codecogs.com/png.latex?z_j"> 상에서 파란색 곡선 <img src="https://latex.codecogs.com/png.latex?p(z_j)">는 해당 잠재 변수가 따르기를 기대하는 사전 분포(Prior distribution, 일반적으로 표준 정규 분포)를 나타내며, 주황색 곡선 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi">는 인코더가 특정 입력 데이터를 바탕으로 추정한 근사 사후 분포(Approximate posterior distribution)를 의미한다. VAE는 학습 시 손실 함수 내의 KL 발산(KL Divergence) 항을 통해 이 두 분포 사이의 차이를 최소화하여, 인코더의 결과물인 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi">가 목표 분포인 <img src="https://latex.codecogs.com/png.latex?p(z_j)">에 최대한 가까워지도록 강제한다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+<section id="introduction-the-culmination-of-the-toolkit" class="level1">
+<h1>7. Introduction: The Culmination of the Toolkit</h1>
+<ul>
+<li><p>지금까지 우리는 VAE(Variational Autoencoder)의 수학적 기반을 다지기 위해 KL 발산(KL divergence), 젠슨 부등식(Jensen’s inequality), 그리고 가우시안 분포 간의 KL 발산(Gaussian KL)이라는 세 가지 강력한 도구를 학습했습니다.</p></li>
+<li><p>이번 포스트에서는 이 도구들이 최종적으로 결합하여 만들어내는 VAE의 궁극적인 목적 함수, 즉 <strong>ELBO (Evidence Lower Bound)</strong>의 형태를 미리 살펴보고 그 직관적인 의미를 해석해 보겠습니다.</p></li>
+</ul>
+<hr>
+<section id="the-vae-lower-bound-elbo" class="level2">
+<h2 class="anchored" data-anchor-id="the-vae-lower-bound-elbo">7.1. The VAE Lower Bound: ELBO</h2>
+<ul>
+<li>앞선 포스트에서 젠슨 부등식을 통해 데이터의 로그 주변부 우도(Log marginal likelihood)인 <img src="https://latex.codecogs.com/png.latex?%5Clog%20p_%5Ctheta(x)"> 의 하한선(Lower bound)을 도출할 수 있음을 확인했습니다. VAE에서 이 하한선 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D(x;%5Ctheta,%5Cphi)"> 은 다음과 같이 두 개의 항으로 구성됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathcal%7BL%7D(x;%5Ctheta,%5Cphi)%20=%20%5Cmathbb%7BE%7D_%7Bz%20%5Csim%20q_%5Cphi(z%7Cx)%7D%5B%5Clog%20p_%5Ctheta(x%7Cz)%5D%20-%20D_%7BKL%7D(q_%5Cphi(z%7Cx)%20%7C%7C%20p(z))%0A"></p>
+<ul>
+<li>이 수식은 모델의 학습 방향을 결정짓는 매우 직관적인 두 가지 목표를 동시에 담고 있습니다.</li>
+</ul>
+<section id="interpretation-직관적-해석" class="level3">
+<h3 class="anchored" data-anchor-id="interpretation-직관적-해석">Interpretation (직관적 해석)</h3>
+<ul>
+<li><strong>ELBO = Reconstruction Quality (복원 품질) - Latent Regularization (잠재 공간 정규화)</strong>
+<ul>
+<li><ol type="1">
+<li><strong>첫 번째 항 (<img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D_%7Bz%20%5Csim%20q_%5Cphi(z%7Cx)%7D%5B%5Clog%20p_%5Ctheta(x%7Cz)%5D">):</strong></li>
+</ol>
+<ul>
+<li>인코더가 추정한 분포 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi"> 에서 샘플링된 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z"> 를 디코더에 통과시켰을 때, 원래의 데이터 <img src="https://latex.codecogs.com/png.latex?x"> 가 나올 확률(로그 우도)입니다. 이 항을 최대화하는 것은 모델이 데이터를 훌륭하게 복원(Good reconstruction)하도록 장려하는 역할을 합니다. (오토인코더의 재구성 손실과 본질적으로 같습니다.)</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>두 번째 항 (<img src="https://latex.codecogs.com/png.latex?-%20D_%7BKL%7D(q_%5Cphi(z%7Cx)%20%7C%7C%20p(z))">):</strong></li>
+</ol>
+<ul>
+<li>우리가 앞서 분석했던 ‘가우시안 KL’ 항입니다. 이 항은 인코더가 만들어내는 잠재 코드의 분포 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)"> 가 우리가 생성 단계에서 샘플링하기 쉬운 단순한 사전 분포(Sampleable prior) <img src="https://latex.codecogs.com/png.latex?p(z)"> 에 가깝게 유지되도록 강제합니다. 이 정규화 덕분에 잠재 공간에 빈 구멍(Holes)이 생기지 않습니다.</li>
+</ul></li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="elbo-as-a-lower-bound-and-the-gap" class="level2">
+<h2 class="anchored" data-anchor-id="elbo-as-a-lower-bound-and-the-gap">7.2. ELBO as a Lower Bound and The Gap</h2>
+<ul>
+<li>그렇다면 이 ELBO 수식과 우리가 원래 최대화하고자 했던 데이터의 진짜 우도 <img src="https://latex.codecogs.com/png.latex?%5Clog%20p_%5Ctheta(x)"> 사이에는 어떤 수학적 관계가 있을까요? 베이즈 정리를 이용해 수식을 전개하면 다음의 아름다운 등식을 얻을 수 있습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Clog%20p_%5Ctheta(x)%20=%20%5Cmathcal%7BL%7D(x;%5Ctheta,%5Cphi)%20+%20D_%7BKL%7D(q_%5Cphi(z%7Cx)%20%7C%7C%20p_%5Ctheta(z%7Cx))%0A"></p>
+<ul>
+<li>이 등식은 매우 중요한 두 가지 사실을 알려줍니다.</li>
+</ul>
+<section id="the-posterior-approximation-gap" class="level3">
+<h3 class="anchored" data-anchor-id="the-posterior-approximation-gap">7.2.1 The Posterior Approximation Gap</h3>
+<ul>
+<li>우변의 두 번째 항인 <img src="https://latex.codecogs.com/png.latex?D_%7BKL%7D(q_%5Cphi(z%7Cx)%20%7C%7C%20p_%5Ctheta(z%7Cx))"> 은 우리가 인코더를 통해 만든 ‘근사 사후 확률(<img src="https://latex.codecogs.com/png.latex?q_%5Cphi">)’과 모델의 ’참인 사후 확률(<img src="https://latex.codecogs.com/png.latex?p_%5Ctheta">)’ 사이의 차이를 나타냅니다. 이 값을 <strong>사후 확률 근사 오차(Posterior approximation gap)</strong>라고 부릅니다.</li>
+</ul>
+</section>
+<section id="the-bound-condition" class="level3">
+<h3 class="anchored" data-anchor-id="the-bound-condition">7.2.2 The Bound Condition</h3>
+<ul>
+<li>KL 발산은 항상 0보다 크거나 같다는 성질(Non-negativity)을 가지고 있습니다. 따라서 사후 확률 근사 오차 역시 항상 <img src="https://latex.codecogs.com/png.latex?0"> 이상이 되며, 결과적으로 다음과 같은 부등식이 성립합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Clog%20p_%5Ctheta(x)%20%5Cge%20%5Cmathcal%7BL%7D(x;%5Ctheta,%5Cphi)%0A"></p>
+<ul>
+<li><p>이것이 바로 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D(x;%5Ctheta,%5Cphi)"> 가 <img src="https://latex.codecogs.com/png.latex?%5Clog%20p_%5Ctheta(x)"> 의 하한선(Lower Bound)으로 불리는 명확한 수학적 이유입니다.</p></li>
+<li><p>우리가 딥러닝 프레임워크를 통해 이 ELBO 값(<img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D">)을 최대화(Maximizing)하도록 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta"> 와 <img src="https://latex.codecogs.com/png.latex?%5Cphi"> 를 업데이트하면, 일석이조의 효과를 얻게 됩니다. 모델의 <strong>재구성 품질(Reconstruction)이 향상</strong>됨과 동시에, 계산이 불가능했던 참인 사후 확률과 근사 분포 사이의 <strong>오차(Gap)가 줄어들게</strong> 됩니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/elbo_posterior_approximation_gap.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 변분 오토인코더(VAE)의 최적화 목표인 ELBO와 실제 로그 우도(Log-likelihood) 간의 관계를 나타낸 1차원 도식. 파란색 점으로 표시된 <img src="https://latex.codecogs.com/png.latex?%5Clog%20p_%5Ctheta(x)">는 우리가 궁극적으로 최대화하고자 하는 실제 데이터의 로그 우도이며, 주황색 점으로 표시된 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D(x;%20%5Ctheta,%20%5Cphi)">는 최적화를 위해 계산 가능한 하한선인 ELBO(Evidence Lower Bound)를 나타낸다. ELBO는 항상 실제 로그 우도보다 작거나 같으며, 두 값 사이의 차이인 ’사후 근사 격차(posterior approximation gap)’는 인코더가 만든 근사 사후 분포와 실제 사후 분포 간의 쿨백-라이블러 발산(KL Divergence)을 의미한다. VAE 학습 시 ELBO를 최대화하는 것은 곧 이 격차를 줄여 근사 분포를 실제 사후 분포에 최대한 가깝게 만드는 과정과 일치한다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+</section>
+<section id="introduction-beyond-standard-kl-divergence" class="level1">
+<h1>8. Introduction: Beyond Standard KL Divergence</h1>
+<ul>
+<li><p>이전 포스트까지 VAE(Variational Autoencoder)의 목적 함수인 ELBO를 유도하는 데 필요한 핵심 수학적 도구들을 성공적으로 정립했습니다. 본 포스트는 강의의 부록(Backup) 섹션으로, VAE의 기본적인 유도 과정에는 필수적이지 않지만 생성 모델 전반을 깊이 이해하기 위해 알아두면 유용한 <strong>추가적인 발산(Extra divergences) 지표</strong>들을 다룹니다.</p></li>
+<li><p>확률 분포 간의 차이를 측정하는 방법은 KL 발산 외에도 다양하며, 각 지표가 가지는 기하학적 특성에 따라 최적화 결과가 크게 달라질 수 있습니다.</p></li>
+</ul>
+<hr>
+<section id="forward-kl-vs.-reverse-kl" class="level2">
+<h2 class="anchored" data-anchor-id="forward-kl-vs.-reverse-kl">8.1. Forward KL vs.&nbsp;Reverse KL</h2>
+<ul>
+<li>진짜 데이터 분포 <img src="https://latex.codecogs.com/png.latex?p">를 우리가 만든 모델 분포 <img src="https://latex.codecogs.com/png.latex?q_%5Ctheta">로 근사한다고 가정해 보겠습니다. KL 발산은 비대칭성(Asymmetry)을 가지므로, 어떤 분포를 기준으로 삼느냐에 따라 두 가지 전혀 다른 최적화 양상을 보입니다.</li>
+</ul>
+<section id="forward-kl" class="level3">
+<h3 class="anchored" data-anchor-id="forward-kl">8.1.1. Forward KL</h3>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/forward_kl_mean_seeking.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Forward KL(순방향 쿨백-라이블러 발산) 최적화 시 나타나는 ‘평균 탐색(Mean-seeking)’ 특성을 시각화한 그래프. 파란색 곡선은 두 개의 봉우리를 갖는(Bimodal) 복잡한 실제 데이터 분포 <img src="https://latex.codecogs.com/png.latex?p">를 나타내며, 주황색 곡선은 이를 단순한 단일 정규 분포로 근사하려는 모델 분포 <img src="https://latex.codecogs.com/png.latex?q">를 나타낸다. Forward KL인 <img src="https://latex.codecogs.com/png.latex?D_%7BKL%7D(p%7C%7Cq)">를 최소화하는 방향으로 학습할 경우, 실제 분포 <img src="https://latex.codecogs.com/png.latex?p">가 존재하는 영역에서 모델 분포 <img src="https://latex.codecogs.com/png.latex?q">가 0의 값을 가지면 엄청난 페널티를 받게 된다. 이로 인해 <img src="https://latex.codecogs.com/png.latex?q">는 <img src="https://latex.codecogs.com/png.latex?p">의 모든 밀집 영역을 놓치지 않기 위해 넓게 퍼져 두 봉우리를 모두 덮는 형태를 띠게 된다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>Forward KL은 진짜 분포 <img src="https://latex.codecogs.com/png.latex?p">를 기준으로 모델 분포 <img src="https://latex.codecogs.com/png.latex?q_%5Ctheta">를 평가합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmin_%5Ctheta%20D_%7BKL%7D(p%7C%7Cq_%5Ctheta)%0A"></p>
+<ul>
+<li><strong>특징:</strong> 이 방식은 주로 ‘평균을 추구하는(Mean-seeking)’ 또는 ‘질량을 덮는(Mass-covering)’ 특성으로 설명됩니다.</li>
+<li><strong>해석:</strong> 모델 분포 <img src="https://latex.codecogs.com/png.latex?q_%5Ctheta">가 진짜 분포 <img src="https://latex.codecogs.com/png.latex?p">가 존재하는 모든 영역을 넓게 포괄하도록 학습되므로, 여러 개의 봉우리(Mode)가 있는 다봉 분포를 하나의 넓은 분포로 덮어버리는 경향이 있습니다.</li>
+</ul>
+</section>
+<section id="reverse-kl" class="level3">
+<h3 class="anchored" data-anchor-id="reverse-kl">8.1.2. Reverse KL</h3>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/images/reverse_kl_mode_seeking.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Reverse KL(역방향 쿨백-라이블러 발산) 최적화 시 나타나는 ‘최빈값 탐색(Mode-seeking)’ 특성을 시각화한 그래프. 파란색 곡선은 두 개의 봉우리를 갖는(Bimodal) 복잡한 실제 데이터 분포 <img src="https://latex.codecogs.com/png.latex?p">를 나타내며, 주황색 곡선은 이를 단순한 단일 정규 분포로 근사하려는 모델 분포 <img src="https://latex.codecogs.com/png.latex?q">를 나타낸다. Reverse KL인 <img src="https://latex.codecogs.com/png.latex?D_%7BKL%7D(q%7C%7Cp)">를 최소화하는 방향으로 학습할 경우, 실제 분포 <img src="https://latex.codecogs.com/png.latex?p">가 0에 가까운 영역에서 모델 분포 <img src="https://latex.codecogs.com/png.latex?q">가 큰 값을 가지면 엄청난 페널티를 받게 된다(Zero-forcing). 이로 인해 <img src="https://latex.codecogs.com/png.latex?q">는 페널티를 피하고자 <img src="https://latex.codecogs.com/png.latex?p">의 여러 봉우리 중 하나에만 밀착하여 집중하는 형태를 띠게 되며, 다른 영역의 정보는 무시하게 된다. 변분 오토인코더(VAE)의 근사 사후 분포 학습이 바로 이 방식을 기반으로 이루어진다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>Reverse KL은 모델 분포 <img src="https://latex.codecogs.com/png.latex?q_%5Ctheta">를 기준으로 진짜 분포 <img src="https://latex.codecogs.com/png.latex?p">를 평가합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmin_%5Ctheta%20D_%7BKL%7D(q_%5Ctheta%7C%7Cp)%0A"></p>
+<ul>
+<li><strong>특징:</strong> 이 방식은 주로 ‘봉우리를 추구하는(Mode-seeking)’ 특성으로 설명됩니다.</li>
+<li><strong>해석:</strong> 모델 분포 <img src="https://latex.codecogs.com/png.latex?q_%5Ctheta">가 진짜 분포 <img src="https://latex.codecogs.com/png.latex?p">의 여러 봉우리 중 하나에 집중하여 그 형태를 날카롭게 따라가려는 경향을 보입니다. (참고로 VAE의 ELBO에 포함된 KL 항은 수학적 형태상 Reverse KL의 성격을 띱니다.)</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="jensen-shannon-divergence-jsd" class="level2">
+<h2 class="anchored" data-anchor-id="jensen-shannon-divergence-jsd">8.2. Jensen-Shannon Divergence (JSD)</h2>
+<ul>
+<li><p>KL 발산의 비대칭성 문제를 해결하기 위해 등장한 것이 바로 <strong>젠슨-섀넌 발산(Jensen-Shannon divergence)</strong>입니다.</p></li>
+<li><p>두 분포 <img src="https://latex.codecogs.com/png.latex?p">와 <img src="https://latex.codecogs.com/png.latex?q">에 대하여 JSD는 다음과 같이 정의됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AJSD(p%7C%7Cq)%20=%20%5Cfrac%7B1%7D%7B2%7D(D_%7BKL%7D(p%7C%7Cm)%20+%20D_%7BKL%7D(q%7C%7Cm))%0A"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?m">은 두 분포의 평균 분포를 의미합니다. <img src="https://latex.codecogs.com/png.latex?%0Am%20=%20%5Cfrac%7B1%7D%7B2%7D(p%20+%20q)%0A"></li>
+</ul>
+<section id="jsd의-주요-수학적-성질" class="level3">
+<h3 class="anchored" data-anchor-id="jsd의-주요-수학적-성질">JSD의 주요 수학적 성질</h3>
+<ul>
+<li><strong>대칭성 (Symmetric):</strong> <img src="https://latex.codecogs.com/png.latex?JSD(p%7C%7Cq)%20=%20JSD(q%7C%7Cp)"> 가 성립합니다.</li>
+<li><strong>거리 공간 지표 (Metric):</strong> JSD의 제곱근인 <img src="https://latex.codecogs.com/png.latex?%5Csqrt%7BJSD%7D">는 수학적으로 완전한 거리 공간의 지표(Metric)로 기능할 수 있습니다.</li>
+<li><strong>유한한 상한선 (Upper Bound):</strong> 밑이 2인 로그(log base 2)를 사용할 경우, JSD의 값은 0과 1 사이로 제한됩니다 (<img src="https://latex.codecogs.com/png.latex?0%20%5Cle%20JSD(p%7C%7Cq)%20%5Cle%201">). 자연로그(Natural log)를 사용할 경우 상한선은 <img src="https://latex.codecogs.com/png.latex?%5Clog%202"> 가 됩니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="f-divergence" class="level2">
+<h2 class="anchored" data-anchor-id="f-divergence">8.3. f-Divergence</h2>
+<ul>
+<li><p>다양한 발산 지표들을 하나의 통합된 수학적 틀로 묶어주는 거대한 범용 클래스가 바로 <strong>f-발산(f-divergence)</strong>입니다.</p></li>
+<li><p>함수 <img src="https://latex.codecogs.com/png.latex?f">가 <img src="https://latex.codecogs.com/png.latex?f(1)=0">을 만족하는 볼록 함수(Convex function)일 때, f-발산은 다음과 같이 정의됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0AD_f(p%7C%7Cq)%20=%20%5Cint%20q(x)%20f%5Cleft(%5Cfrac%7Bp(x)%7D%7Bq(x)%7D%5Cright)%20dx%20=%20%5Cmathbb%7BE%7D_%7BX%20%5Csim%20q%7D%5Cleft%5Bf%5Cleft(%5Cfrac%7Bp(X)%7D%7Bq(X)%7D%5Cright)%5Cright%5D%0A"></p>
+<section id="f-divergence의-포괄성" class="level3">
+<h3 class="anchored" data-anchor-id="f-divergence의-포괄성">f-Divergence의 포괄성</h3>
+<ul>
+<li>이 일반화된 수식에서 함수 <img src="https://latex.codecogs.com/png.latex?f(t)">를 어떻게 설정하느냐에 따라 우리가 아는 지표들이 도출됩니다.
+<ul>
+<li>만약 <img src="https://latex.codecogs.com/png.latex?f(t)%20=%20t%20%5Clog%20t"> 로 설정하면, 이 f-발산은 정확히 <strong>KL 발산</strong>이 됩니다.</li>
+<li>앞서 살펴본 <strong>Jensen-Shannon 발산</strong> 역시 이 f-발산 계열(Family)의 하나로 표현될 수 있습니다.</li>
+</ul></li>
+<li>이러한 f-발산은 머신러닝에서 분포 간의 차이를 다루는 매우 유용하고 광범위한 함수군(Broader family)을 제공하지만, 기본적인 VAE를 유도하는 과정에는 반드시 필요하지는 않습니다. 하지만 향후 GAN(Generative Adversarial Networks)과 같은 다른 생성 모델의 원리를 이해할 때 매우 중요한 수학적 배경이 됩니다.</li>
+</ul>
+
+
+
+</section>
+</section>
+</section>
+
+ ]]></description>
+  <category>Deep Learning</category>
+  <guid>https://shsha0110.github.io/posts/Deep Learning/17.Deep-Generative-Models-1/</guid>
+  <pubDate>Sun, 03 May 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>[Machine Learning] 12. Gradient Descent</title>
   <dc:creator>유성현 </dc:creator>
@@ -3350,170 +4154,6 @@
  ]]></description>
   <category>Optimization</category>
   <guid>https://shsha0110.github.io/posts/Optimization/12.Proximal-Gradient-Descent/12.1/</guid>
-  <pubDate>Sun, 12 Apr 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] 12. Proximal Gradient Descent (Part 2)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/12.Proximal-Gradient-Descent/12.2/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-composite-convex-optimization" class="level1">
-<h1>1. Introduction: Composite Convex Optimization</h1>
-<ul>
-<li><p>이전 포스트에서는 Proximal Gradient Descent(근접 경사 하강법)의 개념과 <img src="https://latex.codecogs.com/png.latex?l_1">-정규화 등에 적용되는 근접 연산자(Proximal Operator)의 구체적인 형태를 살펴보았습니다. 이번 포스트에서는 이 알고리즘이 얼마나 빠르게 최적해에 도달할 수 있는지, 즉 <strong>수렴성(Convergence)</strong>을 수학적으로 엄밀하게 증명해보겠습니다.</p></li>
-<li><p>우리가 풀고자 하는 목적 함수는 다음과 같은 복합 볼록 최적화 문제(Composite Convex Optimization Problem)입니다.</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cmin_%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20f(x)%20=%20g(x)%20+%20h(x)"></p>
-<ul>
-<li><p>여기서 <img src="https://latex.codecogs.com/png.latex?g(x)">는 미분 가능한 매끄러운(smooth) 볼록 함수이고, <img src="https://latex.codecogs.com/png.latex?h(x)">는 미분 불가능할 수 있는 볼록 함수입니다.</p></li>
-<li><p>앞서 살펴보았듯 제약이 있는 최소화 문제의 경우 <img src="https://latex.codecogs.com/png.latex?h(x)%20=%20I_C(x)"> (지시 함수)로 두어 투영 연산자(Projection operator)로 환원시킬 수 있으며, LASSO 모델의 경우 <img src="https://latex.codecogs.com/png.latex?h(%5Cbeta)%20=%20%5Clambda%20%5C%7C%5Cbeta%5C%7C_1">로 두어 Shrinkage 연산자를 도출할 수 있습니다.</p></li>
-<li><p>이를 푸는 <strong>Algorithm 1: Proximal Gradient Descent</strong>의 구조는 다음과 같습니다.</p>
-<ul>
-<li><ol type="1">
-<li>초기값 <img src="https://latex.codecogs.com/png.latex?x_1%20%5Cin%20C"> 설정</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?t%20=%201,%20%5Cdots,%20T">에 대해 다음 업데이트 수행: <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20Prox_%7B%5Ceta%20h%7D%20%5Cleft(%20x_t%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20%5Cnabla%20g(x_t)%20%5Cright)"></li>
-</ol>
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">는 함수 <img src="https://latex.codecogs.com/png.latex?g">의 smoothness 파라미터이며, 학습률 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20=%201/%5Cbeta">를 사용합니다.</li>
-</ul></li>
-<li><ol start="3" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?x_%7BT+1%7D"> 반환</li>
-</ol></li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="gradient-mapping-경사-매핑" class="level1">
-<h1>2. Gradient Mapping (경사 매핑)</h1>
-<ul>
-<li><p>표준적인 경사 하강법(Gradient Descent)의 수렴성을 분석할 때는 그레이디언트 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x)"> 자체의 크기가 줄어드는 것을 지표로 삼습니다. 그러나 복합 최적화 문제에서는 <img src="https://latex.codecogs.com/png.latex?f(x)">가 전체적으로 미분 가능하지 않기 때문에, 일반적인 그레이디언트 대신 <strong>경사 매핑(Gradient Mapping)</strong>이라는 새로운 개념을 도입합니다.</p></li>
-<li><p>경사 매핑 <img src="https://latex.codecogs.com/png.latex?G_%5Ceta(x)">는 다음과 같이 정의됩니다.</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?G_%5Ceta(x)%20=%20%5Cfrac%7B1%7D%7B%5Ceta%7D%20%5Cleft(%20x%20-%20Prox_%7B%5Ceta%20h%7D(x%20-%20%5Ceta%20%5Cnabla%20g(x))%20%5Cright)"></p>
-<ul>
-<li>이 식을 살짝 변형하여 <img src="https://latex.codecogs.com/png.latex?-%5Ceta%20G_%5Ceta(x)%20=%20Prox_%7B%5Ceta%20h%7D(x%20-%20%5Ceta%20%5Cnabla%20g(x))%20-%20x"> 로 써보면, 이는 현재 점 <img src="https://latex.codecogs.com/png.latex?x">에서 근접 경사 하강 업데이트를 한 번 수행했을 때의 ’이동 벡터(difference)’를 의미함을 알 수 있습니다. 즉, 업데이트 규칙을 다음과 같이 아주 간단하게 표현할 수 있습니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20x_t%20-%20%5Ceta%20G_%5Ceta(x_t)"></p>
-<ul>
-<li>만약 <img src="https://latex.codecogs.com/png.latex?h(x)">가 별다른 패널티를 주지 않는 상수이거나 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5Ed"> 공간 전체에 대한 지시 함수라면, <img src="https://latex.codecogs.com/png.latex?Prox_%7B%5Ceta%20h%7D">는 항등 함수가 되어 <img src="https://latex.codecogs.com/png.latex?G_%5Ceta(x)%20=%20%5Cnabla%20g(x)">로 축소됩니다. 따라서 경사 매핑은 비매끄러운 최적화 문제에서 그레이디언트의 역할을 완벽히 대체하는 도구입니다.</li>
-</ul>
-<section id="최적성-조건과-경사-매핑-lemma-12.2" class="level2">
-<h2 class="anchored" data-anchor-id="최적성-조건과-경사-매핑-lemma-12.2">2.1 최적성 조건과 경사 매핑 (Lemma 12.2)</h2>
-<ul>
-<li>경사 매핑이 그레이디언트의 역할을 제대로 수행하는지 확인하기 위해, 최적해에서 경사 매핑이 0이 되는지를 살펴보겠습니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>Lemma 12.2.</strong> <img src="https://latex.codecogs.com/png.latex?G_%5Ceta(%5Chat%7Bx%7D)%20=%200"> 이기 위한 필요충분조건은 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D%20%5Cin%20%5Carg%5Cmin_%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%5Ed%7D%20g(x)%20+%20h(x)"> 인 것이다.</p>
-</blockquote>
-<section id="proof." class="level3">
-<h3 class="anchored" data-anchor-id="proof."><strong>Proof.</strong></h3>
-<ul>
-<li><p>최적성 조건에 의해, <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D">가 <img src="https://latex.codecogs.com/png.latex?g+h">를 최소화한다는 것은 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D">에서의 Subdifferential이 0을 포함한다는 것과 동치입니다. <img src="https://latex.codecogs.com/png.latex?0%20%5Cin%20%5C%7B%5Cnabla%20g(%5Chat%7Bx%7D)%5C%7D%20+%20%5Cpartial%20h(%5Chat%7Bx%7D)%20%5Ciff%20-%5Cnabla%20g(%5Chat%7Bx%7D)%20%5Cin%20%5Cpartial%20h(%5Chat%7Bx%7D)"></p></li>
-<li><p>양변에 <img src="https://latex.codecogs.com/png.latex?%5Ceta">를 곱하고 식을 재조합하면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?(%5Chat%7Bx%7D%20-%20%5Ceta%20%5Cnabla%20g(%5Chat%7Bx%7D))%20-%20%5Chat%7Bx%7D%20%5Cin%20%5Ceta%20%5Cpartial%20h(%5Chat%7Bx%7D)"></p></li>
-<li><p>이전 포스트의 Lemma 12.1 (<img src="https://latex.codecogs.com/png.latex?u%20=%20Prox_%7B%5Ceta%20h%7D(x)%20%5Ciff%20x%20-%20u%20%5Cin%20%5Ceta%20%5Cpartial%20h(u)">)를 적용하면, 위 조건은 다음 식과 정확히 동치입니다. <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D%20=%20Prox_%7B%5Ceta%20h%7D(%5Chat%7Bx%7D%20-%20%5Ceta%20%5Cnabla%20g(%5Chat%7Bx%7D))"></p></li>
-<li><p>이때 경사 매핑의 정의에 위 결과를 대입하면, <img src="https://latex.codecogs.com/png.latex?G_%5Ceta(%5Chat%7Bx%7D)%20=%20%5Cfrac%7B1%7D%7B%5Ceta%7D%20%5Cleft(%20%5Chat%7Bx%7D%20-%20Prox_%7B%5Ceta%20h%7D(%5Chat%7Bx%7D%20-%20%5Ceta%20%5Cnabla%20g(%5Chat%7Bx%7D))%20%5Cright)%20=%20%5Cfrac%7B1%7D%7B%5Ceta%7D%20(%5Chat%7Bx%7D%20-%20%5Chat%7Bx%7D)%20=%200"> 이 성립합니다. 따라서 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D">가 최적해인 것과 경사 매핑이 0인 것은 동치입니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></p></li>
-</ul>
-<hr>
-</section>
-</section>
-</section>
-<section id="key-lemma-for-convergence-analysis-lemma-12.3" class="level1">
-<h1>3. Key Lemma for Convergence Analysis (Lemma 12.3)</h1>
-<ul>
-<li>수렴 속도를 증명하기 위해 가장 핵심이 되는 보조 정리를 살펴보겠습니다. 이 정리는 함수 값이 업데이트를 거듭함에 따라 얼마나 감소하는지에 대한 상한을 제공합니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>Lemma 12.3.</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?f%20=%20g+h"> 이고, <img src="https://latex.codecogs.com/png.latex?g">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smooth 하면서 <img src="https://latex.codecogs.com/png.latex?l_2"> norm에 대해 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-strongly convex 하다고 가정하자. (단, <img src="https://latex.codecogs.com/png.latex?%5Cbeta%20%3E%200,%20%5Calpha%20%5Cge%200">). 또한 <img src="https://latex.codecogs.com/png.latex?h">는 볼록 함수이다. 이때 임의의 <img src="https://latex.codecogs.com/png.latex?x,%20z">에 대하여 다음이 성립한다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?f%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20G_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cle%20f(z)%20+%20G_%7B1/%5Cbeta%7D(x)%5E%5Ctop%20(x-z)%20-%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%5C%7CG_%7B1/%5Cbeta%7D(x)%5C%7C_2%5E2%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%5C%7Cx-z%5C%7C_2%5E2"></p>
-</blockquote>
-<section id="proof.-1" class="level3">
-<h3 class="anchored" data-anchor-id="proof.-1"><strong>Proof.</strong></h3>
-<ul>
-<li><p>증명은 <img src="https://latex.codecogs.com/png.latex?f%20=%20g%20+%20h"> 이므로 두 부분으로 나누어 상한을 구한 뒤 더하는 방식으로 진행됩니다. 편의상 <img src="https://latex.codecogs.com/png.latex?x_%7Bnext%7D%20=%20x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)"> 라고 합시다.</p></li>
-<li><p><strong>Step 1: <img src="https://latex.codecogs.com/png.latex?g"> 부분의 상한 구하기</strong></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?g">의 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smoothness 성질을 이용해 <img src="https://latex.codecogs.com/png.latex?x_%7Bnext%7D">에서의 함수값을 전개합니다. <img src="https://latex.codecogs.com/png.latex?g%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20G_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cle%20g(x)%20+%20%5Cnabla%20g(x)%5E%5Ctop%20%5Cleft(%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20G_%7B1/%5Cbeta%7D(x)%20%5Cright)%20+%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%5Cleft%5C%7C%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20G_%7B1/%5Cbeta%7D(x)%20%5Cright%5C%7C_2%5E2"> <img src="https://latex.codecogs.com/png.latex?=%20g(x)%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20%5Cnabla%20g(x)%5E%5Ctop%20G_%7B1/%5Cbeta%7D(x)%20+%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%20%5C%7CG_%7B1/%5Cbeta%7D(x)%5C%7C_2%5E2"></li>
-<li>여기에 <img src="https://latex.codecogs.com/png.latex?g">의 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-strong convexity 정의(<img src="https://latex.codecogs.com/png.latex?g(x)%20%5Cle%20g(z)%20-%20%5Cnabla%20g(x)%5E%5Ctop(z-x)%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%5C%7Cz-x%5C%7C_2%5E2">)를 <img src="https://latex.codecogs.com/png.latex?g(x)">에 적용하여 치환합니다. <img src="https://latex.codecogs.com/png.latex?%5Cle%20g(z)%20-%20%5Cnabla%20g(x)%5E%5Ctop(z-x)%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%5C%7Cz-x%5C%7C_2%5E2%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20%5Cnabla%20g(x)%5E%5Ctop%20G_%7B1/%5Cbeta%7D(x)%20+%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%20%5C%7CG_%7B1/%5Cbeta%7D(x)%5C%7C_2%5E2%20%5Cquad%20%5Cdots%20%5Ctext%7B(12.1)%7D"></li>
-</ul></li>
-<li><p><strong>Step 2: <img src="https://latex.codecogs.com/png.latex?h"> 부분의 상한 구하기</strong></p>
-<ul>
-<li>근접 연산자의 성질(Lemma 12.1)에 의해, <img src="https://latex.codecogs.com/png.latex?u%20=%20Prox_%7B(1/%5Cbeta)h%7D(x%20-%20(1/%5Cbeta)%5Cnabla%20g(x))%20=%20x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)"> 이면 다음이 성립합니다. <img src="https://latex.codecogs.com/png.latex?%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%5Cnabla%20g(x)%5Cright)%20-%20%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cin%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%5Cpartial%20h%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)"></li>
-<li>양변에 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">를 곱하면 간단히 정리됩니다. <img src="https://latex.codecogs.com/png.latex?G_%7B1/%5Cbeta%7D(x)%20-%20%5Cnabla%20g(x)%20%5Cin%20%5Cpartial%20h%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)"></li>
-<li>이제 볼록 함수 <img src="https://latex.codecogs.com/png.latex?h">의 1차 테일러 전개 하한 성질(Subgradient 부등식)을 <img src="https://latex.codecogs.com/png.latex?x_%7Bnext%7D">와 <img src="https://latex.codecogs.com/png.latex?z">에 대해 적용합니다. <img src="https://latex.codecogs.com/png.latex?h%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cle%20h(z)%20-%20(G_%7B1/%5Cbeta%7D(x)%20-%20%5Cnabla%20g(x))%5E%5Ctop%20%5Cleft(%20z%20-%20%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cright)%20%5Cquad%20%5Cdots%20%5Ctext%7B(12.2)%7D"></li>
-</ul></li>
-<li><p><strong>Step 3: 식의 병합</strong></p>
-<ul>
-<li>식 (12.1)과 (12.2)를 더하면, 복잡한 내적 항들이 상쇄되면서 부등식이 깔끔하게 정리됩니다. <img src="https://latex.codecogs.com/png.latex?f%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7DG_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cle%20f(z)%20-%20G_%7B1/%5Cbeta%7D(x)%5E%5Ctop(z-x)%20-%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%5C%7CG_%7B1/%5Cbeta%7D(x)%5C%7C_2%5E2%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%5C%7Cx-z%5C%7C_2%5E2"></li>
-<li>이는 증명하고자 했던 수식과 정확히 일치합니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></li>
-</ul></li>
-<li><p><strong>의의 (Eq 12.3)</strong></p>
-<ul>
-<li>위 보조정리에서 임의의 점 <img src="https://latex.codecogs.com/png.latex?z"> 대신 현재 점 <img src="https://latex.codecogs.com/png.latex?x">를 대입해보면 <img src="https://latex.codecogs.com/png.latex?%5Calpha"> 항이 사라지고 다음과 같이 목적 함수가 매 스텝 얼마나 감소하는지 알 수 있습니다. <img src="https://latex.codecogs.com/png.latex?f%5Cleft(x%20-%20%5Cfrac%7B1%7D%7B%5Cbeta%7D%20G_%7B1/%5Cbeta%7D(x)%5Cright)%20%5Cle%20f(x)%20-%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%20%5C%7CG_%7B1/%5Cbeta%7D(x)%5C%7C_2%5E2%20%5Cquad%20%5Cdots%20%5Ctext%7B(12.3)%7D"></li>
-<li>이는 경사 매핑의 크기에 비례하여 함수값이 항상 단조 감소(Monotonic decrease)함을 보장합니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="convergence-theorems-수렴성-정리" class="level1">
-<h1>4. Convergence Theorems (수렴성 정리)</h1>
-<ul>
-<li><p>이제 Lemma 12.3을 활용하여, 실제 알고리즘이 반복 횟수 <img src="https://latex.codecogs.com/png.latex?T">에 따라 얼마나 빠르게 최적해 <img src="https://latex.codecogs.com/png.latex?x%5E*">에 도달하는지 수렴 속도를 도출해봅시다.</p></li>
-<li><p>먼저 Lemma 12.3 식에 <img src="https://latex.codecogs.com/png.latex?x%20=%20x_t">, <img src="https://latex.codecogs.com/png.latex?z%20=%20x%5E*"> (최적해)를 대입하면 다음 전개가 가능합니다. <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20%5Cle%20f(x%5E*)%20+%20G_%7B1/%5Cbeta%7D(x_t)%5E%5Ctop%20(x_t%20-%20x%5E*)%20-%20%5Cfrac%7B1%7D%7B2%5Cbeta%7D%5C%7CG_%7B1/%5Cbeta%7D(x_t)%5C%7C_2%5E2%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2"></p></li>
-<li><p>우변의 내적항과 제곱항을 완전제곱식 형태인 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cbeta%7D%7B2%7D(%5C%7CA%5C%7C%5E2%20-%20%5C%7CB%5C%7C%5E2)"> 로 변환하여 묶어내면 아래의 핵심 부등식(12.4)을 얻을 수 있습니다. <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%5Cleft(%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2%20-%20%5C%7Cx_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cright)%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2%20%5Cquad%20%5Cdots%20%5Ctext%7B(12.4)%7D"></p></li>
-</ul>
-<section id="smooth-convex-함수의-수렴-속도-o1t" class="level2">
-<h2 class="anchored" data-anchor-id="smooth-convex-함수의-수렴-속도-o1t">4.1 Smooth Convex 함수의 수렴 속도 (<img src="https://latex.codecogs.com/png.latex?O(1/T)">)</h2>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?g">가 단순히 볼록 함수일 때(<img src="https://latex.codecogs.com/png.latex?%5Calpha%20=%200">)의 일반적인 수렴 정리입니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>Theorem 12.4.</strong> <img src="https://latex.codecogs.com/png.latex?g">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smooth 볼록 함수이고 <img src="https://latex.codecogs.com/png.latex?h">가 볼록 함수일 때, Proximal Gradient Descent가 반환하는 <img src="https://latex.codecogs.com/png.latex?x_%7BT+1%7D">은 다음을 만족한다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?f(x_%7BT+1%7D)%20-%20f(x%5E*)%20%5Cle%20%5Cfrac%7B%5Cbeta%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2%7D%7B2T%7D"></p>
-</blockquote>
-<section id="proof.-2" class="level3">
-<h3 class="anchored" data-anchor-id="proof.-2"><strong>Proof.</strong></h3>
-<ul>
-<li><p>식 (12.4)에 <img src="https://latex.codecogs.com/png.latex?%5Calpha%20=%200">을 대입하고, 양변을 <img src="https://latex.codecogs.com/png.latex?t=1">부터 <img src="https://latex.codecogs.com/png.latex?T">까지 더합니다. 우변이 망원 급수(Telescoping sum) 형태이므로 중간 항들이 모두 소거됩니다. 그 후 양변을 <img src="https://latex.codecogs.com/png.latex?T">로 나누면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7BT%7D%20%5Csum_%7Bt=1%7D%5ET%20%5Cleft(%20f(x_%7Bt+1%7D)%20-%20f(x%5E*)%20%5Cright)%20%5Cle%20%5Cfrac%7B%5Cbeta%7D%7B2T%7D%20%5Cleft(%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2%20-%20%5C%7Cx_%7BT+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cright)"></p></li>
-<li><p>앞서 (12.3)에서 보았듯 <img src="https://latex.codecogs.com/png.latex?f(x_t)">는 단조 감소하므로 <img src="https://latex.codecogs.com/png.latex?f(x_%7BT+1%7D)%20%5Cle%20f(x_t)"> 가 성립합니다. 따라서 좌변의 평균은 최소한 <img src="https://latex.codecogs.com/png.latex?f(x_%7BT+1%7D)%20-%20f(x%5E*)"> 보다 크거나 같습니다. 우변의 경우 <img src="https://latex.codecogs.com/png.latex?-%5C%7Cx_%7BT+1%7D-x%5E*%5C%7C_2%5E2%20%5Cle%200"> 이므로 항을 버려서 상한을 느슨하게 만들 수 있습니다.</p></li>
-<li><p>결과적으로 <img src="https://latex.codecogs.com/png.latex?O(1/T)"> 의 수렴 속도를 얻습니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></p></li>
-</ul>
-</section>
-</section>
-<section id="strongly-convex-함수의-수렴-속도-linear-convergence" class="level2">
-<h2 class="anchored" data-anchor-id="strongly-convex-함수의-수렴-속도-linear-convergence">4.2 Strongly Convex 함수의 수렴 속도 (Linear Convergence)</h2>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?g">가 강볼록(Strongly convex) 함수일 때(<img src="https://latex.codecogs.com/png.latex?%5Calpha%20%3E%200">), 수렴 속도는 기하급수적으로 빨라집니다.</li>
-</ul>
-<blockquote class="blockquote">
-<p><strong>Theorem 12.5.</strong> <img src="https://latex.codecogs.com/png.latex?g">가 <img src="https://latex.codecogs.com/png.latex?%5Cbeta">-smooth 및 <img src="https://latex.codecogs.com/png.latex?%5Calpha">-strongly convex 함수이고 <img src="https://latex.codecogs.com/png.latex?h">가 볼록 함수일 때, 다음이 성립한다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%5C%7Cx_%7BT+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cle%20%5Cleft(%201%20-%20%5Cfrac%7B%5Calpha%7D%7B%5Cbeta%7D%20%5Cright)%5ET%20%5C%7Cx_1%20-%20x%5E*%5C%7C_2%5E2"></p>
-</blockquote>
-<section id="proof.-3" class="level3">
-<h3 class="anchored" data-anchor-id="proof.-3"><strong>Proof.</strong></h3>
-<ul>
-<li><p>식 (12.4)에서 좌변 <img src="https://latex.codecogs.com/png.latex?f(x_%7Bt+1%7D)%20-%20f(x%5E*)"> 는 최적해의 정의에 의해 항상 0보다 크거나 같습니다. 따라서 부등식 우변도 0보다 크거나 같아야 합니다. <img src="https://latex.codecogs.com/png.latex?0%20%5Cle%20%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%5Cleft(%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2%20-%20%5C%7Cx_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cright)%20-%20%5Cfrac%7B%5Calpha%7D%7B2%7D%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2"></p></li>
-<li><p>이를 <img src="https://latex.codecogs.com/png.latex?%5C%7Cx_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2"> 에 대해 정리해 보겠습니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cbeta%7D%7B2%7D%20%5C%7Cx_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cle%20%5Cfrac%7B%5Cbeta%20-%20%5Calpha%7D%7B2%7D%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2"> <img src="https://latex.codecogs.com/png.latex?%5C%7Cx_%7Bt+1%7D%20-%20x%5E*%5C%7C_2%5E2%20%5Cle%20%5Cleft(%201%20-%20%5Cfrac%7B%5Calpha%7D%7B%5Cbeta%7D%20%5Cright)%20%5C%7Cx_t%20-%20x%5E*%5C%7C_2%5E2"></p></li>
-<li><p>이 관계식을 <img src="https://latex.codecogs.com/png.latex?t=1">부터 <img src="https://latex.codecogs.com/png.latex?T">까지 연쇄적으로(Recursively) 적용하면, 공비가 <img src="https://latex.codecogs.com/png.latex?(1%20-%20%5Calpha/%5Cbeta)">인 등비수열의 형태가 되어 증명이 완료됩니다. 이는 매 스텝마다 최적해와의 거리의 제곱이 상수 비율로 감소하는 <strong>선형 수렴(Linear Convergence)</strong>을 의미합니다. <img src="https://latex.codecogs.com/png.latex?%5Cblacksquare"></p></li>
-</ul>
-
-
-
-</section>
-</section>
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/12.Proximal-Gradient-Descent/12.2/</guid>
   <pubDate>Sun, 12 Apr 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>

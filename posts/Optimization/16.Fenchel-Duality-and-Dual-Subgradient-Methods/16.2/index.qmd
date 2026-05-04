@@ -1,0 +1,93 @@
+---
+title: "[Optimization] 16. Fenchel Duality and Dual Subgradient Methods (Part 2)"
+description: "Lagrangian duality based on the Fenchel conjugate"
+author: "유성현"
+date: "2026-04-29"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. Fenchel Conjugate를 활용한 라그랑지안 쌍대 함수 도출
+
+* 라그랑지안 쌍대(Lagrangian duality)는 켤레 함수(Conjugate function)의 개념을 바탕으로 도출할 수 있습니다. 다음과 같이 등식과 부등식 제약조건이 모두 포함된 최적화 문제 (16.5)를 고려해 보겠습니다.
+
+$$ 
+\begin{aligned}
+\text{minimize} \quad & f(x) \\
+\text{subject to} \quad & Ax = b \\
+& Cx \le d
+\end{aligned} 
+$$
+
+* 이 문제와 연관된 라그랑지안 쌍대 함수 $q(\lambda,\mu)$는 펜첼 켤레 함수(Fenchel conjugate)인 $f^*$를 사용하여 다음과 같이 전개할 수 있습니다.
+$$ 
+\begin{aligned}
+q(\lambda,\mu) &= \min_{x}\{f(x)+\lambda^{\top}(Cx-d)+\mu^{\top}(Ax-b)\} \\
+&= -d^{\top}\lambda-b^{\top}\mu+\min_{x}\{f(x)+(C^{\top}\lambda+A^{\top}\mu)^{\top}x\} \\
+&= -d^{\top}\lambda-b^{\top}\mu-\sup_{x}\{-f(x)-(C^{\top}\lambda+A^{\top}\mu)^{\top}x\} \\
+&= -d^{\top}\lambda-b^{\top}\mu-f^{*}(-C^{\top}\lambda-A^{\top}\mu)
+\end{aligned} 
+$$
+  * 여기서 $\sup_{x}\{-f(x) - y^{\top}x\}$ 형태가 $f^*(y)$의 정의와 연결되어 수식이 변환됩니다.
+
+---
+
+# 2. 등식 제약조건만 있는 경우의 쌍대 문제
+
+* 만약 문제에 부등식 제약조건($Cx \le d$)이 없다면, 쌍대 변수 $\lambda$ 항이 사라지게 되어 연관된 라그랑지안 쌍대 함수는 다음처럼 단순화됩니다.
+
+$$ q(\mu) = -b^{\top}\mu - f^{*}(-A^{\top}\mu) $$
+
+* 이를 바탕으로 구성된 라그랑지안 쌍대 문제는 다음과 같습니다.
+
+$$ \text{maximize} \quad -b^{\top}\mu - f^{*}(-A^{\top}\mu) $$
+
+* 위 수식에 $-1$을 곱하여 최대화 문제를 최소화 문제 (16.6)으로 동치 변환할 수 있습니다. $f^*$가 볼록 함수(convex function)이므로 이 쌍대 공식 역시 볼록 최소화(convex minimization) 문제가 됩니다.
+
+$$ \text{minimize} \quad f^{*}(-A^{\top}\mu) + b^{\top}\mu $$
+
+---
+
+# 3. 쌍대 문제에 대한 서브그레디언트 방법 (Subgradient Method)
+
+* 변환된 쌍대 문제 (16.6)을 풀기 위해 서브그레디언트(Subgradient) 방법을 적용해 보겠습니다. $\mu_t$가 주어졌을 때, 서브그레디언트 $g_t$를 다음과 같이 정의합니다.
+
+$$ g_{t} \in \partial(f^{*}(-A^{\top}\mu_{t}) + b^{\top}\mu_{t}) $$
+
+* 서브그레디언트 업데이트 규칙은 다음과 같습니다.
+$$ \mu_{t+1} = \mu_{t} - \eta_{t}g_{t} $$
+
+* 이때 $g_t$의 정체를 파악하기 위해 목적 함수의 서브디퍼렌셜(subdifferential)을 전개하면 다음과 같습니다.
+$$ \partial \left( f^{*}(-A^{\top}\mu_{t}) + b^{\top}\mu_{t} \right) = -A\partial f^{*}(-A^{\top}\mu_{t}) + b $$
+
+* 따라서, 어떤 $x_{t} \in \partial f^{*}(-A^{\top}\mu_{t})$ 에 대하여 $g_t$는 다음과 같이 표현됩니다.
+$$ g_{t} = -Ax_{t} + b $$
+
+* 켤레 함수의 특성에 의해 $x_{t} \in \partial f^{*}(-A^{\top}\mu_{t})$ 는 $-A^{\top}\mu_{t} \in \partial f(x_{t})$ 와 필요충분조건입니다. 이를 다시 쓰면 $0 \in \partial f(x_{t}) + A^{\top}\mu_{t}$ 가 성립해야 하며, 이는 다음 최적화의 해를 의미합니다.
+$$ x_{t} \in \text{argmin}_{x} f(x) + \mu_{t}^{\top}Ax $$
+
+* $\mu_t^\top b$는 $x$가 변함에 따라 상수로 유지되므로, 위 식은 다음 식과 완전히 동치입니다.
+$$ x_{t} \in \text{argmin}_{x} f(x) + \mu_{t}^{\top}(Ax-b) $$
+
+---
+
+# 4. Algorithm: Subgradient Method for the Dual Problem
+
+* 위의 전개 과정을 종합하면, 쌍대 문제에 대한 서브그레디언트 알고리즘은 다음과 같이 정리됩니다. 알고리즘의 매 반복(iteration)마다 주어진 쌍대 승수(dual multiplier) $\mu_t$에 대해 라그랑지안 함수 $\mathcal{L}(x, \mu_t) = f(x) + \mu_{t}^{\top}(Ax-b)$를 최소화하는 $x_t$를 먼저 찾습니다. 그런 다음, 대응하는 쌍대 서브그레디언트 $Ax_t - b$를 사용하여 새로운 승수 $\mu_{t+1}$을 업데이트합니다. 
+
+> **Initialize:** $\mu_1$
+> 
+> * **for** $t=1, ..., T-1$ **do**
+>   1. $x_{t} \in \text{argmin}_{x} f(x) + \mu_{t}^{\top}(Ax-b)$ 값을 구합니다.
+> 
+>   2. 스텝 사이즈 $\eta_t > 0$ 에 대해 $\mu_{t+1} = \mu_{t} + \eta_{t}(Ax_{t}-b)$ 로 업데이트합니다.
+> 
+> * **end for**
+
+* 이 방법은 각 반복마다 제약이 없는(unconstrained) 라그랑지안 함수의 최소화 문제를 풀게 되므로, 제약 조건 시스템이 매우 복잡할 때 유용한 접근 방식이 됩니다.

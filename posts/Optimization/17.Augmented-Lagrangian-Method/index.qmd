@@ -1,0 +1,237 @@
+---
+title: "[Optimization] 17. Augmented Lagrangian Method"
+description: "Augmented Lagrangian Method"
+author: "유성현"
+date: "2026-05-04"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. 들어가며 (Introduction)
+
+* 이번 포스트에서는 제약 조건이 있는 최적화 문제를 푸는 강력한 기법인 **Augmented Lagrangian Method (ALM)**에 대해 알아봅니다. 최적화 문제에서 제약 조건을 처리하는 방법은 다양하지만, ALM은 기존의 페널티(Penalty) 기법과 쌍대(Dual) 기법의 장점을 결합하여 수렴성과 안정성을 크게 높인 방법론입니다.
+
+* 강의 전반에 걸쳐 우리는 다음의 핵심 주제들을 다룹니다:
+  * 1. 원문제(Primal)와 쌍대문제(Dual)에서의 Subgradient 방법 비교
+  * 2. 분리 가능한(Separable) 문제에 대한 Dual Subgradient의 적용
+  * 3. Moreau-Yosida 평활화(Smoothing)의 개념
+  * 4. 쌍대문제에 대한 Proximal Point Algorithm의 적용 및 ALM 유도
+  * 5. 복합 문제(Composite Problems)를 위한 Proximal Gradient Method
+
+---
+
+# 2. Primal vs. Dual Subgradient Methods
+
+* 제약 조건 집합 $C = \{x \mid Ax = b\}$ 를 가지는 최적화 문제를 생각해 봅시다. 
+
+* 원문제(Primal Problem)를 풀기 위해 가장 먼저 떠올릴 수 있는 방법은 **Projected Subgradient Method**입니다. 이 방법의 업데이트 규칙은 다음과 같습니다:
+$$x_{t+1} = \text{proj}_{C}(x_t - \eta_t g_t)$$
+  * 여기서 $g_t \in \partial f(x_t)$ 이며, $\text{proj}_C$는 집합 $C$로의 투영 연산입니다.
+
+* 하지만 투영 집합 $C$가 복잡한 경우, 매 반복(iteration)마다 투영(Projection) 연산을 수행하는 것은 연산 비용이 매우 높습니다(expensive).
+
+## 2.1. Dual Subgradient Method의 이점
+
+* 이러한 경우 **Dual Subgradient Method**가 훌륭한 대안이 될 수 있습니다. 쌍대 방법을 사용하면 제약 조건이 목적 함수로 이동하여 하위 문제(Subproblem)를 제약 없이(unconstrained) 풀 수 있게 됩니다.
+
+* 업데이트 규칙은 다음과 같습니다:
+$$x_t \in \arg\min_x \{f(x) + \mu_t^\top (Ax - b)\}$$
+$$\mu_{t+1} = \mu_t + \eta_t (Ax_t - b)$$
+
+* $x_t$를 구하는 과정이 제약 없는 라그랑지안 하위 문제를 푸는 것과 같으므로 훨씬 효율적입니다. 
+
+## 2.2. 쌍대 목적 함수의 평활성 (Smooth Dual)
+
+* 쌍대 방법의 또 다른 강력한 동기는 **원문제 목적 함수가 매끄럽지(non-smooth) 않더라도, 쌍대 목적 함수는 매끄러워질 수 있다**는 점입니다.
+
+> **Theorem (Smoothness to Strong Convexity):**
+> 
+> 함수 $f: \mathbb{R}^d \to \mathbb{R}$ 가 닫혀 있고(closed) $l_2$ 노름(norm)에 대해 $\alpha$-강볼록(strongly convex)이라고 가정합시다. 그러면 그 켤레 함수(Fenchel conjugate)인 $f^*$ 는 $l_2$ 노름에 대해 $(1/\alpha)$-평활(smooth)합니다. 
+
+* 반대로, 함수 $f$가 $\beta$-평활하면, $f^*$는 $(1/\beta)$-강볼록합니다. 따라서 원문제에서 강볼록 목적 함수를 가진다면, 쌍대 문제로 전환함으로써 부드러운 함수에 적용 가능한 최적화 기법(예: Gradient Descent)들을 레버리지할 수 있습니다.
+
+---
+
+# 3. 분리 가능한 문제에 대한 쌍대 방법 (Separable Problems)
+
+* 목적 함수가 분리 가능하지만, 변수들이 제약 조건에 의해 얽혀 있는 다음 문제를 고려해 봅시다:
+
+$$\min \quad f_1(x_1) + f_2(x_2)$$
+$$\text{subject to} \quad A_1 x_1 + A_2 x_2 = b$$
+
+
+* 이 문제의 쌍대 문제(Dual Problem)는 다음과 같이 전개됩니다:
+$$\max_{\mu} \quad -f_1^*(-A_1^\top \mu) - f_2^*(-A_2^\top \mu) - b^\top \mu$$
+
+
+* 이는 다음을 최소화하는 것과 같습니다:
+$$\min_{\mu} \quad f_1^*(-A_1^\top \mu) + f_2^*(-A_2^\top \mu) + b^\top \mu$$
+
+
+* 이 쌍대 문제에 Subgradient Method를 적용하면 다음과 같은 알고리즘을 얻을 수 있습니다.
+
+> **Algorithm 1: Dual subgradient method for a separable problem** 
+> 
+> * $\mu_1$ 초기화 
+> 
+> * $t = 1, \dots, T-1$ 에 대하여 반복:
+> 
+>   * $x_{1,t} \in \arg\min_{x_1} \{f_1(x_1) + \mu_t^\top A_1 x_1\}$ 계산  
+> 
+>   * $x_{2,t} \in \arg\min_{x_2} \{f_2(x_2) + \mu_t^\top A_2 x_2\}$ 계산  
+> 
+>   * $\mu_{t+1} = \mu_t + \eta_t(A_1 x_{1,t} + A_2 x_{2,t} - b)$ 업데이트 
+
+* 이 알고리즘은 분산 최적화(Distributed Optimization) 시스템을 구축하는 핵심 원리가 됩니다.
+
+---
+
+# 4. Moreau-Yosida 평활화 (Smoothing)
+
+* 목적 함수가 매끄럽지 않을 때, 이를 부드럽게 근사하는 방법 중 하나가 바로 **Moreau-Yosida smoothing (Moreau envelope)** 입니다.
+
+* 함수 $f: \mathbb{R}^d \to \mathbb{R}$ 와 $\eta > 0$ 에 대해, Moreau envelope은 다음과 같이 정의됩니다:
+$$f_\eta(x) := \inf_u \left\{ f(u) + \frac{1}{2\eta} \|u - x\|_2^2 \right\}$$
+
+> **Proposition:** 
+> 
+> * $f$가 볼록(convex)할 때,
+> 
+>   * 1. $f_\eta$ 역시 볼록하며 $(1/\eta)$-평활 함수가 됩니다.
+> 
+>   * 2. $f_\eta$의 켤레 함수(Fenchel conjugate)는 $f_\eta^*(y) = f^*(y) + \frac{\eta}{2}\|y\|_2^2$ 입니다.
+> 
+>   * 3. $f_\eta$의 그라디언트는 근접 연산자(Proximal operator)를 통해 다음과 같이 계산됩니다:
+> 
+>    $$\nabla f_\eta(x) = \frac{1}{\eta} (x - \text{prox}_{\eta f}(x))$$
+
+> **Proposition:** 함수 $f$가 닫혀 있을 때, 평활화된 함수의 최솟값은 원래 함수의 최솟값과 일치합니다.
+> 
+> $$\arg\min_x f_\eta(x) = \arg\min_x f(x)$$
+
+* 따라서 $f_\eta(x)$에 대해 Gradient Descent를 적용하는 업데이트 규칙은 다음과 같이 유도됩니다:
+$$x_{t+1} = x_t - \eta \nabla f_\eta(x_t) = x_t - \eta \left( \frac{1}{\eta} (x_t - \text{prox}_{\eta f}(x_t)) \right) = \text{prox}_{\eta f}(x_t)$$
+
+* 즉, **원문제에 대한 Proximal Point Algorithm은 평활화된 목적 함수($f_\eta$)에 Gradient Descent를 적용한 것과 완전히 동일(Equivalent)합니다.** 
+
+---
+
+# 5. 쌍대 문제에 적용된 Proximal Point Algorithm (ALM의 유도)
+
+* 이 섹션은 이번 강의의 하이라이트입니다. 제약 조건이 있는 문제 $\min_{Ax=b} f(x)$ 의 쌍대 문제에 Proximal Point Algorithm을 적용해보며, 이것이 어떻게 Augmented Lagrangian Method(ALM)로 연결되는지 상세히 유도해보겠습니다.
+
+* 쌍대 문제는 다음과 같습니다:
+$$\min_{\mu} \quad h(\mu) = f^*(-A^\top \mu) + b^\top \mu$$
+
+* 이에 대해 Proximal point algorithm을 적용한 업데이트 규칙은 다음과 같습니다:
+$$\mu_{t+1} = \arg\min_{\mu} \left\{ f^*(-A^\top \mu) + b^\top \mu + \frac{1}{2\eta} \|\mu - \mu_t\|_2^2 \right\}$$
+
+## 5.1. 유도 과정의 빈칸 채우기 (Detailed Derivations)
+
+* **Step 1: 최적성 조건 (Optimality condition)**
+  * 위 최소화 문제에 대한 1차 최적성 조건에 의해 $0$이 Subdifferential 안에 포함되어야 합니다.
+  $$0 \in -A \partial f^*(-A^\top \mu_{t+1}) + b + \frac{1}{\eta}(\mu_{t+1} - \mu_t)$$
+
+* **Step 2: Fenchel 켤레의 성질 활용**
+  * $x_{t+1} \in \partial f^*(-A^\top \mu_{t+1})$ 라고 정의합시다.
+  * Convex analysis의 기초 성질($x \in \partial f^*(y) \iff y \in \partial f(x)$)에 의해, 다음이 성립합니다:
+  $$-A^\top \mu_{t+1} \in \partial f(x_{t+1})$$
+
+* **Step 3: $\mu_{t+1}$의 업데이트 도출**
+  * $x_{t+1}$의 정의를 Step 1의 식에 대입하면 다음과 같이 정리됩니다.
+  $$0 = -A x_{t+1} + b + \frac{1}{\eta}(\mu_{t+1} - \mu_t)$$
+  $$\implies \mu_{t+1} = \mu_t + \eta(A x_{t+1} - b)$$
+
+* **Step 4: $x_{t+1}$를 구하는 하위 문제 도출**
+  * 이제 $x_{t+1}$이 실제로 어떤 식을 최소화하여 얻어지는지 알아봅시다. Step 3에서 구한 $\mu_{t+1}$을 Step 2의 식에 대입합니다:
+  $$-A^\top (\mu_t + \eta(A x_{t+1} - b)) \in \partial f(x_{t+1})$$
+  * 이 식을 이항하여 정리하면,
+  $$0 \in \partial f(x_{t+1}) + A^\top \mu_t + \eta A^\top (A x_{t+1} - b)$$
+
+* 이 Subgradient 조건은 정확히 다음 식을 $x$에 대해 최소화할 때의 1차 최적성 조건과 같습니다:
+$$x_{t+1} = \arg\min_x \left\{ f(x) + \mu_t^\top(Ax - b) + \frac{\eta}{2}\|Ax - b\|_2^2 \right\}$$
+
+* 이 결과는 놀랍게도 **Augmented Lagrangian Method (ALM)**의 업데이트 규칙과 완벽하게 일치합니다! 
+
+> **Algorithm 2: Augmented Lagrangian Method** 
+> 
+> * $\mu_1$ 초기화 
+> 
+> * $t = 1, \dots, T$ 에 대하여 반복:
+>   * $x_t \in \arg\min_x \left\{ f(x) + \mu_t^\top Ax + \frac{\eta}{2}\|Ax - b\|_2^2 \right\}$ 찾기 
+>   * $\mu_{t+1} = \mu_t + \eta(Ax_t - b)$ 업데이트 
+
+---
+
+# 6. 해석 및 요약 (Summary of Relationships)
+
+* 지금까지 도출한 관계들을 종합하면, 원문제와 쌍대문제에 대한 여러 최적화 기법들이 사실상 수학적으로 **동치(Equivalent)**임을 알 수 있습니다.
+
+* **원문제 (Primal Problem) 관점:** 
+  * 원문제 $\min_x f(x)$ 에 대한 **Proximal point algorithm** 
+  * = 평활화된 문제 $\min_x f_\eta(x)$ 에 대한 **Gradient descent** 
+
+* **쌍대문제 (Dual Problem) 관점:** 
+  * **Augmented Lagrangian method** 
+  * = 쌍대 문제 $\min_{\mu} h(\mu) = f^*(-A^\top \mu) + b^\top \mu$ 에 대한 **Proximal point algorithm** 
+  * = 평활화된 쌍대 문제 $\min_{\mu} h_\eta(\mu)$ 에 대한 **Gradient descent** 
+  * = Augmented Primal $\min_x \{f(x) + \frac{\eta}{2}\|Ax - b\|_2^2 : Ax=b\}$ 에 대한 **Dual gradient method** 
+
+* 이러한 관계성은 ALM이 단순히 휴리스틱한 페널티 함수법이 아니라, 쌍대 공간에서 잘 정의된 Proximal 최적화의 결과물이라는 깊은 직관을 제공합니다.
+
+---
+
+# 7. Composite Problems와 Proximal Gradient Method
+
+* 강의의 마지막 주제는 **Composite problems** 입니다.
+$$\min \quad f(x) + g(Ax)$$
+
+
+* 이 문제는 변수 $y$를 도입하여 다음과 같은 제약 문제로 변형할 수 있습니다.
+$$\min \quad f(x) + g(y) \quad \text{subject to} \quad Ax = y$$
+
+
+* 이 문제의 쌍대(Dual)는 다음과 같습니다:
+$$\min_{\mu} \quad f^*(-A^\top \mu) + g^*(\mu)$$
+
+
+## 7.1. 쌍대에 대한 Proximal Gradient 적용 (Detailed Derivations)
+
+* 목적함수가 $f^*$와 $g^*$의 합으로 주어져 있으므로, $f$가 강볼록하여 $f^*$가 매끄럽다고 가정하면, 이 쌍대 문제에 **Proximal Gradient Method**를 적용할 수 있습니다.
+
+* 업데이트 식은 다음과 같이 정의됩니다:
+$$\mu_{t+1} = \text{prox}_{\eta g^*} (\mu_t + \eta A \nabla f^*(-A^\top \mu_t))$$
+  * **Step 1: $\nabla f^*$ 의 처리**
+    * $x_t = \nabla f^*(-A^\top \mu_t)$ 라고 정의합시다.
+    * 이는 곧 $-A^\top \mu_t \in \partial f(x_t)$ 를 의미하며, 따라서 다음 하위 문제를 푸는 것과 동치입니다.
+    $$x_t \in \arg\min_x \{ f(x) + \mu_t^\top A x \}$$
+  * **Step 2: Moreau Decomposition 활용**
+    * 업데이트 식에 $x_t$를 대입하면 $\mu_{t+1} = \text{prox}_{\eta g^*} (\mu_t + \eta A x_t)$ 가 됩니다.
+    * 근접 연산자의 성질(Moreau identity)인 $\text{prox}_{\eta g^*}(v) = v - \eta \text{prox}_{g/\eta}(v/\eta)$ 를 활용합시다.
+    * $v = \mu_t + \eta A x_t$ 라 두면,
+    $$\mu_{t+1} = \mu_t + \eta A x_t - \eta \cdot \text{prox}_{g/\eta}\left( A x_t + \frac{\mu_t}{\eta} \right)$$
+  * **Step 3: $y_t$ 하위 문제 정의**
+    * $y_t = \text{prox}_{g/\eta}\left( A x_t + \frac{\mu_t}{\eta} \right)$ 라고 정의하면, 이는 다음을 최소화하는 해입니다.
+    $$y_t = \arg\min_y \left\{ g(y) + \frac{\eta}{2} \left\| y - \left( Ax_t + \frac{\mu_t}{\eta} \right) \right\|_2^2 \right\}$$
+    * 제곱항을 전개하여 불필요한 상수를 제외하고 정리하면,
+    $$y_t = \arg\min_y \left\{ g(y) - \mu_t^\top y + \frac{\eta}{2}\|Ax_t - y\|_2^2 \right\}$$
+  * **Step 4: 최종 $\mu$ 업데이트**
+    * 최종적으로 $\mu_{t+1}$ 의 업데이트 식은 다음과 같이 정리됩니다.
+    $$\mu_{t+1} = \mu_t + \eta(Ax_t - y_t)$$
+
+* 이 과정을 하나의 알고리즘으로 묶으면 다음과 같습니다.
+
+> **Algorithm 5: Proximal gradient for composite problems** 
+> $\mu_1$ 초기화
+> $t = 1, \dots, T-1$ 에 대하여 반복:
+>   $x_t \in \arg\min_x \{ f(x) + \mu_t^\top Ax \}$ 획득 
+>   $y_t \in \arg\min_y \left\{ g(y) - \mu_t^\top y + \frac{\eta}{2}\|Ax_t - y\|_2^2 \right\}$ 획득 
+>   $\mu_{t+1} = \mu_t + \eta(Ax_t - y_t)$ 업데이트 
+
+* 이 알고리즘은 ADMM(Alternating Direction Method of Multipliers)의 형태와도 깊이 맞닿아 있는 매우 중요한 결과입니다.

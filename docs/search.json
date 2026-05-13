@@ -12132,6 +12132,466 @@
     ]
   },
   {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html",
+    "title": "[Data Mining] 19. ML On Graphs (Part 3)",
+    "section": "",
+    "text": "지난 포스트에서는 그래프 신경망(GNN)이 노드의 이웃 구조를 연산 그래프(Computation Graph)로 변환하여 정보를 집계하는 기본 원리를 살펴보았습니다.\n현대적인 GNN은 단순한 하나의 수식으로 정의되기보다는, 메시지(Message), 집계(Aggregation), 업데이트(Update)라는 3단계의 독립적인 모듈로 구성된 메시지 패싱 프레임워크(Message Passing Framework)를 따릅니다. 이 세 가지 컴포넌트를 어떻게 설계하느냐에 따라 우리가 흔히 아는 GCN, GraphSAGE, GAT 등 수많은 GNN 변형(Variants)들이 탄생하게 됩니다.\n이번 포스트에서는 GNN 계층의 일반적인 프레임워크를 수학적으로 정립하고, 제공된 6장의 상세 도식을 통해 대표적인 아키텍처인 GraphSAGE와 GCN의 내부 동작 원리를 깊이 있게 분석해 보겠습니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 3)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html#단계-메시지-계산-message-computation",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html#단계-메시지-계산-message-computation",
+    "title": "[Data Mining] 19. ML On Graphs (Part 3)",
+    "section": "2.1 1단계: 메시지 계산 (Message Computation)",
+    "text": "2.1 1단계: 메시지 계산 (Message Computation)\n\n가장 먼저, 이웃 노드들이 타겟 노드에게 전달할 ‘메시지(Message)’를 생성해야 합니다.\n\n\n\n\nFigure 4: 1단계 메시지 계산(Message Computation). 왼쪽의 원본 입력 그래프에서 타겟 노드 A가 이웃 B, C, D를 가짐을 확인합니다. 오른쪽 도식에서는 점선으로 표시된 붉은 박스를 통해, 각 이웃 노드가 타겟 노드에게 보낼 고유한 ’메시지’를 생성하는 첫 번째 변환 단계(Message)를 강조하고 있습니다.\n\n\n\\[\nm_u^{(l)} = \\text{MSG}^{(l)}\\left(h_u^{(l-1)}\\right)\n\\]\n\n직관 (Intuition): 각 이웃 노드 \\(u\\)는 자신의 이전 계층 상태 \\(h_u^{(l-1)}\\)를 바탕으로 다른 노드들에게 보낼 정보 덩어리(\\(m_u^{(l)}\\))를 만듭니다.\n예시 (Example): 가장 흔하게 사용되는 \\(\\text{MSG}\\) 함수는 가중치 행렬 \\(W^{(l)}\\)을 곱하는 단순 선형 변환(Linear layer)입니다. (\\(m_u^{(l)} = W^{(l)} h_u^{(l-1)}\\))",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 3)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html#단계-집계-aggregation",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html#단계-집계-aggregation",
+    "title": "[Data Mining] 19. ML On Graphs (Part 3)",
+    "section": "2.2 2단계: 집계 (Aggregation)",
+    "text": "2.2 2단계: 집계 (Aggregation)\n\n이웃 노드들이 생성한 다수의 메시지들을 타겟 노드 \\(v\\) 입장에서 ‘하나로 결합’하는 과정입니다.\n\n\n\n\nFigure 5: 2단계 집계(Aggregation). 왼쪽의 그래프 구조를 바탕으로 생성된 다수의 메시지들이, 오른쪽 도식의 붉은 점선 박스로 강조된 집계 함수(Aggregation)를 통과합니다. 이 단계를 통해 여러 갈래로 들어온 이웃들의 정보가 타겟 노드(노란색)를 위한 단 하나의 결합된 정보 벡터로 융합됩니다.\n\n\n\\[\n\\hat{h}_v^{(l)} = \\text{AGG}^{(l)}\\left( \\left\\{ m_u^{(l)} \\mid u \\in N(v) \\right\\} \\right)\n\\]\n\n직관 (Intuition): 타겟 노드 \\(v\\)의 이웃 집합 \\(N(v)\\)에 속한 모든 노드들로부터 온 메시지들을 병합하여 임시 벡터 \\(\\hat{h}_v^{(l)}\\)를 만듭니다.\n필수 조건 (Permutation Invariance): 노드들이 메시지를 보내는 ’순서’는 존재하지 않으므로, 집계 함수 \\(\\text{AGG}\\)는 입력 순서가 바뀌어도 결과가 완벽히 동일한 순열 불변 함수여야 합니다. (예: 원소별 합 \\(\\text{sum}(\\cdot)\\), 평균 \\(\\text{mean}(\\cdot)\\), 최댓값 \\(\\text{max}(\\cdot)\\) 등)",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 3)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html#단계-자가-연결-및-업데이트-self-connection-update",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html#단계-자가-연결-및-업데이트-self-connection-update",
+    "title": "[Data Mining] 19. ML On Graphs (Part 3)",
+    "section": "2.3 3단계: 자가 연결 및 업데이트 (Self-Connection & Update)",
+    "text": "2.3 3단계: 자가 연결 및 업데이트 (Self-Connection & Update)\n\n이웃의 정보를 모두 모았으니, 이제 ‘자기 자신의 기존 정보’와 결합하여 최종적으로 상태를 업데이트해야 합니다.\n\n\n\n\nFigure 6: 3단계 자가 연결(Self-Connection) 및 업데이트. 왼쪽의 순환 화살표가 있는 노드 ‘a’ 모식도는 노드가 자기 자신의 기존 정보도 잃지 않고 보존해야 함을 상징합니다. 오른쪽 도식 상단의 최종 출력 단계에서, 집계된 이웃 정보와 노드 본연의 이전 상태가 결합되어 업데이트가 이루어집니다.\n\n\n\\[\nh_v^{(l)} = \\text{UPDATE}^{(l)}\\left( \\hat{h}_v^{(l)}, h_v^{(l-1)} \\right)\n\\]\n\n직관 (Intuition): 이웃으로부터 얻은 새로운 정보 \\(\\hat{h}_v^{(l)}\\)에 타겟 노드 \\(v\\) 본연의 이전 상태 \\(h_v^{(l-1)}\\)(Self-connection)를 더하여 융합합니다.\n보통 이 단계에서 ReLU와 같은 비선형 활성화 함수(Activation function)가 적용되어 신경망의 비선형적 표현력을 극대화합니다.\n이러한 \\(\\text{MSG} \\rightarrow \\text{AGG} \\rightarrow \\text{UPDATE}\\) 의 일반 프레임워크 안에서 각 함수를 어떻게 선택하느냐에 따라 다양한 GNN 모델이 파생됩니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 3)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html#gcn-수식의-구조적-특징",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html#gcn-수식의-구조적-특징",
+    "title": "[Data Mining] 19. ML On Graphs (Part 3)",
+    "section": "4.1 GCN 수식의 구조적 특징",
+    "text": "4.1 GCN 수식의 구조적 특징\n\nSelf-connection의 융합: 합산 기호 아래의 \\(N(v) \\cup \\{v\\}\\) 조건에서 보듯, 타겟 노드 자기 자신(\\(v\\))을 아예 이웃 집합의 일부로 취급(Self-loop)합니다. 따라서 업데이트(UPDATE) 단계가 집계(AGG) 단계와 하나로 통합되어 있습니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 3)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html#가장-중요한-차이-대칭-정규화-symmetric-normalization",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.3/index.html#가장-중요한-차이-대칭-정규화-symmetric-normalization",
+    "title": "[Data Mining] 19. ML On Graphs (Part 3)",
+    "section": "4.2 가장 중요한 차이: 대칭 정규화 (Symmetric Normalization)",
+    "text": "4.2 가장 중요한 차이: 대칭 정규화 (Symmetric Normalization)\n\n단순 평균을 쓴다면 \\(\\frac{1}{d_v + 1}\\) 이면 충분할 텐데, 왜 GCN은 굳이 분모에 \\(\\sqrt{d_v + 1} \\sqrt{d_u + 1}\\) 이라는 대칭 정규화(Symmetric Normalization) 텀을 도입했을까요?\n\n타겟 노드의 차수 조절 (\\(\\frac{1}{\\sqrt{d_v + 1}}\\)):\n\n\n인맥이 지나치게 넓은 타겟 노드(Hub node)가 수많은 이웃으로부터 정보를 받을 때 값이 무한정 커지는 것을 방지(스케일 다운)합니다.\n\n\n소스 노드의 차수 조절 (\\(\\frac{1}{\\sqrt{d_u + 1}}\\)): (GCN의 핵심 직관)\n\n\n메시지를 보내는 이웃(Source node \\(u\\))의 차수도 함께 패널티로 적용합니다. 만약 이웃 \\(u\\)가 수만 명과 연결된 인플루언서라면, 그 노드가 나에게 주는 메시지의 정보량(고유성)은 매우 떨어질 것입니다.\n반대로 나하고만 연결된 희귀한 이웃의 정보는 매우 귀중합니다. 즉, “발이 넒은 이웃이 보내는 정보는 가중치를 낮추고, 좁은 관계를 가진 이웃의 정보는 높은 가중치로 받아들인다”는 철학이 \\(\\sqrt{d_u + 1}\\)에 담겨 있는 것입니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 3)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html",
+    "title": "[Data Mining] 19. ML On Graphs (Part 1)",
+    "section": "",
+    "text": "그래프(Graph)는 노드(Node)와 간선(Edge)을 통해 엔티티 간의 복잡한 상호작용과 관계를 모델링하는 데 특화된 데이터 구조입니다. 과거의 기계학습 기법들은 네트워크의 위상(Topology)이나 노드의 통계적 특성을 사람이 직접 수동으로 추출(Hand-crafted features)하여 사용했습니다.\n하지만 표현 학습(Representation Learning)의 패러다임이 그래프 데이터에 적용되면서, 그래프의 구조적 정보를 보존하는 임베딩(Embedding)을 신경망이 스스로 학습할 수 있게 되었습니다. 이번 포스트에서는 초기 그래프 임베딩 기법인 ’얕은 임베딩(Shallow Embeddings)’의 수학적 구조와 치명적인 한계점들을 짚어보고, 이를 극복하기 위해 등장한 그래프 신경망(Graph Neural Networks, GNN) 기반의 깊은 인코더(Deep Graph Encoders) 개념을 논리적 흐름에 따라 상세히 다룹니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 1)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#노드-임베딩의-핵심-목표",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#노드-임베딩의-핵심-목표",
+    "title": "[Data Mining] 19. ML On Graphs (Part 1)",
+    "section": "1.1 노드 임베딩의 핵심 목표",
+    "text": "1.1 노드 임베딩의 핵심 목표\n\n그래프 표현 학습의 가장 근본적인 목표는 원본 네트워크 상에서 노드들이 가지고 있는 구조적 특성과 위상적 유사성(Structural properties)을 보존하면서, 이를 저차원 벡터 공간(Embedding Space)으로 매핑(Mapping)하는 것입니다.\n함수 \\(f\\)를 통해 원본 그래프를 입력받아 각 노드의 2D 혹은 고차원의 임베딩 벡터를 출력하게 되며, 이 공간 안에서는 비슷한 구조적 역할을 하거나 서로 밀접하게 연결된 노드들이 기하학적으로 가깝게 위치하게 됩니다.\n\n\n\n\nFigure 1: 함수 f를 통한 그래프 임베딩 매핑 과정. 좌측의 원본 그래프(Input graph)가 함수 \\(f\\)를 통과하면, 우측과 같이 각 노드가 2차원 임베딩 공간(2D node embeddings)의 점으로 변환됩니다. 같은 색상으로 표시된 군집(예: 파란색, 초록색, 빨간색 등 질병 연관 노드들)이 원본 위상 구조를 유지한 채 임베딩 공간에서도 서로 가깝게 위치하고 있음을 확인할 수 있습니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 1)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#인코더와-유사도-함수-encoder-similarity-function",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#인코더와-유사도-함수-encoder-similarity-function",
+    "title": "[Data Mining] 19. ML On Graphs (Part 1)",
+    "section": "1.2 인코더와 유사도 함수 (Encoder & Similarity Function)",
+    "text": "1.2 인코더와 유사도 함수 (Encoder & Similarity Function)\n\n노드 임베딩을 수학적으로 정립하기 위해, 노드 \\(u\\)와 \\(v\\) 간의 관계를 수식화할 필요가 있습니다. 그래프 표현 학습은 다음의 핵심 수식을 만족하는 인코더 함수 \\(\\text{ENC}(\\cdot)\\)를 찾는 최적화 과정입니다.\n\n\\[\n\\text{similarity}(u, v) \\approx \\mathbf{z}_v^\\top \\mathbf{z}_u\n\\]\n\n\\(\\text{similarity}(u, v)\\): 원본 네트워크 상에서 두 노드 간의 구조적 유사도를 의미합니다. (예: 두 노드가 직접 연결되어 있는지, 공유하는 이웃 노드가 얼마나 많은지, 무작위 보행(Random Walk) 시 얼마나 자주 함께 방문되는지 등을 측정)\n\\(\\text{ENC}(u), \\text{ENC}(v)\\): 원본 그래프의 노드를 임베딩 공간으로 보내는 인코더 함수입니다.\n\\(\\mathbf{z}_u, \\mathbf{z}_v\\): 인코더를 통과하여 생성된 노드 \\(u\\)와 \\(v\\)의 \\(d\\)차원 잠재 벡터(Latent vector)입니다. 즉, \\(\\mathbf{z}_u = \\text{ENC}(u)\\) 입니다.\n\\(\\mathbf{z}_v^\\top \\mathbf{z}_u\\): 임베딩 공간 상에서 두 벡터의 내적(Dot product)입니다. 벡터 간의 코사인 유사도 혹은 거리에 비례하는 값으로, 임베딩 공간에서의 유사도를 나타냅니다.\n\n\n\n\nFigure 2: 인코더와 유사도 함수의 개념도. 원본 네트워크 상의 노드 \\(u\\)와 \\(v\\)는 각각 인코더 함수 \\(\\text{ENC}(u)\\)와 \\(\\text{ENC}(v)\\)를 통해 임베딩 공간의 점 \\(\\mathbf{z}_u\\)와 \\(\\mathbf{z}_v\\)로 인코딩됩니다. 표현 학습의 최종 목표(Goal)는 원본 네트워크에서의 유사도가 임베딩 벡터의 내적 \\(\\mathbf{z}_v^\\top \\mathbf{z}_u\\)와 근사해지도록 인코더를 학습시키는 것입니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 1)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#얕은-인코더의-수학적-정의",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#얕은-인코더의-수학적-정의",
+    "title": "[Data Mining] 19. ML On Graphs (Part 1)",
+    "section": "2.1 얕은 인코더의 수학적 정의",
+    "text": "2.1 얕은 인코더의 수학적 정의\n\n얕은 인코더에서 함수 \\(\\text{ENC}(v)\\)는 단순히 임베딩 행렬(Embedding Matrix)에서 해당 노드에 대응하는 열(Column)을 조회(Look-up)하는 방식으로 작동합니다. 전체 노드 집합을 \\(V\\)라 하고, 우리가 원하는 임베딩의 차원을 \\(d\\)라고 할 때, 임베딩 행렬 \\(\\mathbf{Z}\\)는 다음과 같이 정의됩니다.\n\n\\[\n\\mathbf{Z} \\in \\mathbb{R}^{d \\times |V|}\n\\]\n\n특정 노드 \\(v\\)의 임베딩 벡터 \\(\\mathbf{z}_v\\)는 임베딩 행렬 \\(\\mathbf{Z}\\)와 지시 벡터(Indicator vector) \\(\\mathbf{v} \\in \\{0, 1\\}^{|V|}\\) 의 행렬 곱으로 산출됩니다. (여기서 지시 벡터 \\(\\mathbf{v}\\)는 노드 \\(v\\)의 인덱스 위치만 1이고 나머지는 0인 원-핫 인코딩 벡터입니다.)\n\n\\[\n\\text{ENC}(v) = \\mathbf{z}_v = \\mathbf{Z} \\mathbf{v}\n\\]\n\n\n\nFigure 3: 얕은 임베딩 행렬 \\(\\mathbf{Z}\\)의 시각적 구조. 행렬의 전체 크기는 (임베딩 차원수) \\(\\times\\) (전체 노드 수)로 구성됩니다. 점선으로 강조된 하나의 열(column)이 곧 특정 노드의 고유한 임베딩 벡터가 되며, 노드 하나당 하나의 열이 1:1로 매핑되는 단순 룩업(Look-up) 구조임을 보여줍니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 1)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#얕은-인코더의-3가지-치명적-한계",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#얕은-인코더의-3가지-치명적-한계",
+    "title": "[Data Mining] 19. ML On Graphs (Part 1)",
+    "section": "2.2 얕은 인코더의 3가지 치명적 한계",
+    "text": "2.2 얕은 인코더의 3가지 치명적 한계\n\n이러한 단순 행렬 룩업 방식은 직관적이지만, 실제 대규모/동적 그래프에 적용할 때 다음과 같은 명확한 한계를 지닙니다.\n\n매개변수 효율성 부족 (Limitation 1: \\(O(|V|d)\\) parameters are needed)\n\n\n파라미터 비공유(No sharing of parameters): 노드들 사이에 가중치를 공유하는 메커니즘이 전혀 없습니다.\n모든 노드가 자신만의 고유한 임베딩 벡터(열)를 독립적으로 학습해야 하므로, 그래프의 노드 수 \\(|V|\\)가 수백만~수십억 개로 증가하면 학습해야 할 행렬 \\(\\mathbf{Z}\\)의 크기도 선형적으로 폭발하여 메모리 초과 현상이 발생합니다.\n\n\n본질적인 변환적 학습의 한계 (Limitation 2: Inherently “transductive”)\n\n\n행렬 \\(\\mathbf{Z}\\)의 크기와 구조는 모델이 훈련되는 시점의 노드 집합에 완전히 고정됩니다.\n학습 시점에 존재하지 않았던 완전히 새로운 노드(Unseen nodes)가 네트워크에 추가될 경우, 이 노드에 대한 임베딩을 즉각적으로 생성해내는 추론(Inductive inference)이 불가능합니다. 새로운 노드를 반영하려면 \\(\\mathbf{Z}\\)에 새로운 열을 추가하고 전체 모델을 다시 학습해야만 합니다.\n\n\n노드 특성(Features) 활용 불가 (Limitation 3: Do not incorporate node features)\n\n\n현실의 네트워크(예: 소셜 네트워크의 사용자 프로필 텍스트, 분자 구조 내 원자의 화학적 성질 등)에서 각 노드는 매우 풍부한 고유 특성(Features) 데이터를 가집니다.\n하지만 얕은 임베딩은 오직 연결 구조(Topology) 정보만을 사용하여 \\(\\mathbf{Z}\\) 행렬을 업데이트할 뿐, 노드가 원래 가지고 있는 특성 행렬(Feature Matrix)를 임베딩 생성 과정에 결합할 수 있는 구조적 방법론이 부재합니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 1)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#새로운-인코더의-수학적-정의",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#새로운-인코더의-수학적-정의",
+    "title": "[Data Mining] 19. ML On Graphs (Part 1)",
+    "section": "3.1 새로운 인코더의 수학적 정의",
+    "text": "3.1 새로운 인코더의 수학적 정의\n\n이제 그래프 \\(G=(A, X)\\)가 주어졌다고 가정해 봅시다.\n인접 행렬 (Adjacency Matrix) \\(A\\): \\(A \\in \\mathbb{R}^{|V| \\times |V|}\\) (노드 간의 연결 여부나 가중치를 나타내는 행렬)\n노드 특성 행렬 (Feature Matrix) \\(X\\): \\(X \\in \\mathbb{R}^{|V| \\times d_{in}}\\) (노드 자체의 속성값, 예를 들어 유저 프로필이나 이미지 피처 등을 나타냄)\n우리가 설계할 새로운 깊은 인코더 \\(f_\\theta\\)는 학습 가능한 파라미터 \\(\\theta\\)의 집합으로 구성된 신경망이며, 구조 정보 \\(A\\)와 특성 정보 \\(X\\)를 동시에 고려하여 최종 잠재 표현 행렬 \\(H\\)를 만들어냅니다.\n\n\\[\nH = f_\\theta(A, X) \\quad \\text{where } H \\in \\mathbb{R}^{|V| \\times d}\n\\]\n\n즉, 특정 노드 \\(v\\)에 대한 인코딩은 더 이상 단순한 행렬 조회가 아니라, 노드 \\(v\\)의 속성값과 주변 이웃들의 구조적 정보를 조합한 다층적인 연산의 결과물이 됩니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 1)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#gnn-파이프라인과-딥러닝-아키텍처",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.1/index.html#gnn-파이프라인과-딥러닝-아키텍처",
+    "title": "[Data Mining] 19. ML On Graphs (Part 1)",
+    "section": "3.2 GNN 파이프라인과 딥러닝 아키텍처",
+    "text": "3.2 GNN 파이프라인과 딥러닝 아키텍처\n\n깊은 인코더는 여러 층의 그래프 합성곱 계층(Graph Convolutions Layer)을 쌓아 올린 형태를 취합니다.\n\n\n\n\nFigure 4: 그래프 신경망(GNN) 기반 깊은 그래프 인코더의 아키텍처. 입력 그래프 구조와 노드 특성이 첫 번째 ‘Graph convolutions’ 층을 통과하여 이웃의 정보를 집계합니다. 이후 비선형 활성화 함수(Activation function)와 정규화(Regularization, e.g., dropout)를 거치고, 여러 층의 합성곱을 반복 통과합니다. 최종적으로 각 노드에 대한 정교한 임베딩이 산출되며, 이를 확장하여 부분 그래프(Subgraph)나 전체 그래프 단위의 임베딩도 추출할 수 있습니다.\n\n\n\n깊은 인코더가 기존 한계를 해결하는 메커니즘:\n\n\n파라미터 공유 및 효율성: 모든 노드가 고유한 벡터를 가지는 대신, 이웃의 정보를 집계(Aggregation)하고 변환하는 ’가중치 행렬 \\(\\theta\\)’를 공유합니다. 따라서 파라미터 수가 노드 수 \\(|V|\\)에 의존하지 않고 특성 차원에만 의존하므로 메모리 효율이 극대화됩니다.\n\n\n귀납적 추론(Inductive Capability): 학습된 모델 \\(f_\\theta\\)는 정보를 모으는 ’규칙’을 학습한 것입니다. 따라서 새로운 노드가 추가되더라도, 그 노드의 주변 이웃 구조(\\(A\\)의 일부)와 고유 특성(\\(X\\))만 입력하면 즉각적으로 새로운 임베딩을 연산해낼 수 있습니다.\n\n\n다양한 정보의 융합: 식 \\(f_\\theta(A, X)\\)에서 명시되어 있듯, 노드가 원래 가지는 텍스트/이미지 특성 정보가 그래프 구조 정보와 함께 다층 신경망(Multi-layer Neural Network)을 통해 유기적으로 결합됩니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 1)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html",
+    "title": "[Data Mining] 15. Link Analysis (Part 2)",
+    "section": "",
+    "text": "이전 포스트에서는 검색 엔진이 Link Spam을 방어하기 위해 어떻게 랜덤 워크를 변형하여 TrustRank와 Topic-Specific PageRank를 고안해냈는지, 그리고 특정 노드와의 네트워크상 ’근접성(Proximity)’을 측정하는 Personalized PageRank(PPR) 모델의 원리를 확인했습니다.\n이번 포스트에서는 한 걸음 더 나아가, PPR 점수를 활용하여 네트워크 내부의 숨겨진 군집(Community)을 찾아내는 알고리즘을 다룹니다. 현실 세계의 소셜 네트워크나 인용 네트워크는 무작위로 연결되어 있지 않으며, 비슷한 특성을 공유하는 노드들이 특정한 군집(Community) 구조를 이룹니다.\n\n\n\n\nFigure: 현실 세계의 네트워크 군집 구조. 수많은 노드들이 무작위로 얽혀 있는 것이 아니라, 연결망의 밀도에 따라 푸른색, 붉은색, 초록색, 주황색 등 뚜렷하게 구분되는 여러 개의 커뮤니티 구조를 형성하고 있음을 시각적으로 보여줍니다.\n\n\n\n거대한 그래프 데이터에서 의미 있는 커뮤니티를 수학적으로 정의하는 방법과, 메모리 한계를 극복하기 위해 제안된 ‘국소 커뮤니티 탐지(Local Community Detection)’ 기법 및 Sweep Algorithm을 자세히 살펴보겠습니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 2)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#cut-score의-정의와-계산",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#cut-score의-정의와-계산",
+    "title": "[Data Mining] 15. Link Analysis (Part 2)",
+    "section": "2.1. Cut Score의 정의와 계산",
+    "text": "2.1. Cut Score의 정의와 계산\n\n노드 집합 \\(V\\)를 우리가 평가하려는 군집 \\(A\\)와 나머지 외부 집합 \\(V \\setminus A\\)로 분할했다고 가정해 보겠습니다.\n\n\n\n\nFigure: 그래프 분할의 기본 개념. 6개의 노드로 구성된 단순한 그래프를 집합 A={1,2,3}과 나머지 집합 V={4,5,6}으로 나누는 푸른색 절취선(Cut)을 묘사하고 있습니다.\n\n\n\n이때 \\(A\\)의 Cut Score는 \\(A\\) 내부 노드와 \\(A\\) 외부 노드를 가로질러 연결하는 간선들의 총합으로 정의됩니다. 수식으로는 다음과 같이 표현됩니다.\n\n\\[cut(A) = \\sum_{i \\in A, j \\notin A} a_{ij}\\]\n\n\n\nFigure: Cut Score 계산 예시. 집합 A(노란색 타원)에 포함된 노드 1, 2, 3에서 외부로 뻗어나가는 간선은 (1,5)와 (3,4) 두 개뿐입니다. 따라서 두 군집 사이를 끊어내기 위해 제거해야 하는 간선의 수인 cut(A) = 2가 됩니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 2)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#cut-score-최적화의-한계-minimum-cut-problem",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#cut-score-최적화의-한계-minimum-cut-problem",
+    "title": "[Data Mining] 15. Link Analysis (Part 2)",
+    "section": "2.2. Cut Score 최적화의 한계 (Minimum Cut Problem)",
+    "text": "2.2. Cut Score 최적화의 한계 (Minimum Cut Problem)\n\n군집 분할을 위해 단순히 Cut Score 수치를 최소화(Minimum cut)하는 최적화를 수행하면, 수학적 맹점으로 인해 알고리즘이 망가지게 됩니다.\nCut Score는 ’외부로 나가는 선이 몇 개인가?’에만 집착할 뿐, ’군집 내부의 결속력(intra-cluster connectivity)’은 전혀 고려하지 않습니다. 그 결과, 거대한 네트워크를 의미 있는 덩어리로 쪼개는 대신 연결선이 하나뿐인 주변부 말단 노드(Degree-1 node) 하나만 잘라내는 편법을 선택하게 됩니다.\n\n\n\n\nFigure: Cut Score 최소화의 한계점 (Minimum Cut Problem). 붉은 군집과 초록 군집을 완벽히 반으로 가르는 직관적인 이상적 분할(Optimal cut, 푸른색 점선)은 컷이 2입니다. 반면 수치상 최솟값을 찾는 Minimum cut(붉은색 점선)은 맨 우측 말단 노드 하나만 떼어내어 컷 1을 달성합니다. 단순 Cut Score만을 지표로 삼으면 알고리즘은 붉은 점선처럼 무의미한 아웃라이어 분할을 정답으로 도출하게 됩니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 2)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#volume과-conductance-수식",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#volume과-conductance-수식",
+    "title": "[Data Mining] 15. Link Analysis (Part 2)",
+    "section": "3.1. Volume과 Conductance 수식",
+    "text": "3.1. Volume과 Conductance 수식\n\n어떤 노드 집합 \\(A\\)의 볼륨 \\(vol(A)\\)는 해당 집합에 속한 모든 노드들의 차수(Degree, \\(d_i\\)) 총합입니다.\n\n\\[vol(A) = \\sum_{i \\in A} d_i\\]\n\n이 \\(vol(A)\\) 값은 (집합 A 내부에서 서로 연결된 간선 수 \\(\\times 2\\)) + (외부로 뻗어나가는 간선 수)와 정확히 일치합니다.\n이를 바탕으로 Conductance \\(\\phi(A)\\)는 다음과 같이 계산됩니다. \\[\\phi(A) = \\frac{cut(A)}{\\min(vol(A), 2m - vol(A))} = \\frac{|\\{(i, j) \\in E \\mid i \\in A, j \\notin A\\}|}{\\min(vol(A), 2m - vol(A))}\\]\n\n단, \\(m\\)은 그래프 전체의 간선 수이며, \\(2m\\)은 그래프 전체의 총 Volume을 의미합니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 2)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#conductance가-문제를-해결하는-원리",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#conductance가-문제를-해결하는-원리",
+    "title": "[Data Mining] 15. Link Analysis (Part 2)",
+    "section": "3.2. Conductance가 문제를 해결하는 원리",
+    "text": "3.2. Conductance가 문제를 해결하는 원리\n\nConductance 수식은 분모에 \\(\\min(vol(A), 2m-vol(A))\\)를 취하여 군집의 규모를 평가합니다.\n앞선 Minimum Cut 문제처럼 말단 노드 단 하나만 잘라낼 경우, 컷은 1(혹은 2)로 작아지지만 분리된 군집의 내부 볼륨 역시 극히 작아집니다. 결과적으로 분모가 아주 작아져 \\(\\phi(A)\\)는 거의 1에 가까운 최악의 점수를 받게 됩니다. 반면 내부가 촘촘한 거대한 덩어리로 나누면 분모가 기하급수적으로 커져 \\(\\phi(A)\\)는 0에 가깝게 낮아집니다.\n\n\n\n\nFigure: Conductance 계산 비교. (좌측) 푸른색 군집에서 주변부 붉은 노드 1개를 떼어내면 컷은 2이고, 분리된 노드의 총 볼륨은 4에 불과하여 Conductance가 2/4 = 0.5로 높게 계산됩니다. (우측) 전체 그래프를 절반으로 가르는 좋은 컷입니다. 컷은 6으로 다소 늘어났지만 분리된 붉은 군집의 압도적인 내부 밀도 덕분에 볼륨이 92에 달합니다. 따라서 Conductance는 6/92 = 0.065로 매우 낮게 산출되며, 이는 우측이 수학적으로 훨씬 우수한 커뮤니티 분할임을 의미합니다.\n\n\n\n즉, Conductance \\(\\phi(A)\\)가 0에 가까울수록 내부 결속력은 탄탄하고 외부 유출은 적인 이상적인 커뮤니티 구조임을 뜻합니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 2)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#알고리즘-동작-원리",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#알고리즘-동작-원리",
+    "title": "[Data Mining] 15. Link Analysis (Part 2)",
+    "section": "5.1. 알고리즘 동작 원리",
+    "text": "5.1. 알고리즘 동작 원리\n\n\nPPR (근접성) 계산: 시드 노드 \\(S=\\{s\\}\\)로 텔레포트를 100% 한정시킨 Random Walk with Restarts를 실행하여, 모든 노드들이 시드 노드 \\(s\\)와 가지는 네트워크 근접성(PPR score)을 계산합니다.\n\n\n정렬 (Sort): 계산된 PPR 점수가 높은 순서(내림차순)로 노드들을 줄 세웁니다.\n\n\n스윕 (Sweep): 상위 노드부터 하나씩 새로운 군집 \\(A_i\\)에 집어넣어가며 그 순간의 Conductance \\(\\phi(A_i)\\)를 측정합니다.\n\n\n\\(A_1 = \\{u_1\\}\\)\n\\(A_i = \\{u_1, u_2, \\dots, u_i\\}\\)\n\n\n로컬 미니마(Local Minima) 판별: \\(\\phi(A_i)\\) 값을 그래프로 그렸을 때, 값이 크게 하락하여 골짜기를 이루는 점(Local minima)들이 발견됩니다. 이 지점들이 바로 이상적인 군집의 경계(Good clusters)를 의미합니다.\n\n\n\n\n\nFigure: Sweep 알고리즘에 따른 Conductance 곡선. X축은 PPR 점수 내림차순에 따른 추가 노드 순위(i)이고, Y축은 해당 순위까지의 노드를 포함시킨 집합의 Conductance 값입니다. 노드를 계속 추가함에 따라 점수가 요동치며, i=7과 i=18 부근에서 깊은 골짜기인 지역 최소점(Local minima)을 형성합니다. 이 점들이 바로 외부 유출이 최소화되는 견고한 커뮤니티(Good clusters)의 경계선입니다. 이후 성질이 다른 외부 노드가 강제로 편입되기 시작하면 곡선은 다시 가파르게 상승합니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 2)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#선형-시간oa-처리를-위한-동적-갱신update-식",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#선형-시간oa-처리를-위한-동적-갱신update-식",
+    "title": "[Data Mining] 15. Link Analysis (Part 2)",
+    "section": "5.2. 선형 시간(\\(O(|A|)\\)) 처리를 위한 동적 갱신(Update) 식",
+    "text": "5.2. 선형 시간(\\(O(|A|)\\)) 처리를 위한 동적 갱신(Update) 식\n\n매 \\(i\\)번째 스윕 단계마다 집합 \\(A_i\\)의 \\(vol\\)과 \\(cut\\)을 처음부터 다시 센다면 연산 시간이 비효율적으로 증가합니다. 이를 해결하기 위해 새로운 노드 \\(u_{i+1}\\)이 추가될 때 이전 단계의 값을 활용하여 빠르게 업데이트하는 점화식을 사용합니다.\nVolume 업데이트: 단순 합계입니다. 새 노드의 간선 수를 기존 볼륨에 더합니다. \\[vol(A_{i+1}) = vol(A_i) + d_{i+1}\\]\nCut 업데이트: 새 노드의 모든 간선은 일단 외부를 향하는 컷으로 간주하여 더합니다. 하지만 그중에서 기존 집합 \\(A_i\\)를 향하는 내부 간선들은 컷의 성질을 잃게 되므로 그 개수의 2배를 빼줍니다 (기존에 밖으로 나가던 컷 1번 상쇄 + 방금 들어오면서 컷으로 추가했던 것 1번 상쇄). \\[cut(A_{i+1}) = cut(A_i) + d_{i+1} - 2 \\times (\\text{\\# of edges from } u_{i+1} \\text{ to } A_i)\\]\n어떤 이웃 노드 \\(v\\)가 이미 집합 \\(A_i\\) 안에 있는지 확인하는 작업은 1과 0을 반환하는 상수 시간 \\(O(1)\\)의 해시 테이블(Hash table, \\(h(v)\\))을 사용하여 즉각적으로 판별합니다. 이러한 트릭 덕분에 대규모 네트워크에서도 타겟 커뮤니티를 찾아내는 연산이 완벽한 선형 시간 내에 종료됩니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 2)"
+    ]
+  },
+  {
+    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html",
+    "href": "TEMP/19.Fixed-Point-Iteration/index.html",
+    "title": "[Optimization] 19. Fixed-Point Iteration",
+    "section": "",
+    "text": "최적화 문제를 푸는 많은 알고리즘들은 본질적으로 특정한 ’작용소(Operator)’를 반복적으로 적용하여 해에 수렴해 나가는 과정으로 이해할 수 있습니다. 이번 포스트에서는 최적화 알고리즘의 수렴성을 분석하는 강력한 수학적 도구인 고정점 반복법(Fixed-Point Iteration)에 대해 다룹니다.\n우선, 이전 강의에서 다루었던 근접점 알고리즘(Proximal Point Algorithm)을 복습해 보겠습니다. 근접점 알고리즘은 다음의 업데이트 규칙을 따릅니다:\n\\[x_{t+1} = \\text{prox}_{\\eta f}(x_t) = \\arg\\min_{x} \\left\\{ f(x) + \\frac{1}{2\\eta} \\|x - x_t\\|^2 \\right\\}\\]\n이 알고리즘에서 가장 중요한 성질 중 하나는 다음 두 명제가 완전히 동치라는 점입니다:\n\n\\(\\hat{x} = \\text{prox}_{\\eta f}(\\hat{x})\\)\n\\(\\hat{x} \\in \\arg\\min_{x \\in \\mathbb{R}^d} f(x)\\)\n\n즉, 근접 작용소(Proximal operator)의 고정점(Fixed point)을 찾는 것이 곧 원래 목적 함수 \\(f(x)\\)의 최소점(Minimizer)을 찾는 것과 같다는 의미입니다. 이러한 관점은 경사하강법(Gradient Descent)이나 근접 경사법(Proximal Gradient Method) 등 다양한 알고리즘으로 확장될 수 있습니다.",
+    "crumbs": [
+      "About",
+      "TEMP",
+      "[Optimization] 19. Fixed-Point Iteration"
+    ]
+  },
+  {
+    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#기본-정의",
+    "href": "TEMP/19.Fixed-Point-Iteration/index.html#기본-정의",
+    "title": "[Optimization] 19. Fixed-Point Iteration",
+    "section": "2.1. 기본 정의",
+    "text": "2.1. 기본 정의\n집합치 작용소, 혹은 관계(Relation) \\(\\mathbb{T}\\)는 다음과 같이 정의되는 매핑입니다: \\[\\mathbb{T} : \\mathbb{R}^d \\Rightarrow \\mathbb{R}^d\\] 이는 각 점 \\(x \\in \\mathbb{R}^d\\)를 \\(\\mathbb{R}^d\\)의 어떤 부분 집합 \\(\\mathbb{T}(x) \\subseteq \\mathbb{R}^d\\)로 매핑합니다.\n만약 모든 \\(x \\in \\mathbb{R}^d\\)에 대해 \\(\\mathbb{T}(x)\\)가 단일 원소만 가지거나(Singleton) 공집합(Empty)이라면, 해당 작용소 \\(\\mathbb{T}\\)는 단일치(Single-valued)라고 부릅니다.\n\n\n\nFigure: 단일치 작용소와 집합치 작용소의 차이. 단일치 작용소는 하나의 입력 x가 정확히 하나의 출력 y로 연결되는 반면, 집합치 작용소는 입력 x가 여러 y값들로 이루어진 집합 T(x)에 대응되는 것을 보여준다. 이는 미분 불가능한 점에서의 서브그레디언트와 같은 수학적 현상을 모델링하는 데 필수적이다.\n\n\n작용소 \\(\\mathbb{T}\\)에 대한 주요 구성 요소는 다음과 같습니다:\n\n정의역(Domain): \\(\\text{domain}(\\mathbb{T}) = \\{ x \\in \\mathbb{R}^d : \\mathbb{T}(x) \\neq \\emptyset \\}\\)\n치역(Range): \\(\\text{range}(\\mathbb{T}) = \\{ y \\in \\mathbb{R}^d : y \\in \\mathbb{T}(x), x \\in \\mathbb{R}^d \\}\\)\n그래프(Graph): \\(\\text{gra}(\\mathbb{T}) = \\{ (x,y) \\in \\mathbb{R}^d \\times \\mathbb{R}^d : y \\in \\mathbb{T}(x) \\}\\)",
+    "crumbs": [
+      "About",
+      "TEMP",
+      "[Optimization] 19. Fixed-Point Iteration"
+    ]
+  },
+  {
+    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#작용소의-연산",
+    "href": "TEMP/19.Fixed-Point-Iteration/index.html#작용소의-연산",
+    "title": "[Optimization] 19. Fixed-Point Iteration",
+    "section": "2.2. 작용소의 연산",
+    "text": "2.2. 작용소의 연산\n집합치 작용소들 간에는 덧셈, 합성, 역연산 등을 정의할 수 있습니다.\n\n합(Sum): \\((\\mathbb{T} + \\mathbb{S})(x) = \\{ y + z : y \\in \\mathbb{T}(x), z \\in \\mathbb{S}(x) \\}\\)\n합성(Composition): \\((\\mathbb{T} \\circ \\mathbb{S})(x) = \\{ y : z \\in \\mathbb{S}(x), y \\in \\mathbb{T}(z) \\}\\)\n항등 작용소(Identity operator): \\(\\mathbb{I}(x) = \\{x\\}\\)\n영 작용소(Zero operator): \\(\\mathbb{O}(x) = \\{0\\}\\)\n\n모든 작용소 \\(\\mathbb{T}\\)에 대하여, \\(\\mathbb{T} + \\mathbb{O} = \\mathbb{T}\\), \\(\\mathbb{T} \\circ \\mathbb{I} = \\mathbb{T}\\), 그리고 \\(\\mathbb{T} \\circ \\mathbb{T} = \\mathbb{T}\\)가 성립합니다.\n역작용소(Inverse operator)는 다음과 같이 정의됩니다: \\[\\mathbb{T}^{-1}(y) = \\{ x : y \\in \\mathbb{T}(x) \\}\\]\n정의에 따라 \\(x \\in \\mathbb{T}^{-1}(y)\\)일 필요충분조건은 \\(y \\in \\mathbb{T}(x)\\)이므로, 역작용소의 그래프는 원래 그래프의 \\(x\\)와 \\(y\\) 좌표를 뒤집은 것과 같습니다: \\[\\text{gra}(\\mathbb{T}^{-1}) = \\{ (y,x) : (x,y) \\in \\text{gra}(\\mathbb{T}) \\}\\] 따라서 \\((\\mathbb{T}^{-1})^{-1} = \\mathbb{T}\\) 이고, \\(\\text{domain}(\\mathbb{T}^{-1}) = \\text{range}(\\mathbb{T})\\) 가 성립합니다.",
+    "crumbs": [
+      "About",
+      "TEMP",
+      "[Optimization] 19. Fixed-Point Iteration"
+    ]
+  },
+  {
+    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#고정점의-정의와-성질",
+    "href": "TEMP/19.Fixed-Point-Iteration/index.html#고정점의-정의와-성질",
+    "title": "[Optimization] 19. Fixed-Point Iteration",
+    "section": "4.1. 고정점의 정의와 성질",
+    "text": "4.1. 고정점의 정의와 성질\n단일치 작용소 \\(\\mathbb{T}\\)가 주어졌을 때, \\(\\mathbb{T}(x) = x\\) 를 만족하는 \\(x \\in \\mathbb{R}^d\\) 를 작용소 \\(\\mathbb{T}\\)의 고정점(Fixed point)이라고 합니다. 작용소 \\(\\mathbb{T}\\)의 고정점들의 집합을 다음과 같이 표기합니다:\n\\[\\text{fix}(\\mathbb{T}) = \\{ x \\in \\mathbb{R}^d : x \\in \\mathbb{T}(x) \\} = (\\mathbb{I} - \\mathbb{T})^{-1}(0)\\]\n정리: 만약 \\(\\mathbb{T}\\)가 비팽창 작용소(Non-expansive)이고 \\(\\text{dom}(\\mathbb{T}) = \\mathbb{R}^d\\) 라면, \\(\\text{fix}(\\mathbb{T})\\)는 닫힌 볼록 집합(Closed and convex set)입니다.\n\n[수학적 유도 과정: 고정점 집합의 볼록성 및 폐포성 증명]\n1. 볼록성(Convexity):\n\n\n\\(x, y \\in \\text{fix}(\\mathbb{T})\\) 라고 합시다. 즉, \\(\\mathbb{T}(x)=x\\), \\(\\mathbb{T}(y)=y\\) 입니다.\n\n\n임의의 \\(\\alpha \\in (0,1)\\) 에 대해 \\(z = \\alpha x + (1-\\alpha) y\\) 라 두겠습니다.\n\n\n\\(\\mathbb{T}\\)는 비팽창 작용소이므로 다음이 성립합니다:\n\n\n\\(\\|\\mathbb{T}(z) - x\\| = \\|\\mathbb{T}(z) - \\mathbb{T}(x)\\| \\le \\|z - x\\| = (1-\\alpha)\\|x - y\\|\\)\n\n\n\\(\\|\\mathbb{T}(z) - y\\| = \\|\\mathbb{T}(z) - \\mathbb{T}(y)\\| \\le \\|z - y\\| = \\alpha\\|x - y\\|\\)\n\n\n삼각 부등식(Triangle inequality)에 의해:\n\n\n\\(\\|x - y\\| \\le \\|x - \\mathbb{T}(z)\\| + \\|\\mathbb{T}(z) - y\\| \\le (1-\\alpha)\\|x - y\\| + \\alpha\\|x - y\\| = \\|x - y\\|\\)\n\n\n양 끝의 값이 같으므로, 중간의 삼각 부등식은 등식으로 성립해야 합니다. 유클리드 공간에서 삼각 부등식이 등호로 성립하려면 \\(\\mathbb{T}(z)\\)가 \\(x\\)와 \\(y\\)를 잇는 선분 위에 있어야 하며, 거리 제약 조건에 의해 정확히 \\(\\mathbb{T}(z) = z\\) 임을 유도할 수 있습니다. 따라서 \\(z \\in \\text{fix}(\\mathbb{T})\\) 이고, 집합은 볼록(Convex)합니다.\n2. 닫힘성(Closedness):\n비팽창 작용소는 1-Lipschitz 연속이므로, 연속 함수입니다. 따라서 \\(\\mathbb{I} - \\mathbb{T}\\) 역시 연속 함수입니다. \\(\\{0\\}\\)은 닫힌 집합이며, 연속 함수의 역상(inverse image)인 \\((\\mathbb{I} - \\mathbb{T})^{-1}(0)\\) 역시 닫힌 집합이 됩니다.",
+    "crumbs": [
+      "About",
+      "TEMP",
+      "[Optimization] 19. Fixed-Point Iteration"
+    ]
+  },
+  {
+    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#고정점-반복법-fixed-point-iteration",
+    "href": "TEMP/19.Fixed-Point-Iteration/index.html#고정점-반복법-fixed-point-iteration",
+    "title": "[Optimization] 19. Fixed-Point Iteration",
+    "section": "4.2. 고정점 반복법 (Fixed-Point Iteration)",
+    "text": "4.2. 고정점 반복법 (Fixed-Point Iteration)\n고정점을 찾기 위한 가장 직관적인 알고리즘은 고정점 반복법(Fixed-Point Iteration) 또는 피카르 반복법(Picard Iteration)입니다: \\[x_{t+1} = \\mathbb{T}(x_t)\\]\n하지만, \\(\\mathbb{T}\\)가 단순히 비팽창 작용소일 때는 고정점 반복법이 항상 수렴하는 것은 아닙니다. 대표적인 예시로 \\(\\mathbb{T}(x) = -x\\) (여기서 \\(x \\in \\mathbb{R}\\))가 있습니다. 이 작용소는 \\(1\\)-Lipschitz이므로 비팽창 작용소이지만, 초기값 \\(x_0 \\neq 0\\) 에서 반복법을 적용하면 \\(x_0 \\to -x_0 \\to x_0 \\to -x_0 \\dots\\) 로 진동하며 고정점 \\(0\\)에 수렴하지 않습니다. 일반적으로 2차원 이상의 공간에서 회전 작용소(Rotation operator) 또한 수렴을 보장하지 않습니다.",
+    "crumbs": [
+      "About",
+      "TEMP",
+      "[Optimization] 19. Fixed-Point Iteration"
+    ]
+  },
+  {
+    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#바나흐의-고정점-정리-banachs-fixed-point-theorem",
+    "href": "TEMP/19.Fixed-Point-Iteration/index.html#바나흐의-고정점-정리-banachs-fixed-point-theorem",
+    "title": "[Optimization] 19. Fixed-Point Iteration",
+    "section": "4.3. 바나흐의 고정점 정리 (Banach’s Fixed-Point Theorem)",
+    "text": "4.3. 바나흐의 고정점 정리 (Banach’s Fixed-Point Theorem)\n반면, 작용소가 더 강한 조건인 축소 작용소(Contractive operator)를 만족한다면 상황은 달라집니다.\n정리 (바나흐 고정점 정리): 작용소 \\(\\mathbb{T}\\)가 축소 작용소이면, \\(\\text{fix}(\\mathbb{T})\\)는 단원소 집합(Singleton)이며 (즉, 고정점이 유일하게 존재함), 임의의 초기점에서 시작한 고정점 반복법은 이 유일한 고정점으로 선형 속도(Linear rate)로 수렴합니다.\n\n[수학적 유도 과정: 바나흐 고정점 정리 증명]\n1. 유일성(Uniqueness):\n\\(\\mathbb{T}\\)가 상수 \\(L \\in (0,1)\\) 인 축소 작용소라고 가정합니다. \\(x^*, y^*\\)가 모두 고정점이라고 해봅시다.\n\\(\\|x^* - y^*\\| = \\|\\mathbb{T}(x^*) - \\mathbb{T}(y^*)\\| \\le L \\|x^* - y^*\\|\\)\n\\(L &lt; 1\\) 이므로 위 부등식이 성립하려면 \\(\\|x^* - y^*\\| = 0\\) 즉, \\(x^* = y^*\\) 이어야 합니다. 따라서 고정점은 유일합니다.\n2. 수렴성(Convergence):\n\\(x^*\\)를 유일한 고정점이라 합시다. 업데이트 \\(x_{t+1} = \\mathbb{T}(x_t)\\) 에 대해,\n\\(\\|x_{t+1} - x^*\\| = \\|\\mathbb{T}(x_t) - \\mathbb{T}(x^*)\\| \\le L \\|x_t - x^*\\|\\)\n이를 반복적으로 적용(Induction)하면,\n\\(\\|x_t - x^*\\| \\le L^t \\|x_0 - x^*\\|\\)\n\\(L &lt; 1\\) 이므로 \\(t \\to \\infty\\) 일 때 \\(L^t \\to 0\\) 이 되어 \\(x_t \\to x^*\\) 로 수렴함을 알 수 있습니다. 거리가 매 스텝마다 상수비율 \\(L\\)로 줄어들므로 선형 수렴 속도(Linear rate)를 가집니다.",
+    "crumbs": [
+      "About",
+      "TEMP",
+      "[Optimization] 19. Fixed-Point Iteration"
+    ]
+  },
+  {
+    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#개념-및-정의",
+    "href": "TEMP/19.Fixed-Point-Iteration/index.html#개념-및-정의",
+    "title": "[Optimization] 19. Fixed-Point Iteration",
+    "section": "6.1. 개념 및 정의",
+    "text": "6.1. 개념 및 정의\n어떤 \\(\\theta \\in (0, 1)\\) 에 대하여, 작용소 \\(\\mathbb{T}\\)가 다음 형태로 표현될 때 이를 \\(\\theta\\)-평균화된 작용소(\\(\\theta\\)-averaged operator)라고 합니다: \\[\\mathbb{T} = (1-\\theta)\\mathbb{I} + \\theta\\mathbb{S}\\] 여기서 \\(\\mathbb{S}\\)는 비팽창 작용소(Non-expansive operator)입니다. 즉, 평균화된 작용소는 자기 자신을 반환하는 항등 작용소 \\(\\mathbb{I}\\)와 비팽창 작용소 \\(\\mathbb{S}\\)의 볼록 결합(Convex combination)으로 구성됩니다. 이는 비팽창 작용소가 가질 수 있는 진동 현상(예: \\(-x\\))을 감쇠시키는(damping) 역할을 합니다.\n예를 들어, \\(f\\)가 볼록(Convex)하고 \\(\\beta\\)-평활(Smooth)할 때, 경사하강법 작용소 \\(\\mathbb{T} = \\mathbb{I} - \\eta \\nabla f\\) 는 임의의 \\(\\eta \\in (0, 2/\\beta)\\) 에 대해 \\(\\theta = \\eta\\beta/2\\) 인 \\(\\theta\\)-평균화된 작용소임이 알려져 있습니다.\n\n\n\nFigure: 크라스노셀스키-만(Krasnosel’skii-Mann) 반복법이 어떻게 진동(Oscillation)을 줄이고 수렴을 유도하는지 보여주는 도식. 항등 작용소(I)와 비팽창 작용소(S)를 일정 비율(1-θ, θ)로 섞어줌으로써 극단적인 점프를 방지하고 고정점을 향해 안정적으로 다가가게 한다.",
+    "crumbs": [
+      "About",
+      "TEMP",
+      "[Optimization] 19. Fixed-Point Iteration"
+    ]
+  },
+  {
+    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#krasnoselskii-mann-반복법-정리-및-증명",
+    "href": "TEMP/19.Fixed-Point-Iteration/index.html#krasnoselskii-mann-반복법-정리-및-증명",
+    "title": "[Optimization] 19. Fixed-Point Iteration",
+    "section": "6.2. Krasnosel’skii-Mann 반복법 (정리 및 증명)",
+    "text": "6.2. Krasnosel’skii-Mann 반복법 (정리 및 증명)\n평균화된 작용소에 대해서는 매우 중요한 수렴 정리가 성립합니다.\n정리 (Krasnosel’skii-Mann Iteration): 작용소 \\(\\mathbb{T}\\)가 어떤 \\(\\theta \\in (0, 1)\\) 에 대해 \\(\\theta\\)-평균화된 작용소이고 고정점이 존재한다고 가정합시다 (\\(\\text{fix}(\\mathbb{T}) \\neq \\emptyset\\)). 임의의 초기점 \\(x_0 \\in \\mathbb{R}^d\\) 에서 시작하는 고정점 반복법 \\(x_{t+1} = \\mathbb{T}(x_t)\\) 는 \\(\\mathbb{T}\\)의 고정점으로 수렴합니다. 더욱 구체적으로 다음이 성립합니다:\n\n\\(\\text{dist}(x_t, \\text{fix}(\\mathbb{T})) \\rightarrow 0\\)\n\\(||x_{t+1} - x_t||^2 \\le \\frac{\\theta}{(t+1)(1-\\theta)} \\text{dist}^2(x_0, \\text{fix}(\\mathbb{T}))\\)\n\n\n[수학적 유도 과정: Krasnosel’skii-Mann 정리 증명]\n\\(\\mathbb{T} = (1-\\theta)\\mathbb{I} + \\theta\\mathbb{S}\\) 라 하고, \\(x^* \\in \\text{fix}(\\mathbb{T})\\) 라고 합시다. \\(\\text{fix}(\\mathbb{T}) = \\text{fix}(\\mathbb{S})\\) 임을 유의해야 합니다.\n\\(t+1\\) 스텝에서의 고정점과의 거리를 측정해보겠습니다. 벡터의 볼록 결합에 대한 거리 분해 항등식(\\(\\|(1-\\theta)u + \\theta v\\|^2 = (1-\\theta)\\|u\\|^2 + \\theta\\|v\\|^2 - \\theta(1-\\theta)\\|u-v\\|^2\\))을 사용합니다.\n여기서 \\(u = x_t - x^*\\), \\(v = \\mathbb{S}(x_t) - x^*\\) 로 둡니다.\n\\[\n\\begin{align*}\n\\|x_{t+1} - x^*\\|^2 &= \\|\\mathbb{T}(x_t) - x^*\\|^2 \\\\\n&= \\|(1-\\theta)(x_t - x^*) + \\theta(\\mathbb{S}(x_t) - x^*)\\|^2 \\\\\n&= (1-\\theta)\\|x_t - x^*\\|^2 + \\theta\\|\\mathbb{S}(x_t) - x^*\\|^2 - \\theta(1-\\theta)\\|x_t - \\mathbb{S}(x_t)\\|^2\n\\end{align*}\n\\]\n\\(\\mathbb{S}\\)는 비팽창 작용소이므로, \\(\\|\\mathbb{S}(x_t) - x^*\\| = \\|\\mathbb{S}(x_t) - \\mathbb{S}(x^*)\\| \\le \\|x_t - x^*\\|\\) 가 성립합니다. 이를 대입하면:\n\\[\n\\begin{align*}\n\\|x_{t+1} - x^*\\|^2 &\\le (1-\\theta)\\|x_t - x^*\\|^2 + \\theta\\|x_t - x^*\\|^2 - \\theta(1-\\theta)\\|x_t - \\mathbb{S}(x_t)\\|^2 \\\\\n&= \\|x_t - x^*\\|^2 - \\theta(1-\\theta)\\|x_t - \\mathbb{S}(x_t)\\|^2\n\\end{align*}\n\\]\n한편 업데이트 식에서 \\(x_{t+1} - x_t = \\mathbb{T}(x_t) - x_t = \\theta(\\mathbb{S}(x_t) - x_t)\\) 이므로, \\(x_t - \\mathbb{S}(x_t) = -\\frac{1}{\\theta}(x_{t+1} - x_t)\\) 입니다. 이를 거리 식에 대입합니다.\n\\[\n\\|x_{t+1} - x^*\\|^2 \\le \\|x_t - x^*\\|^2 - \\frac{1-\\theta}{\\theta}\\|x_{t+1} - x_t\\|^2 \\quad \\dots \\text{(Eq. 1)}\n\\]\n(Eq. 1)은 \\(\\|x_t - x^*\\|\\) 가 단조 감소(monotonically decreasing)하는 수열임을 보여줍니다. 즉, \\(\\text{dist}(x_t, \\text{fix}(\\mathbb{T}))\\) 가 수렴함을 의미합니다.\n이제 양변을 \\(t=0\\) 부터 \\(T\\) 까지 더해줍니다(Telescoping sum).\n\\[\n\\sum_{t=0}^T \\frac{1-\\theta}{\\theta}\\|x_{t+1} - x_t\\|^2 \\le \\|x_0 - x^*\\|^2 - \\|x_{T+1} - x^*\\|^2 \\le \\|x_0 - x^*\\|^2\n\\]\n따라서 무한급수가 수렴하므로, \\(\\|x_{t+1} - x_t\\| \\rightarrow 0\\) 이 증명됩니다.\n더 나아가, 비팽창 작용소의 특성상 수열 \\(\\|x_{t+1} - x_t\\|\\) 은 단조 감소함을 보일 수 있습니다. 따라서 가장 작은 항인 마지막 항에 대해 바운드를 잡으면 정리의 속도인 \\(\\mathcal{O}(1/t)\\) 를 얻게 됩니다.",
+    "crumbs": [
+      "About",
+      "TEMP",
+      "[Optimization] 19. Fixed-Point Iteration"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html",
+    "title": "[Data Mining] 15. Link Analysis (Part 3)",
+    "section": "",
+    "text": "이전 포스트들에서 다룬 Personalized PageRank (PPR)는 특정 시드 노드와의 네트워크 근접성을 측정하여 커뮤니티를 탐지하는 데 매우 유용합니다. 그러나 거대한 현실 세계의 그래프에서 이 알고리즘을 실제로 구동하려면 치명적인 문제가 발생합니다. 바로 전체 그래프를 연산해야 한다는 점입니다.\n기존의 Power Iteration 방식은 동기식(Synchronous)으로 작동하여 매 반복마다 네트워크의 모든 노드 점수를 일괄적으로 업데이트해야 하므로, 찾고자 하는 국소 커뮤니티의 크기가 작더라도 전체 그래프 크기 \\(O(|V|)\\)에 비례하는 연산 시간이 소모됩니다.\n이러한 한계를 극복하기 위해 제안된 것이 Approximate Personalized PageRank (APPR)입니다. APPR은 전체 노드를 동시에 업데이트하는 대신, 점수 갱신이 가장 시급한 노드부터 하나씩 비동기식(Asynchronous)으로 업데이트를 진행합니다. 이를 통해 약간의 근사 오차(Approximation)를 허용하는 대신 연산 시간을 획기적으로 단축할 수 있습니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 3)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#초기화-initialization",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#초기화-initialization",
+    "title": "[Data Mining] 15. Link Analysis (Part 3)",
+    "section": "3.1. 초기화 (Initialization)",
+    "text": "3.1. 초기화 (Initialization)\n\n시드 노드(Seed node)를 \\(s\\)라고 할 때, 텔레포트 벡터 \\(a\\)는 시드 노드의 위치만 1이고 나머지는 0인 원-핫 벡터(One-hot vector)로 정의됩니다.\n추정 점수는 0으로 초기화합니다: \\(r = 0\\).\n초기 잔여 점수는 텔레포트 벡터로 설정합니다: \\(q = a\\). 즉, 초기 상태에서는 시드 노드만 막대한 잔여 점수(\\(q_s=1\\))를 가지며, 알고리즘의 다음 단계는 이 1이라는 점수를 이웃들에게 분배하는 것으로 시작됩니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 3)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#lazy-random-walk와-push-연산",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#lazy-random-walk와-push-연산",
+    "title": "[Data Mining] 15. Link Analysis (Part 3)",
+    "section": "3.2. Lazy Random Walk와 Push 연산",
+    "text": "3.2. Lazy Random Walk와 Push 연산\n\n알고리즘은 매 반복마다 차수(degree, \\(d_u\\)) 대비 잔여 점수의 비율인 \\(q_u / d_u\\)가 가장 높은 노드 \\(u\\)를 찾아냅니다. 이 값이 사전에 정의한 임계값 \\(\\epsilon\\)보다 크다면 (\\(q_u / d_u &gt; \\epsilon\\)), 해당 노드에 대해 Push 연산을 수행합니다.\nPush 연산은 단순히 점수를 뿌리는 것이 아니라 Lazy Random Walk (게으른 무작위 행보) 개념을 사용합니다. \\(push(u, r, q)\\) 연산의 수식은 다음과 같습니다.\n\n\n추정 점수 개선: 노드 \\(u\\)는 자신이 가진 잔여 점수 \\(q_u\\) 중 텔레포트(재시작) 확률인 \\((1-\\beta)\\)만큼을 자신의 추정 점수로 확정(Store)하여 누적합니다. \\[r'_u = r_u + (1-\\beta)q_u\\]\n\n\n잔여 점수 보유 (Laziness): 나머지 전이 확률 \\(\\beta q_u\\) 전체를 이웃에게 뿌리지 않고, 절반인 \\(\\frac{1}{2}\\) 확률로 현재 노드 \\(u\\)에 머물게 합니다(Stay). 이것이 ’Lazy’라고 불리는 이유입니다. \\[q'_u = \\frac{1}{2}\\beta q_u\\]\n\n\n잔여 점수 분배: 남은 절반의 확률에 해당하는 점수를 노드 \\(u\\)의 외향 간선(Outgoing edges)을 따라 이웃 노드 \\(v\\)들에게 균등하게 배분합니다. \\[\\text{for each } v \\text{ such that } u \\rightarrow v:\\] \\[q'_v = q_v + \\frac{1}{2}\\beta \\frac{q_u}{d_u}\\]",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 3)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#왜-하필-lazy-random-walk를-사용하는가",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#왜-하필-lazy-random-walk를-사용하는가",
+    "title": "[Data Mining] 15. Link Analysis (Part 3)",
+    "section": "3.3. 왜 하필 Lazy Random Walk를 사용하는가?",
+    "text": "3.3. 왜 하필 Lazy Random Walk를 사용하는가?\n\n일반적인 Random Walk 모델을 사용해도 알고리즘은 정상적으로 작동합니다. 그러나 일반적인 워크는 점수가 네트워크 전체로 너무 빠르고 넓게 퍼져버려(propagated) 국소성(Locality)이 떨어집니다.\n반면 Lazy Random Walk는 점수 분배 시 절반의 잔여 점수를 자기 자신에게 남겨둠으로써 점수의 파동이 시드 노드 \\(s\\) 근처에 고도로 집중(Concentrated)되도록 만듭니다. 이는 \\(q_u / d_u &gt; \\epsilon\\) 테스트와 맞물려 국소적인 군집만을 빠르게 도출해내는 데 수학적 편의성과 탁월한 지역성을 제공합니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 3)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#종료의-보장-monotonic-decrease",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#종료의-보장-monotonic-decrease",
+    "title": "[Data Mining] 15. Link Analysis (Part 3)",
+    "section": "5.1. 종료의 보장 (Monotonic Decrease)",
+    "text": "5.1. 종료의 보장 (Monotonic Decrease)\n\n어떤 노드 \\(u\\)에서 Push 연산을 1회 수행할 때 일어나는 잔여 점수의 변화량을 계산해 봅시다.\n\n원래 노드 \\(u\\)가 가지고 있던 \\(q_u\\)가 사라집니다.\n\\(u\\)는 \\(\\frac{1}{2}\\beta q_u\\)를 가져갑니다.\n이웃들은 다 합쳐서 \\(\\frac{1}{2}\\beta q_u\\)를 가져갑니다.\n\n네트워크 전체에 남은 잔여 점수 총합의 변화량 \\(\\Delta e\\)는 다음과 같습니다. \\[\\Delta e = \\text{기존 점수} - \\text{새로 분배된 점수}\\] \\[\\Delta e = q_u - (\\frac{1}{2}\\beta q_u + \\frac{1}{2}\\beta q_u) = q_u - \\beta q_u = (1-\\beta)q_u\\]\n즉, Push 연산을 한 번 할 때마다 전체 잔여 점수 \\(e\\)는 정확히 \\((1-\\beta)q_u\\) 만큼 감소합니다. \\(e\\)는 0 이하로 내려갈 수 없으므로, 이 값은 단조 감소(Monotonically decreases)하여 결국 0을 향해 수렴하며 알고리즘은 반드시 종료됩니다.",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 3)"
+    ]
+  },
+  {
+    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#그래프-크기에-독립적인-시간-복잡도",
+    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#그래프-크기에-독립적인-시간-복잡도",
+    "title": "[Data Mining] 15. Link Analysis (Part 3)",
+    "section": "5.2. 그래프 크기에 독립적인 시간 복잡도",
+    "text": "5.2. 그래프 크기에 독립적인 시간 복잡도\n\n알고리즘의 시간 복잡도를 엄밀히 계산해 보겠습니다.\nPush 연산이 실행되기 위한 조건은 \\(q_u / d_u &gt; \\epsilon\\) 이며, 이를 변형하면 \\(q_u &gt; \\epsilon d_u\\) 입니다.\n따라서 Push 1회당 잔여 점수 감소량 \\(\\Delta e\\)의 하한선(Lower bound)은 다음과 같습니다. \\[\\Delta e = (1-\\beta)q_u &gt; (1-\\beta)\\epsilon d_u\\]\nPush 1회를 수행하는 데 드는 연산 비용은 \\(O(d_u)\\)입니다.\n그렇다면 잔여 점수 \\(e\\)를 ’1’만큼 떨어뜨리는 데 들어가는 평균적인(Amortized) 연산 비용은 얼마일까요? \\[\\text{Cost per unit drop} = \\frac{O(d_u)}{(1-\\beta)\\epsilon d_u} = O\\left(\\frac{1}{(1-\\beta)\\epsilon}\\right)\\]\n시작할 때 잔여 점수 \\(e\\)의 총합은 1이었습니다(\\(q=a\\), 원-핫 벡터이므로 합이 1). 이 1이라는 점수가 완전히 0이 될 때까지 소모되는 총 알고리즘 복잡도는 \\(\\Delta e\\)가 1인 경우와 같으므로, 전체 복잡도는 \\(O\\left(\\frac{1}{(1-\\beta)\\epsilon}\\right)\\) 로 도출됩니다.\n놀랍게도, 이 최종 복잡도 수식에는 노드 수 \\(|V|\\)나 간선 수 \\(|E|\\)가 전혀 존재하지 않습니다. \\(\\beta\\)와 \\(\\epsilon\\)이 상수로 고정되어 있다면, 연산 시간은 그래프의 크기와 완전히 독립적(Independent of graph size)이게 됩니다! (상세한 수학적 증명은 F. Chung의 논문을 참조하시기 바랍니다 ).",
+    "crumbs": [
+      "About",
+      "Posts",
+      "Data Mining",
+      "15.Link Analysis 2",
+      "[Data Mining] 15. Link Analysis (Part 3)"
+    ]
+  },
+  {
     "objectID": "posts/Data Mining/15.Link-Analysis-2/15.1/index.html",
     "href": "posts/Data Mining/15.Link-Analysis-2/15.1/index.html",
     "title": "[Data Mining] 15. Link Analysis (Part 1)",
@@ -12272,281 +12732,157 @@
     ]
   },
   {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html",
-    "title": "[Data Mining] 15. Link Analysis (Part 3)",
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html",
+    "title": "[Data Mining] 19. ML On Graphs (Part 2)",
     "section": "",
-    "text": "이전 포스트들에서 다룬 Personalized PageRank (PPR)는 특정 시드 노드와의 네트워크 근접성을 측정하여 커뮤니티를 탐지하는 데 매우 유용합니다. 그러나 거대한 현실 세계의 그래프에서 이 알고리즘을 실제로 구동하려면 치명적인 문제가 발생합니다. 바로 전체 그래프를 연산해야 한다는 점입니다.\n기존의 Power Iteration 방식은 동기식(Synchronous)으로 작동하여 매 반복마다 네트워크의 모든 노드 점수를 일괄적으로 업데이트해야 하므로, 찾고자 하는 국소 커뮤니티의 크기가 작더라도 전체 그래프 크기 \\(O(|V|)\\)에 비례하는 연산 시간이 소모됩니다.\n이러한 한계를 극복하기 위해 제안된 것이 Approximate Personalized PageRank (APPR)입니다. APPR은 전체 노드를 동시에 업데이트하는 대신, 점수 갱신이 가장 시급한 노드부터 하나씩 비동기식(Asynchronous)으로 업데이트를 진행합니다. 이를 통해 약간의 근사 오차(Approximation)를 허용하는 대신 연산 시간을 획기적으로 단축할 수 있습니다.",
+    "text": "이전 포스트에서는 기존의 얕은 임베딩(Shallow Embeddings) 방식이 노드 수에 비례하여 파라미터가 증가하고 새로운 노드에 대응하지 못하는 한계가 있음을 확인했습니다. 이를 해결하기 위해 등장한 그래프 신경망(Graph Neural Networks, GNN)은 그래프의 구조와 노드의 특성을 동시에 활용하는 깊은 인코더(Deep Encoder) 모델입니다.\n이번 포스트에서는 GNN이 도대체 ‘어떻게’ 그래프 데이터를 신경망 구조에 태우는지, 그 내부의 계층(Layer) 구조와 수학적 원리를 상세히 파헤쳐 보겠습니다.",
     "crumbs": [
       "About",
       "Posts",
       "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 3)"
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 2)"
     ]
   },
   {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#초기화-initialization",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#초기화-initialization",
-    "title": "[Data Mining] 15. Link Analysis (Part 3)",
-    "section": "3.1. 초기화 (Initialization)",
-    "text": "3.1. 초기화 (Initialization)\n\n시드 노드(Seed node)를 \\(s\\)라고 할 때, 텔레포트 벡터 \\(a\\)는 시드 노드의 위치만 1이고 나머지는 0인 원-핫 벡터(One-hot vector)로 정의됩니다.\n추정 점수는 0으로 초기화합니다: \\(r = 0\\).\n초기 잔여 점수는 텔레포트 벡터로 설정합니다: \\(q = a\\). 즉, 초기 상태에서는 시드 노드만 막대한 잔여 점수(\\(q_s=1\\))를 가지며, 알고리즘의 다음 단계는 이 1이라는 점수를 이웃들에게 분배하는 것으로 시작됩니다.",
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#입력-그래프와-트리-구조로-펼쳐지는-연산-그래프",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#입력-그래프와-트리-구조로-펼쳐지는-연산-그래프",
+    "title": "[Data Mining] 19. ML On Graphs (Part 2)",
+    "section": "2.1 입력 그래프와 트리 구조로 펼쳐지는 연산 그래프",
+    "text": "2.1 입력 그래프와 트리 구조로 펼쳐지는 연산 그래프\n\nGNN이 동작하는 방식을 구체적으로 이해하기 위해, 다음과 같은 간단한 장난감 그래프(Toy Graph)를 가정해 봅시다.\n\n\n\n\nFigure 3: 6개의 노드로 구성된 기본 입력 그래프(INPUT GRAPH). 노드 A부터 F까지 서로 다른 연결 관계를 맺고 있습니다. 이 위상 구조를 바탕으로 GNN의 계층적 연산이 어떻게 일어나는지 살펴봅니다.\n\n\n\n각 노드는 주변 이웃들로부터 정보를 받아 자신의 상태를 업데이트합니다. 타겟 노드 A를 중심으로 정보를 끌어오는 과정을 역추적해 보면, 타겟 노드를 루트(Root)로 하는 트리 형태의 연산 그래프가 만들어집니다.\n\n\n\n\nFigure 4: 타겟 노드 A의 연산 그래프(Computation Graph) 전개. 타겟 노드 A(노란색)를 업데이트하기 위해 직속 이웃인 B, C, D로부터 정보를 모아옵니다. 노드 C(초록색)의 경우, 다시 그 이웃인 A, B, E, F로부터 정보를 수집합니다. 원래 순환(Cycle)이 존재하는 그래프라도 정보의 흐름 관점에서는 방향성 있는 트리 구조로 펼쳐집니다.\n\n\n\n레이어 \\(l\\)에서의 노드 \\(A\\)의 은닉 상태(Hidden representation)를 \\(h_A^{(l)}\\)라고 합시다.\n\\(h_A^{(l)}\\)는 이전 레이어 \\(l-1\\)에 있는 자신의 상태 \\(h_A^{(l-1)}\\)와 이웃 노드들의 상태 \\(h_B^{(l-1)}, h_C^{(l-1)}, h_D^{(l-1)}\\)를 바탕으로 계산됩니다.",
     "crumbs": [
       "About",
       "Posts",
       "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 3)"
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 2)"
     ]
   },
   {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#lazy-random-walk와-push-연산",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#lazy-random-walk와-push-연산",
-    "title": "[Data Mining] 15. Link Analysis (Part 3)",
-    "section": "3.2. Lazy Random Walk와 Push 연산",
-    "text": "3.2. Lazy Random Walk와 Push 연산\n\n알고리즘은 매 반복마다 차수(degree, \\(d_u\\)) 대비 잔여 점수의 비율인 \\(q_u / d_u\\)가 가장 높은 노드 \\(u\\)를 찾아냅니다. 이 값이 사전에 정의한 임계값 \\(\\epsilon\\)보다 크다면 (\\(q_u / d_u &gt; \\epsilon\\)), 해당 노드에 대해 Push 연산을 수행합니다.\nPush 연산은 단순히 점수를 뿌리는 것이 아니라 Lazy Random Walk (게으른 무작위 행보) 개념을 사용합니다. \\(push(u, r, q)\\) 연산의 수식은 다음과 같습니다.\n\n\n추정 점수 개선: 노드 \\(u\\)는 자신이 가진 잔여 점수 \\(q_u\\) 중 텔레포트(재시작) 확률인 \\((1-\\beta)\\)만큼을 자신의 추정 점수로 확정(Store)하여 누적합니다. \\[r'_u = r_u + (1-\\beta)q_u\\]\n\n\n잔여 점수 보유 (Laziness): 나머지 전이 확률 \\(\\beta q_u\\) 전체를 이웃에게 뿌리지 않고, 절반인 \\(\\frac{1}{2}\\) 확률로 현재 노드 \\(u\\)에 머물게 합니다(Stay). 이것이 ’Lazy’라고 불리는 이유입니다. \\[q'_u = \\frac{1}{2}\\beta q_u\\]\n\n\n잔여 점수 분배: 남은 절반의 확률에 해당하는 점수를 노드 \\(u\\)의 외향 간선(Outgoing edges)을 따라 이웃 노드 \\(v\\)들에게 균등하게 배분합니다. \\[\\text{for each } v \\text{ such that } u \\rightarrow v:\\] \\[q'_v = q_v + \\frac{1}{2}\\beta \\frac{q_u}{d_u}\\]",
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#독립적이고-병렬적인-그래프-정의",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#독립적이고-병렬적인-그래프-정의",
+    "title": "[Data Mining] 19. ML On Graphs (Part 2)",
+    "section": "2.2 독립적이고 병렬적인 그래프 정의",
+    "text": "2.2 독립적이고 병렬적인 그래프 정의\n\n중요한 점은, 이러한 연산 그래프가 전체를 아우르는 단 하나의 거대한 수식이 아니라, 모든 노드에 대해 각자의 이웃 구조를 바탕으로 병렬적으로(in parallel) 정의된다는 것입니다.\n\n\n\n\nFigure 5: 그래프 내 모든 노드의 병렬적 연산 그래프 형성. 왼쪽부터 각각 타겟 노드를 다르게 설정했을 때 도출되는 고유한 트리 구조들입니다. 모든 노드는 자신의 이웃 연결성에 따라 서로 다른 형태와 크기의 연산 그래프를 갖게 되며, 모델은 이렇게 가변적인 구조를 동시에 처리할 수 있어야 합니다.",
     "crumbs": [
       "About",
       "Posts",
       "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 3)"
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 2)"
     ]
   },
   {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#왜-하필-lazy-random-walk를-사용하는가",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#왜-하필-lazy-random-walk를-사용하는가",
-    "title": "[Data Mining] 15. Link Analysis (Part 3)",
-    "section": "3.3. 왜 하필 Lazy Random Walk를 사용하는가?",
-    "text": "3.3. 왜 하필 Lazy Random Walk를 사용하는가?\n\n일반적인 Random Walk 모델을 사용해도 알고리즘은 정상적으로 작동합니다. 그러나 일반적인 워크는 점수가 네트워크 전체로 너무 빠르고 넓게 퍼져버려(propagated) 국소성(Locality)이 떨어집니다.\n반면 Lazy Random Walk는 점수 분배 시 절반의 잔여 점수를 자기 자신에게 남겨둠으로써 점수의 파동이 시드 노드 \\(s\\) 근처에 고도로 집중(Concentrated)되도록 만듭니다. 이는 \\(q_u / d_u &gt; \\epsilon\\) 테스트와 맞물려 국소적인 군집만을 빠르게 도출해내는 데 수학적 편의성과 탁월한 지역성을 제공합니다.",
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#깊은-그래프-신경망-deep-gnns",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#깊은-그래프-신경망-deep-gnns",
+    "title": "[Data Mining] 19. ML On Graphs (Part 2)",
+    "section": "2.3 깊은 그래프 신경망 (Deep GNNs)",
+    "text": "2.3 깊은 그래프 신경망 (Deep GNNs)\n\nGNN은 이러한 정보 집계 계층을 여러 겹 쌓아 임의의 깊이(Arbitrary depth)를 가질 수 있습니다. 계층(Layer)의 개념을 연산 그래프 위에 매핑해 보면 정보의 흐름이 더욱 명확해집니다.\n\n\n\n\nFigure 6: 다층(Deep) 그래프 신경망의 계층적 구조 매핑. 오른쪽 끝의 Layer-0은 각 노드가 가진 최초의 원시 특성값(Input features, 예: \\(\\mathbf{X}_A, \\mathbf{X}_C\\))을 의미합니다. 이 특성들이 Layer-1의 집계기를 통과해 1-hop 이웃 정보를 합치고, 다시 Layer-2의 집계기를 통과해 2-hop 이웃 정보까지 합쳐져 최종적으로 타겟 노드 A의 임베딩을 완성합니다.\n\n\n\nLayer-0 (초기 상태): 0번째 계층에서 노드 \\(u\\)의 임베딩 \\(h_u^{(0)}\\)는 그래프 구조의 반영 없이 노드 자신이 원래 가지고 있던 특성 벡터 \\(x_u\\)로 초기화됩니다.\nLayer-k (k-hop 정보의 통합): \\(k\\)번째 계층의 임베딩은 네트워크 상에서 반경 \\(k\\)-hop 이내에 있는 모든 이웃들의 정보를 집계한 결과입니다. 계층이 깊어질수록 노드는 더 넓은 전역적(Global) 문맥을 이해하게 됩니다.",
     "crumbs": [
       "About",
       "Posts",
       "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 3)"
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 2)"
     ]
   },
   {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#종료의-보장-monotonic-decrease",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#종료의-보장-monotonic-decrease",
-    "title": "[Data Mining] 15. Link Analysis (Part 3)",
-    "section": "5.1. 종료의 보장 (Monotonic Decrease)",
-    "text": "5.1. 종료의 보장 (Monotonic Decrease)\n\n어떤 노드 \\(u\\)에서 Push 연산을 1회 수행할 때 일어나는 잔여 점수의 변화량을 계산해 봅시다.\n\n원래 노드 \\(u\\)가 가지고 있던 \\(q_u\\)가 사라집니다.\n\\(u\\)는 \\(\\frac{1}{2}\\beta q_u\\)를 가져갑니다.\n이웃들은 다 합쳐서 \\(\\frac{1}{2}\\beta q_u\\)를 가져갑니다.\n\n네트워크 전체에 남은 잔여 점수 총합의 변화량 \\(\\Delta e\\)는 다음과 같습니다. \\[\\Delta e = \\text{기존 점수} - \\text{새로 분배된 점수}\\] \\[\\Delta e = q_u - (\\frac{1}{2}\\beta q_u + \\frac{1}{2}\\beta q_u) = q_u - \\beta q_u = (1-\\beta)q_u\\]\n즉, Push 연산을 한 번 할 때마다 전체 잔여 점수 \\(e\\)는 정확히 \\((1-\\beta)q_u\\) 만큼 감소합니다. \\(e\\)는 0 이하로 내려갈 수 없으므로, 이 값은 단조 감소(Monotonically decreases)하여 결국 0을 향해 수렴하며 알고리즘은 반드시 종료됩니다.",
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#상태-업데이트-수식",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#상태-업데이트-수식",
+    "title": "[Data Mining] 19. ML On Graphs (Part 2)",
+    "section": "4.1 상태 업데이트 수식",
+    "text": "4.1 상태 업데이트 수식\n\n\\(L\\)개의 계층으로 이루어진 GNN을 가정할 때, 각 노드 \\(v\\)의 상태 업데이트 수식은 다음과 같습니다.\n\n\n초기화 (Layer 0): \\(h_v^{(0)} = x_v\\)\n\n\n레이어 업데이트 (Layer \\(l \\rightarrow l+1\\)): \\[h_v^{(l+1)} = \\sigma \\left( \\sum_{u \\in N(v)} \\frac{W^{(l)} h_u^{(l)}}{|N(v)|} + B^{(l)} h_v^{(l)} \\right)\\]\n\n\n최종 임베딩 반환: \\(z_v = h_v^{(L)}\\)",
     "crumbs": [
       "About",
       "Posts",
       "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 3)"
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 2)"
     ]
   },
   {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#그래프-크기에-독립적인-시간-복잡도",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.3/index.html#그래프-크기에-독립적인-시간-복잡도",
-    "title": "[Data Mining] 15. Link Analysis (Part 3)",
-    "section": "5.2. 그래프 크기에 독립적인 시간 복잡도",
-    "text": "5.2. 그래프 크기에 독립적인 시간 복잡도\n\n알고리즘의 시간 복잡도를 엄밀히 계산해 보겠습니다.\nPush 연산이 실행되기 위한 조건은 \\(q_u / d_u &gt; \\epsilon\\) 이며, 이를 변형하면 \\(q_u &gt; \\epsilon d_u\\) 입니다.\n따라서 Push 1회당 잔여 점수 감소량 \\(\\Delta e\\)의 하한선(Lower bound)은 다음과 같습니다. \\[\\Delta e = (1-\\beta)q_u &gt; (1-\\beta)\\epsilon d_u\\]\nPush 1회를 수행하는 데 드는 연산 비용은 \\(O(d_u)\\)입니다.\n그렇다면 잔여 점수 \\(e\\)를 ’1’만큼 떨어뜨리는 데 들어가는 평균적인(Amortized) 연산 비용은 얼마일까요? \\[\\text{Cost per unit drop} = \\frac{O(d_u)}{(1-\\beta)\\epsilon d_u} = O\\left(\\frac{1}{(1-\\beta)\\epsilon}\\right)\\]\n시작할 때 잔여 점수 \\(e\\)의 총합은 1이었습니다(\\(q=a\\), 원-핫 벡터이므로 합이 1). 이 1이라는 점수가 완전히 0이 될 때까지 소모되는 총 알고리즘 복잡도는 \\(\\Delta e\\)가 1인 경우와 같으므로, 전체 복잡도는 \\(O\\left(\\frac{1}{(1-\\beta)\\epsilon}\\right)\\) 로 도출됩니다.\n놀랍게도, 이 최종 복잡도 수식에는 노드 수 \\(|V|\\)나 간선 수 \\(|E|\\)가 전혀 존재하지 않습니다. \\(\\beta\\)와 \\(\\epsilon\\)이 상수로 고정되어 있다면, 연산 시간은 그래프의 크기와 완전히 독립적(Independent of graph size)이게 됩니다! (상세한 수학적 증명은 F. Chung의 논문을 참조하시기 바랍니다 ).",
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#수식의-3단계-해부",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#수식의-3단계-해부",
+    "title": "[Data Mining] 19. ML On Graphs (Part 2)",
+    "section": "4.2 수식의 3단계 해부",
+    "text": "4.2 수식의 3단계 해부\n\n위 수식은 딥러닝 관점에서 다음과 같은 3가지 명확한 단계로 분해됩니다.\nStep 1. 변환 (Transform)\n\n\\(W^{(l)} h_u^{(l)}\\) : 이웃 노드 \\(u\\)가 보내는 메시지를 가중치 행렬 \\(W^{(l)}\\)에 곱하여 의미 있는 잠재 공간으로 투영합니다.\n\\(B^{(l)} h_v^{(l)}\\) : 다음 계층의 업데이트를 위해, 자기 자신의 이전 상태 \\(h_v^{(l)}\\) 역시 별도의 가중치 \\(B^{(l)}\\)에 곱해 변환합니다.\n\nStep 2. 집계 (Aggregate)\n\n\\(\\sum_{u \\in N(v)} \\frac{(\\cdot)}{|N(v)|}\\) : 이웃 \\(N(v)\\)들로부터 온 메시지들을 모두 합친 뒤 이웃의 개수 \\(|N(v)|\\)로 나누어 평균(Average)을 취합니다. 허브(Hub) 노드처럼 연결이 비정상적으로 많은 노드의 값이 폭발하는 것을 방지하는 정규화 과정입니다.\n\nStep 3. 비선형 활성화 (Nonlinearity)\n\n\\(\\sigma(\\cdot)\\) : 계산된 선형 결합 결과에 ReLU 연산과 같은 비선형 함수를 적용합니다. 이를 통해 다층 네트워크가 복잡한 표현력을 획득하게 됩니다.",
     "crumbs": [
       "About",
       "Posts",
       "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 3)"
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 2)"
     ]
   },
   {
-    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html",
-    "href": "TEMP/19.Fixed-Point-Iteration/index.html",
-    "title": "[Optimization] 19. Fixed-Point Iteration",
-    "section": "",
-    "text": "최적화 문제를 푸는 많은 알고리즘들은 본질적으로 특정한 ’작용소(Operator)’를 반복적으로 적용하여 해에 수렴해 나가는 과정으로 이해할 수 있습니다. 이번 포스트에서는 최적화 알고리즘의 수렴성을 분석하는 강력한 수학적 도구인 고정점 반복법(Fixed-Point Iteration)에 대해 다룹니다.\n우선, 이전 강의에서 다루었던 근접점 알고리즘(Proximal Point Algorithm)을 복습해 보겠습니다. 근접점 알고리즘은 다음의 업데이트 규칙을 따릅니다:\n\\[x_{t+1} = \\text{prox}_{\\eta f}(x_t) = \\arg\\min_{x} \\left\\{ f(x) + \\frac{1}{2\\eta} \\|x - x_t\\|^2 \\right\\}\\]\n이 알고리즘에서 가장 중요한 성질 중 하나는 다음 두 명제가 완전히 동치라는 점입니다:\n\n\\(\\hat{x} = \\text{prox}_{\\eta f}(\\hat{x})\\)\n\\(\\hat{x} \\in \\arg\\min_{x \\in \\mathbb{R}^d} f(x)\\)\n\n즉, 근접 작용소(Proximal operator)의 고정점(Fixed point)을 찾는 것이 곧 원래 목적 함수 \\(f(x)\\)의 최소점(Minimizer)을 찾는 것과 같다는 의미입니다. 이러한 관점은 경사하강법(Gradient Descent)이나 근접 경사법(Proximal Gradient Method) 등 다양한 알고리즘으로 확장될 수 있습니다.",
-    "crumbs": [
-      "About",
-      "TEMP",
-      "[Optimization] 19. Fixed-Point Iteration"
-    ]
-  },
-  {
-    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#기본-정의",
-    "href": "TEMP/19.Fixed-Point-Iteration/index.html#기본-정의",
-    "title": "[Optimization] 19. Fixed-Point Iteration",
-    "section": "2.1. 기본 정의",
-    "text": "2.1. 기본 정의\n집합치 작용소, 혹은 관계(Relation) \\(\\mathbb{T}\\)는 다음과 같이 정의되는 매핑입니다: \\[\\mathbb{T} : \\mathbb{R}^d \\Rightarrow \\mathbb{R}^d\\] 이는 각 점 \\(x \\in \\mathbb{R}^d\\)를 \\(\\mathbb{R}^d\\)의 어떤 부분 집합 \\(\\mathbb{T}(x) \\subseteq \\mathbb{R}^d\\)로 매핑합니다.\n만약 모든 \\(x \\in \\mathbb{R}^d\\)에 대해 \\(\\mathbb{T}(x)\\)가 단일 원소만 가지거나(Singleton) 공집합(Empty)이라면, 해당 작용소 \\(\\mathbb{T}\\)는 단일치(Single-valued)라고 부릅니다.\n\n\n\nFigure: 단일치 작용소와 집합치 작용소의 차이. 단일치 작용소는 하나의 입력 x가 정확히 하나의 출력 y로 연결되는 반면, 집합치 작용소는 입력 x가 여러 y값들로 이루어진 집합 T(x)에 대응되는 것을 보여준다. 이는 미분 불가능한 점에서의 서브그레디언트와 같은 수학적 현상을 모델링하는 데 필수적이다.\n\n\n작용소 \\(\\mathbb{T}\\)에 대한 주요 구성 요소는 다음과 같습니다:\n\n정의역(Domain): \\(\\text{domain}(\\mathbb{T}) = \\{ x \\in \\mathbb{R}^d : \\mathbb{T}(x) \\neq \\emptyset \\}\\)\n치역(Range): \\(\\text{range}(\\mathbb{T}) = \\{ y \\in \\mathbb{R}^d : y \\in \\mathbb{T}(x), x \\in \\mathbb{R}^d \\}\\)\n그래프(Graph): \\(\\text{gra}(\\mathbb{T}) = \\{ (x,y) \\in \\mathbb{R}^d \\times \\mathbb{R}^d : y \\in \\mathbb{T}(x) \\}\\)",
-    "crumbs": [
-      "About",
-      "TEMP",
-      "[Optimization] 19. Fixed-Point Iteration"
-    ]
-  },
-  {
-    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#작용소의-연산",
-    "href": "TEMP/19.Fixed-Point-Iteration/index.html#작용소의-연산",
-    "title": "[Optimization] 19. Fixed-Point Iteration",
-    "section": "2.2. 작용소의 연산",
-    "text": "2.2. 작용소의 연산\n집합치 작용소들 간에는 덧셈, 합성, 역연산 등을 정의할 수 있습니다.\n\n합(Sum): \\((\\mathbb{T} + \\mathbb{S})(x) = \\{ y + z : y \\in \\mathbb{T}(x), z \\in \\mathbb{S}(x) \\}\\)\n합성(Composition): \\((\\mathbb{T} \\circ \\mathbb{S})(x) = \\{ y : z \\in \\mathbb{S}(x), y \\in \\mathbb{T}(z) \\}\\)\n항등 작용소(Identity operator): \\(\\mathbb{I}(x) = \\{x\\}\\)\n영 작용소(Zero operator): \\(\\mathbb{O}(x) = \\{0\\}\\)\n\n모든 작용소 \\(\\mathbb{T}\\)에 대하여, \\(\\mathbb{T} + \\mathbb{O} = \\mathbb{T}\\), \\(\\mathbb{T} \\circ \\mathbb{I} = \\mathbb{T}\\), 그리고 \\(\\mathbb{T} \\circ \\mathbb{T} = \\mathbb{T}\\)가 성립합니다.\n역작용소(Inverse operator)는 다음과 같이 정의됩니다: \\[\\mathbb{T}^{-1}(y) = \\{ x : y \\in \\mathbb{T}(x) \\}\\]\n정의에 따라 \\(x \\in \\mathbb{T}^{-1}(y)\\)일 필요충분조건은 \\(y \\in \\mathbb{T}(x)\\)이므로, 역작용소의 그래프는 원래 그래프의 \\(x\\)와 \\(y\\) 좌표를 뒤집은 것과 같습니다: \\[\\text{gra}(\\mathbb{T}^{-1}) = \\{ (y,x) : (x,y) \\in \\text{gra}(\\mathbb{T}) \\}\\] 따라서 \\((\\mathbb{T}^{-1})^{-1} = \\mathbb{T}\\) 이고, \\(\\text{domain}(\\mathbb{T}^{-1}) = \\text{range}(\\mathbb{T})\\) 가 성립합니다.",
-    "crumbs": [
-      "About",
-      "TEMP",
-      "[Optimization] 19. Fixed-Point Iteration"
-    ]
-  },
-  {
-    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#고정점의-정의와-성질",
-    "href": "TEMP/19.Fixed-Point-Iteration/index.html#고정점의-정의와-성질",
-    "title": "[Optimization] 19. Fixed-Point Iteration",
-    "section": "4.1. 고정점의 정의와 성질",
-    "text": "4.1. 고정점의 정의와 성질\n단일치 작용소 \\(\\mathbb{T}\\)가 주어졌을 때, \\(\\mathbb{T}(x) = x\\) 를 만족하는 \\(x \\in \\mathbb{R}^d\\) 를 작용소 \\(\\mathbb{T}\\)의 고정점(Fixed point)이라고 합니다. 작용소 \\(\\mathbb{T}\\)의 고정점들의 집합을 다음과 같이 표기합니다:\n\\[\\text{fix}(\\mathbb{T}) = \\{ x \\in \\mathbb{R}^d : x \\in \\mathbb{T}(x) \\} = (\\mathbb{I} - \\mathbb{T})^{-1}(0)\\]\n정리: 만약 \\(\\mathbb{T}\\)가 비팽창 작용소(Non-expansive)이고 \\(\\text{dom}(\\mathbb{T}) = \\mathbb{R}^d\\) 라면, \\(\\text{fix}(\\mathbb{T})\\)는 닫힌 볼록 집합(Closed and convex set)입니다.\n\n[수학적 유도 과정: 고정점 집합의 볼록성 및 폐포성 증명]\n1. 볼록성(Convexity):\n\n\n\\(x, y \\in \\text{fix}(\\mathbb{T})\\) 라고 합시다. 즉, \\(\\mathbb{T}(x)=x\\), \\(\\mathbb{T}(y)=y\\) 입니다.\n\n\n임의의 \\(\\alpha \\in (0,1)\\) 에 대해 \\(z = \\alpha x + (1-\\alpha) y\\) 라 두겠습니다.\n\n\n\\(\\mathbb{T}\\)는 비팽창 작용소이므로 다음이 성립합니다:\n\n\n\\(\\|\\mathbb{T}(z) - x\\| = \\|\\mathbb{T}(z) - \\mathbb{T}(x)\\| \\le \\|z - x\\| = (1-\\alpha)\\|x - y\\|\\)\n\n\n\\(\\|\\mathbb{T}(z) - y\\| = \\|\\mathbb{T}(z) - \\mathbb{T}(y)\\| \\le \\|z - y\\| = \\alpha\\|x - y\\|\\)\n\n\n삼각 부등식(Triangle inequality)에 의해:\n\n\n\\(\\|x - y\\| \\le \\|x - \\mathbb{T}(z)\\| + \\|\\mathbb{T}(z) - y\\| \\le (1-\\alpha)\\|x - y\\| + \\alpha\\|x - y\\| = \\|x - y\\|\\)\n\n\n양 끝의 값이 같으므로, 중간의 삼각 부등식은 등식으로 성립해야 합니다. 유클리드 공간에서 삼각 부등식이 등호로 성립하려면 \\(\\mathbb{T}(z)\\)가 \\(x\\)와 \\(y\\)를 잇는 선분 위에 있어야 하며, 거리 제약 조건에 의해 정확히 \\(\\mathbb{T}(z) = z\\) 임을 유도할 수 있습니다. 따라서 \\(z \\in \\text{fix}(\\mathbb{T})\\) 이고, 집합은 볼록(Convex)합니다.\n2. 닫힘성(Closedness):\n비팽창 작용소는 1-Lipschitz 연속이므로, 연속 함수입니다. 따라서 \\(\\mathbb{I} - \\mathbb{T}\\) 역시 연속 함수입니다. \\(\\{0\\}\\)은 닫힌 집합이며, 연속 함수의 역상(inverse image)인 \\((\\mathbb{I} - \\mathbb{T})^{-1}(0)\\) 역시 닫힌 집합이 됩니다.",
-    "crumbs": [
-      "About",
-      "TEMP",
-      "[Optimization] 19. Fixed-Point Iteration"
-    ]
-  },
-  {
-    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#고정점-반복법-fixed-point-iteration",
-    "href": "TEMP/19.Fixed-Point-Iteration/index.html#고정점-반복법-fixed-point-iteration",
-    "title": "[Optimization] 19. Fixed-Point Iteration",
-    "section": "4.2. 고정점 반복법 (Fixed-Point Iteration)",
-    "text": "4.2. 고정점 반복법 (Fixed-Point Iteration)\n고정점을 찾기 위한 가장 직관적인 알고리즘은 고정점 반복법(Fixed-Point Iteration) 또는 피카르 반복법(Picard Iteration)입니다: \\[x_{t+1} = \\mathbb{T}(x_t)\\]\n하지만, \\(\\mathbb{T}\\)가 단순히 비팽창 작용소일 때는 고정점 반복법이 항상 수렴하는 것은 아닙니다. 대표적인 예시로 \\(\\mathbb{T}(x) = -x\\) (여기서 \\(x \\in \\mathbb{R}\\))가 있습니다. 이 작용소는 \\(1\\)-Lipschitz이므로 비팽창 작용소이지만, 초기값 \\(x_0 \\neq 0\\) 에서 반복법을 적용하면 \\(x_0 \\to -x_0 \\to x_0 \\to -x_0 \\dots\\) 로 진동하며 고정점 \\(0\\)에 수렴하지 않습니다. 일반적으로 2차원 이상의 공간에서 회전 작용소(Rotation operator) 또한 수렴을 보장하지 않습니다.",
-    "crumbs": [
-      "About",
-      "TEMP",
-      "[Optimization] 19. Fixed-Point Iteration"
-    ]
-  },
-  {
-    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#바나흐의-고정점-정리-banachs-fixed-point-theorem",
-    "href": "TEMP/19.Fixed-Point-Iteration/index.html#바나흐의-고정점-정리-banachs-fixed-point-theorem",
-    "title": "[Optimization] 19. Fixed-Point Iteration",
-    "section": "4.3. 바나흐의 고정점 정리 (Banach’s Fixed-Point Theorem)",
-    "text": "4.3. 바나흐의 고정점 정리 (Banach’s Fixed-Point Theorem)\n반면, 작용소가 더 강한 조건인 축소 작용소(Contractive operator)를 만족한다면 상황은 달라집니다.\n정리 (바나흐 고정점 정리): 작용소 \\(\\mathbb{T}\\)가 축소 작용소이면, \\(\\text{fix}(\\mathbb{T})\\)는 단원소 집합(Singleton)이며 (즉, 고정점이 유일하게 존재함), 임의의 초기점에서 시작한 고정점 반복법은 이 유일한 고정점으로 선형 속도(Linear rate)로 수렴합니다.\n\n[수학적 유도 과정: 바나흐 고정점 정리 증명]\n1. 유일성(Uniqueness):\n\\(\\mathbb{T}\\)가 상수 \\(L \\in (0,1)\\) 인 축소 작용소라고 가정합니다. \\(x^*, y^*\\)가 모두 고정점이라고 해봅시다.\n\\(\\|x^* - y^*\\| = \\|\\mathbb{T}(x^*) - \\mathbb{T}(y^*)\\| \\le L \\|x^* - y^*\\|\\)\n\\(L &lt; 1\\) 이므로 위 부등식이 성립하려면 \\(\\|x^* - y^*\\| = 0\\) 즉, \\(x^* = y^*\\) 이어야 합니다. 따라서 고정점은 유일합니다.\n2. 수렴성(Convergence):\n\\(x^*\\)를 유일한 고정점이라 합시다. 업데이트 \\(x_{t+1} = \\mathbb{T}(x_t)\\) 에 대해,\n\\(\\|x_{t+1} - x^*\\| = \\|\\mathbb{T}(x_t) - \\mathbb{T}(x^*)\\| \\le L \\|x_t - x^*\\|\\)\n이를 반복적으로 적용(Induction)하면,\n\\(\\|x_t - x^*\\| \\le L^t \\|x_0 - x^*\\|\\)\n\\(L &lt; 1\\) 이므로 \\(t \\to \\infty\\) 일 때 \\(L^t \\to 0\\) 이 되어 \\(x_t \\to x^*\\) 로 수렴함을 알 수 있습니다. 거리가 매 스텝마다 상수비율 \\(L\\)로 줄어들므로 선형 수렴 속도(Linear rate)를 가집니다.",
-    "crumbs": [
-      "About",
-      "TEMP",
-      "[Optimization] 19. Fixed-Point Iteration"
-    ]
-  },
-  {
-    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#개념-및-정의",
-    "href": "TEMP/19.Fixed-Point-Iteration/index.html#개념-및-정의",
-    "title": "[Optimization] 19. Fixed-Point Iteration",
-    "section": "6.1. 개념 및 정의",
-    "text": "6.1. 개념 및 정의\n어떤 \\(\\theta \\in (0, 1)\\) 에 대하여, 작용소 \\(\\mathbb{T}\\)가 다음 형태로 표현될 때 이를 \\(\\theta\\)-평균화된 작용소(\\(\\theta\\)-averaged operator)라고 합니다: \\[\\mathbb{T} = (1-\\theta)\\mathbb{I} + \\theta\\mathbb{S}\\] 여기서 \\(\\mathbb{S}\\)는 비팽창 작용소(Non-expansive operator)입니다. 즉, 평균화된 작용소는 자기 자신을 반환하는 항등 작용소 \\(\\mathbb{I}\\)와 비팽창 작용소 \\(\\mathbb{S}\\)의 볼록 결합(Convex combination)으로 구성됩니다. 이는 비팽창 작용소가 가질 수 있는 진동 현상(예: \\(-x\\))을 감쇠시키는(damping) 역할을 합니다.\n예를 들어, \\(f\\)가 볼록(Convex)하고 \\(\\beta\\)-평활(Smooth)할 때, 경사하강법 작용소 \\(\\mathbb{T} = \\mathbb{I} - \\eta \\nabla f\\) 는 임의의 \\(\\eta \\in (0, 2/\\beta)\\) 에 대해 \\(\\theta = \\eta\\beta/2\\) 인 \\(\\theta\\)-평균화된 작용소임이 알려져 있습니다.\n\n\n\nFigure: 크라스노셀스키-만(Krasnosel’skii-Mann) 반복법이 어떻게 진동(Oscillation)을 줄이고 수렴을 유도하는지 보여주는 도식. 항등 작용소(I)와 비팽창 작용소(S)를 일정 비율(1-θ, θ)로 섞어줌으로써 극단적인 점프를 방지하고 고정점을 향해 안정적으로 다가가게 한다.",
-    "crumbs": [
-      "About",
-      "TEMP",
-      "[Optimization] 19. Fixed-Point Iteration"
-    ]
-  },
-  {
-    "objectID": "TEMP/19.Fixed-Point-Iteration/index.html#krasnoselskii-mann-반복법-정리-및-증명",
-    "href": "TEMP/19.Fixed-Point-Iteration/index.html#krasnoselskii-mann-반복법-정리-및-증명",
-    "title": "[Optimization] 19. Fixed-Point Iteration",
-    "section": "6.2. Krasnosel’skii-Mann 반복법 (정리 및 증명)",
-    "text": "6.2. Krasnosel’skii-Mann 반복법 (정리 및 증명)\n평균화된 작용소에 대해서는 매우 중요한 수렴 정리가 성립합니다.\n정리 (Krasnosel’skii-Mann Iteration): 작용소 \\(\\mathbb{T}\\)가 어떤 \\(\\theta \\in (0, 1)\\) 에 대해 \\(\\theta\\)-평균화된 작용소이고 고정점이 존재한다고 가정합시다 (\\(\\text{fix}(\\mathbb{T}) \\neq \\emptyset\\)). 임의의 초기점 \\(x_0 \\in \\mathbb{R}^d\\) 에서 시작하는 고정점 반복법 \\(x_{t+1} = \\mathbb{T}(x_t)\\) 는 \\(\\mathbb{T}\\)의 고정점으로 수렴합니다. 더욱 구체적으로 다음이 성립합니다:\n\n\\(\\text{dist}(x_t, \\text{fix}(\\mathbb{T})) \\rightarrow 0\\)\n\\(||x_{t+1} - x_t||^2 \\le \\frac{\\theta}{(t+1)(1-\\theta)} \\text{dist}^2(x_0, \\text{fix}(\\mathbb{T}))\\)\n\n\n[수학적 유도 과정: Krasnosel’skii-Mann 정리 증명]\n\\(\\mathbb{T} = (1-\\theta)\\mathbb{I} + \\theta\\mathbb{S}\\) 라 하고, \\(x^* \\in \\text{fix}(\\mathbb{T})\\) 라고 합시다. \\(\\text{fix}(\\mathbb{T}) = \\text{fix}(\\mathbb{S})\\) 임을 유의해야 합니다.\n\\(t+1\\) 스텝에서의 고정점과의 거리를 측정해보겠습니다. 벡터의 볼록 결합에 대한 거리 분해 항등식(\\(\\|(1-\\theta)u + \\theta v\\|^2 = (1-\\theta)\\|u\\|^2 + \\theta\\|v\\|^2 - \\theta(1-\\theta)\\|u-v\\|^2\\))을 사용합니다.\n여기서 \\(u = x_t - x^*\\), \\(v = \\mathbb{S}(x_t) - x^*\\) 로 둡니다.\n\\[\n\\begin{align*}\n\\|x_{t+1} - x^*\\|^2 &= \\|\\mathbb{T}(x_t) - x^*\\|^2 \\\\\n&= \\|(1-\\theta)(x_t - x^*) + \\theta(\\mathbb{S}(x_t) - x^*)\\|^2 \\\\\n&= (1-\\theta)\\|x_t - x^*\\|^2 + \\theta\\|\\mathbb{S}(x_t) - x^*\\|^2 - \\theta(1-\\theta)\\|x_t - \\mathbb{S}(x_t)\\|^2\n\\end{align*}\n\\]\n\\(\\mathbb{S}\\)는 비팽창 작용소이므로, \\(\\|\\mathbb{S}(x_t) - x^*\\| = \\|\\mathbb{S}(x_t) - \\mathbb{S}(x^*)\\| \\le \\|x_t - x^*\\|\\) 가 성립합니다. 이를 대입하면:\n\\[\n\\begin{align*}\n\\|x_{t+1} - x^*\\|^2 &\\le (1-\\theta)\\|x_t - x^*\\|^2 + \\theta\\|x_t - x^*\\|^2 - \\theta(1-\\theta)\\|x_t - \\mathbb{S}(x_t)\\|^2 \\\\\n&= \\|x_t - x^*\\|^2 - \\theta(1-\\theta)\\|x_t - \\mathbb{S}(x_t)\\|^2\n\\end{align*}\n\\]\n한편 업데이트 식에서 \\(x_{t+1} - x_t = \\mathbb{T}(x_t) - x_t = \\theta(\\mathbb{S}(x_t) - x_t)\\) 이므로, \\(x_t - \\mathbb{S}(x_t) = -\\frac{1}{\\theta}(x_{t+1} - x_t)\\) 입니다. 이를 거리 식에 대입합니다.\n\\[\n\\|x_{t+1} - x^*\\|^2 \\le \\|x_t - x^*\\|^2 - \\frac{1-\\theta}{\\theta}\\|x_{t+1} - x_t\\|^2 \\quad \\dots \\text{(Eq. 1)}\n\\]\n(Eq. 1)은 \\(\\|x_t - x^*\\|\\) 가 단조 감소(monotonically decreasing)하는 수열임을 보여줍니다. 즉, \\(\\text{dist}(x_t, \\text{fix}(\\mathbb{T}))\\) 가 수렴함을 의미합니다.\n이제 양변을 \\(t=0\\) 부터 \\(T\\) 까지 더해줍니다(Telescoping sum).\n\\[\n\\sum_{t=0}^T \\frac{1-\\theta}{\\theta}\\|x_{t+1} - x_t\\|^2 \\le \\|x_0 - x^*\\|^2 - \\|x_{T+1} - x^*\\|^2 \\le \\|x_0 - x^*\\|^2\n\\]\n따라서 무한급수가 수렴하므로, \\(\\|x_{t+1} - x_t\\| \\rightarrow 0\\) 이 증명됩니다.\n더 나아가, 비팽창 작용소의 특성상 수열 \\(\\|x_{t+1} - x_t\\|\\) 은 단조 감소함을 보일 수 있습니다. 따라서 가장 작은 항인 마지막 항에 대해 바운드를 잡으면 정리의 속도인 \\(\\mathcal{O}(1/t)\\) 를 얻게 됩니다.",
-    "crumbs": [
-      "About",
-      "TEMP",
-      "[Optimization] 19. Fixed-Point Iteration"
-    ]
-  },
-  {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html",
-    "title": "[Data Mining] 15. Link Analysis (Part 2)",
-    "section": "",
-    "text": "이전 포스트에서는 검색 엔진이 Link Spam을 방어하기 위해 어떻게 랜덤 워크를 변형하여 TrustRank와 Topic-Specific PageRank를 고안해냈는지, 그리고 특정 노드와의 네트워크상 ’근접성(Proximity)’을 측정하는 Personalized PageRank(PPR) 모델의 원리를 확인했습니다.\n이번 포스트에서는 한 걸음 더 나아가, PPR 점수를 활용하여 네트워크 내부의 숨겨진 군집(Community)을 찾아내는 알고리즘을 다룹니다. 현실 세계의 소셜 네트워크나 인용 네트워크는 무작위로 연결되어 있지 않으며, 비슷한 특성을 공유하는 노드들이 특정한 군집(Community) 구조를 이룹니다.\n\n\n\n\nFigure: 현실 세계의 네트워크 군집 구조. 수많은 노드들이 무작위로 얽혀 있는 것이 아니라, 연결망의 밀도에 따라 푸른색, 붉은색, 초록색, 주황색 등 뚜렷하게 구분되는 여러 개의 커뮤니티 구조를 형성하고 있음을 시각적으로 보여줍니다.\n\n\n\n거대한 그래프 데이터에서 의미 있는 커뮤니티를 수학적으로 정의하는 방법과, 메모리 한계를 극복하기 위해 제안된 ‘국소 커뮤니티 탐지(Local Community Detection)’ 기법 및 Sweep Algorithm을 자세히 살펴보겠습니다.",
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#전체-노드-업데이트-행렬-수식",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#전체-노드-업데이트-행렬-수식",
+    "title": "[Data Mining] 19. ML On Graphs (Part 2)",
+    "section": "5.1 전체 노드 업데이트 행렬 수식",
+    "text": "5.1 전체 노드 업데이트 행렬 수식\n\n전체 노드의 \\(l\\)번째 은닉 상태를 행으로 차곡차곡 쌓은 행렬을 \\(H^{(l)} \\in \\mathbb{R}^{|V| \\times d_l}\\) 이라고 합시다. 기본 GNN 레이어는 다음과 같이 우아한 행렬식으로 표현됩니다.\n\n\\[\nH^{(l+1)} = \\sigma \\left( D^{-1} A H^{(l)} W^{(l)} + H^{(l)} B^{(l)} \\right)\n\\]\n\n\\(A \\in \\mathbb{R}^{|V| \\times |V|}\\) : 인접 행렬\n\\(D \\in \\mathbb{R}^{|V| \\times |V|}\\) : 대각선 성분에 각 노드의 차수(이웃 수)를 기록한 대각 행렬 (\\(d_{ii} = \\sum_k a_{ik}\\))\n\\(W^{(l)}, B^{(l)} \\in \\mathbb{R}^{d_l \\times d_{l+1}}\\) : 해당 레이어에서 학습되는 가중치 행렬",
     "crumbs": [
       "About",
       "Posts",
       "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 2)"
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 2)"
     ]
   },
   {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#cut-score의-정의와-계산",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#cut-score의-정의와-계산",
-    "title": "[Data Mining] 15. Link Analysis (Part 2)",
-    "section": "2.1. Cut Score의 정의와 계산",
-    "text": "2.1. Cut Score의 정의와 계산\n\n노드 집합 \\(V\\)를 우리가 평가하려는 군집 \\(A\\)와 나머지 외부 집합 \\(V \\setminus A\\)로 분할했다고 가정해 보겠습니다.\n\n\n\n\nFigure: 그래프 분할의 기본 개념. 6개의 노드로 구성된 단순한 그래프를 집합 A={1,2,3}과 나머지 집합 V={4,5,6}으로 나누는 푸른색 절취선(Cut)을 묘사하고 있습니다.\n\n\n\n이때 \\(A\\)의 Cut Score는 \\(A\\) 내부 노드와 \\(A\\) 외부 노드를 가로질러 연결하는 간선들의 총합으로 정의됩니다. 수식으로는 다음과 같이 표현됩니다.\n\n\\[cut(A) = \\sum_{i \\in A, j \\notin A} a_{ij}\\]\n\n\n\nFigure: Cut Score 계산 예시. 집합 A(노란색 타원)에 포함된 노드 1, 2, 3에서 외부로 뻗어나가는 간선은 (1,5)와 (3,4) 두 개뿐입니다. 따라서 두 군집 사이를 끊어내기 위해 제거해야 하는 간선의 수인 cut(A) = 2가 됩니다.",
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#행렬-곱의-의미-해석",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#행렬-곱의-의미-해석",
+    "title": "[Data Mining] 19. ML On Graphs (Part 2)",
+    "section": "5.2 행렬 곱의 의미 해석",
+    "text": "5.2 행렬 곱의 의미 해석\n\n\\(A H^{(l)}\\) : 인접 행렬과 노드 상태를 곱하면, 자연스럽게 각 노드 행에 연결된 이웃들의 상태 벡터 합산(Sum) 결과가 맺히게 됩니다.\n\\(D^{-1} (A H^{(l)})\\) : 역행렬 \\(D^{-1}\\)을 곱하는 것은 각 행을 해당 노드의 차수로 나누어주는 것과 완벽히 일치합니다. 즉, 단순 합산을 평균(Average)으로 정규화하는 수학적 트릭입니다.",
     "crumbs": [
       "About",
       "Posts",
       "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 2)"
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 2)"
     ]
   },
   {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#cut-score-최적화의-한계-minimum-cut-problem",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#cut-score-최적화의-한계-minimum-cut-problem",
-    "title": "[Data Mining] 15. Link Analysis (Part 2)",
-    "section": "2.2. Cut Score 최적화의 한계 (Minimum Cut Problem)",
-    "text": "2.2. Cut Score 최적화의 한계 (Minimum Cut Problem)\n\n군집 분할을 위해 단순히 Cut Score 수치를 최소화(Minimum cut)하는 최적화를 수행하면, 수학적 맹점으로 인해 알고리즘이 망가지게 됩니다.\nCut Score는 ’외부로 나가는 선이 몇 개인가?’에만 집착할 뿐, ’군집 내부의 결속력(intra-cluster connectivity)’은 전혀 고려하지 않습니다. 그 결과, 거대한 네트워크를 의미 있는 덩어리로 쪼개는 대신 연결선이 하나뿐인 주변부 말단 노드(Degree-1 node) 하나만 잘라내는 편법을 선택하게 됩니다.\n\n\n\n\nFigure: Cut Score 최소화의 한계점 (Minimum Cut Problem). 붉은 군집과 초록 군집을 완벽히 반으로 가르는 직관적인 이상적 분할(Optimal cut, 푸른색 점선)은 컷이 2입니다. 반면 수치상 최솟값을 찾는 Minimum cut(붉은색 점선)은 맨 우측 말단 노드 하나만 떼어내어 컷 1을 달성합니다. 단순 Cut Score만을 지표로 삼으면 알고리즘은 붉은 점선처럼 무의미한 아웃라이어 분할을 정답으로 도출하게 됩니다.",
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#기존-mlp-수식과의-비교",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#기존-mlp-수식과의-비교",
+    "title": "[Data Mining] 19. ML On Graphs (Part 2)",
+    "section": "5.3 기존 MLP 수식과의 비교",
+    "text": "5.3 기존 MLP 수식과의 비교\n\n일반적인 MLP의 업데이트 수식은 \\(H^{(l+1)} = \\sigma \\left( H^{(l)} W^{(l)} \\right)\\) 입니다.\n이를 GNN 식과 비교하기 위해 자기 자신 변환 행렬 \\(B\\)와 이웃 변환 행렬 \\(W\\)를 단순화하여 하나로 묶어본다면, GNN은 다음과 같이 요약할 수 있습니다.\n\n\\[H^{(l+1)} \\approx \\sigma \\left( \\hat{A} H^{(l)} W^{(l)} \\right) \\quad (\\text{단, } \\hat{A} = D^{-1}A)\\]\n\n결과적으로 GNN은 기존 MLP 연산(특성 변환 \\(H W\\)) 앞에 정규화된 인접 행렬 \\(\\hat{A}\\)를 곱해주는 구조적 혼합(Structural mixing) 과정을 하나 더 얹은 것으로 볼 수 있습니다. 즉, GNN은 완전히 새로운 이질적인 구조가 아니라 딥러닝 패러다임을 비유클리드 그래프 공간으로 자연스럽게 확장(Natural extension)한 것입니다.",
     "crumbs": [
       "About",
       "Posts",
       "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 2)"
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 2)"
     ]
   },
   {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#volume과-conductance-수식",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#volume과-conductance-수식",
-    "title": "[Data Mining] 15. Link Analysis (Part 2)",
-    "section": "3.1. Volume과 Conductance 수식",
-    "text": "3.1. Volume과 Conductance 수식\n\n어떤 노드 집합 \\(A\\)의 볼륨 \\(vol(A)\\)는 해당 집합에 속한 모든 노드들의 차수(Degree, \\(d_i\\)) 총합입니다.\n\n\\[vol(A) = \\sum_{i \\in A} d_i\\]\n\n이 \\(vol(A)\\) 값은 (집합 A 내부에서 서로 연결된 간선 수 \\(\\times 2\\)) + (외부로 뻗어나가는 간선 수)와 정확히 일치합니다.\n이를 바탕으로 Conductance \\(\\phi(A)\\)는 다음과 같이 계산됩니다. \\[\\phi(A) = \\frac{cut(A)}{\\min(vol(A), 2m - vol(A))} = \\frac{|\\{(i, j) \\in E \\mid i \\in A, j \\notin A\\}|}{\\min(vol(A), 2m - vol(A))}\\]\n\n단, \\(m\\)은 그래프 전체의 간선 수이며, \\(2m\\)은 그래프 전체의 총 Volume을 의미합니다.",
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#막대한-파라미터-절감-효과",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#막대한-파라미터-절감-효과",
+    "title": "[Data Mining] 19. ML On Graphs (Part 2)",
+    "section": "6.1 막대한 파라미터 절감 효과",
+    "text": "6.1 막대한 파라미터 절감 효과\n\nDeepWalk와 같은 얕은 인코더(Shallow Encoder)는 각 노드마다 별개의 임베딩 룩업 벡터를 생성하므로 파라미터 수가 노드 수에 비례하는 \\(\\mathcal{O}(|V|d)\\) 이었습니다. 그래프가 커지면 학습이 불가능했습니다.\n하지만 GNN의 파라미터 행렬 \\(W\\)와 \\(B\\)는 노드의 식별자나 개수(\\(|V|\\))에 의존하지 않고 오직 특성 벡터의 차원(\\(d\\))에만 의존합니다. 은닉층 차원이 \\(d\\), 초기 입력 차원이 \\(d_{in}\\)일 때 \\(L\\)층 GNN의 파라미터 수는 대략 다음과 같습니다.\n\n\\[\\text{Number of parameters: } \\mathcal{O}(L d^2 + d \\cdot d_{in})\\]\n\n노드들이 가중치를 완벽하게 공유(Weight sharing)하므로 거대한 네트워크도 학습 가능하며, 학습 시 보지 못했던 새로운 서브그래프나 노드가 추가되어도 즉시 임베딩을 계산할 수 있는 귀납적 추론(Inductive learning)이 가능합니다.",
     "crumbs": [
       "About",
       "Posts",
       "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 2)"
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 2)"
     ]
   },
   {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#conductance가-문제를-해결하는-원리",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#conductance가-문제를-해결하는-원리",
-    "title": "[Data Mining] 15. Link Analysis (Part 2)",
-    "section": "3.2. Conductance가 문제를 해결하는 원리",
-    "text": "3.2. Conductance가 문제를 해결하는 원리\n\nConductance 수식은 분모에 \\(\\min(vol(A), 2m-vol(A))\\)를 취하여 군집의 규모를 평가합니다.\n앞선 Minimum Cut 문제처럼 말단 노드 단 하나만 잘라낼 경우, 컷은 1(혹은 2)로 작아지지만 분리된 군집의 내부 볼륨 역시 극히 작아집니다. 결과적으로 분모가 아주 작아져 \\(\\phi(A)\\)는 거의 1에 가까운 최악의 점수를 받게 됩니다. 반면 내부가 촘촘한 거대한 덩어리로 나누면 분모가 기하급수적으로 커져 \\(\\phi(A)\\)는 0에 가깝게 낮아집니다.\n\n\n\n\nFigure: Conductance 계산 비교. (좌측) 푸른색 군집에서 주변부 붉은 노드 1개를 떼어내면 컷은 2이고, 분리된 노드의 총 볼륨은 4에 불과하여 Conductance가 2/4 = 0.5로 높게 계산됩니다. (우측) 전체 그래프를 절반으로 가르는 좋은 컷입니다. 컷은 6으로 다소 늘어났지만 분리된 붉은 군집의 압도적인 내부 밀도 덕분에 볼륨이 92에 달합니다. 따라서 Conductance는 6/92 = 0.065로 매우 낮게 산출되며, 이는 우측이 수학적으로 훨씬 우수한 커뮤니티 분할임을 의미합니다.\n\n\n\n즉, Conductance \\(\\phi(A)\\)가 0에 가까울수록 내부 결속력은 탄탄하고 외부 유출은 적인 이상적인 커뮤니티 구조임을 뜻합니다.",
+    "objectID": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#gnn의-손실-함수와-학습",
+    "href": "posts/Data Mining/19.ML-On-Graphs-2/19.2/index.html#gnn의-손실-함수와-학습",
+    "title": "[Data Mining] 19. ML On Graphs (Part 2)",
+    "section": "6.2 GNN의 손실 함수와 학습",
+    "text": "6.2 GNN의 손실 함수와 학습\n\n비지도 학습 (Unsupervised Learning)\n\n레이블 없이 오직 그래프 구조만으로 임베딩을 학습할 때 사용합니다. 임베딩 벡터 간 유사도를 이용해 원본 그래프의 주변 문맥을 잘 복원하도록 모델 파라미터 \\(\\theta\\)를 최적화합니다. \\[\\theta^* = \\arg\\min_\\theta \\sum_v - \\log P(N(v) | z_v)\\]\n\n지도 학습 (Supervised Learning)\n\n노드 분류, 링크 예측 등의 명확한 태스크 라벨 \\(y\\)가 주어졌을 때는, 최종 출력된 임베딩 기반의 예측값 \\(f(z_v)\\)과 실제 라벨 간의 오차(Cross-Entropy 등) \\(\\mathcal{L}\\)을 최소화하는 방향으로 엔드투엔드(End-to-End) 학습을 진행합니다. \\[\\theta^* = \\arg\\min_\\theta \\sum_v \\mathcal{L}(y, f(z_v))\\]",
     "crumbs": [
       "About",
       "Posts",
       "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 2)"
-    ]
-  },
-  {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#알고리즘-동작-원리",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#알고리즘-동작-원리",
-    "title": "[Data Mining] 15. Link Analysis (Part 2)",
-    "section": "5.1. 알고리즘 동작 원리",
-    "text": "5.1. 알고리즘 동작 원리\n\n\nPPR (근접성) 계산: 시드 노드 \\(S=\\{s\\}\\)로 텔레포트를 100% 한정시킨 Random Walk with Restarts를 실행하여, 모든 노드들이 시드 노드 \\(s\\)와 가지는 네트워크 근접성(PPR score)을 계산합니다.\n\n\n정렬 (Sort): 계산된 PPR 점수가 높은 순서(내림차순)로 노드들을 줄 세웁니다.\n\n\n스윕 (Sweep): 상위 노드부터 하나씩 새로운 군집 \\(A_i\\)에 집어넣어가며 그 순간의 Conductance \\(\\phi(A_i)\\)를 측정합니다.\n\n\n\\(A_1 = \\{u_1\\}\\)\n\\(A_i = \\{u_1, u_2, \\dots, u_i\\}\\)\n\n\n로컬 미니마(Local Minima) 판별: \\(\\phi(A_i)\\) 값을 그래프로 그렸을 때, 값이 크게 하락하여 골짜기를 이루는 점(Local minima)들이 발견됩니다. 이 지점들이 바로 이상적인 군집의 경계(Good clusters)를 의미합니다.\n\n\n\n\n\nFigure: Sweep 알고리즘에 따른 Conductance 곡선. X축은 PPR 점수 내림차순에 따른 추가 노드 순위(i)이고, Y축은 해당 순위까지의 노드를 포함시킨 집합의 Conductance 값입니다. 노드를 계속 추가함에 따라 점수가 요동치며, i=7과 i=18 부근에서 깊은 골짜기인 지역 최소점(Local minima)을 형성합니다. 이 점들이 바로 외부 유출이 최소화되는 견고한 커뮤니티(Good clusters)의 경계선입니다. 이후 성질이 다른 외부 노드가 강제로 편입되기 시작하면 곡선은 다시 가파르게 상승합니다.",
-    "crumbs": [
-      "About",
-      "Posts",
-      "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 2)"
-    ]
-  },
-  {
-    "objectID": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#선형-시간oa-처리를-위한-동적-갱신update-식",
-    "href": "posts/Data Mining/15.Link-Analysis-2/15.2/index.html#선형-시간oa-처리를-위한-동적-갱신update-식",
-    "title": "[Data Mining] 15. Link Analysis (Part 2)",
-    "section": "5.2. 선형 시간(\\(O(|A|)\\)) 처리를 위한 동적 갱신(Update) 식",
-    "text": "5.2. 선형 시간(\\(O(|A|)\\)) 처리를 위한 동적 갱신(Update) 식\n\n매 \\(i\\)번째 스윕 단계마다 집합 \\(A_i\\)의 \\(vol\\)과 \\(cut\\)을 처음부터 다시 센다면 연산 시간이 비효율적으로 증가합니다. 이를 해결하기 위해 새로운 노드 \\(u_{i+1}\\)이 추가될 때 이전 단계의 값을 활용하여 빠르게 업데이트하는 점화식을 사용합니다.\nVolume 업데이트: 단순 합계입니다. 새 노드의 간선 수를 기존 볼륨에 더합니다. \\[vol(A_{i+1}) = vol(A_i) + d_{i+1}\\]\nCut 업데이트: 새 노드의 모든 간선은 일단 외부를 향하는 컷으로 간주하여 더합니다. 하지만 그중에서 기존 집합 \\(A_i\\)를 향하는 내부 간선들은 컷의 성질을 잃게 되므로 그 개수의 2배를 빼줍니다 (기존에 밖으로 나가던 컷 1번 상쇄 + 방금 들어오면서 컷으로 추가했던 것 1번 상쇄). \\[cut(A_{i+1}) = cut(A_i) + d_{i+1} - 2 \\times (\\text{\\# of edges from } u_{i+1} \\text{ to } A_i)\\]\n어떤 이웃 노드 \\(v\\)가 이미 집합 \\(A_i\\) 안에 있는지 확인하는 작업은 1과 0을 반환하는 상수 시간 \\(O(1)\\)의 해시 테이블(Hash table, \\(h(v)\\))을 사용하여 즉각적으로 판별합니다. 이러한 트릭 덕분에 대규모 네트워크에서도 타겟 커뮤니티를 찾아내는 연산이 완벽한 선형 시간 내에 종료됩니다.",
-    "crumbs": [
-      "About",
-      "Posts",
-      "Data Mining",
-      "15.Link Analysis 2",
-      "[Data Mining] 15. Link Analysis (Part 2)"
+      "19.ML On Graphs 2",
+      "[Data Mining] 19. ML On Graphs (Part 2)"
     ]
   },
   {
@@ -25475,6 +25811,6 @@
     "href": "index.html",
     "title": "스흐의 블로그",
     "section": "",
-    "text": "[Causal Inference] 01. Introduction\n\n\nIntroduction to Causal Inference\n\n\n\n\n\nJan 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 02. Causal Models and Graphs (Part 2)\n\n\nStructural Causal Model (SCM), Markovian Factorization, and d-separation\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 02. Causal Models and Graphs (Part 1)\n\n\nStructural Causal Models (SCM), Causal Graphs, and Markovian Factorization\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 03. Identification of Causal Effects\n\n\n관측 데이터로부터 인과 효과를 계산할 수 있는가? (SCM, Truncated Factorization, Adjustment Formula)\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 1)\n\n\nIndentifiable and Non-identifiable Effects\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 2)\n\n\nCounfounding Bias\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 3)\n\n\nBack-door Criterion\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 4)\n\n\nInverse Probability Weighting\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 5)\n\n\nSimpson’s Paradox Simulation Using DoWhy: Stratification & Refutation\n\n\n\n\n\nJan 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 05. Adjustment Criterion (Part 1)\n\n\nBackdoor Criterion - Tightness of the Back-door Criterion\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 05. Adjustment Criterion (Part 2)\n\n\nAdjustment Criterion\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 05. Adjustment Criterion (Part 3)\n\n\nAlgorithm\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 05. Adjustment Criterion (Part 4)\n\n\nConditional Ignorability in Potential Outcome Framework\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 06. The Causal Calculus (Part 1)\n\n\nThree Examples\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 06. The Causal Calculus (Part 2)\n\n\nIdentification Approaches & Three Insights\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 06. The Causal Calculus (Part 3)\n\n\nCausal Calculus — A systematic approach for identification\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 06. The Causal Calculus (Part 4)\n\n\nBack to Simpson’s Paradox\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 07. An Algorithmic Approach to Identification (Part 1)\n\n\nFactorizing Observational Distributions\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 07. An Algorithmic Approach to Identification (Part 2)\n\n\nExpressing Causal Queries in terms of C-factors: Examples\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 07. An Algorithmic Approach to Identification (Part 3)\n\n\nA General Approach\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 1)\n\n\nPartial Identification Problem: Natural Bounds\n\n\n\n\n\nJan 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 2)\n\n\nPartial Identification Problem: Non-Compliance\n\n\n\n\n\nJan 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 3)\n\n\nBounds on Partially-observed Covariates\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 4)\n\n\nNon-Compliance Simulation\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 09. Linear Structural Causal Models (Part 1)\n\n\nIntroduction\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 09. Linear Structural Causal Models (Part 2)\n\n\nLinear Regression\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 09. Linear Structural Causal Models (Part 3)\n\n\nAlgorithmic Identification Methods\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 09. Linear Structural Causal Models (Part 4)\n\n\nIV to Instrumental Sets\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 09. Linear Structural Causal Models (Part 5)\n\n\nThe Method of Auxiliary Variables\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 10. Potential Outcome Framework (Part 1)\n\n\nIntroduction\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 10. Potential Outcome Framework (Part 2)\n\n\nRandomization and Observational Study\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 11. IPW and Its Variants (Part 1)\n\n\nIntroduction\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 11. IPW and Its Variants (Part 2)\n\n\nDoubly Robust Estimation\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 11A. Generalized Propensity Score\n\n\n일반화 성향점수\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 12. Matching\n\n\nNonparametric Imputation for Causal Inference: Exact, Nearest Neighbor, Propensity Score, and Balance Checking\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 1)\n\n\nIV under Linear Assumption\n\n\n\n\n\nJan 15, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 2)\n\n\nRandom Experiment wiht Noncompliance\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 3)\n\n\nLinear 2SLS vs. Deep IV\n\n\n\n\n\nJan 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 14. Regression Discontinuity Design\n\n\nDefinition, Indentification and Estimation of RDD\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15. DiD & SCM (Part 1)\n\n\nDifference in Differences\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15. DiD & SCM (Part 2)\n\n\nNonlinear DiD\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15. DiD & SCM (Part 3)\n\n\nSynthetic Control Method\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15A. SDiD (Part 1)\n\n\nSynthetic Difference-in-Differences\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15A. SDiD (Part 2)\n\n\nSynthetic Difference-in-Differences\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15A. Staggered DiD\n\n\nStaggered Difference-in-Differences\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 1)\n\n\nIntroduction\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 2)\n\n\nConstraint-Based Structure Learning\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 3)\n\n\nExtensions of PC Algorithm & FCI\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 4)\n\n\nScore-Based Approach\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 5)\n\n\nParametric Approaches\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 6)\n\n\nTime Series Causal Discovery\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 1)\n\n\nIntroduction\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 2)\n\n\nExperimental Conditions - General Identifiability\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 3)\n\n\nEnvironmental Conditions - Transportability, External Validity, Meta-Analysis\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 4)\n\n\nSampling Conditions - Recovering From Selection Bias\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 5)\n\n\nMissing Data\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 6)\n\n\nMeasurement\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 01.Single World Intervention Graphs (SWIGs)\n\n\nUnifying the Counterfactual and Graphical Approaches to Causality\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 02. Direct and Indirect Effects (Part 1)\n\n\nIntroduction\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 02. Direct and Indirect Effects (Part 2)\n\n\nMathematization\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 02. Direct and Indirect Effects (Part 3)\n\n\nNatural Indirect Effects\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 02. Direct and Indirect Effects (Part 4)\n\n\nPath-Specific Effects\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 03. Soft-Intervention and σ-calculus (Part 1)\n\n\nMotivation for Soft-Interventions & Canonical Types of Regimes\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 03. Soft-Intervention and σ-calculus (Part 2)\n\n\nReduction & σ-calculus\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 03. Soft-Intervention and σ-calculus (Part 3)\n\n\nComparisons to do-calculus\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 03. Soft-Intervention and σ-calculus (Part 4)\n\n\nC-Factors and Soft-Intervention\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 04. Proximal Causal Inference (Part 01)\n\n\nSingle Proxy\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 04. Proximal Causal Inference (Part 02)\n\n\nDouble Proxy\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Convex Optimization] 1. Introduction (Part 1)\n\n\nMathematical Optimization\n\n\n\n\n\nMar 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Convex Optimization] 1. Introduction (Part 2)\n\n\nConvex Optimization\n\n\n\n\n\nMar 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Convex Optimization] 2. Convex Sets (Part 1)\n\n\nSome Standard Convex Sets\n\n\n\n\n\nMar 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Convex Optimization] 2. Convex Sets (Part 2)\n\n\nOperation That Preserve Convexity\n\n\n\n\n\nMar 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 10. Dimensionality Reduction (Part 1)\n\n\nDimensionality Reduction\n\n\n\n\n\nApr 2, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 10. Dimensionality Reduction (Part 2)\n\n\nEigenvalues and Eigenpairs\n\n\n\n\n\nApr 2, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 10. Dimensionality Reduction (Part 3)\n\n\nPower Iteration\n\n\n\n\n\nApr 2, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 10. Dimensionality Reduction (Part 4)\n\n\nPrincipal Component Analysis\n\n\n\n\n\nApr 2, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 11. Dimensionality Reduction (Part 1)\n\n\nSingular Value Decomposition\n\n\n\n\n\nApr 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 11. Dimensionality Reduction (Part 2)\n\n\nDimensionality Reduction with SVD\n\n\n\n\n\nApr 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 11. Dimensionality Reduction (Part 3)\n\n\nCUR Decomposition\n\n\n\n\n\nApr 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 12. Recommender Systems (Part 1)\n\n\nRecommender Systems\n\n\n\n\n\nApr 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 12. Recommender Systems (Part 2)\n\n\nContent-based Recommendation\n\n\n\n\n\nApr 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 12. Recommender Systems (Part 3)\n\n\nCollaborative Filtering\n\n\n\n\n\nApr 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 12. Recommender Systems (Part 4)\n\n\nThe Netflix Challenge\n\n\n\n\n\nApr 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 13. Recommender Systems (Part 1)\n\n\nUV Decomposition\n\n\n\n\n\nApr 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 13. Recommender Systems (Part 2)\n\n\nUV Decomposition as Machine Learning\n\n\n\n\n\nApr 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 13. Recommender Systems (Part 3)\n\n\nVariants of UV Decomposition\n\n\n\n\n\nApr 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 13. Recommender Systems (Part 4)\n\n\nDealing with Implicit Feedback\n\n\n\n\n\nApr 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 14. Link Analysis (Part 1)\n\n\nWeb Search as a Graph\n\n\n\n\n\nApr 21, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 14. Link Analysis (Part 2)\n\n\nPageRank: Idea\n\n\n\n\n\nApr 21, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 14. Link Analysis (Part 3)\n\n\nPageRank: Power Iteration\n\n\n\n\n\nApr 21, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 14. Link Analysis (Part 4)\n\n\nPageRank: Sparse Encoding\n\n\n\n\n\nApr 21, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 15. Link Analysis (Part 1)\n\n\nTopic-Specific PageRank\n\n\n\n\n\nApr 28, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 15. Link Analysis (Part 2)\n\n\nCommunity Detection\n\n\n\n\n\nApr 28, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 15. Link Analysis (Part 3)\n\n\nApproximate Personalized PageRank\n\n\n\n\n\nApr 28, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 16. Deep Learning (Part 1)\n\n\nDeep Learning\n\n\n\n\n\nApr 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 16. Deep Learning (Part 2)\n\n\nMulti-layer Perceptrons\n\n\n\n\n\nApr 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 16. Deep Learning (Part 3)\n\n\nBackpropagation\n\n\n\n\n\nApr 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 17. Deep Learning (Part 1)\n\n\nLearning Embeddings\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 17. Deep Learning (Part 2)\n\n\nWord2Vec\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 17. Deep Learning (Part 3)\n\n\nWord2Vec: Example\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 17. Deep Learning (Part 4)\n\n\nAutoencoder\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 18. ML On Graphs (Part 1)\n\n\nGraph Representation Learning\n\n\n\n\n\nMay 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 18. ML On Graphs (Part 2)\n\n\nDeepWalk\n\n\n\n\n\nMay 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 18. ML On Graphs (Part 3)\n\n\nNode2vec\n\n\n\n\n\nMay 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 2. MapReduce (Part 1)\n\n\nDistributed Computing for Data Mining\n\n\n\n\n\nMar 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 2. MapReduce (Part 2)\n\n\nMapReduce: Basics\n\n\n\n\n\nMar 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 2. MapReduce (Part 3)\n\n\nMapReduce: Details\n\n\n\n\n\nMar 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 3. Spark (Part 1)\n\n\nOverview\n\n\n\n\n\nMar 10, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 3. Spark (Part 2)\n\n\nOperations\n\n\n\n\n\nMar 10, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 3. Spark (Part 3)\n\n\nImplementations\n\n\n\n\n\nMar 10, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 4. Frequent Itemsets (Part 1)\n\n\nFrequent Itemsets\n\n\n\n\n\nMar 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 4. Frequent Itemsets (Part 2)\n\n\nAssociation Rules\n\n\n\n\n\nMar 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 4. Frequent Itemsets (Part 3)\n\n\nFinding Frequent Pairs\n\n\n\n\n\nMar 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 4. Frequent Itemsets (Part 4)\n\n\nA-Priori Algorithm\n\n\n\n\n\nMar 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 5. Frequent Itemsets (Part 1)\n\n\nPCY Algorithm\n\n\n\n\n\nMar 17, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 5. Frequent Itemsets (Part 2)\n\n\nExtensions of PCY\n\n\n\n\n\nMar 17, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 5. Frequent Itemsets (Part 3)\n\n\nLimited-pass Algorithms\n\n\n\n\n\nMar 17, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 6. Finding Similar Items (Part 1)\n\n\nFinding Similar Items\n\n\n\n\n\nMar 19, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 6. Finding Similar Items (Part 2)\n\n\nShingling\n\n\n\n\n\nMar 19, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 6. Finding Similar Items (Part 3)\n\n\nMinhashing\n\n\n\n\n\nMar 19, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 6. Finding Similar Items (Part 4)\n\n\nMore on Minhashing\n\n\n\n\n\nMar 19, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 7. Finding Similar Items (Part 1)\n\n\nLocality-Sensitive Hashing\n\n\n\n\n\nMar 24, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 7. Finding Similar Items (Part 2)\n\n\nS-Curves\n\n\n\n\n\nMar 24, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 7. Finding Similar Items (Part 3)\n\n\nLSH Families\n\n\n\n\n\nMar 24, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 7. Finding Similar Items (Part 4)\n\n\nLSH with Other Distance Measures\n\n\n\n\n\nMar 24, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 8. Clustering (Part 1)\n\n\nClustering\n\n\n\n\n\nMar 26, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 8. Clustering (Part 2)\n\n\nHierarchical Clustering\n\n\n\n\n\nMar 26, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 8. Clustering (Part 3)\n\n\nK-means Clustering\n\n\n\n\n\nMar 26, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 9. Clustering (Part 1)\n\n\nCURE Algorithm\n\n\n\n\n\nMar 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 9. Clustering (Part 2)\n\n\nBFR Algorithm\n\n\n\n\n\nMar 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 9. Clustering (Part 3)\n\n\nBFR Algorithm: Process\n\n\n\n\n\nMar 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 9. Clustering (Part 4)\n\n\nGRGPF Algorithm\n\n\n\n\n\nMar 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 1. Introduction (Part 1)\n\n\nIntroduction\n\n\n\n\n\nMar 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 1. Introduction (Part 2)\n\n\nOptimization Overview\n\n\n\n\n\nMar 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 17. Deep Generative Models 1\n\n\nAutoencoders and athe VAE Toolkit\n\n\n\n\n\nMay 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 18. Deep Generative Models 2\n\n\nVariational Autoencoders\n\n\n\n\n\nMay 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 19. Deep Generative Models 3\n\n\nAutoregressive Models and GANs\n\n\n\n\n\nMay 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 2. Loss Function and Backpropagation (Part 1)\n\n\nClassification\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 2. Loss Function and Backpropagation (Part 2)\n\n\nScore Functions\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 2. Loss Function and Backpropagation (Part 3)\n\n\nLoss Functions\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 2. Loss Function and Backpropagation (Part 4)\n\n\nComputational Graphs\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 3. Neural Networks (Part 1)\n\n\nNeural Networks\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 3. Neural Networks (Part 2)\n\n\nConvolutional Neural Networks\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 3. Neural Networks (Part 3)\n\n\nPooling layer, Activation, Weight initialization\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 3. Neural Networks (Part 4)\n\n\nNormalization\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 3. Neural Networks (Part 5)\n\n\nRegularization\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 1)\n\n\nRNN\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 2)\n\n\nLSTM\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 3)\n\n\nAttention\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 4)\n\n\nTransformer\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 01. Introduction\n\n\nIntroduction\n\n\n\n\n\nMar 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 02. Linear Classifier\n\n\nLinear Classifier\n\n\n\n\n\nMar 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 03. Feature Representation\n\n\nFeature Representation\n\n\n\n\n\nMar 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 04. Kernel Methods\n\n\nKernel Methods\n\n\n\n\n\nMar 17, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 05. Support Vector Machines\n\n\nSupport Vector Machines\n\n\n\n\n\nMar 24, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 06. Support Vector Machines\n\n\nSupport Vector Machines\n\n\n\n\n\nMar 26, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 07. Generalization and Regularization\n\n\nSupport Vector Machines\n\n\n\n\n\nMar 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 08. Generalization and Regularization\n\n\nGeneralization and Regularization\n\n\n\n\n\nApr 2, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 09. Perceptron & Neural Networks\n\n\nPerceptron & Neural Networks\n\n\n\n\n\nApr 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 10. Generative Learning Algorithms\n\n\nGenerative Learning Algorithms\n\n\n\n\n\nApr 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 11. Gradient Descent\n\n\nGradient Descent\n\n\n\n\n\nApr 28, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 12. Gradient Descent\n\n\nGradient Descent\n\n\n\n\n\nApr 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 13. Regression\n\n\nRegression\n\n\n\n\n\nApr 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 14. Unsupervised Learning\n\n\nUnsupervised Learning\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 15. Unsupervised Learning\n\n\nUnsupervised Learning\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 1. Convex Analysis (Part 1)\n\n\nConvex Sets\n\n\n\n\n\nMar 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 1. Convex Analysis (Part 2)\n\n\nConvex Functions\n\n\n\n\n\nMar 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 1. Convex Analysis (Part 3)\n\n\nFirst-order and second-order characterizations of convex functions\n\n\n\n\n\nMar 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 10. Strongly Convex Functions (Part 1)\n\n\nStrongly Convex Functions\n\n\n\n\n\nApr 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 10. Strongly Convex Functions (Part 2)\n\n\nGradient descent for strongly convex functions\n\n\n\n\n\nApr 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 10. Strongly Convex Functions (Part 3)\n\n\nProjected gradient descent\n\n\n\n\n\nApr 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 11. Accelerated and Projection-free Methods (Part 1)\n\n\nLower bounds on the iteration complexity of gradient methods\n\n\n\n\n\nApr 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 11. Accelerated and Projection-free Methods (Part 2)\n\n\nAccelerated gradient method\n\n\n\n\n\nApr 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 11. Accelerated and Projection-free Methods (Part 3)\n\n\nProjection-free method\n\n\n\n\n\nApr 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 12. Proximal Gradient Descent (Part 1)\n\n\nProximal gradient descent\n\n\n\n\n\nApr 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 12. Proximal Gradient Descent (Part 2)\n\n\nConvergence of proximal gradient descent\n\n\n\n\n\nApr 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 12. Proximal Gradient Descent (Part 3)\n\n\nLASSO: Least Absolute Shrinkage and Selection Operator\n\n\n\n\n\nApr 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 12. Proximal Gradient Descent (Part 4)\n\n\nNesterov’s Acceleration and FISTA\n\n\n\n\n\nApr 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 12. Proximal Gradient Descent (Part 5)\n\n\nProximal point algorithm\n\n\n\n\n\nApr 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 13. Smooth Approximation of Nonsmooth Optimization (Part 1)\n\n\nSmooth approximation\n\n\n\n\n\nApr 20, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 13. Smooth Approximation of Nonsmooth Optimization (Part 2)\n\n\nFenchel conjugate\n\n\n\n\n\nApr 20, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 14. Moreau-Yosida Smoothing\n\n\nMoreau-Yosida Smoothing\n\n\n\n\n\nApr 27, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 15. Lagrangian Duality\n\n\nLagrangian Duality\n\n\n\n\n\nApr 29, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 16. Fenchel Duality and Dual Subgradient Methods (Part 1)\n\n\nSaddle point problem\n\n\n\n\n\nApr 29, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 16. Fenchel Duality and Dual Subgradient Methods (Part 2)\n\n\nLagrangian duality based on the Fenchel conjugate\n\n\n\n\n\nApr 29, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 17. Augmented Lagrangian Method\n\n\nAugmented Lagrangian Method\n\n\n\n\n\nMay 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 2. Introduction to Convex Optimization (Part 1)\n\n\nOperations Preserving Convexity\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 2. Introduction to Convex Optimization (Part 2)\n\n\nConvex Optimization Problem\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 2. Introduction to Convex Optimization (Part 3)\n\n\nConvex Optimization Applications\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 3. Linear Programming (Part 1)\n\n\nConvex Programming Hierarchy and Linear Programming\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 3. Linear Programming (Part 2)\n\n\nOptimization Problems Represented as Linear Programs\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 4. Simplex Method for Linear Programming (Part 1)\n\n\nLinear programming standard form\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 4. Simplex Method for Linear Programming (Part 2)\n\n\nSimplex Method\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 5. Simplex Method for Linear Programming (Part 1)\n\n\nTwo-Phase Simplex Algorithm\n\n\n\n\n\nMar 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 5. Simplex Method for Linear Programming (Part 2)\n\n\nSimplex Method for Infeasible and Unbounded Linear Programs\n\n\n\n\n\nMar 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 5. Simplex Method for Linear Programming (Part 3)\n\n\nSimplex Method Phase I Technical Details\n\n\n\n\n\nMar 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 5. Simplex Method for Linear Programming (Part 4)\n\n\nPhase II Technical Details\n\n\n\n\n\nMar 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 6. Convex Optimization Beyond Linear Programming (Part 1)\n\n\nQuadratic Programming\n\n\n\n\n\nMar 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 6. Convex Optimization Beyond Linear Programming (Part 2)\n\n\nSemidefinite Programming\n\n\n\n\n\nMar 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 6. Convex Optimization Beyond Linear Programming (Part 3)\n\n\nConic Programming\n\n\n\n\n\nMar 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 6. Convex Optimization Beyond Linear Programming (Part 4)\n\n\nSecond-order Cone Programming\n\n\n\n\n\nMar 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 7. Conic Duality (Part 1)\n\n\nConic duality theorem\n\n\n\n\n\nMar 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 7. Conic Duality (Part 2)\n\n\nOptimality conditions for convex minimization\n\n\n\n\n\nMar 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 8. Introduction to Gradient Descent (Part 1)\n\n\nIntroduction to gradient descent\n\n\n\n\n\nMar 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 8. Introduction to Gradient Descent (Part 2)\n\n\nConvergence of gradient descent\n\n\n\n\n\nMar 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 9. Gradient Descent for Smooth Functions (Part 1)\n\n\nConvergence of gradient descent for smooth functions\n\n\n\n\n\nApr 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 9. Gradient Descent for Smooth Functions (Part 2)\n\n\nSmooth functions\n\n\n\n\n\nApr 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification\n\n\n\n\n\n\n\n\nJan 15, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] Conformal Inference of Counterfactuals and Individual Treatment Effects\n\n\n\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] Conformal Meta-learners for Predictive Inference of Individual Treatment Effects\n\n\nCausal Inference에서 불확실성을 다루는 새로운 프레임워크: Conformal Prediction과 Meta-learner의 결합\n\n\n\n\n\nJan 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] DAG-GNN: DAG Structure Learning with Graph Neural Networks\n\n\nVAE와 GNN을 결합하여 비선형 관계와 다양한 데이터 타입을 포괄하는 새로운 DAG 구조 학습 프레임워크 제안\n\n\n\n\n\nJan 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] Doubly Robust Estimation of Policy-Relevant Causal Effects Under Interference\n\n\nPhiladelphia Beverage Tax 사례를 중심으로: 간섭 하에서의 이중 강건 DiD 추정 방법론\n\n\n\n\n\nFeb 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] Forecasting Treatment Responses Over Time Using Recurrent Marginal Structural Networks\n\n\nNeurIPS 2018: Time-dependent confounding 해결을 위한 Deep Learning 기반의 RMSN 모델 소개\n\n\n\n\n\nFeb 19, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] Structural Nested Mean Models for Assessing Time-Varying Effect Moderation\n\n\n종단적 데이터에서 시간에 따라 변화하는 치료 및 조절변수의 인과적 효과 분석\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[What If] Chapter 19. Time-Varying Treatments\n\n\n고정 처치(Fixed Treatment)를 넘어 시변 처치(Time-Varying Treatment)의 인과 효과를 정의하는 방법과 표기법(History Notation)에 대한 정리\n\n\n\n\n\nFeb 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[What If] Chapter 20. Treatment-Confounder Feedback\n\n\n시변 교란요인과 처치 간의 피드백 루프가 형성될 때 발생하는 인과추론의 구조적 문제\n\n\n\n\n\nFeb 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[What If] Chapter 21. G-Methods For Time-Varying Treatments\n\n\n시변 처리와 교란요인 피드백 상황에서의 인과 효과 추정\n\n\n\n\n\nFeb 10, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[What If] Chapter 22. Target Trial Emulation\n\n\nTarget Trial Emulation\n\n\n\n\n\nFeb 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[What If] Chapter 23. Causal Mediation\n\n\nHernán & Robins Chapter 23\n\n\n\n\n\nFeb 11, 2026\n\n\n유성현\n\n\n\n\n\nNo matching items"
+    "text": "[Causal Inference] 01. Introduction\n\n\nIntroduction to Causal Inference\n\n\n\n\n\nJan 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 02. Causal Models and Graphs (Part 2)\n\n\nStructural Causal Model (SCM), Markovian Factorization, and d-separation\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 02. Causal Models and Graphs (Part 1)\n\n\nStructural Causal Models (SCM), Causal Graphs, and Markovian Factorization\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 03. Identification of Causal Effects\n\n\n관측 데이터로부터 인과 효과를 계산할 수 있는가? (SCM, Truncated Factorization, Adjustment Formula)\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 1)\n\n\nIndentifiable and Non-identifiable Effects\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 2)\n\n\nCounfounding Bias\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 3)\n\n\nBack-door Criterion\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 4)\n\n\nInverse Probability Weighting\n\n\n\n\n\nJan 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 04. Confounding and Backdoor (Part 5)\n\n\nSimpson’s Paradox Simulation Using DoWhy: Stratification & Refutation\n\n\n\n\n\nJan 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 05. Adjustment Criterion (Part 1)\n\n\nBackdoor Criterion - Tightness of the Back-door Criterion\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 05. Adjustment Criterion (Part 2)\n\n\nAdjustment Criterion\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 05. Adjustment Criterion (Part 3)\n\n\nAlgorithm\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 05. Adjustment Criterion (Part 4)\n\n\nConditional Ignorability in Potential Outcome Framework\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 06. The Causal Calculus (Part 1)\n\n\nThree Examples\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 06. The Causal Calculus (Part 2)\n\n\nIdentification Approaches & Three Insights\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 06. The Causal Calculus (Part 3)\n\n\nCausal Calculus — A systematic approach for identification\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 06. The Causal Calculus (Part 4)\n\n\nBack to Simpson’s Paradox\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 07. An Algorithmic Approach to Identification (Part 1)\n\n\nFactorizing Observational Distributions\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 07. An Algorithmic Approach to Identification (Part 2)\n\n\nExpressing Causal Queries in terms of C-factors: Examples\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 07. An Algorithmic Approach to Identification (Part 3)\n\n\nA General Approach\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 1)\n\n\nPartial Identification Problem: Natural Bounds\n\n\n\n\n\nJan 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 2)\n\n\nPartial Identification Problem: Non-Compliance\n\n\n\n\n\nJan 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 3)\n\n\nBounds on Partially-observed Covariates\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 08. Partial Identification (Part 4)\n\n\nNon-Compliance Simulation\n\n\n\n\n\nJan 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 09. Linear Structural Causal Models (Part 1)\n\n\nIntroduction\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 09. Linear Structural Causal Models (Part 2)\n\n\nLinear Regression\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 09. Linear Structural Causal Models (Part 3)\n\n\nAlgorithmic Identification Methods\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 09. Linear Structural Causal Models (Part 4)\n\n\nIV to Instrumental Sets\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 09. Linear Structural Causal Models (Part 5)\n\n\nThe Method of Auxiliary Variables\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 10. Potential Outcome Framework (Part 1)\n\n\nIntroduction\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 10. Potential Outcome Framework (Part 2)\n\n\nRandomization and Observational Study\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 11. IPW and Its Variants (Part 1)\n\n\nIntroduction\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 11. IPW and Its Variants (Part 2)\n\n\nDoubly Robust Estimation\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 11A. Generalized Propensity Score\n\n\n일반화 성향점수\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 12. Matching\n\n\nNonparametric Imputation for Causal Inference: Exact, Nearest Neighbor, Propensity Score, and Balance Checking\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 1)\n\n\nIV under Linear Assumption\n\n\n\n\n\nJan 15, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 2)\n\n\nRandom Experiment wiht Noncompliance\n\n\n\n\n\nJan 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 13. IV (Part 3)\n\n\nLinear 2SLS vs. Deep IV\n\n\n\n\n\nJan 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 14. Regression Discontinuity Design\n\n\nDefinition, Indentification and Estimation of RDD\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15. DiD & SCM (Part 1)\n\n\nDifference in Differences\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15. DiD & SCM (Part 2)\n\n\nNonlinear DiD\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15. DiD & SCM (Part 3)\n\n\nSynthetic Control Method\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15A. SDiD (Part 1)\n\n\nSynthetic Difference-in-Differences\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15A. SDiD (Part 2)\n\n\nSynthetic Difference-in-Differences\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 15A. Staggered DiD\n\n\nStaggered Difference-in-Differences\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 1)\n\n\nIntroduction\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 2)\n\n\nConstraint-Based Structure Learning\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 3)\n\n\nExtensions of PC Algorithm & FCI\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 4)\n\n\nScore-Based Approach\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 5)\n\n\nParametric Approaches\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 16. Causal Discovery (Part 6)\n\n\nTime Series Causal Discovery\n\n\n\n\n\nJan 22, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 1)\n\n\nIntroduction\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 2)\n\n\nExperimental Conditions - General Identifiability\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 3)\n\n\nEnvironmental Conditions - Transportability, External Validity, Meta-Analysis\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 4)\n\n\nSampling Conditions - Recovering From Selection Bias\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 5)\n\n\nMissing Data\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] 17. Causal Data Science (Part 6)\n\n\nMeasurement\n\n\n\n\n\nJan 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 01.Single World Intervention Graphs (SWIGs)\n\n\nUnifying the Counterfactual and Graphical Approaches to Causality\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 02. Direct and Indirect Effects (Part 1)\n\n\nIntroduction\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 02. Direct and Indirect Effects (Part 2)\n\n\nMathematization\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 02. Direct and Indirect Effects (Part 3)\n\n\nNatural Indirect Effects\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 02. Direct and Indirect Effects (Part 4)\n\n\nPath-Specific Effects\n\n\n\n\n\nFeb 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 03. Soft-Intervention and σ-calculus (Part 1)\n\n\nMotivation for Soft-Interventions & Canonical Types of Regimes\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 03. Soft-Intervention and σ-calculus (Part 2)\n\n\nReduction & σ-calculus\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 03. Soft-Intervention and σ-calculus (Part 3)\n\n\nComparisons to do-calculus\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 03. Soft-Intervention and σ-calculus (Part 4)\n\n\nC-Factors and Soft-Intervention\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 04. Proximal Causal Inference (Part 01)\n\n\nSingle Proxy\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Causal Inference] Appendix 04. Proximal Causal Inference (Part 02)\n\n\nDouble Proxy\n\n\n\n\n\nFeb 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Convex Optimization] 1. Introduction (Part 1)\n\n\nMathematical Optimization\n\n\n\n\n\nMar 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Convex Optimization] 1. Introduction (Part 2)\n\n\nConvex Optimization\n\n\n\n\n\nMar 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Convex Optimization] 2. Convex Sets (Part 1)\n\n\nSome Standard Convex Sets\n\n\n\n\n\nMar 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Convex Optimization] 2. Convex Sets (Part 2)\n\n\nOperation That Preserve Convexity\n\n\n\n\n\nMar 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 10. Dimensionality Reduction (Part 1)\n\n\nDimensionality Reduction\n\n\n\n\n\nApr 2, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 10. Dimensionality Reduction (Part 2)\n\n\nEigenvalues and Eigenpairs\n\n\n\n\n\nApr 2, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 10. Dimensionality Reduction (Part 3)\n\n\nPower Iteration\n\n\n\n\n\nApr 2, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 10. Dimensionality Reduction (Part 4)\n\n\nPrincipal Component Analysis\n\n\n\n\n\nApr 2, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 11. Dimensionality Reduction (Part 1)\n\n\nSingular Value Decomposition\n\n\n\n\n\nApr 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 11. Dimensionality Reduction (Part 2)\n\n\nDimensionality Reduction with SVD\n\n\n\n\n\nApr 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 11. Dimensionality Reduction (Part 3)\n\n\nCUR Decomposition\n\n\n\n\n\nApr 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 12. Recommender Systems (Part 1)\n\n\nRecommender Systems\n\n\n\n\n\nApr 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 12. Recommender Systems (Part 2)\n\n\nContent-based Recommendation\n\n\n\n\n\nApr 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 12. Recommender Systems (Part 3)\n\n\nCollaborative Filtering\n\n\n\n\n\nApr 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 12. Recommender Systems (Part 4)\n\n\nThe Netflix Challenge\n\n\n\n\n\nApr 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 13. Recommender Systems (Part 1)\n\n\nUV Decomposition\n\n\n\n\n\nApr 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 13. Recommender Systems (Part 2)\n\n\nUV Decomposition as Machine Learning\n\n\n\n\n\nApr 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 13. Recommender Systems (Part 3)\n\n\nVariants of UV Decomposition\n\n\n\n\n\nApr 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 13. Recommender Systems (Part 4)\n\n\nDealing with Implicit Feedback\n\n\n\n\n\nApr 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 14. Link Analysis (Part 1)\n\n\nWeb Search as a Graph\n\n\n\n\n\nApr 21, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 14. Link Analysis (Part 2)\n\n\nPageRank: Idea\n\n\n\n\n\nApr 21, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 14. Link Analysis (Part 3)\n\n\nPageRank: Power Iteration\n\n\n\n\n\nApr 21, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 14. Link Analysis (Part 4)\n\n\nPageRank: Sparse Encoding\n\n\n\n\n\nApr 21, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 15. Link Analysis (Part 1)\n\n\nTopic-Specific PageRank\n\n\n\n\n\nApr 28, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 15. Link Analysis (Part 2)\n\n\nCommunity Detection\n\n\n\n\n\nApr 28, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 15. Link Analysis (Part 3)\n\n\nApproximate Personalized PageRank\n\n\n\n\n\nApr 28, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 16. Deep Learning (Part 1)\n\n\nDeep Learning\n\n\n\n\n\nApr 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 16. Deep Learning (Part 2)\n\n\nMulti-layer Perceptrons\n\n\n\n\n\nApr 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 16. Deep Learning (Part 3)\n\n\nBackpropagation\n\n\n\n\n\nApr 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 17. Deep Learning (Part 1)\n\n\nLearning Embeddings\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 17. Deep Learning (Part 2)\n\n\nWord2Vec\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 17. Deep Learning (Part 3)\n\n\nWord2Vec: Example\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 17. Deep Learning (Part 4)\n\n\nAutoencoder\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 18. ML On Graphs (Part 1)\n\n\nGraph Representation Learning\n\n\n\n\n\nMay 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 18. ML On Graphs (Part 2)\n\n\nDeepWalk\n\n\n\n\n\nMay 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 18. ML On Graphs (Part 3)\n\n\nNode2vec\n\n\n\n\n\nMay 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 19. ML On Graphs (Part 1)\n\n\nDeep Learning on Graphs\n\n\n\n\n\nMay 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 19. ML On Graphs (Part 2)\n\n\nGraph Neural Networks\n\n\n\n\n\nMay 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 19. ML On Graphs (Part 3)\n\n\nGraph Neural Networks: Layers\n\n\n\n\n\nMay 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 2. MapReduce (Part 1)\n\n\nDistributed Computing for Data Mining\n\n\n\n\n\nMar 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 2. MapReduce (Part 2)\n\n\nMapReduce: Basics\n\n\n\n\n\nMar 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 2. MapReduce (Part 3)\n\n\nMapReduce: Details\n\n\n\n\n\nMar 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 3. Spark (Part 1)\n\n\nOverview\n\n\n\n\n\nMar 10, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 3. Spark (Part 2)\n\n\nOperations\n\n\n\n\n\nMar 10, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 3. Spark (Part 3)\n\n\nImplementations\n\n\n\n\n\nMar 10, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 4. Frequent Itemsets (Part 1)\n\n\nFrequent Itemsets\n\n\n\n\n\nMar 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 4. Frequent Itemsets (Part 2)\n\n\nAssociation Rules\n\n\n\n\n\nMar 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 4. Frequent Itemsets (Part 3)\n\n\nFinding Frequent Pairs\n\n\n\n\n\nMar 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 4. Frequent Itemsets (Part 4)\n\n\nA-Priori Algorithm\n\n\n\n\n\nMar 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 5. Frequent Itemsets (Part 1)\n\n\nPCY Algorithm\n\n\n\n\n\nMar 17, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 5. Frequent Itemsets (Part 2)\n\n\nExtensions of PCY\n\n\n\n\n\nMar 17, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 5. Frequent Itemsets (Part 3)\n\n\nLimited-pass Algorithms\n\n\n\n\n\nMar 17, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 6. Finding Similar Items (Part 1)\n\n\nFinding Similar Items\n\n\n\n\n\nMar 19, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 6. Finding Similar Items (Part 2)\n\n\nShingling\n\n\n\n\n\nMar 19, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 6. Finding Similar Items (Part 3)\n\n\nMinhashing\n\n\n\n\n\nMar 19, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 6. Finding Similar Items (Part 4)\n\n\nMore on Minhashing\n\n\n\n\n\nMar 19, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 7. Finding Similar Items (Part 1)\n\n\nLocality-Sensitive Hashing\n\n\n\n\n\nMar 24, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 7. Finding Similar Items (Part 2)\n\n\nS-Curves\n\n\n\n\n\nMar 24, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 7. Finding Similar Items (Part 3)\n\n\nLSH Families\n\n\n\n\n\nMar 24, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 7. Finding Similar Items (Part 4)\n\n\nLSH with Other Distance Measures\n\n\n\n\n\nMar 24, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 8. Clustering (Part 1)\n\n\nClustering\n\n\n\n\n\nMar 26, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 8. Clustering (Part 2)\n\n\nHierarchical Clustering\n\n\n\n\n\nMar 26, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 8. Clustering (Part 3)\n\n\nK-means Clustering\n\n\n\n\n\nMar 26, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 9. Clustering (Part 1)\n\n\nCURE Algorithm\n\n\n\n\n\nMar 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 9. Clustering (Part 2)\n\n\nBFR Algorithm\n\n\n\n\n\nMar 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 9. Clustering (Part 3)\n\n\nBFR Algorithm: Process\n\n\n\n\n\nMar 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Data Mining] 9. Clustering (Part 4)\n\n\nGRGPF Algorithm\n\n\n\n\n\nMar 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 1. Introduction (Part 1)\n\n\nIntroduction\n\n\n\n\n\nMar 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 1. Introduction (Part 2)\n\n\nOptimization Overview\n\n\n\n\n\nMar 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 17. Deep Generative Models 1\n\n\nAutoencoders and athe VAE Toolkit\n\n\n\n\n\nMay 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 18. Deep Generative Models 2\n\n\nVariational Autoencoders\n\n\n\n\n\nMay 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 19. Deep Generative Models 3\n\n\nAutoregressive Models and GANs\n\n\n\n\n\nMay 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 2. Loss Function and Backpropagation (Part 1)\n\n\nClassification\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 2. Loss Function and Backpropagation (Part 2)\n\n\nScore Functions\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 2. Loss Function and Backpropagation (Part 3)\n\n\nLoss Functions\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 2. Loss Function and Backpropagation (Part 4)\n\n\nComputational Graphs\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 3. Neural Networks (Part 1)\n\n\nNeural Networks\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 3. Neural Networks (Part 2)\n\n\nConvolutional Neural Networks\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 3. Neural Networks (Part 3)\n\n\nPooling layer, Activation, Weight initialization\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 3. Neural Networks (Part 4)\n\n\nNormalization\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 3. Neural Networks (Part 5)\n\n\nRegularization\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 1)\n\n\nRNN\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 2)\n\n\nLSTM\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 3)\n\n\nAttention\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Deep Learning] 4. RNN, LSTM, Attention, Transformer (Part 4)\n\n\nTransformer\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 01. Introduction\n\n\nIntroduction\n\n\n\n\n\nMar 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 02. Linear Classifier\n\n\nLinear Classifier\n\n\n\n\n\nMar 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 03. Feature Representation\n\n\nFeature Representation\n\n\n\n\n\nMar 12, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 04. Kernel Methods\n\n\nKernel Methods\n\n\n\n\n\nMar 17, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 05. Support Vector Machines\n\n\nSupport Vector Machines\n\n\n\n\n\nMar 24, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 06. Support Vector Machines\n\n\nSupport Vector Machines\n\n\n\n\n\nMar 26, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 07. Generalization and Regularization\n\n\nSupport Vector Machines\n\n\n\n\n\nMar 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 08. Generalization and Regularization\n\n\nGeneralization and Regularization\n\n\n\n\n\nApr 2, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 09. Perceptron & Neural Networks\n\n\nPerceptron & Neural Networks\n\n\n\n\n\nApr 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 10. Generative Learning Algorithms\n\n\nGenerative Learning Algorithms\n\n\n\n\n\nApr 14, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 11. Gradient Descent\n\n\nGradient Descent\n\n\n\n\n\nApr 28, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 12. Gradient Descent\n\n\nGradient Descent\n\n\n\n\n\nApr 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 13. Regression\n\n\nRegression\n\n\n\n\n\nApr 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 14. Unsupervised Learning\n\n\nUnsupervised Learning\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Machine Learning] 15. Unsupervised Learning\n\n\nUnsupervised Learning\n\n\n\n\n\nMay 7, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 1. Convex Analysis (Part 1)\n\n\nConvex Sets\n\n\n\n\n\nMar 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 1. Convex Analysis (Part 2)\n\n\nConvex Functions\n\n\n\n\n\nMar 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 1. Convex Analysis (Part 3)\n\n\nFirst-order and second-order characterizations of convex functions\n\n\n\n\n\nMar 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 10. Strongly Convex Functions (Part 1)\n\n\nStrongly Convex Functions\n\n\n\n\n\nApr 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 10. Strongly Convex Functions (Part 2)\n\n\nGradient descent for strongly convex functions\n\n\n\n\n\nApr 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 10. Strongly Convex Functions (Part 3)\n\n\nProjected gradient descent\n\n\n\n\n\nApr 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 11. Accelerated and Projection-free Methods (Part 1)\n\n\nLower bounds on the iteration complexity of gradient methods\n\n\n\n\n\nApr 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 11. Accelerated and Projection-free Methods (Part 2)\n\n\nAccelerated gradient method\n\n\n\n\n\nApr 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 11. Accelerated and Projection-free Methods (Part 3)\n\n\nProjection-free method\n\n\n\n\n\nApr 8, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 12. Proximal Gradient Descent (Part 1)\n\n\nProximal gradient descent\n\n\n\n\n\nApr 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 12. Proximal Gradient Descent (Part 2)\n\n\nConvergence of proximal gradient descent\n\n\n\n\n\nApr 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 12. Proximal Gradient Descent (Part 3)\n\n\nLASSO: Least Absolute Shrinkage and Selection Operator\n\n\n\n\n\nApr 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 12. Proximal Gradient Descent (Part 4)\n\n\nNesterov’s Acceleration and FISTA\n\n\n\n\n\nApr 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 12. Proximal Gradient Descent (Part 5)\n\n\nProximal point algorithm\n\n\n\n\n\nApr 13, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 13. Smooth Approximation of Nonsmooth Optimization (Part 1)\n\n\nSmooth approximation\n\n\n\n\n\nApr 20, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 13. Smooth Approximation of Nonsmooth Optimization (Part 2)\n\n\nFenchel conjugate\n\n\n\n\n\nApr 20, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 14. Moreau-Yosida Smoothing\n\n\nMoreau-Yosida Smoothing\n\n\n\n\n\nApr 27, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 15. Lagrangian Duality\n\n\nLagrangian Duality\n\n\n\n\n\nApr 29, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 16. Fenchel Duality and Dual Subgradient Methods (Part 1)\n\n\nSaddle point problem\n\n\n\n\n\nApr 29, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 16. Fenchel Duality and Dual Subgradient Methods (Part 2)\n\n\nLagrangian duality based on the Fenchel conjugate\n\n\n\n\n\nApr 29, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 17. Augmented Lagrangian Method\n\n\nAugmented Lagrangian Method\n\n\n\n\n\nMay 4, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 2. Introduction to Convex Optimization (Part 1)\n\n\nOperations Preserving Convexity\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 2. Introduction to Convex Optimization (Part 2)\n\n\nConvex Optimization Problem\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 2. Introduction to Convex Optimization (Part 3)\n\n\nConvex Optimization Applications\n\n\n\n\n\nMar 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 3. Linear Programming (Part 1)\n\n\nConvex Programming Hierarchy and Linear Programming\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 3. Linear Programming (Part 2)\n\n\nOptimization Problems Represented as Linear Programs\n\n\n\n\n\nMar 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 4. Simplex Method for Linear Programming (Part 1)\n\n\nLinear programming standard form\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 4. Simplex Method for Linear Programming (Part 2)\n\n\nSimplex Method\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 5. Simplex Method for Linear Programming (Part 1)\n\n\nTwo-Phase Simplex Algorithm\n\n\n\n\n\nMar 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 5. Simplex Method for Linear Programming (Part 2)\n\n\nSimplex Method for Infeasible and Unbounded Linear Programs\n\n\n\n\n\nMar 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 5. Simplex Method for Linear Programming (Part 3)\n\n\nSimplex Method Phase I Technical Details\n\n\n\n\n\nMar 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 5. Simplex Method for Linear Programming (Part 4)\n\n\nPhase II Technical Details\n\n\n\n\n\nMar 18, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 6. Convex Optimization Beyond Linear Programming (Part 1)\n\n\nQuadratic Programming\n\n\n\n\n\nMar 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 6. Convex Optimization Beyond Linear Programming (Part 2)\n\n\nSemidefinite Programming\n\n\n\n\n\nMar 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 6. Convex Optimization Beyond Linear Programming (Part 3)\n\n\nConic Programming\n\n\n\n\n\nMar 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 6. Convex Optimization Beyond Linear Programming (Part 4)\n\n\nSecond-order Cone Programming\n\n\n\n\n\nMar 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 7. Conic Duality (Part 1)\n\n\nConic duality theorem\n\n\n\n\n\nMar 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 7. Conic Duality (Part 2)\n\n\nOptimality conditions for convex minimization\n\n\n\n\n\nMar 25, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 8. Introduction to Gradient Descent (Part 1)\n\n\nIntroduction to gradient descent\n\n\n\n\n\nMar 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 8. Introduction to Gradient Descent (Part 2)\n\n\nConvergence of gradient descent\n\n\n\n\n\nMar 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 9. Gradient Descent for Smooth Functions (Part 1)\n\n\nConvergence of gradient descent for smooth functions\n\n\n\n\n\nApr 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Optimization] 9. Gradient Descent for Smooth Functions (Part 2)\n\n\nSmooth functions\n\n\n\n\n\nApr 1, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification\n\n\n\n\n\n\n\n\nJan 15, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] Conformal Inference of Counterfactuals and Individual Treatment Effects\n\n\n\n\n\n\n\n\nJan 23, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] Conformal Meta-learners for Predictive Inference of Individual Treatment Effects\n\n\nCausal Inference에서 불확실성을 다루는 새로운 프레임워크: Conformal Prediction과 Meta-learner의 결합\n\n\n\n\n\nJan 30, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] DAG-GNN: DAG Structure Learning with Graph Neural Networks\n\n\nVAE와 GNN을 결합하여 비선형 관계와 다양한 데이터 타입을 포괄하는 새로운 DAG 구조 학습 프레임워크 제안\n\n\n\n\n\nJan 31, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] Doubly Robust Estimation of Policy-Relevant Causal Effects Under Interference\n\n\nPhiladelphia Beverage Tax 사례를 중심으로: 간섭 하에서의 이중 강건 DiD 추정 방법론\n\n\n\n\n\nFeb 6, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] Forecasting Treatment Responses Over Time Using Recurrent Marginal Structural Networks\n\n\nNeurIPS 2018: Time-dependent confounding 해결을 위한 Deep Learning 기반의 RMSN 모델 소개\n\n\n\n\n\nFeb 19, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[Paper Review] Structural Nested Mean Models for Assessing Time-Varying Effect Moderation\n\n\n종단적 데이터에서 시간에 따라 변화하는 치료 및 조절변수의 인과적 효과 분석\n\n\n\n\n\nMar 16, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[What If] Chapter 19. Time-Varying Treatments\n\n\n고정 처치(Fixed Treatment)를 넘어 시변 처치(Time-Varying Treatment)의 인과 효과를 정의하는 방법과 표기법(History Notation)에 대한 정리\n\n\n\n\n\nFeb 5, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[What If] Chapter 20. Treatment-Confounder Feedback\n\n\n시변 교란요인과 처치 간의 피드백 루프가 형성될 때 발생하는 인과추론의 구조적 문제\n\n\n\n\n\nFeb 9, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[What If] Chapter 21. G-Methods For Time-Varying Treatments\n\n\n시변 처리와 교란요인 피드백 상황에서의 인과 효과 추정\n\n\n\n\n\nFeb 10, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[What If] Chapter 22. Target Trial Emulation\n\n\nTarget Trial Emulation\n\n\n\n\n\nFeb 11, 2026\n\n\n유성현\n\n\n\n\n\n\n\n\n\n\n\n\n[What If] Chapter 23. Causal Mediation\n\n\nHernán & Robins Chapter 23\n\n\n\n\n\nFeb 11, 2026\n\n\n유성현\n\n\n\n\n\nNo matching items"
   }
 ]

@@ -1,0 +1,151 @@
+---
+title: "[Optimization] 17. Augmented Lagrangian Method (Part 2)"
+description: "Augmented Lagrangian method"
+author: "유성현"
+date: "2026-05-04"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. Introduction
+
+* 이전 포스트에서는 분리 가능한 문제(Separable problems)를 병렬적으로 풀기 위해 고안된 **쌍대 기울기법(Dual gradient method)**에 대해 알아보았습니다. 하지만 쌍대 기울기법은 목적 함수가 엄격하게 매끄럽지(smooth) 않을 경우 수렴 속도가 느려지거나 불안정해질 수 있다는 한계를 가집니다.
+
+* 이를 극복하기 위해 서울대학교 이다빈 교수님의 최적화 강의(Lecture #17) 후반부에서는 **증강 라그랑지안 기법(Augmented Lagrangian Method, ALM)**을 소개합니다. 본 포스트에서는 단순한 패널티 함수의 추가를 넘어, 쌍대 공간(Dual space)에서의 **근접점 알고리즘(Proximal Point Algorithm)**과 **Moreau-Yosida 평활화(Smoothing)** 관점에서 ALM이 어떻게 수학적으로 자연스럽게 유도되는지 심도 있게 파헤쳐 보겠습니다.
+
+---
+
+# 2. Dual Formulation Revisited
+
+* 먼저 우리가 풀고자 하는 제약이 있는 원래의 볼록 최적화 문제(Primal problem)를 다시 상기해 봅시다.
+
+$$minimize \quad f(x)$$
+$$subject\;to \quad Ax = b$$
+
+* 이 문제에 대한 쌍대 문제(Dual problem)는 라그랑지안 승수 $\mu$를 활용하여 다음과 같이 도출됨을 이전 파트에서 확인했습니다.
+
+$$maximize \quad -f^*(-A^\top\mu) - b^\top\mu$$
+
+* 이는 목적 함수에 음수를 취해 다음과 같은 동치의 최소화 문제로 변환할 수 있습니다.
+
+$$minimize \quad f^*(-A^\top\mu) + b^\top\mu$$
+
+* 이전 섹션의 쌍대 서브그라디언트 방법(Dual subgradient method)은 이 최소화 문제를 서브그라디언트 스텝을 통해 직접 푸는 방식이었습니다. 이제 우리는 이 쌍대 문제의 구조를 개선하는 완전히 새로운 알고리즘적 접근을 시도해 보겠습니다.
+
+---
+
+# 3. Proximal Point Algorithm Applied to the Dual
+
+* 목적 함수가 미분 불가능할 때 수렴 안정성을 높이기 위해 널리 사용되는 방법이 바로 **근접점 알고리즘(Proximal point algorithm)**입니다. 위에서 정의한 쌍대 최소화 문제에 근접점 알고리즘을 적용하면, 업데이트 규칙은 다음과 같이 이전 단계의 변수 $\mu_t$에서 너무 멀어지지 않도록 이차 패널티(Quadratic penalty) 항을 추가한 부분 문제를 푸는 형태가 됩니다.
+
+$$\mu_{t+1} = argmin_{\mu} \left\{ f^*(-A^\top\mu) + b^\top\mu + \frac{1}{2\eta}||\mu - \mu_t||_2^2 \right\}$$
+
+* 여기서 $\eta > 0$는 스텝 사이즈를 결정하는 파라미터입니다. 
+
+---
+
+# 4. Deriving the Augmented Lagrangian Method (ALM)
+
+* 이제 위 근접점 알고리즘의 업데이트 식을 전개하여 원래의 원문제 변수 $x$ 공간과 연결해 보겠습니다.
+
+## 4.1. 최적성 조건 (Optimality Condition)
+
+* $\mu_{t+1}$이 위 부분 문제의 최적해이므로, 페르마의 정리(최소점에서 서브그라디언트가 0을 포함)에 의해 다음 최적성 조건이 성립합니다.
+
+$$0 \in -A\partial f^*(-A^\top\mu_{t+1}) + b + \frac{1}{\eta}(\mu_{t+1} - \mu_t)$$
+
+* 이를 $\mu_{t+1}$에 대해 정리하면, 어떤 $x_t \in \partial f^*(-A^\top\mu_{t+1})$ 에 대하여 다음 식을 만족합니다.
+
+$$\mu_{t+1} = \mu_t + \eta(Ax_t - b)$$
+
+## 4.2. 볼록 켤레(Convex Conjugate) 성질의 적용
+
+* 여기서 켤레 함수의 중요한 성질인 $x_t \in \partial f^*(-A^\top\mu_{t+1}) \iff -A^\top\mu_{t+1} \in \partial f(x_t)$ 를 활용합니다. 
+* 이를 풀어서 쓰면 다음과 같이 전개됩니다.
+
+$$0 \in \partial f(x_t) + A^\top\mu_{t+1}$$
+
+* 위에서 구한 $\mu_{t+1}$의 식을 대입해 봅시다.
+
+$$\iff 0 \in \partial f(x_t) + A^\top \big(\mu_t + \eta(Ax_t - b)\big)$$
+$$\iff 0 \in \partial f(x_t) + A^\top\mu_t + \eta A^\top(Ax_t - b)$$
+
+* 이 식을 가만히 살펴보면, 어떤 목적 함수를 $x$에 대해 미분(또는 서브그라디언트를 취함)하여 0이 되는 조건과 정확히 일치합니다. 이를 다시 $x_t$를 구하는 최소화 문제로 되돌리면 다음과 같습니다.
+
+$$\iff x_t \in argmin_x \left\{ f(x) + \mu_t^\top(Ax - b) + \frac{\eta}{2}||Ax - b||_2^2 \right\}$$
+
+## 4.3. Algorithm: Augmented Lagrangian Method
+
+* 위의 유도 과정을 하나의 알고리즘으로 묶으면, 놀랍게도 이것이 바로 **증강 라그랑지안 기법(Augmented Lagrangian Method, ALM)**과 완벽히 동일해집니다.
+
+### Algorithm 2: Augmented Lagrangian Method
+* **초기화:** $\mu_1$ 설정
+* **반복 (For $t=1,...,T$ do):**
+    * 1. 원문제 변수 $x$ 업데이트 (Primal Update):
+       $$x_t \in argmin_x \left\{ f(x) + \mu_t^\top(Ax - b) + \frac{\eta}{2}||Ax - b||_2^2 \right\}$$
+    * 2. 쌍대 승수 $\mu$ 업데이트 (Dual Update):
+       $$\mu_{t+1} = \mu_t + \eta(Ax_t - b)$$
+* **종료 (End for)**
+
+* **핵심 인사이트:** 증강 라그랑지안 기법(ALM)은 사실 원문제에 다음과 같이 인위적인 이차 패널티(Quadratic penalty)를 추가한 문제에 쌍대 기울기법을 적용한 것과 같습니다.
+
+$$minimize \quad f(x) + \frac{\eta}{2}||Ax - b||_2^2$$
+$$subject\;to \quad Ax = b$$
+
+* 이차 패널티 항 $\frac{\eta}{2}||Ax - b||_2^2$이 더해짐으로써 목적 함수가 **강볼록(Strongly convex)**해지고, 이는 쌍대 함수가 **매끄러워지는(Smooth)** 결과를 낳습니다. 결국 ALM은 쌍대 공간에서 미분 가능성을 확보하여 수렴을 가속화하는 탁월한 전략입니다.
+
+---
+
+# 5. Moreau-Yosida Smoothing of the Dual
+
+* 앞선 섹션 4에서 우리는 **쌍대 문제에 근접점 알고리즘을 적용하는 것**이 **패널티가 추가된 원문제에 쌍대 기울기법을 적용하는 것**과 동치임을 보였습니다. 
+* 수학 최적화에서 근접점 알고리즘은 **Moreau-Yosida 평활화(Smoothing)** 함수에 기울기법을 적용하는 것과 같다는 널리 알려진 사실이 있습니다. 그렇다면, 여기서 자연스러운 질문이 생깁니다.
+
+> "증강된 원문제(Augmented primal problem)의 쌍대 문제는 원문제의 쌍대 문제(Original dual problem)를 Moreau-Yosida 평활화한 것과 동일한가?"
+
+* 이 우아한 수학적 대칭성을 증명해 봅시다.
+
+## 5.1. 원래 쌍대 문제의 Moreau-Yosida 평활화
+
+* 원문제의 쌍대 목적 함수를 $h(\mu) = f^*(-A^\top\mu) + b^\top\mu$ 라고 합시다. 이 $h(\mu)$에 대한 파라미터 $\eta$의 Moreau-Yosida 평활화 함수 $h_\eta(\mu)$는 다음과 같이 정의됩니다 (하한 회선, Infimal convolution).
+
+$$h_\eta(\mu) = \inf_u \left\{ h(u) + \frac{1}{2\eta}||u - \mu||_2^2 \right\} = \inf_u \left\{ f^*(-A^\top u) + b^\top u + \frac{1}{2\eta}||u - \mu||_2^2 \right\}$$
+
+* 우리는 이제 $min\{h_\eta(\mu)\}$를 푸는 것이 증강된 원문제의 쌍대 문제를 푸는 것과 같음을 보일 것입니다.
+
+## 5.2. $h_\eta(\mu)$의 쌍대화 (Dualizing the Smoothed Problem)
+
+* 최소화 문제 $\min h_\eta(\mu)$를 다시 쌍대화해 보겠습니다. 이를 형태적으로 맞추기 위해 억지로 제약조건을 도입하면 다음과 같습니다.
+$$minimize \quad h_\eta(-(-I)^\top\mu) + 0^\top\mu$$
+
+* 펜첼 쌍대성(Fenchel duality)에 의해, 이 문제의 쌍대 문제는 새로운 변수 $y$에 대해 다음과 같이 주어집니다.
+$$minimize \quad h_\eta^*(y) \quad subject\;to \quad -y = 0$$
+
+## 5.3. 켤레 함수의 계산과 결론
+
+* Moreau-Yosida 평활화 함수의 볼록 켤레는 매우 아름다운 성질을 갖습니다. 평활화 함수의 켤레 $h_\eta^*(y)$는 원래 함수의 켤레 $h^*(y)$에 이차항을 더한 것과 정확히 같습니다.
+$$h_\eta^*(y) = h^*(y) + \frac{\eta}{2}||y||_2^2$$
+
+* 여기서 원래 쌍대 함수 $h(\mu)$의 켤레 $h^*(y)$를 풀어봅시다.
+$$h^*(y) = \sup_\mu \{ y^\top\mu - f^*(-A^\top\mu) - b^\top\mu \} = \sup_\mu \{ -f^*(-A^\top\mu) - (b-y)^\top\mu \}$$
+
+* 이 식은 정확히 제약 조건이 $Ax = b-y$인 원래의 Primal 문제의 라그랑지안 쌍대 함수입니다. **강한 쌍대성(Strong duality)**이 성립한다고 가정하면, 이는 원문제의 해와 같습니다.
+$$h^*(y) = \inf_x \{ f(x) : Ax = b-y \}$$
+
+* 따라서 $h_\eta^*(y)$는 다음과 같이 정리됩니다.
+$$h_\eta^*(y) = \inf_x \{ f(x) : y = b - Ax \} + \frac{\eta}{2}||y||_2^2$$
+
+* 우리의 쌍대 문제는 제약 조건 $-y = 0$ (즉, $y=0$)을 가지고 있었습니다. 
+* $y = b - Ax$ 와 $y=0$ 을 모두 만족하도록 식을 결합하면 최종적으로 다음의 최소화 문제가 도출됩니다.
+
+$$minimize \quad f(x) + \frac{\eta}{2}||b - Ax||_2^2$$
+$$subject\;to \quad Ax = b$$
+
+* 이 결과는 정확히 섹션 4에서 살펴본 **증강된 원문제(Augmented Primal Problem)**입니다!
+* 즉, 쌍대 공간에서 Moreau-Yosida 평활화를 통해 매끄럽게 만드는 작업이, 원문제 공간에서는 $||Ax-b||_2^2$ 라는 이차 패널티를 더해 강볼록하게 만드는 작업과 완벽히 동전의 양면처럼 수학적으로 연결되어 있음을 증명한 것입니다.

@@ -10,7 +10,590 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>스흐의 공부 블로그</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Mon, 18 May 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Wed, 20 May 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>[Data Mining] 21. Time Series Forecasting (Part 1)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.1/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="introduction" class="level1">
+<h1>1. Introduction</h1>
+<ul>
+<li>시계열 예측(Time Series Forecasting)은 과거의 데이터를 기반으로 미래의 패턴을 추론하는 중요한 태스크입니다. 본 포스트에서는 가장 단순한 형태인 선형 회귀(Linear Regression)에서 출발하여, 이를 심층 신경망(Multi-layer Perceptrons, MLPs)으로 일반화하는 과정을 살펴봅니다. 더 나아가, 시계열 데이터가 가지는 순차적(sequential) 특성을 효과적으로 모델링하기 위해 상태 공간 모델(State-Space Model, SSM)의 개념을 신경망에 도입한 <strong>순환 신경망(Recurrent Neural Networks, RNN)</strong>의 구조와 특징을 수학적 수식과 함께 상세히 다루겠습니다.</li>
+</ul>
+<hr>
+</section>
+<section id="선형-회귀에서-다층-퍼셉트론mlp으로의-확장" class="level1">
+<h1>2. 선형 회귀에서 다층 퍼셉트론(MLP)으로의 확장</h1>
+<section id="선형-회귀-linear-regression의-재해석" class="level2">
+<h2 class="anchored" data-anchor-id="선형-회귀-linear-regression의-재해석">2.1. 선형 회귀 (Linear Regression)의 재해석</h2>
+<ul>
+<li>시계열 예측을 위한 가장 기본적인 모델은 선형 회귀입니다. 신경망의 관점에서 선형 회귀는 단일 뉴런(single neuron)으로 간주할 수 있습니다. 특정 시점 <img src="https://latex.codecogs.com/png.latex?t">에서의 입력 피처(feature)를 <img src="https://latex.codecogs.com/png.latex?x_%7Bt%7D">라고 할 때, 출력 예측값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bz%7D_%7Bt%7D">는 가중치(weight) 벡터 <img src="https://latex.codecogs.com/png.latex?w">와 편향(bias) <img src="https://latex.codecogs.com/png.latex?b">의 선형 결합으로 표현됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Chat%7Bz%7D_%7Bt%7D%20=%20w%5E%7B%5Ctop%7Dx_%7Bt%7D%20+%20b"></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.1/images/linear_regression.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 선형 회귀를 단일 뉴런의 나열로 표현한 도식. 파란색 실선은 시계열 데이터의 흐름을 나타내며, 하단의 하늘색 원형 노드들은 각각 독립적인 단일 뉴런을 의미합니다. 각 시점마다 입력 <img src="https://latex.codecogs.com/png.latex?x_1,%20x_2,%20x_3">가 주어지고 이를 선형 결합하여 독립적인 Output(주황색 점에 대응)을 산출합니다. 노드들 사이에 가로축(시간축) 방향의 연결 고리가 없어 시점 간의 정보 교환이 이루어지지 않음을 명확히 보여줍니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>위 그림에서 보듯, 선형 회귀는 각 시점의 데이터를 독립적으로 처리하므로, 과거의 정보가 현재의 예측에 직접적으로 전달되지 않는 한계를 지닙니다.</li>
+</ul>
+</section>
+<section id="다층-퍼셉트론-mlps을-통한-일반화" class="level2">
+<h2 class="anchored" data-anchor-id="다층-퍼셉트론-mlps을-통한-일반화">2.2. 다층 퍼셉트론 (MLPs)을 통한 일반화</h2>
+<ul>
+<li>선형 회귀의 단순한 맵핑(mapping)을 <strong>심층 신경망(Deep Neural Network)</strong>으로 일반화하여 모델의 표현력을 비약적으로 높일 수 있습니다. 이제 출력 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bz%7D_%7Bt%7D">는 입력 <img src="https://latex.codecogs.com/png.latex?x_%7Bt%7D">에 대한 임의의 비선형 함수 <img src="https://latex.codecogs.com/png.latex?f">를 통해 모델링됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Chat%7Bz%7D_%7Bt%7D%20=%20f(x_%7Bt%7D)"></p>
+<ul>
+<li>함수 <img src="https://latex.codecogs.com/png.latex?f">를 다층 퍼셉트론(MLP)으로 구성하면, 모델은 여러 은닉층(hidden layers)을 거치며 복잡한 패턴을 학습하게 됩니다. 이를 수식으로 전개하면 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?z_%7Bt%7D%20=%20%5Csigma%5Cleft(w_%7Bl%7D%5E%7B%5Ctop%7D%5Cleft(%5Csigma%5Cleft(W_%7Bl-1%7D%5E%7B%5Ctop%7D%5Cleft(%5Cdots%20W_%7B0%7D%5E%7B%5Ctop%7Dx_%7Bt%7D%5Cright)%5Cright)%5Cright)%5Cright)%20:=%20%5Ctext%7BDEEP-NET%7D(x_%7Bt%7D)"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?W_%7Bk%7D">는 <img src="https://latex.codecogs.com/png.latex?k">번째 층의 가중치 행렬이며, <img src="https://latex.codecogs.com/png.latex?%5Csigma">는 비선형 활성화 함수(Activation function, 예: ReLU, Sigmoid 등)를 의미합니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.1/images/mlp_generalization.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: MLP를 통해 선형 회귀를 일반화한 도식. 구조 자체는 이전의 선형 회귀(단일 뉴런) 도식과 유사하게 시점 간 연결이 없는 독립적 형태를 취하고 있으나, 하단의 수식을 통해 각 노드가 단순한 선형 결합이 아닌 여러 층의 비선형 변환(<img src="https://latex.codecogs.com/png.latex?%5Csigma">)이 중첩된 심층 신경망(DEEP-NET) 연산을 수행하고 있음을 보여줍니다.</figcaption>
+</figure>
+</div>
+<section id="mlps의-장단점" class="level3">
+<h3 class="anchored" data-anchor-id="mlps의-장단점">2.2.1. MLPs의 장단점</h3>
+<ul>
+<li><p>MLP를 시계열 분석에 도입할 경우 다음과 같은 트레이드오프가 발생합니다.</p></li>
+<li><p><strong>장점 (Advantages):</strong></p>
+<ul>
+<li>변수 간의 복잡한 비선형 관계를 학습할 수 있습니다.</li>
+<li>도메인 지식에 의존하는 수작업 특성 공학(Feature engineering)의 필요성을 크게 줄여줍니다.</li>
+</ul></li>
+<li><p><strong>단점 (Disadvantages):</strong></p>
+<ul>
+<li>충분한 패턴 학습을 위해 선형 회귀보다 훨씬 더 많은 양의 훈련 데이터가 요구됩니다.</li>
+<li>과적합 방지를 위한 정규화(regularization) 등 세심한 튜닝이 필수적입니다.</li>
+<li>입력 데이터의 스케일링(scaling)에 매우 민감합니다.</li>
+<li>모델 파라미터 증가로 인해 더 많은 컴퓨팅 자원과 시간이 소요됩니다.</li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="순환-모델recurrent-models을-향하여" class="level1">
+<h1>3. 순환 모델(Recurrent Models)을 향하여</h1>
+<ul>
+<li>MLP는 강력한 비선형 표현력을 제공하지만, 여전히 각 시점을 독립적으로 처리하므로 시계열 고유의 <strong>순차적(sequential) 관계</strong>를 자연스럽게 반영하지 못합니다. 과거의 상태가 현재에 미치는 영향을 모델링하기 위해, 전통적인 통계학의 <strong>상태 공간 모델(State-Space Model, SSM)</strong> 구조를 살펴봅니다.</li>
+</ul>
+<section id="상태-공간-모델-state-space-model" class="level2">
+<h2 class="anchored" data-anchor-id="상태-공간-모델-state-space-model">3.1. 상태 공간 모델 (State-Space Model)</h2>
+<ul>
+<li>상태 공간 모델에서는 겉으로 관측되지 않는 잠재 상태(latent state) <img src="https://latex.codecogs.com/png.latex?l_t">가 존재하며, 이 상태가 시간에 따라 전이(transition)된다고 가정합니다.
+<ul>
+<li><strong>상태 전이 (State Transition):</strong> 과거의 상태 <img src="https://latex.codecogs.com/png.latex?l_%7Bt-1%7D">에 노이즈 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon_t">가 더해져 현재 상태 <img src="https://latex.codecogs.com/png.latex?l_t">가 형성됩니다. <img src="https://latex.codecogs.com/png.latex?l_%7Bt%7D%20=%20l_%7Bt-1%7D%20+%20%5Calpha%20%5Ccdot%20%5Cepsilon_%7Bt%7D"></li>
+<li><strong>관측/출력 (Observation):</strong> 현재 상태 <img src="https://latex.codecogs.com/png.latex?l_t">와 현재 입력 <img src="https://latex.codecogs.com/png.latex?x_t">의 선형 결합으로 최종 관측값 <img src="https://latex.codecogs.com/png.latex?z_t">가 도출됩니다. <img src="https://latex.codecogs.com/png.latex?z_%7Bt%7D%20=%20v%5E%7B%5Ctop%7Dl_%7Bt%7D%20+%20w%5E%7B%5Ctop%7Dx_%7Bt%7D%20+%20%5Cepsilon_%7Bt%7D"></li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.1/images/ssm_sequence.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 상태 공간 모델(SSM)의 시퀀스 흐름도. 하단의 연두색 사각형 노드(<img src="https://latex.codecogs.com/png.latex?l_%7Bt-1%7D,%20l_t">)들이 가로 화살표로 연결되어 상태(state)가 시간에 따라 순차적으로 전이됨을 보여줍니다. 각 시점의 상태 <img src="https://latex.codecogs.com/png.latex?l_t">는 외부 입력 피처 <img src="https://latex.codecogs.com/png.latex?x_1,%20x_2,%20x_3">와 결합되어 상단의 Output으로 연결되며, 이전 시간의 정보가 계속해서 다음 시간으로 흐르는 구조(Recurrent)를 시각적으로 나타냅니다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+</section>
+<section id="순환-신경망-recurrent-neural-networks-rnns" class="level1">
+<h1>4. 순환 신경망 (Recurrent Neural Networks, RNNs)</h1>
+<ul>
+<li>상태 공간 모델(SSM)이 보여준 <strong>‘과거 상태의 순차적 전이’</strong>라는 아이디어를, 다층 퍼셉트론(MLP)의 <strong>‘비선형 함수 매핑’</strong>과 결합한 것이 바로 순환 신경망(RNN)입니다.</li>
+</ul>
+<section id="ssm과-rnn의-구조적-비교" class="level2">
+<h2 class="anchored" data-anchor-id="ssm과-rnn의-구조적-비교">4.1. SSM과 RNN의 구조적 비교</h2>
+<ul>
+<li>두 모델은 과거의 정보(상태)를 현재로 전달한다는 기본 철학을 공유하지만, 전이 방식과 수식 구조에서 큰 차이를 보입니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.1/images/ssm_vs_rnn_comparison.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 상태 공간 모델(SSM, 좌측)과 순환 신경망(RNN, 우측)의 비교 도식. 좌측의 SSM은 <img src="https://latex.codecogs.com/png.latex?l_t">에 관한 선형 전이 식을 갖는 반면, 우측의 RNN은 은닉 상태 <img src="https://latex.codecogs.com/png.latex?h_t">를 구하기 위해 비선형 활성화 함수 <img src="https://latex.codecogs.com/png.latex?%5Csigma">를 거치는 구조를 띠고 있습니다. RNN 측 도식의 하단 빨간색 박스에는 상태 전이식과 출력식이 명시되어 있습니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="rnn의-수학적-공식화" class="level2">
+<h2 class="anchored" data-anchor-id="rnn의-수학적-공식화">4.2. RNN의 수학적 공식화</h2>
+<ul>
+<li>RNN의 핵심 아이디어는 시점 <img src="https://latex.codecogs.com/png.latex?t">에서의 은닉 상태(hidden state) <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D">가 이전 상태와 현재 입력의 선형 결합에 그치지 않고, <strong>비선형 활성화 함수(Nonlinear function)</strong>를 통과하여 결정된다는 점입니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.1/images/rnn_structure.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 순환 신경망(RNN) 단일 셀의 상세 구조. 가로 방향으로 은닉 상태 <img src="https://latex.codecogs.com/png.latex?h_%7Bt-1%7D">이 <img src="https://latex.codecogs.com/png.latex?h_t">로 전이되며, 동시에 아래에서 위 방향으로 입력 <img src="https://latex.codecogs.com/png.latex?x_t">가 들어와 최종 출력 <img src="https://latex.codecogs.com/png.latex?z_t">를 생성하는 것을 보여줍니다. 하단에 수식 <img src="https://latex.codecogs.com/png.latex?h_t%20=%20%5Csigma(%5Ctheta_0%20h_%7Bt-1%7D%20+%20%5Ctheta_1%20x_t)"> 와 <img src="https://latex.codecogs.com/png.latex?z_t%20=%20%5Csigma(%5Ctheta%20h_t)">가 제시되어 비선형성이 어떻게 개입하는지 명시합니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>RNN의 연산 과정은 다음 두 수식으로 명확히 정의됩니다.</li>
+<li><ol type="1">
+<li><strong>은닉 상태 업데이트 (Hidden State Update):</strong> <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D%20=%20%5Csigma(%5Ctheta_%7B0%7Dh_%7Bt-1%7D%20+%20%5Ctheta_%7B1%7Dx_%7Bt%7D)"></li>
+</ol>
+<ul>
+<li>(이전 상태 <img src="https://latex.codecogs.com/png.latex?h_%7Bt-1%7D">과 현재 피처 <img src="https://latex.codecogs.com/png.latex?x_%7Bt%7D">에 가중치 <img src="https://latex.codecogs.com/png.latex?%5Ctheta_0,%20%5Ctheta_1">을 곱해 더한 후, 활성화 함수 <img src="https://latex.codecogs.com/png.latex?%5Csigma">를 통과시킵니다.)</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>출력 생성 (Output Generation):</strong> <img src="https://latex.codecogs.com/png.latex?z_%7Bt%7D%20=%20%5Csigma(%5Ctheta%20h_%7Bt%7D)"></li>
+</ol>
+<ul>
+<li>(업데이트된 현재 상태 <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D">를 바탕으로 새로운 가중치 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 적용하고 다시 비선형 함수를 거쳐 시점 <img src="https://latex.codecogs.com/png.latex?t">의 정보 <img src="https://latex.codecogs.com/png.latex?z_t">를 생성합니다.)</li>
+</ul></li>
+</ul>
+</section>
+<section id="계층layers으로서의-상태-전이-state-transition" class="level2">
+<h2 class="anchored" data-anchor-id="계층layers으로서의-상태-전이-state-transition">4.3. 계층(Layers)으로서의 상태 전이 (State Transition)</h2>
+<ul>
+<li>RNN을 이해하는 매우 중요한 관점은 <strong>시간의 흐름(Sequence) 자체를 신경망의 깊이(Depth)로 해석</strong>하는 것입니다.
+<ul>
+<li>RNN의 각 시점(시간 스텝 <img src="https://latex.codecogs.com/png.latex?t">)은 마치 깊은 MLP 구조에서의 한 층(Layer)처럼 작동합니다.</li>
+<li>매 상태 전이마다 활성화 함수 <img src="https://latex.codecogs.com/png.latex?%5Csigma">가 적용되므로, 시퀀스가 길어질수록 비선형성이 계속해서 중첩·누적됩니다.</li>
+</ul></li>
+</ul>
+<section id="순환-구조의-장단점" class="level3">
+<h3 class="anchored" data-anchor-id="순환-구조의-장단점">4.3.1. 순환 구조의 장단점</h3>
+<ul>
+<li><strong>장점 (Pros):</strong> 강력한 표현력(expressive power)을 가집니다. 시퀀스가 진행됨에 따라 은닉 상태 <img src="https://latex.codecogs.com/png.latex?h_t">는 과거의 모든 입력 정보를 축적하게 되어 매우 풍부한(richer) 문맥적 요약본이 됩니다.</li>
+<li><strong>단점 (Cons):</strong> 시간 스텝이 길어지면 신경망의 층이 너무 많아지는 것과 같은 문제가 발생합니다(Too many layers). 연산 경로(computational path)가 지나치게 길어지면 역전파(Backpropagation) 과정에서 기울기 소실이나 폭발 현상이 발생하여 학습이 매우 불안정해집니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="시퀀스-요약과-projection-head" class="level1">
+<h1>5. 시퀀스 요약과 Projection Head</h1>
+<ul>
+<li>학습된 RNN을 사용하여 실제 스칼라 타겟 값(예: 미래의 매출액, 온도 등)을 예측하기 위해 <strong>Projection Head</strong>라는 개념을 도입합니다.</li>
+</ul>
+<section id="시퀀스-인코딩과-요약" class="level2">
+<h2 class="anchored" data-anchor-id="시퀀스-인코딩과-요약">5.1. 시퀀스 인코딩과 요약</h2>
+<ul>
+<li><p>입력 시계열 데이터가 <img src="https://latex.codecogs.com/png.latex?x%20=%20(x_%7B1%7D,%20%5Cdots,%20x_%7Bt%7D)"> 로 주어졌을 때, RNN 모델은 이를 처리하여 크기가 <img src="https://latex.codecogs.com/png.latex?t%20%5Ctimes%20h">인 전체 은닉 상태 행렬 <img src="https://latex.codecogs.com/png.latex?H%20=%20%5Ctext%7BRNN%7D(x)">를 생성합니다. (여기서 <img src="https://latex.codecogs.com/png.latex?h">는 사용자가 지정하는 은닉 차원의 크기입니다.)</p></li>
+<li><p>일반적인 시계열 회귀/분류 태스크에서는 전체 시퀀스 출력보다는 <strong>가장 마지막 상태인 <img src="https://latex.codecogs.com/png.latex?z_%7Bt%7D"></strong> 에 주목합니다. <img src="https://latex.codecogs.com/png.latex?z_t">는 입력된 전체 과거 시점들의 비선형적 변환이 모두 누적된 상태이므로, 전체 시계열의 핵심 정보를 담은 <strong>강력한 요약 벡터(Summary)</strong>로 작용하기 때문입니다.</p></li>
+</ul>
+</section>
+<section id="projection-head의-적용" class="level2">
+<h2 class="anchored" data-anchor-id="projection-head의-적용">5.2. Projection Head의 적용</h2>
+<ul>
+<li>우리가 최종적으로 원하는 것은 <img src="https://latex.codecogs.com/png.latex?h"> 차원의 요약 벡터 <img src="https://latex.codecogs.com/png.latex?z_%7Bt%7D">가 아니라, 우리가 예측하고자 하는 도메인의 구체적인 스칼라(또는 특정 차원의) 타겟 값 <img src="https://latex.codecogs.com/png.latex?y">입니다. 이를 위해 마지막 상태 <img src="https://latex.codecogs.com/png.latex?z_t">에 선형 변환 층(Projection Head)을 부착합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?y%20=%20w%5E%7B%5Ctop%7Dz_%7Bt%7D"></p>
+<ul>
+<li>이 수식은 단일 뉴런에 해당하며, 복잡하게 추출된 시계열 피처(feature) 벡터 <img src="https://latex.codecogs.com/png.latex?z_t">를 우리가 원하는 차원으로 매핑(projection)하여 최종 예측을 완성하는 역할을 합니다.</li>
+</ul>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.1/</guid>
+  <pubDate>Wed, 20 May 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 21. Time Series Forecasting (Part 2)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="단일-예측에서-확률적-예측probabilistic-forecasts으로" class="level1">
+<h1>1. 단일 예측에서 확률적 예측(Probabilistic Forecasts)으로</h1>
+<ul>
+<li><p>이전 포스트에서는 시계열 데이터의 순차적(sequential) 특징을 모델링하기 위해 다층 퍼셉트론(MLP)에서 순환 신경망(RNN)으로 확장하는 과정을 다루었습니다. 하지만 현실의 시계열 예측 문제에서는 단순히 미래의 특정 시점 <img src="https://latex.codecogs.com/png.latex?t">에 대한 단일 예측값(single prediction) <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bz%7D_%7Bt%7D">를 도출하는 것만으로는 충분하지 않은 경우가 많습니다.</p></li>
+<li><p>불확실성이 존재하는 실제 환경에서는 미래 값의 <strong>확률 분포(distribution) <img src="https://latex.codecogs.com/png.latex?P(z_%7Bt%7D)"> 자체를 추정</strong>하는 것이 궁극적인 목표가 됩니다. 이러한 접근 방식을 <strong>확률적 예측(Probabilistic Forecasting)</strong>이라고 합니다. 본 포스트에서는 계산의 편의를 위해 1-step 예측(<img src="https://latex.codecogs.com/png.latex?h=1">) 상황을 가정하고 논의를 진행하겠습니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/images/probabilistic_forecast_concept.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 관측된 과거 시계열(Observed time series, 파란색 선)을 바탕으로 미래 시계열을 예측하는 개념도. 미래 구간에는 단일 예측선이 아닌, 다양한 가능성을 내포하는 신뢰 구간(하늘색 음영)과 여러 예측 경로(빨간색, 검은색 선)가 제시되어 확률적 예측(Probabilistic Forecast)의 본질인 불확실성 추정을 시각적으로 묘사합니다.</figcaption>
+</figure>
+</div>
+<hr>
+</section>
+<section id="신경망-구조의-재구성-encoder와-projection-head" class="level1">
+<h1>2. 신경망 구조의 재구성: Encoder와 Projection Head</h1>
+<ul>
+<li><p>딥러닝을 활용해 확률적 예측을 수행하려면 기존 신경망의 구조를 어떻게 변경해야 할까요? RNN을 포함한 모든 딥러닝 기반 예측 모델은 크게 두 부분으로 나누어 볼 수 있습니다.</p>
+<ul>
+<li><ol type="1">
+<li><strong>인코더 (Encoder):</strong> 입력 데이터를 처리하여 유용한 잠재 표현(representation) <img src="https://latex.codecogs.com/png.latex?h">를 생성하는 역할을 합니다. 이는 신경망의 마지막 직전 층(penultimate layer)까지의 연산을 포함합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>프로젝션 헤드 (Projection Head):</strong> 인코더가 추출한 <img src="https://latex.codecogs.com/png.latex?h">를 우리가 원하는 최종 예측값으로 변환(converting)합니다. 일반적으로는 <img src="https://latex.codecogs.com/png.latex?%5Chat%7By%7D%20=%20Wh%20+%20b"> 형태의 선형 맵핑(Linear mapping)이 사용됩니다.</li>
+</ol></li>
+</ul></li>
+<li><p>확률적 예측을 위해 신경망 전체 구조를 바꿀 필요는 없습니다. 인코더가 생성한 요약 벡터 <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D">가 주어졌을 때, 미래 값의 조건부 분포 <img src="https://latex.codecogs.com/png.latex?P(z_%7Bt%7D%7Ch_%7Bt%7D)">를 모델링할 수 있도록 <strong>프로젝션 헤드(Projection Head)만을 수정</strong>하는 것이 훨씬 효율적인 접근 방식입니다.</p></li>
+<li><p>딥러닝 모델에서 확률적 예측을 구현하는 대표적인 방법론으로는 <strong>분위수 회귀(Quantile Regression)</strong>와 <strong>파라메트릭 분포(Parametric Distribution)</strong> 방법이 있습니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="접근법-1-분위수-회귀-quantile-regression" class="level1">
+<h1>3. 접근법 1: 분위수 회귀 (Quantile Regression)</h1>
+<section id="분위수-예측의-개념" class="level2">
+<h2 class="anchored" data-anchor-id="분위수-예측의-개념">3.1. 분위수 예측의 개념</h2>
+<ul>
+<li>분위수 회귀의 핵심 아이디어는 각기 다른 신뢰 수준(confidence levels)을 가진 여러 개의 예측값을 생성하는 것입니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/images/fan_chart_probabilistic.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 확률적 예측을 통해 도출된 팬 차트(Fan chart). 특정 시점 이후 미래를 예측할 때, 시간이 지날수록 예측의 불확실성이 커짐을 점진적으로 옅어지는 주황색/노란색 음영(각기 다른 분위수 구간)으로 표현하여 데이터가 가질 수 있는 분포의 범위를 시각적으로 보여줍니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>특정 분위수 <img src="https://latex.codecogs.com/png.latex?x">에 대한 예측값을 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bz%7D_%7Bt%7D%5E%7Bx%7D">라고 할 때, <img src="https://latex.codecogs.com/png.latex?P_%7Bx%7D"> 예측(forecast)이 의미하는 바는 실제 관측치 <img src="https://latex.codecogs.com/png.latex?z_%7Bt%7D">가 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bz%7D_%7Bt%7D%5E%7Bx%7D">보다 작거나 같을 확률이 <strong>x%</strong>라는 것입니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/images/quantile_regression_p50_p90.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 실제 시계열 관측치(검은색 실선)와 P50, P90 분위수 예측 결과를 겹쳐 그린 그래프. 우측 텍스트를 통해 P50은 전체 시간의 <strong>50%</strong>가 해당 예측값 이하에 머무르는 중앙값 성격의 예측임을, P90은 <strong>90%</strong>가 해당 예측값 이하에 머무르는 상단 바운더리 성격의 예측임을 수식(<img src="https://latex.codecogs.com/png.latex?z_%7Bt%7D%20%5Cle%20%5Chat%7Bz%7D_%7Bt%7D">)과 함께 명확히 설명하고 있습니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><p><strong>P50 Forecast:</strong> 전체 시간의 <strong>50%</strong> 동안 <img src="https://latex.codecogs.com/png.latex?z_%7Bt%7D%20%5Cle%20%5Chat%7Bz%7D_%7Bt%7D">가 성립합니다. 이는 곧 예측의 중앙값(median)을 의미하며, 분포의 최빈값(가장 발생 확률이 높은 값)을 의미하는 것은 아닙니다.</p></li>
+<li><p><strong>P90 Forecast:</strong> 전체 시간의 <strong>90%</strong> 동안 <img src="https://latex.codecogs.com/png.latex?z_%7Bt%7D%20%5Cle%20%5Chat%7Bz%7D_%7Bt%7D">가 성립합니다.</p></li>
+<li><p>분위수의 통계적 정의에 따라, <img src="https://latex.codecogs.com/png.latex?a%20%3C%20b">일 때 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bz%7D_%7Bt%7D%5E%7Ba%7D%20%3C%20%5Chat%7Bz%7D_%7Bt%7D%5E%7Bb%7D">가 자연스럽게 성립할 것으로 기대할 수 있습니다.</p></li>
+</ul>
+</section>
+<section id="다중-프로젝션-헤드-multiple-projection-heads" class="level2">
+<h2 class="anchored" data-anchor-id="다중-프로젝션-헤드-multiple-projection-heads">3.2. 다중 프로젝션 헤드 (Multiple Projection Heads)</h2>
+<ul>
+<li>다양한 분위수(예: <img src="https://latex.codecogs.com/png.latex?q%20%5Cin%20%5C%7B0.01,%200.1,%200.3,%20%5Cdots,%200.99%5C%7D">)를 한 번에 예측하기 위해, 인코더에서 나온 동일한 은닉 상태(encoded state) <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D">를 공유하되 <strong>각 분위수 <img src="https://latex.codecogs.com/png.latex?q">마다 서로 다른 선형 맵핑(가중치 <img src="https://latex.codecogs.com/png.latex?w_%7Bq%7D">)을 적용하는 다중 프로젝션 헤드</strong>를 구성합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Chat%7Bz%7D_%7Bt%7D%5E%7Bq%7D%20=%20w_%7Bq%7D%5E%7B%5Ctop%7D%20h_%7Bt%7D"></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/images/multiple_quantiles.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 0.01부터 0.99까지 다양한 분위수(q)에 대한 다중 프로젝션 헤드의 출력 결과를 시계열로 나타낸 그래프. 동일한 잠재 상태 <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D">를 공유하면서도 서로 다른 선형 가중치가 곱해져, 하단의 파란선(q=0.01)부터 상단의 분홍선(q=0.99)까지 데이터의 전체 분포 범위를 촘촘히 묘사하고 있습니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="비대칭-분위수-손실-함수-asymmetric-quantile-loss" class="level2">
+<h2 class="anchored" data-anchor-id="비대칭-분위수-손실-함수-asymmetric-quantile-loss">3.3. 비대칭 분위수 손실 함수 (Asymmetric Quantile Loss)</h2>
+<ul>
+<li>여러 개의 분위수를 동시에 올바르게 학습시키기 위해서는 모델 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 최적화할 새로운 목적 함수(Objective Function) <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D(%5Ctheta)">가 필요합니다. 이는 각 분위수별 손실의 합으로 정의됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D(%5Ctheta)%20=%20%5Csum_%7Bq%7D%20loss_%7Bq%7D(%5Chat%7Bz%7D_%7Bt%7D%5E%7Bq%7D)"></p>
+<ul>
+<li>여기서 각 <img src="https://latex.codecogs.com/png.latex?loss_%7Bq%7D">는 <strong>비대칭 분위수 손실(Asymmetric quantile loss)</strong> 혹은 핀볼 손실(Pinball loss)이라고 불리며 다음과 같이 정의됩니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?loss_%7Bq%7D(%5Chat%7Bz%7D_%7Bt%7D%5E%7Bq%7D)%20=%20%5Cbegin%7Bcases%7D%20q%20%5Ccdot%20(z_%7Bt%7D%20-%20%5Chat%7Bz%7D_%7Bt%7D%5E%7Bq%7D)%20&amp;%20%5Ctext%7Bif%20%7D%20z_%7Bt%7D%20%3E%20%5Chat%7Bz%7D_%7Bt%7D%5E%7Bq%7D%20%5C%5C%20(1-q)%20%5Ccdot%20(%5Chat%7Bz%7D_%7Bt%7D%5E%7Bq%7D%20-%20z_%7Bt%7D)%20&amp;%20%5Ctext%7Bif%20%7D%20z_%7Bt%7D%20%3C%20%5Chat%7Bz%7D_%7Bt%7D%5E%7Bq%7D%20%5Cend%7Bcases%7D"></p>
+<ul>
+<li>이 수식은 예측값 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bz%7D_%7Bt%7D%5E%7Bq%7D">가 실제값 <img src="https://latex.codecogs.com/png.latex?z_%7Bt%7D">를 과소 추정했을 때와 과대 추정했을 때, <img src="https://latex.codecogs.com/png.latex?q">의 값에 따라 패널티를 비대칭적으로 부여함으로써 모델이 정확한 분위수 지점을 찾아가도록 유도합니다.</li>
+</ul>
+</section>
+<section id="분위수-회귀의-장단점" class="level2">
+<h2 class="anchored" data-anchor-id="분위수-회귀의-장단점">3.4. 분위수 회귀의 장단점</h2>
+<ul>
+<li><strong>장점 (Pros):</strong> 데이터가 따르는 특정 분포를 명시적으로 가정하고 모델링할 필요가 없습니다. 또한, 도출된 결과가 특정 신뢰 구간으로 바로 해석(interpretable) 가능하다는 실무적 이점이 있습니다.</li>
+<li><strong>단점 (Cons):</strong> 예측 결과가 연속적인 확률 분포(continuous representation) 형태를 지원하지 않습니다. 부드럽고 촘촘한 분포 형태를 추정하려면 매우 많은 수의 프로젝션 헤드가 필요하여 연산 비효율이 발생합니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="접근법-2-파라메트릭-분포-parametric-distribution" class="level1">
+<h1>4. 접근법 2: 파라메트릭 분포 (Parametric Distribution)</h1>
+<ul>
+<li>분위수 회귀의 단점을 극복하기 위한 두 번째 접근법은 파라메트릭 분포(Parametric Distribution)를 활용하는 것입니다. 이 아이디어는 조건부 분포 <img src="https://latex.codecogs.com/png.latex?P(z_%7Bt%7D%7Ch_%7Bt%7D)">가 가우시안(Gaussian) 정규분포와 같은 <strong>명시적이고 잘 알려진 통계적 분포를 따른다고 가정</strong>하는 데서 출발합니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/images/parametric_distributions_overview.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 대표적인 3가지 파라메트릭 분포를 나란히 보여주는 이미지. 좌측부터 연속형 데이터를 위한 가우시안(정규) 분포, 특정 대기 시간이나 수명을 모델링하는 지수 분포, 그리고 이산적인 사건의 발생 횟수를 모델링하는 푸아송 분포가 나열되어 있어 데이터 특성에 따른 분포 선택의 중요성을 시사합니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>이 방식에서 프로젝션 헤드의 반환값은 직접적인 예측값이 아닙니다. 대신, <strong>가정한 분포의 파라미터(예: 평균, 분산 등)를 반환</strong>하게 됩니다.</li>
+</ul>
+<section id="가우시안-분포-gaussian-distribution의-적용" class="level2">
+<h2 class="anchored" data-anchor-id="가우시안-분포-gaussian-distribution의-적용">4.1. 가우시안 분포 (Gaussian Distribution)의 적용</h2>
+<ul>
+<li>만약 <img src="https://latex.codecogs.com/png.latex?P(z_%7Bt%7D%7Ch_%7Bt%7D)">가 가우시안 분포를 따른다고 가정한다면, 이 분포의 확률 밀도 함수(PDF, Probabilistic density function)는 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%5Cpi%5Csigma%5E%7B2%7D%7D%7D%20%5Cexp%5Cleft(-%5Cfrac%7B(x-%5Cmu)%5E%7B2%7D%7D%7B2%5Csigma%5E%7B2%7D%7D%5Cright)"></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/images/gaussian_distribution.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 평균(<img src="https://latex.codecogs.com/png.latex?%5Cmu">)과 분산(<img src="https://latex.codecogs.com/png.latex?%5Csigma%5E%7B2%7D">) 파라미터 변화에 따른 다양한 가우시안(정규) 분포의 확률 밀도 함수 곡선. 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cmu">가 곡선의 중심 위치를 결정하고, <img src="https://latex.codecogs.com/png.latex?%5Csigma%5E%7B2%7D">가 곡선의 퍼짐 정도(너비와 높이)를 조절함을 수식 기호와 함께 명확히 나타냅니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>우리의 목표는 잠재 상태 <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D">로부터 가우시안 분포를 결정짓는 두 파라미터인 평균 <img src="https://latex.codecogs.com/png.latex?%5Cmu">와 분산 <img src="https://latex.codecogs.com/png.latex?%5Csigma%5E%7B2%7D"> (혹은 표준편차 <img src="https://latex.codecogs.com/png.latex?%5Csigma">)를 생성하여 <img src="https://latex.codecogs.com/png.latex?P(z_%7Bt%7D%7Ch_%7Bt%7D)">를 정의하는 것입니다. 이를 위해 다음과 같이 두 개의 독립적인 프로젝션 헤드를 설계합니다.
+<ul>
+<li><strong>평균 추정:</strong> <img src="https://latex.codecogs.com/png.latex?%5Cmu(h_%7Bt%7D)%20=%20w_%7B%5Cmu%7D%5E%7B%5Ctop%7D%20h_%7Bt%7D"> (실수 전체 범위를 가질 수 있으므로 일반 선형 결합 사용)</li>
+<li><strong>표준편차 추정:</strong> <img src="https://latex.codecogs.com/png.latex?%5Csigma(h_%7Bt%7D)%20=%20%5Ctext%7Bsoftplus%7D(w_%7B%5Csigma%7D%5E%7B%5Ctop%7D%20h_%7Bt%7D)"></li>
+</ul></li>
+<li>여기서 표준편차 <img src="https://latex.codecogs.com/png.latex?%5Csigma">는 통계적 정의상 항상 양수여야 합니다. 이를 보장하기 위해 출력층에 <strong>Softplus 함수</strong> <img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Clog(1+e%5E%7Bx%7D)">를 적용하여 네트워크 출력이 항상 0보다 큰 양수 값을 갖도록 강제합니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/images/softplus_function.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Softplus 함수의 그래프. 함수식이 <img src="https://latex.codecogs.com/png.latex?y%20=%20%5Clog(1+e%5E%7Bx%7D)">이며, 입력 <img src="https://latex.codecogs.com/png.latex?x">가 음수일 때는 0에 점근적으로 가까워지고 양수일 때는 <img src="https://latex.codecogs.com/png.latex?x">에 선형적으로 근사하여 출력값이 항상 0보다 큰 양수가 됨을 보여줍니다. 분산이나 표준편차처럼 음수가 될 수 없는 파라미터를 추정할 때 핵심적으로 사용됩니다.</figcaption>
+</figure>
+</div>
+<p><img src="https://latex.codecogs.com/png.latex?P(z_%7Bt%7D%7Ch_%7Bt%7D)%20=%20%5Cmathcal%7BN%7D(z_%7Bt%7D%7C%5Cmu(h_%7Bt%7D),%20%5Csigma%5E%7B2%7D(h_%7Bt%7D))"></p>
+</section>
+<section id="음이항-분포-negative-binomial-distribution" class="level2">
+<h2 class="anchored" data-anchor-id="음이항-분포-negative-binomial-distribution">4.2. 음이항 분포 (Negative Binomial Distribution)</h2>
+<ul>
+<li>시계열 데이터가 수요량(demand)이나 판매량처럼 양수(Positive side)에만 집중되어 있고 이산적인(discrete) 특성을 띨 때는 가우시안보다 음이항 분포(Negative binomial distribution)가 더 적합할 수 있습니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/images/negative_binomial.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 파라미터 <img src="https://latex.codecogs.com/png.latex?n">과 <img src="https://latex.codecogs.com/png.latex?p"> 값의 변화에 따른 음이항 분포(Negative Binomial Distribution)의 확률 질량 함수. 0 이상의 양수 구간에서 비대칭적인 꼬리를 가지며 이산적인 막대그래프 형태를 띠고 있어, 판매량이나 수요량 같은 양의 카운트(count) 데이터를 모델링하는 데 특화되어 있음을 보여줍니다.</figcaption>
+</figure>
+</div>
+<p><img src="https://latex.codecogs.com/png.latex?P(z_%7Bt%7D%7Ch_%7Bt%7D)%20=%20NB(z_%7Bt%7D%7C%5Cmu(h_%7Bt%7D),%20%5Calpha(h_%7Bt%7D))"></p>
+<ul>
+<li>음이항 분포를 위한 두 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cmu">와 <img src="https://latex.codecogs.com/png.latex?%5Calpha"> 역시 양수 제약 조건을 만족해야 하므로, 두 프로젝션 헤드 모두에 softplus 활성화 함수를 통과시킵니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cmu(h_%7Bt%7D)%20=%20%5Ctext%7Bsoftplus%7D(w_%7B%5Cmu%7D%5E%7B%5Ctop%7D%20h_%7Bt%7D)"></li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Calpha(h_%7Bt%7D)%20=%20%5Ctext%7Bsoftplus%7D(w_%7B%5Calpha%7D%5E%7B%5Ctop%7D%20h_%7Bt%7D)"></li>
+</ul></li>
+</ul>
+</section>
+<section id="가우시안-혼합-모델-mixture-of-gaussians-mog" class="level2">
+<h2 class="anchored" data-anchor-id="가우시안-혼합-모델-mixture-of-gaussians-mog">4.3. 가우시안 혼합 모델 (Mixture of Gaussians, MoG)</h2>
+<ul>
+<li><p>데이터의 분포가 단일 봉우리(unimodal)가 아닌 복잡한 다봉형(multimodal) 형태를 가질 경우, 여러 개의 분포를 혼합한 가우시안 혼합 모델(Mixture of distributions)을 사용할 수 있습니다.</p></li>
+<li><p>여러 분포를 혼합하기 위해서는 데이터가 어느 군집(Cluster)에 속할지를 결정하는 ‘소속 확률 파라미터(membership parameter)’ <img src="https://latex.codecogs.com/png.latex?%5Cpi">가 추가로 필요합니다. <img src="https://latex.codecogs.com/png.latex?K">개의 군집을 가정할 때 혼합 분포는 다음과 같이 정의됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?P(z_%7Bt%7D%7Ch_%7Bt%7D)%20=%20%5Csum_%7Bk=1%7D%5E%7BK%7D%20%5Cpi_%7Bk%7D%20%5Cmathcal%7BN%7D(z_%7Bt%7D%7C%5Cmu_%7Bk%7D(h_%7Bt%7D),%20%5Csigma_%7Bk%7D%5E%7B2%7D(h_%7Bt%7D))"></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/images/mixture_of_gaussians.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 가우시안 혼합 모델(Mixture of Gaussians)의 시각적 묘사. 3개의 서로 다른 군집(Cluster 1, 2, 3)을 중심(<img src="https://latex.codecogs.com/png.latex?%5Cmu_%7B1%7D,%20%5Cmu_%7B2%7D,%20%5Cmu_%7B3%7D">)과 표준편차(<img src="https://latex.codecogs.com/png.latex?%5Csigma_%7B1%7D,%20%5Csigma_%7B2%7D,%20%5Csigma_%7B3%7D">)가 각기 다른 정규분포(빨강, 초록, 파랑)로 나타내었으며, 하단의 개별 데이터 포인트들이 어느 분포에 속할지 가중합으로 결합되어 복잡한 전체 밀도를 형성함을 보여줍니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>각 파라미터를 추정하는 프로젝션 헤드의 수식은 아래와 같습니다.
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cpi%20=%20%5Ctext%7Bsoftmax%7D(W_%7B%5Cpi%7D%20h_%7Bt%7D)"> (확률의 합이 1이 되어야 하므로 softmax 적용)</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cmu_%7Bk%7D(h_%7Bt%7D)%20=%20w_%7B%5Cmu_%7Bk%7D%7D%5E%7B%5Ctop%7D%20h_%7Bt%7D"></li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Csigma_%7Bk%7D(h_%7Bt%7D)%20=%20%5Ctext%7Bsoftplus%7D(w_%7B%5Csigma_%7Bk%7D%7D%5E%7B%5Ctop%7D%20h_%7Bt%7D)"></li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="실무적-고려사항-데이터-분포-확인-및-표준화의-함정" class="level1">
+<h1>5. 실무적 고려사항: 데이터 분포 확인 및 표준화의 함정</h1>
+<section id="올바른-분포의-선택-choice-of-distributions" class="level2">
+<h2 class="anchored" data-anchor-id="올바른-분포의-선택-choice-of-distributions">5.1. 올바른 분포의 선택 (Choice of Distributions)</h2>
+<ul>
+<li>파라메트릭 접근법에서는 데이터 분포를 면밀히 관찰하여 적합한 분포를 선택하는 것이 매우 중요합니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/images/zero_inflated_demand.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 실제 판매량/수요량 데이터의 히스토그램. 대부분의 막대가 0에 극도로 집중되어 있어 데이터의 <strong>98%</strong>가 0의 값을 가지며, 우측으로 꼬리가 매우 길게 이어지는 롱테일(long-tail) 분포, 즉 영과잉(Zero-inflated) 특성을 확연히 보여줍니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>위 그림처럼 실제 산업 현장의 판매량(sales) 데이터 등을 분석해보면, 값이 0인 데이터가 전체의 <strong>98%</strong>를 차지하는 등 극단적인 ‘롱테일(long-tail)’ 형태를 보일 때가 많습니다. 이 경우 단순한 가우시안이나 푸아송 분포보다는, <strong>영과잉 음이항 분포 (Zero-inflated negative binomial)</strong>를 선택하는 것이 압도적으로 나은 모델링 결과를 가져옵니다.</li>
+</ul>
+</section>
+<section id="표준화-standardization의-한계" class="level2">
+<h2 class="anchored" data-anchor-id="표준화-standardization의-한계">5.2. 표준화 (Standardization)의 한계</h2>
+<ul>
+<li><p>시계열 데이터 전처리 시 <img src="https://latex.codecogs.com/png.latex?z_%7Bt%7D%20%5Cleftarrow%20%5Cfrac%7Bz_%7Bt%7D%20-%20%5Ctext%7Bmean%7D(%5Ccdot)%7D%7B%5Ctext%7Bstd%7D(%5Ccdot)%7D"> 식을 통해 모든 값의 평균을 0, 분산을 1로 맞추는 표준화(Standardization)를 널리 수행합니다.</p></li>
+<li><p>하지만 주의할 점은, <strong>데이터를 표준화한다고 해서 데이터의 실제 분포 형태(shape) 자체가 정규분포(normal distribution)로 변하는 것은 아니라는 점입니다</strong>. 잘못된 정규화(Bad normalization)는 오히려 본래 데이터의 특성을 왜곡하여, 모델링에 적합한 좋은 분포를 선택하는 것을 어렵게 만들 수 있습니다.</p></li>
+</ul>
+</section>
+<section id="파라메트릭-분포-모델의-장단점-요약" class="level2">
+<h2 class="anchored" data-anchor-id="파라메트릭-분포-모델의-장단점-요약">5.3. 파라메트릭 분포 모델의 장단점 요약</h2>
+<ul>
+<li><strong>장점 (Pros):</strong>
+<ul>
+<li>데이터의 특성에 맞는 적절한 분포를 선택했을 때 모델의 예측 성능이 뛰어납니다.</li>
+<li>예측된 분포가 닫힌 형태의 해(closed-form solutions)를 지원하므로, 재고 관리 최적화(‘최적의 구매 물품 수량은 얼마인가?’) 등 응용 문제에 수학적으로 바로 적용할 수 있습니다.</li>
+</ul></li>
+<li><strong>단점 (Cons):</strong>
+<ul>
+<li>데이터가 어떤 분포를 따르는지 사전에 명시적으로 가정해야 하는 부담이 있습니다.</li>
+<li>시간이 지남에 따라 데이터의 근본적인 분포 자체가 변한다면, 과거에 맞춘 분포 모델이 더 이상 작동하지 않을 위험이 큽니다.</li>
+</ul></li>
+</ul>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.2/</guid>
+  <pubDate>Wed, 20 May 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 21. Time Series Forecasting (Part 3)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.3/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="모델-학습의-새로운-패러다임-분포의-추정" class="level1">
+<h1>1. 모델 학습의 새로운 패러다임: 분포의 추정</h1>
+<ul>
+<li><p>이전 포스트에서는 시계열 예측에서 단순한 점 예측(point predictions)을 넘어 미래 값의 확률 분포 <img src="https://latex.codecogs.com/png.latex?P(z_%7Bt%7D)">를 추정하는 ’확률적 예측(Probabilistic Forecasting)’의 필요성과 구조에 대해 다루었습니다.</p></li>
+<li><p>이제 모델의 출력이 단일 스칼라 값이 아닌 ’분포의 파라미터’가 되었으므로, 기존의 오차 기반 손실 함수(예: MSE, MAE)를 그대로 사용하여 모델을 학습시킬 수 없습니다. 대신 우리는 통계학의 핵심 개념인 <strong>최대 우도 추정(Maximum Likelihood Estimation, MLE)</strong>을 사용하여 네트워크를 학습시켜야 합니다.</p></li>
+<li><p>MLE를 통한 학습은 다음 세 단계로 요약됩니다:</p>
+<ul>
+<li><ol type="1">
+<li><strong>Step 1:</strong> 인코더가 생성한 잠재 상태 <img src="https://latex.codecogs.com/png.latex?h_%7Bt%7D">를 사용하여 예측 분포 <img src="https://latex.codecogs.com/png.latex?P(z_%7Bt%7D%7Ch_%7Bt%7D)">를 추정합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>Step 2:</strong> 추정된 분포를 바탕으로, 실제 관측된 데이터 <img src="https://latex.codecogs.com/png.latex?Z_%7Bt%7D">가 나타날 <strong>우도(Likelihood) <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D(z_%7Bt%7D)"></strong>를 계산합니다.</li>
+</ol></li>
+<li><ol start="3" type="1">
+<li><strong>Step 3:</strong> 이 우도 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D(z_%7Bt%7D)">가 최대화되도록(maximize) 네트워크의 파라미터를 업데이트(역전파)합니다.</li>
+</ol></li>
+</ul></li>
+<li><p>이때, 실제 최적화해야 할 구체적인 목적 함수(objective function)의 형태는 우리가 가정한 분포(Gaussian, Exponential 등)에 따라 다르게 결정됩니다.</p></li>
+</ul>
+<hr>
+</section>
+<section id="우도-likelihood와-nll-negative-log-likelihood" class="level1">
+<h1>2. 우도 (Likelihood)와 NLL (Negative Log Likelihood)</h1>
+<section id="우도-likelihood의-직관적-이해" class="level2">
+<h2 class="anchored" data-anchor-id="우도-likelihood의-직관적-이해">2.1. 우도 (Likelihood)의 직관적 이해</h2>
+<ul>
+<li>데이터 셋 <img src="https://latex.codecogs.com/png.latex?D">와 학습 가능한 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 가진 함수 <img src="https://latex.codecogs.com/png.latex?f_%7B%5Ctheta%7D">가 주어졌다고 가정해 봅시다.</li>
+<li>우도(Likelihood)는 주어진 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta"> 하에서 실제 데이터 <img src="https://latex.codecogs.com/png.latex?D">가 관측될 조건부 확률 <img src="https://latex.codecogs.com/png.latex?p(D%7C%5Ctheta)">로 정의됩니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.3/images/likelihood_concept.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 우도(Likelihood)의 개념을 보여주는 1차원 데이터 분포 도식. 가로축 상에 관측된 5개의 데이터 포인트(주황색 원: <img src="https://latex.codecogs.com/png.latex?x=1,%204,%205,%206,%209">)가 존재하며, 이를 설명하기 위한 두 개의 가우시안 분포 후보(주황색 곡선과 파란색 곡선)가 그려져 있습니다. 데이터들이 주로 우측(4, 5, 6)에 군집해 있기 때문에, 중심이 더 우측에 위치한 파란색 분포가 이 데이터를 생성했을 확률, 즉 ’우도(Likelihood)’가 주황색 분포보다 훨씬 높음을 직관적으로 설명합니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>위 그림처럼 우도가 높다는 것(Higher likelihood)은 현재의 모델 <img src="https://latex.codecogs.com/png.latex?f_%7B%5Ctheta%7D">가 관측된 실제 데이터 <img src="https://latex.codecogs.com/png.latex?D">의 특성을 매우 잘 설명(better describes)하고 있음을 의미합니다. 따라서 머신러닝에서 모델 <img src="https://latex.codecogs.com/png.latex?f_%7B%5Ctheta%7D">를 학습시키는 과정은 수학적으로 <img src="https://latex.codecogs.com/png.latex?p(D%7C%5Ctheta)">를 증가시키는 과정과 완전히 동일(equivalent)합니다.</li>
+</ul>
+</section>
+<section id="nll-negative-log-likelihood-최소화" class="level2">
+<h2 class="anchored" data-anchor-id="nll-negative-log-likelihood-최소화">2.2. NLL (Negative Log Likelihood) 최소화</h2>
+<ul>
+<li>모델을 최적화하기 위해 우리는 우도 <img src="https://latex.codecogs.com/png.latex?p(D%7C%5Ctheta)">를 최대화하는 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%7B*%7D">를 찾아야 합니다. 이를 수식으로 전개하면 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Ctheta%5E%7B*%7D%20=%20%5Ctext%7Bargmax%7D_%7B%5Ctheta%7D%20p(D%7C%5Ctheta)"></p>
+<ul>
+<li><p>샘플들이 서로 독립(independence)이라고 가정하면, 데이터 셋의 결합 확률(Joint probability)은 각 개별 샘플 우도의 곱으로 표현됩니다. <img src="https://latex.codecogs.com/png.latex?=%20%5Ctext%7Bargmax%7D_%7B%5Ctheta%7D%20%5Cprod_%7Bx%20%5Cin%20D%7D%20p(x%7C%5Ctheta)"></p></li>
+<li><p>여기에 자연로그(log)를 취하면, 로그의 성질(property of log)에 의해 곱셈이 덧셈으로 바뀌어 연산이 훨씬 수월해지고 극단적으로 작은 확률값들의 곱셈으로 인한 언더플로우를 방지할 수 있습니다. 머신러닝의 최적화 문제에서는 통상적으로 손실(loss)을 ’최소화(minimize)’하는 형태를 띠므로, 전체 식에 마이너스(-) 기호를 붙여 <strong>NLL (Negative Log Likelihood)</strong> 형태로 변환합니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?=%20%5Ctext%7Bargmin%7D_%7B%5Ctheta%7D%20-%5Csum_%7Bx%20%5Cin%20D%7D%20%5Clog%20p(x%7C%5Ctheta)"></p>
+<hr>
+</section>
+</section>
+<section id="mle-적용-사례-가우시안-분포-gaussian-distribution" class="level1">
+<h1>3. MLE 적용 사례: 가우시안 분포 (Gaussian Distribution)</h1>
+<ul>
+<li><p>파라메트릭 분포 모델에서 예측 결과가 정규분포를 따른다고 가정했을 때의 구체적인 NLL을 유도해 보겠습니다.</p></li>
+<li><p>네트워크는 두 개의 프로젝션 헤드를 통해 평균 <img src="https://latex.codecogs.com/png.latex?%5Cmu">와 표준편차 <img src="https://latex.codecogs.com/png.latex?%5Csigma">를 생성합니다. 이 경우 가우시안 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BN%7D(%5Cmu,%20%5Csigma%5E%7B2%7D)">의 우도는 확률 밀도 함수(PDF) 그 자체와 동일합니다. <img src="https://latex.codecogs.com/png.latex?p(x%7C%5Cmu,%5Csigma)%20=%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%5Cpi%5Csigma%5E%7B2%7D%7D%7D%20%5Cexp%5Cleft(-%5Cfrac%7B(x-%5Cmu)%5E%7B2%7D%7D%7B2%5Csigma%5E%7B2%7D%7D%5Cright)"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?x">는 손실을 계산하고자 하는 실제 관측 타겟 데이터입니다.</li>
+</ul></li>
+<li><p>이 식에 <img src="https://latex.codecogs.com/png.latex?-%5Clog">를 취하여 NLL(<img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D">)을 유도하면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?-%5Clog%20p(x%7C%5Cmu,%5Csigma)%20=%20-%5Clog%20%5Cleft(%20%5Cfrac%7B1%7D%7B%5Csqrt%7B2%5Cpi%5Csigma%5E%7B2%7D%7D%7D%20%5Cexp%5Cleft(-%5Cfrac%7B(x-%5Cmu)%5E%7B2%7D%7D%7B2%5Csigma%5E%7B2%7D%7D%5Cright)%20%5Cright)"> <img src="https://latex.codecogs.com/png.latex?=%20%5Cfrac%7B(x-%5Cmu)%5E%7B2%7D%7D%7B2%5Csigma%5E%7B2%7D%7D%20+%20%5Clog(%5Csigma)%20+%20C"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?C">는 모델 파라미터와 무관한 상수항이므로 학습 그래디언트에 영향을 주지 않습니다.</li>
+</ul></li>
+<li><p>이 손실 함수를 최소화하는 방향으로 모델이 업데이트될 때 다음과 같은 현상이 발생합니다.</p></li>
+<li><p>모델이 추정하는 <strong>평균 <img src="https://latex.codecogs.com/png.latex?%5Cmu"></strong>는 오차를 줄이기 위해 실제 샘플 <img src="https://latex.codecogs.com/png.latex?x">의 위치로 점점 다가가도록(updated toward) 유도됩니다.</p></li>
+<li><p>반면 <strong>표준편차 <img src="https://latex.codecogs.com/png.latex?%5Csigma"></strong>는 흥미로운 트레이드오프(tradeoff) 상황에 놓입니다. 수식의 <img src="https://latex.codecogs.com/png.latex?%5Clog(%5Csigma)"> 항은 표준편차를 무조건 줄이려는(direction to be reduced) 압력을 가하지만, 분모에 있는 <img src="https://latex.codecogs.com/png.latex?%5Csigma%5E%7B2%7D"> 항은 예측 오차 <img src="https://latex.codecogs.com/png.latex?(x-%5Cmu)%5E%7B2%7D">가 클 때 <img src="https://latex.codecogs.com/png.latex?%5Csigma">를 키워서 패널티를 줄이려 합니다. 즉, 모델은 예측 오차가 충분히 작을 때만(only if the error is small) 모델의 확신(작은 <img src="https://latex.codecogs.com/png.latex?%5Csigma">)을 키울 수 있습니다.</p></li>
+</ul>
+<section id="흥미로운-사실-rmse와의-관계" class="level2">
+<h2 class="anchored" data-anchor-id="흥미로운-사실-rmse와의-관계">3.1. 흥미로운 사실: RMSE와의 관계</h2>
+<ul>
+<li>만약 우리가 모델 설계 시 표준편차를 예측하지 않고 어떤 ’고정된 값(fixed standard deviation)’을 사용한다고 가정하면 어떻게 될까요? 이 경우 <img src="https://latex.codecogs.com/png.latex?%5Csigma">는 상수가 되므로, NLL 식은 다음과 같이 간단해집니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?-%5Clog%20f(x)%20=%20(x-%5Cmu)%5E%7B2%7D%20+%20C'"></p>
+<ul>
+<li>이 식은 우리가 가장 흔히 사용하는 회귀 손실 함수인 <strong>RMSE(혹은 MSE, L2) 손실과 완벽하게 동일(equivalent)</strong>해집니다!</li>
+<li>즉, 우리가 딥러닝에서 단순 점 예측(Point forecasts) 모델을 RMSE로 학습시키는 행위는, 본질적으로 “모델의 예측 분포가 고정된 표준편차를 가진 가우시안 분포를 따른다”고 가정하고 MLE를 수행하는 것과 자연스럽게 동일한 의미(naturally interpreted)를 지닙니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="시계열을-넘어선-회귀-문제로의-일반화-generalization" class="level1">
+<h1>4. 시계열을 넘어선 회귀 문제로의 일반화 (Generalization)</h1>
+<ul>
+<li><p>지금까지 살펴본 MLE와 확률적 예측의 아이디어는 시계열 분석(time series forecasting)에만 국한되지 않으며(beyond), 일반적인 모든 딥러닝 회귀(Regression) 문제로 완벽하게 일반화(generalize)될 수 있습니다.</p></li>
+<li><p><strong>이전 관점 (Before):</strong> 네트워크 <img src="https://latex.codecogs.com/png.latex?f_%7B%5Ctheta%7D(x)%20=%20%5Chat%7By%7D"> 가 주어지면 이를 타겟 <img src="https://latex.codecogs.com/png.latex?y">에 대한 결정론적인 단일 점 예측(deterministic prediction)으로만 해석했습니다.</p></li>
+<li><p><strong>새로운 관점 (Now):</strong> 동일한 네트워크라도 <img src="https://latex.codecogs.com/png.latex?f_%7B%5Ctheta%7D(x)%20=%20P_%7BY%7D(%5Ccdot%7Cx,%5Ctheta)"> 처럼, 입력 <img src="https://latex.codecogs.com/png.latex?x">가 주어졌을 때 가능한 <img src="https://latex.codecogs.com/png.latex?Y">의 확률 분포를 모델링한다고 해석할 수 있습니다. 모델 아키텍처 자체는 크게 변하지 않으며(remains the same), 단지 결과를 어떻게 해석(how to interpret)하고 어떤 목적 함수로 훈련시킬 것인가의 차이일 뿐입니다.</p></li>
+</ul>
+<section id="회귀-예시-사과-가격-예측" class="level2">
+<h2 class="anchored" data-anchor-id="회귀-예시-사과-가격-예측">4.1. 회귀 예시: 사과 가격 예측</h2>
+<ul>
+<li>직관적인 회귀 문제(regression problem)를 상상해 봅시다.</li>
+<li>사과의 크기(size) <img src="https://latex.codecogs.com/png.latex?X_%7B1%7D">과 무게(weight) <img src="https://latex.codecogs.com/png.latex?X_%7B2%7D">가 주어졌을 때(Given), 사과의 가격 <img src="https://latex.codecogs.com/png.latex?y">를 예측해야 합니다.</li>
+<li>현실 세계에서 오차가 정확히 ’0(zero error)’인 완벽한 점 예측은 불가능합니다(No!). 대신 우리는 사과 가격이 가질 수 있는 불확실성을 포함한 분포(distribution of price) 자체를 예측해야 합니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.3/images/apple_regression_gaussians.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 두 가지 다른 입력 피처에 따른 가우시안 가격 예측 분포. 좌측은 작고 가벼운 사과(<img src="https://latex.codecogs.com/png.latex?X_1=10%5Ctext%7Bcm%7D,%20X_2=10%5Ctext%7Bg%7D">)에 대해 모델이 평균 가격 <img src="https://latex.codecogs.com/png.latex?%5Cmu=1.5">를 예측한 분포 곡선을 보여줍니다. 반면 우측은 크고 무거운 사과(<img src="https://latex.codecogs.com/png.latex?X_1=15%5Ctext%7Bcm%7D,%20X_2=20%5Ctext%7Bg%7D">)에 대해 모델이 더 높은 평균 가격 <img src="https://latex.codecogs.com/png.latex?%5Cmu=2.5">를 예측한 곡선입니다. 단순히 하나의 가격 점을 찍는 것이 아니라, 가능한 가격의 ’범위와 확률’을 가우시안 형태로 출력하고 있음을 보여줍니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>위 그림처럼 네트워크 <img src="https://latex.codecogs.com/png.latex?f_%7B%5Ctheta%7D">를 통해 사과의 특성(<img src="https://latex.codecogs.com/png.latex?X_1,%20X_2">)에 따라 가격 분포의 평균 <img src="https://latex.codecogs.com/png.latex?%5Cmu">가 유동적으로 변하게 할 수 있습니다.</li>
+<li>만약 RMSE 에러를 최소화하도록 훈련된다면 이는 고정 분산을 가정한 것이지만, 새로운 프로젝션 헤드를 추가한다면 가격의 불확실성(uncertainty) <img src="https://latex.codecogs.com/png.latex?%5Csigma">까지도 유동적으로 함께 모델링(model)할 수 있습니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="분포-가정의-중요성과-새로운-목적-함수-귤-가격-예측" class="level1">
+<h1>5. 분포 가정의 중요성과 새로운 목적 함수: 귤 가격 예측</h1>
+<ul>
+<li><p>우리가 타겟 변수에 대해 어떤 확률 분포(Different distribution <img src="https://latex.codecogs.com/png.latex?p_%7B%5Cphi%7D(y)">)를 가정하느냐에 따라 적용해야 할 NLL 손실 함수 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D">의 모양이 완전히 달라집니다.</p></li>
+<li><p>유사한 예시(similar example)로 귤(tangerine)의 크기 <img src="https://latex.codecogs.com/png.latex?x_%7B1%7D">과 무게 <img src="https://latex.codecogs.com/png.latex?x_%7B2%7D">를 통해 가격 <img src="https://latex.codecogs.com/png.latex?y">를 예측한다고 가정해 봅시다.</p></li>
+<li><p>그런데 만약 우리가 귤이 흔하게 널려있는 제주도(Jeju island)에 살고 있다면 어떨까요? 제주도의 많은 지역에서 귤은 거의 무료(free)에 가깝게 거래되거나 나누어집니다. 이 경우 귤의 가격 <img src="https://latex.codecogs.com/png.latex?y">는 종 모양의 정규분포가 아닌, 0에 가장 많은 확률이 몰려있는 <strong>지수 분포(exponential distribution)</strong>를 따를 확률이 높습니다.</p></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.3/images/exponential_distributions.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Clambda"> 값(0.5, 1.0, 1.5)에 따른 지수 분포(Exponential Distribution)의 확률 밀도 함수(PDF). 가로축은 가격 <img src="https://latex.codecogs.com/png.latex?x">를, 세로축은 확률 밀도 <img src="https://latex.codecogs.com/png.latex?P(x)">를 나타냅니다. 가격이 0에 가까울수록 확률 밀도가 가장 높고 우측으로 갈수록 급격히 감소하는 형태를 띠며, <img src="https://latex.codecogs.com/png.latex?%5Clambda"> 값이 클수록(하늘색 선) 분포가 0 근처에 더 날카롭게 집중됨을 보여줍니다. 제주도의 귤 가격처럼 거의 0(무료)에 가까운 데이터를 모델링하는 데 완벽히 부합합니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><p>지수 분포의 파라미터는 단 하나, 기댓값에 해당하는 <img src="https://latex.codecogs.com/png.latex?1/%5Clambda"> 뿐입니다. 가격 <img src="https://latex.codecogs.com/png.latex?y">는 음수가 될 수 없으므로(nonnegative를 가정), 지수 분포의 PDF는 <img src="https://latex.codecogs.com/png.latex?f(y;%5Clambda)%20=%20%5Clambda%20e%5E%7B-%5Clambda%20y%7D">로 정의됩니다.</p></li>
+<li><p>스케일의 일관성을 위해 모델의 신경망 출력 <img src="https://latex.codecogs.com/png.latex?f_%7B%5Ctheta%7D(x)">를 <img src="https://latex.codecogs.com/png.latex?1/%5Clambda"> 로 추정하도록 설정한다면, 이 문제에 대한 NLL 손실 함수는 확률 밀도 함수에 <img src="https://latex.codecogs.com/png.latex?-%5Clog">를 취하여 다음과 같이 유도됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D(%5Ccdot)%20=%20%5Clog%20f_%7B%5Ctheta%7D(x)%20+%20%5Cfrac%7By%7D%7Bf_%7B%5Ctheta%7D(x)%7D"></p>
+<ul>
+<li>이 수식이 주는 가장 강력하고 중요한 통찰은, <strong>기존 회귀 손실함수에서 널리 쓰이던 “에러(Error)”의 개념(예: <img src="https://latex.codecogs.com/png.latex?%7Cy%20-%20%5Chat%7By%7D%7C">)이 완전히 사라졌다(No concept of error)</strong>는 점입니다! 오직 MLE 원리에 의해 유도된 우도식 그 자체가 전혀 새로운 목적 함수(New Objective Function)가 되어 확률적 예측 모델을 훌륭하게 학습시킬 수 있습니다.</li>
+</ul>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/21.Time-Series-Forecasting-2/21.3/</guid>
+  <pubDate>Wed, 20 May 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>[Data Mining] 20. Time Series Forecasting (Part 1)</title>
   <dc:creator>유성현 </dc:creator>
@@ -3368,469 +3951,6 @@ font-style: inherit;">7.</span>     Q_old를 Q_new로 업데이트합니다.</sp
  ]]></description>
   <category>Data Mining</category>
   <guid>https://shsha0110.github.io/posts/Data Mining/17.Deep-Learning-2/17.3/</guid>
-  <pubDate>Wed, 06 May 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Data Mining] 17. Deep Learning (Part 4)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Data Mining/17.Deep-Learning-2/17.4/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-word2vec에서-오토인코더로" class="level1">
-<h1>1. Introduction: Word2Vec에서 오토인코더로</h1>
-<ul>
-<li><p>이전 포스트들에서 우리는 데이터를 저차원의 벡터로 변환하는 임베딩(Embedding)의 개념과, 이를 자연어에 적용하여 주변 문맥을 예측하는 <strong>Word2Vec</strong>에 대해 알아보았습니다. 흥미롭게도 Word2Vec의 구조를 거시적인 관점에서 바라보면, 오늘 다룰 주제인 <strong>오토인코더(Autoencoder)</strong>의 구조와 매우 닮아 있습니다.</p></li>
-<li><p>Word2Vec이 ’중심 단어로 주변 단어를 예측’하는 프록시 태스크(Proxy Task)를 통해 임베딩을 학습했다면, 오토인코더는 <strong>‘입력된 데이터 그 자신을 똑같이 복원(Reconstruct)’</strong>하는 태스크를 통해 데이터의 가장 본질적인 특징을 학습합니다. 딥러닝에서 표현 학습(Representation Learning)을 수행하는 가장 기본적이면서도 강력한 범용 신경망 구조가 바로 오토인코더입니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="오토인코더의-핵심-구조-인코더와-디코더" class="level1">
-<h1>2. 오토인코더의 핵심 구조: 인코더와 디코더</h1>
-<ul>
-<li>오토인코더는 크게 두 가지 핵심 함수(네트워크)로 구성됩니다.
-<ul>
-<li><ol type="1">
-<li><strong>인코더 (Encoder) <img src="https://latex.codecogs.com/png.latex?f">:</strong></li>
-</ol>
-<ul>
-<li>고차원의 원본 데이터를 저차원의 임베딩 공간으로 압축하는 함수입니다. 원본 데이터의 차원을 <img src="https://latex.codecogs.com/png.latex?M">, 임베딩 공간의 차원을 <img src="https://latex.codecogs.com/png.latex?D">라고 할 때, 인코더 <img src="https://latex.codecogs.com/png.latex?f">는 <img src="https://latex.codecogs.com/png.latex?M"> 차원의 입력을 받아 <img src="https://latex.codecogs.com/png.latex?D"> 차원의 벡터로 변환합니다. 이때 반드시 <strong><img src="https://latex.codecogs.com/png.latex?D%20%5Cll%20M"></strong> (임베딩 차원이 원본 차원보다 훨씬 작음)을 만족해야 합니다.</li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>디코더 (Decoder) <img src="https://latex.codecogs.com/png.latex?g">:</strong></li>
-</ol>
-<ul>
-<li>압축된 임베딩 벡터를 다시 원본 데이터의 차원으로 복원하는 함수입니다. 즉, <img src="https://latex.codecogs.com/png.latex?D"> 차원의 벡터 <img src="https://latex.codecogs.com/png.latex?f(x)">를 입력받아 다시 원래의 <img src="https://latex.codecogs.com/png.latex?M"> 차원 공간으로 되돌리는 역할을 수행합니다.</li>
-</ul></li>
-</ul></li>
-<li>이 두 구조가 결합되어 원본 입력 <img src="https://latex.codecogs.com/png.latex?x">가 네트워크를 통과하면 최종적으로 출력 <img src="https://latex.codecogs.com/png.latex?%5Chat%7Bx%7D%20=%20g(f(x))">가 도출됩니다.</li>
-</ul>
-<hr>
-</section>
-<section id="목적-함수-재구성-오차-reconstruction-error-최소화" class="level1">
-<h1>3. 목적 함수: 재구성 오차 (Reconstruction Error) 최소화</h1>
-<ul>
-<li><p>오토인코더의 궁극적인 목표는 <strong>입력 데이터 <img src="https://latex.codecogs.com/png.latex?x">와 복원된 데이터 <img src="https://latex.codecogs.com/png.latex?g(f(x))"> 사이의 차이를 최소화</strong>하는 최적의 함수 <img src="https://latex.codecogs.com/png.latex?f">와 <img src="https://latex.codecogs.com/png.latex?g">를 찾는 것입니다.</p></li>
-<li><p>이때 사용되는 목적 함수(Objective function)를 <strong>재구성 오차(Reconstruction Error)</strong>라고 부르며, 수식으로는 다음과 같이 입력과 출력 간의 L2 노름(유클리디안 거리)으로 정의됩니다.</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D(x)%20=%20%7C%7Cg(f(x))%20-%20x%7C%7C_2"></p>
-<ul>
-<li><p><em>참고: 다루는 데이터의 성격이나 확률적 가정에 따라 L2 거리 외에도 교차 엔트로피(Cross-Entropy) 등 다양한 목적 함수 변형이 존재할 수 있습니다.</em></p></li>
-<li><p><strong>의미 (Meaning):</strong></p>
-<ul>
-<li>오토인코더가 완벽에 가깝게 <img src="https://latex.codecogs.com/png.latex?x">를 재구성할 수 있다는 것은, 압축된 벡터 <img src="https://latex.codecogs.com/png.latex?f(x)"> 내부에 <strong>원본 데이터 <img src="https://latex.codecogs.com/png.latex?x">를 묘사하는 가장 핵심적이고 필수적인 정보(Essential information)가 모두 보존되어 있음</strong>을 뜻합니다. 따라서 학습이 완료된 후의 <img src="https://latex.codecogs.com/png.latex?f(x)">는 매우 효과적이고 밀집된 데이터의 ’표현(Embedding)’으로 간주하여 다양한 하위 태스크(분류, 군집화 등)에 활용할 수 있습니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="아키텍처-비교-오토인코더-vs.-word2vec" class="level1">
-<h1>4. 아키텍처 비교: 오토인코더 vs.&nbsp;Word2Vec</h1>
-<ul>
-<li>가장 단순한 형태의 선형 오토인코더를 가정해 보겠습니다. 인코더와 디코더를 단일 행렬 곱셈으로 정의하면 다음과 같습니다.
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?f(x)%20=%20x%5E%5Ctop%20W"></li>
-<li><img src="https://latex.codecogs.com/png.latex?g(v)%20=%20v%5E%5Ctop%20W'"></li>
-</ul></li>
-<li>이 수식은 이전 포스트에서 살펴본 Word2Vec의 은닉층-출력층 계산 방식과 거의 유사합니다. 하지만 명확한 <strong>두 가지 차이점</strong>이 존재합니다.
-<ul>
-<li><ol type="1">
-<li><strong>입력 벡터의 성질:</strong> Word2Vec에서는 입력 <img src="https://latex.codecogs.com/png.latex?x">가 0과 1로만 이루어진 극도로 희소한 원-핫 벡터(One-hot vector)였습니다. 반면, 범용적인 오토인코더에서 <img src="https://latex.codecogs.com/png.latex?x">는 이미지 픽셀 값이나 연속적인 수치 등을 포함하는 일반적인 밀집 벡터(Dense/Continuous vector)일 수 있습니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>출력층의 활성화 함수:</strong> Word2Vec은 주변 단어의 ’확률 분포’를 구하기 위해 출력 <img src="https://latex.codecogs.com/png.latex?g(f(x))">에 소프트맥스(Softmax) 함수를 적용했습니다. 하지만 오토인코더는 원본 데이터 수치 자체를 복원하는 것이 목적이므로, 복원 단계에서 소프트맥스를 강제하지 않습니다.</li>
-</ol></li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/17.Deep-Learning-2/17.4/images/basic_autoencoder.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 단일 은닉층을 가진 기본 오토인코더의 구조. 6개의 연속형 입력 노드(Input layer)가 3개의 노드로 이루어진 병목(Bottleneck/Hidden layer)으로 압축된 후, 다시 6개의 출력 노드(Output layer)로 복원되는 과정을 대칭적인 네트워크 구조로 보여줍니다.</figcaption>
-</figure>
-</div>
-<section id="병목bottleneck-구간의-중요성" class="level3">
-<h3 class="anchored" data-anchor-id="병목bottleneck-구간의-중요성">병목(Bottleneck) 구간의 중요성</h3>
-<ul>
-<li>위 그림에서 중심부에 위치한 은닉층을 <strong>병목(Bottleneck)</strong>이라고 부릅니다. 이 병목 구간의 존재가 오토인코더의 정체성 그 자체입니다. 만약 임베딩 차원 <img src="https://latex.codecogs.com/png.latex?D">가 원본 차원 <img src="https://latex.codecogs.com/png.latex?M">보다 크거나 같다면 (<img src="https://latex.codecogs.com/png.latex?D%20%5Cge%20M">), 신경망은 데이터의 유의미한 패턴을 추출하는 대신 단순히 입력을 그대로 출력으로 복사하는 <strong>항등 함수(Identity mapping)를 ‘암기(Memorize)’</strong>해 버릴 위험이 큽니다. 차원을 강제로 좁히는 병목을 거쳐야만 네트워크가 데이터의 노이즈를 버리고 가장 중요한 기저 패턴(Latent core)만을 압축하여 학습하게 됩니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="특이값-분해svd와의-수학적-연결고리" class="level1">
-<h1>5. 특이값 분해(SVD)와의 수학적 연결고리</h1>
-<ul>
-<li><p>오토인코더의 철학은 전통적인 선형대수학의 차원 축소 기법인 <strong>특이값 분해(SVD, Singular Value Decomposition)</strong>와 매우 깊은 연관이 있습니다. 관찰해 보면 SVD와 (선형) 오토인코더는 사실상 동일한 목표를 향해 나아갑니다.</p></li>
-<li><p>행렬 <img src="https://latex.codecogs.com/png.latex?M">에 대한 Truncated SVD(Low-rank approximation)는 재구성 오차를 최소화하는 근사 행렬 <img src="https://latex.codecogs.com/png.latex?U%20%5CSigma%20V%5E%5Ctop">를 도출합니다. 완전히 학습된 선형 오토인코더 역시 재구성 오차를 최소화하는 가중치 행렬 <img src="https://latex.codecogs.com/png.latex?W">와 <img src="https://latex.codecogs.com/png.latex?W'">를 제공합니다.</p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/17.Deep-Learning-2/17.4/images/svd_matrix_decomposition.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 특이값 분해(SVD)의 행렬 분해 도식. 원본 데이터 행렬 M이 세 개의 행렬 U, Σ, V^T의 곱으로 분해되는 모습을 보여주며, 이는 오토인코더에서 차원을 축소하고 복원하는 두 가중치 행렬 W, W’의 역할과 수학적으로 맞닿아 있음을 직관적으로 나타냅니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>수학적으로 이 둘은 다음과 같은 대응 관계를 갖습니다.
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?V%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bn%20%5Ctimes%20r%7D"> (열-개념 행렬, Column-to-concept matrix)는 오토인코더의 인코더 가중치 <strong><img src="https://latex.codecogs.com/png.latex?W">에 대응</strong>됩니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?U%5E%5Ctop%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Br%20%5Ctimes%20m%7D"> (개념-행 행렬, Concept-to-row matrix)는 오토인코더의 디코더 가중치 <strong><img src="https://latex.codecogs.com/png.latex?W'">에 대응</strong>됩니다.</li>
-</ul></li>
-<li>즉, 활성화 함수가 없는 얕은(Shallow) 구조의 오토인코더를 학습시키는 것은 데이터 행렬의 주요 주성분(Principal Components)이나 특이값 분해 공간을 찾아내는 것과 본질적으로 같습니다.</li>
-</ul>
-<hr>
-</section>
-<section id="선형성을-넘어-딥러닝-기반-오토인코더-deep-autoencoders" class="level1">
-<h1>6. 선형성을 넘어: 딥러닝 기반 오토인코더 (Deep Autoencoders)</h1>
-<ul>
-<li><p>SVD는 강력하지만 본질적으로 <strong>선형적(Linear)</strong>인 차원 축소 기법이라는 한계를 지닙니다. 현실의 데이터는 비선형적인 매니폴드(Manifold) 상에 존재하는 경우가 많습니다.</p></li>
-<li><p>오토인코더가 SVD의 성능을 압도할 수 있는 이유는 바로 <strong>비선형성(Nonlinearity)</strong>을 활용할 수 있기 때문입니다.</p>
-<ul>
-<li><ol type="1">
-<li><strong>다층 구조 (Multiple Layers):</strong> 인코더 <img src="https://latex.codecogs.com/png.latex?f">와 디코더 <img src="https://latex.codecogs.com/png.latex?g">를 단일 행렬 곱이 아닌, 여러 개의 은닉층이 겹겹이 쌓인 깊은 신경망(Deep Neural Networks)으로 설계합니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>활성화 함수 (Activation Function):</strong> 각 층의 출력, 특히 병목 구간의 출력에 ReLU, Sigmoid, Tanh와 같은 비선형 활성화 함수를 적용합니다.</li>
-</ol></li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/17.Deep-Learning-2/17.4/images/deep_autoencoder.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 다층 신경망(Deep Neural Network)으로 확장된 오토인코더 구조. 입력층에서 병목(Bottleneck) 구간인 은닉층 중심부로 갈수록 층의 크기가 점진적으로 줄어드는 인코더(Encoder)와, 다시 원본 크기로 점진적으로 확장되는 디코더(Decoder)가 결합된 깊은(Deep) 대칭 구조를 보여줍니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>이러한 깊은 구조와 비선형성이 결합함으로써, 딥 오토인코더는 데이터 간의 단순 선형 상관관계를 넘어 복잡하게 뒤틀려 있는 데이터의 심층적인 기저 표현까지 유연하게 포착할 수 있는 강력한 표현 학습기가 됩니다.</li>
-</ul>
-
-
-
-</section>
-
- ]]></description>
-  <category>Data Mining</category>
-  <guid>https://shsha0110.github.io/posts/Data Mining/17.Deep-Learning-2/17.4/</guid>
-  <pubDate>Wed, 06 May 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Machine Learning] 14. Unsupervised Learning</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Machine Learing/14.Unsupervised-Learning/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-비지도-학습-unsupervised-learning" class="level1">
-<h1>1. Introduction: 비지도 학습 (Unsupervised Learning)</h1>
-<ul>
-<li><p>지금까지의 머신러닝 모델들은 주로 입력 데이터 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">와 그에 대응하는 정답 레이블 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D">가 쌍으로 주어지는 <strong>지도 학습(Supervised Learning)</strong> 환경을 가정했습니다. 그러나 현실 세계의 많은 데이터는 레이블이 지정되지 않은 상태로 존재합니다.</p></li>
-<li><p><strong>비지도 학습(Unsupervised Learning)</strong>은 레이블이 없는 데이터 <img src="https://latex.codecogs.com/png.latex?%5C%7Bx%5E%7B(1)%7D,%20%5Cdots,%20x%5E%7B(n)%7D%5C%7D">만을 이용하여 데이터 내재적인 구조와 패턴을 학습하는 방법론입니다. 본 포스트에서는 비지도 학습의 대표적인 알고리즘인 <strong>K-means 클러스터링(K-means Clustering)</strong>과 그 확률적 확장판이라 할 수 있는 <strong>EM 알고리즘(Expectation-Maximization Algorithm)</strong>, 그리고 이를 활용한 <strong>가우시안 혼합 모델(Mixture of Gaussians)</strong>에 대해 수학적으로 깊이 있게 다루어 보겠습니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="k-means-clustering-algorithm" class="level1">
-<h1>2. K-means Clustering Algorithm</h1>
-<section id="핵심-아이디어와-알고리즘" class="level2">
-<h2 class="anchored" data-anchor-id="핵심-아이디어와-알고리즘">2.1. 핵심 아이디어와 알고리즘</h2>
-<ul>
-<li><p>주어진 레이블 없는 데이터세트를 <img src="https://latex.codecogs.com/png.latex?k">개의 응집된 ’클러스터(Cluster)’로 묶는 것이 K-means의 목표입니다. 각 클러스터는 중심점(centroid) <img src="https://latex.codecogs.com/png.latex?%5Cmu_j">에 의해 대표됩니다.</p></li>
-<li><p>알고리즘은 다음과 같이 아주 직관적인 두 단계를 반복합니다.</p>
-<ul>
-<li><ol type="1">
-<li><strong>초기화(Initialization):</strong> 클러스터의 중심 <img src="https://latex.codecogs.com/png.latex?%5Cmu_1,%20%5Cmu_2,%20%5Cdots,%20%5Cmu_k%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">를 무작위로 설정합니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>반복(Iterate until convergence):</strong></li>
-</ol>
-<ul>
-<li><strong>할당 단계(Assignment):</strong> 각 데이터 포인트 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">를 가장 가까운 클러스터 중심 <img src="https://latex.codecogs.com/png.latex?%5Cmu_j">에 할당합니다. <img src="https://latex.codecogs.com/png.latex?c%5E%7B(i)%7D%20:=%20%5Carg%20%5Cmin_j%20%7C%7Cx%5E%7B(i)%7D%20-%20%5Cmu_j%7C%7C%5E2"></li>
-<li><strong>업데이트 단계(Update):</strong> 각 클러스터에 할당된 데이터 포인트들의 평균 좌표로 클러스터 중심 <img src="https://latex.codecogs.com/png.latex?%5Cmu_j">를 이동시킵니다. <img src="https://latex.codecogs.com/png.latex?%5Cmu_j%20:=%20%5Cfrac%7B%5Csum_%7Bi=1%7D%5En%201%5C%7Bc%5E%7B(i)%7D%20=%20j%5C%7D%20x%5E%7B(i)%7D%7D%7B%5Csum_%7Bi=1%7D%5En%201%5C%7Bc%5E%7B(i)%7D%20=%20j%5C%7D%7D"></li>
-</ul></li>
-</ul></li>
-</ul>
-</section>
-<section id="알고리즘의-수렴성-distortion-function" class="level2">
-<h2 class="anchored" data-anchor-id="알고리즘의-수렴성-distortion-function">2.2. 알고리즘의 수렴성 (Distortion Function)</h2>
-<ul>
-<li>이 직관적인 알고리즘이 반드시 수렴할까요? 이를 수학적으로 증명하기 위해 <strong>왜곡 함수(Distortion Function)</strong> <img src="https://latex.codecogs.com/png.latex?J">를 정의합니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?J(c,%20%5Cmu)%20=%20%5Csum_%7Bi=1%7D%5En%20%7C%7Cx%5E%7B(i)%7D%20-%20%5Cmu_%7Bc%5E%7B(i)%7D%7D%7C%7C%5E2"></p>
-<ul>
-<li>함수 <img src="https://latex.codecogs.com/png.latex?J">는 각 데이터 포인트와 할당된 클러스터 중심 간의 거리 제곱합을 의미합니다.
-<ul>
-<li><strong>할당 단계</strong>는 <img src="https://latex.codecogs.com/png.latex?%5Cmu">를 고정한 상태에서 <img src="https://latex.codecogs.com/png.latex?c">에 대해 <img src="https://latex.codecogs.com/png.latex?J">를 최소화하는 과정입니다.</li>
-<li><strong>업데이트 단계</strong>는 <img src="https://latex.codecogs.com/png.latex?c">를 고정한 상태에서 <img src="https://latex.codecogs.com/png.latex?%5Cmu">에 대해 <img src="https://latex.codecogs.com/png.latex?J">를 최소화하는 과정입니다.</li>
-</ul></li>
-<li>결과적으로 두 단계 모두 <img src="https://latex.codecogs.com/png.latex?J">의 값을 감소시키거나 유지하므로, K-means 알고리즘 진행 중 <img src="https://latex.codecogs.com/png.latex?J">는 <strong>단조 감소(monotonically decrease)</strong>하며 반드시 수렴하게 됩니다. 단, 전역 최적해(Global minimum)가 아닌 나쁜 지역 최소값(Local minima)에 빠질 수 있으므로, 실무에서는 여러 번 무작위 초기화를 수행한 뒤 가장 낮은 <img src="https://latex.codecogs.com/png.latex?J(c,%20%5Cmu)">를 갖는 결과를 선택합니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="em-algorithm-mixture-of-gaussians" class="level1">
-<h1>3. EM Algorithm &amp; Mixture of Gaussians</h1>
-<ul>
-<li>K-means는 각 데이터를 하나의 클러스터에 완전히 할당하는 ’Hard Clustering’입니다. 이를 확률적인 관점에서 ’Soft Clustering’으로 확장한 것이 가우시안 혼합 모델(GMM)과 EM 알고리즘입니다.</li>
-</ul>
-<section id="em-알고리즘의-직관적-이해" class="level2">
-<h2 class="anchored" data-anchor-id="em-알고리즘의-직관적-이해">3.1. EM 알고리즘의 직관적 이해</h2>
-<ul>
-<li>EM(Expectation-Maximization) 알고리즘은 관측되지 않은 잠재 변수(Latent Variable) <img src="https://latex.codecogs.com/png.latex?z">가 존재할 때 확률 모델의 파라미터를 추정하는 방법론입니다.
-<ul>
-<li><strong>E-step (Expectation):</strong> 현재 파라미터를 바탕으로, 각 데이터에 대한 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z%5E%7B(i)%7D">의 값을 “추측(guess)”합니다.</li>
-<li><strong>M-step (Maximization):</strong> E-step에서의 추측이 맞다고 가정하고, 그 추측을 바탕으로 모델의 파라미터를 업데이트(최대우도추정)합니다.</li>
-</ul></li>
-</ul>
-</section>
-<section id="가우시안-혼합-모델-mixture-of-gaussians-gmm" class="level2">
-<h2 class="anchored" data-anchor-id="가우시안-혼합-모델-mixture-of-gaussians-gmm">3.2. 가우시안 혼합 모델 (Mixture of Gaussians, GMM)</h2>
-<ul>
-<li><p>데이터가 <img src="https://latex.codecogs.com/png.latex?k">개의 서로 다른 정규 분포(가우시안)가 섞여서 생성되었다고 가정해 봅시다.</p></li>
-<li><p>데이터 생성 과정은 다음과 같이 모델링됩니다:</p>
-<ul>
-<li><ol type="1">
-<li>잠재 변수 <img src="https://latex.codecogs.com/png.latex?z%5E%7B(i)%7D%20%5Csim%20%5Ctext%7BMultinomial%7D(%5Cphi)"> (즉, <img src="https://latex.codecogs.com/png.latex?P(z%5E%7B(i)%7D%20=%20j)%20=%20%5Cphi_j">)에 따라 어느 클러스터에서 데이터를 생성할지 선택합니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li>선택된 클러스터의 분포에 따라 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D%20%7C%20z%5E%7B(i)%7D%20=%20j%20%5Csim%20%5Cmathcal%7BN%7D(%5Cmu_j,%20%5CSigma_j)">에서 데이터를 샘플링합니다.</li>
-</ol></li>
-</ul></li>
-<li><p>결과적인 결합 확률 분포는 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?p(x%5E%7B(i)%7D,%20z%5E%7B(i)%7D)%20=%20p(x%5E%7B(i)%7D%7Cz%5E%7B(i)%7D)p(z%5E%7B(i)%7D)"></p></li>
-<li><p>목적은 로그 우도 함수를 최대화하는 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cphi,%20%5Cmu,%20%5CSigma">를 찾는 것입니다. <img src="https://latex.codecogs.com/png.latex?l(%5Cphi,%20%5Cmu,%20%5CSigma)%20=%20%5Csum_%7Bi=1%7D%5En%20%5Clog%20%5Csum_%7Bz%5E%7B(i)%7D=1%7D%5Ek%20p(x%5E%7B(i)%7D%7Cz%5E%7B(i)%7D;%20%5Cmu,%20%5CSigma)p(z%5E%7B(i)%7D;%20%5Cphi)"></p></li>
-<li><p>하지만 <img src="https://latex.codecogs.com/png.latex?%5Clog"> 안에 덧셈(<img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bz%7D">)이 들어있어, 미분하여 0이 되는 닫힌 형태(closed form)의 해를 구하는 것이 불가능합니다. 만약 각 데이터가 어느 클러스터에서 왔는지(<img src="https://latex.codecogs.com/png.latex?z%5E%7B(i)%7D">) 정답을 안다면 식은 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bi=1%7D%5En%20%5Cleft(%20%5Clog%20p(x%5E%7B(i)%7D%7Cz%5E%7B(i)%7D;%20%5Cmu,%20%5CSigma)%20+%20%5Clog%20p(z%5E%7B(i)%7D;%20%5Cphi)%20%5Cright)">로 간단해져서 가우시안 판별 분석(GDA)처럼 쉽게 풀 수 있을 것입니다. 여기서 EM 알고리즘의 아이디어가 출발합니다.</p></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="일반화된-em-알고리즘-general-em-algorithms" class="level1">
-<h1>4. 일반화된 EM 알고리즘 (General EM Algorithms)</h1>
-<ul>
-<li>GMM을 넘어, 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">가 존재하는 모든 모델에 적용 가능한 일반적인 EM 알고리즘을 유도해 보겠습니다. 이를 위해 핵심 수학적 도구인 ’옌센의 부등식’이 필요합니다.</li>
-</ul>
-<section id="옌센의-부등식-jensens-inequality" class="level2">
-<h2 class="anchored" data-anchor-id="옌센의-부등식-jensens-inequality">4.1. 옌센의 부등식 (Jensen’s Inequality)</h2>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?f">가 <strong>볼록(convex) 함수</strong>이고 <img src="https://latex.codecogs.com/png.latex?X">가 확률 변수일 때, <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D%5Bf(X)%5D%20%5Cge%20f(%5Cmathbb%7BE%7D%5BX%5D)">가 성립합니다.</li>
-<li>반대로, 로그 함수(<img src="https://latex.codecogs.com/png.latex?f(x)%20=%20%5Clog%20x">)와 같이 <strong>오목(concave) 함수</strong>인 경우에는 부등호 방향이 반대로 되어 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D%5Bf(X)%5D%20%5Cle%20f(%5Cmathbb%7BE%7D%5BX%5D)">가 성립합니다.</li>
-</ul>
-</section>
-<section id="증거-하한-elbo-evidence-lower-bound의-유도" class="level2">
-<h2 class="anchored" data-anchor-id="증거-하한-elbo-evidence-lower-bound의-유도">4.2. 증거 하한 (ELBO, Evidence Lower Bound)의 유도</h2>
-<ul>
-<li>우리의 목표는 불완전 데이터의 로그 우도 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bi=1%7D%5En%20%5Clog%20p(x%5E%7B(i)%7D;%20%5Ctheta)">를 최대화하는 것입니다. 하나의 데이터 포인트 <img src="https://latex.codecogs.com/png.latex?x">에 대해, <img src="https://latex.codecogs.com/png.latex?z">에 대한 임의의 확률 분포 <img src="https://latex.codecogs.com/png.latex?Q(z)"> (단, <img src="https://latex.codecogs.com/png.latex?%5Csum_z%20Q(z)=1,%20Q(z)%20%5Cge%200">)를 도입하여 식을 변형해 보겠습니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Clog%20p(x;%20%5Ctheta)%20=%20%5Clog%20%5Csum_z%20p(x,%20z;%20%5Ctheta)"> <img src="https://latex.codecogs.com/png.latex?=%20%5Clog%20%5Csum_z%20Q(z)%20%5Cfrac%7Bp(x,%20z;%20%5Ctheta)%7D%7BQ(z)%7D"></p>
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?%5Csum_z%20Q(z)%20%5B%5Ccdot%5D"> 은 분포 <img src="https://latex.codecogs.com/png.latex?Q">에 대한 기댓값 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D_%7Bz%20%5Csim%20Q%7D%5B%5Ccdot%5D"> 형태입니다. 로그 함수는 오목(concave) 함수이므로 옌센의 부등식을 적용할 수 있습니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Clog%20%5Csum_z%20Q(z)%20%5Cfrac%7Bp(x,%20z;%20%5Ctheta)%7D%7BQ(z)%7D%20%5Cge%20%5Csum_z%20Q(z)%20%5Clog%20%5Cfrac%7Bp(x,%20z;%20%5Ctheta)%7D%7BQ(z)%7D"></p>
-<ul>
-<li>이 우변을 가리켜 <strong>ELBO (Evidence Lower Bound)</strong>라고 부릅니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BELBO%7D(x;%20Q,%20%5Ctheta)%20=%20%5Csum_z%20Q(z)%20%5Clog%20%5Cfrac%7Bp(x,%20z;%20%5Ctheta)%7D%7BQ(z)%7D"></li>
-</ul>
-</section>
-<section id="em-알고리즘의-진행-e-step-m-step" class="level2">
-<h2 class="anchored" data-anchor-id="em-알고리즘의-진행-e-step-m-step">4.3. EM 알고리즘의 진행 (E-step &amp; M-step)</h2>
-<ul>
-<li><p>EM 알고리즘은 본질적으로 <img src="https://latex.codecogs.com/png.latex?Q">와 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 번갈아 업데이트하며 ELBO를 최대화하는 좌표 상승법(Coordinate Ascent)입니다.</p></li>
-<li><p><strong>1. E-step: <img src="https://latex.codecogs.com/png.latex?Q(z)"> 최적화</strong></p>
-<ul>
-<li>부등식을 ’등식(equality)’으로 만들어 하한선을 끌어올리기 위해, 기댓값 내부의 변수가 상수여야 합니다. 즉 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bp(x,%20z;%20%5Ctheta)%7D%7BQ(z)%7D%20=%20c">.</li>
-<li><img src="https://latex.codecogs.com/png.latex?Q(z)">가 확률 분포의 조건을 만족하도록 상수를 정리하면: <img src="https://latex.codecogs.com/png.latex?Q(z)%20=%20%5Cfrac%7Bp(x,%20z;%20%5Ctheta)%7D%7B%5Csum_z%20p(x,%20z;%20%5Ctheta)%7D%20=%20%5Cfrac%7Bp(x,%20z;%20%5Ctheta)%7D%7Bp(x;%20%5Ctheta)%7D%20=%20p(z%7Cx;%20%5Ctheta)"></li>
-<li>따라서 E-step에서는 <img src="https://latex.codecogs.com/png.latex?Q_i(z%5E%7B(i)%7D)">를 현재 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">가 주어졌을 때의 잠재 변수에 대한 <strong>사후 확률(Posterior)</strong>로 설정합니다. 이는 GMM에서 각 데이터가 각 클러스터에 속할 확률(Soft assignment) <img src="https://latex.codecogs.com/png.latex?w_j%5E%7B(i)%7D">를 구하는 것과 동일합니다.</li>
-</ul></li>
-<li><p><strong>2. M-step: <img src="https://latex.codecogs.com/png.latex?%5Ctheta"> 최적화</strong></p>
-<ul>
-<li>E-step에서 고정된 <img src="https://latex.codecogs.com/png.latex?Q_i">를 바탕으로, ELBO 식을 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">에 대해 최대화합니다. <img src="https://latex.codecogs.com/png.latex?%5Ctheta%20:=%20%5Carg%5Cmax_%5Ctheta%20%5Csum_%7Bi=1%7D%5En%20%5Csum_%7Bz%5E%7B(i)%7D%7D%20Q_i(z%5E%7B(i)%7D)%20%5Clog%20%5Cfrac%7Bp(x%5E%7B(i)%7D,%20z%5E%7B(i)%7D;%20%5Ctheta)%7D%7BQ_i(z%5E%7B(i)%7D)%7D"></li>
-</ul></li>
-<li><p>이 최적화 과정을 반복하면, ELBO가 증가함에 따라 원래의 목표 함수인 <img src="https://latex.codecogs.com/png.latex?%5Clog%20p(x;%20%5Ctheta)"> 역시 단조 증가하므로 알고리즘의 수렴성이 보장됩니다.</p></li>
-<li><p><em>참고: KL 발산(KL Divergence) 관점에서 ELBO는 <img src="https://latex.codecogs.com/png.latex?%5Clog%20p(x)%20-%20D_%7BKL%7D(Q%20%7C%7C%20p_%7Bz%7Cx%7D)">로 표현되며, E-step은 결국 <img src="https://latex.codecogs.com/png.latex?Q">와 사후 확률 간의 KL Divergence를 0으로 만들어 ELBO를 한계치까지 높이는 과정입니다.</em></p></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="gmm에서의-m-step-유도-detailed-derivations" class="level1">
-<h1>5. GMM에서의 M-step 유도 (Detailed Derivations)</h1>
-<ul>
-<li><p>이론적 이해를 바탕으로 다시 가우시안 혼합 모델(GMM)로 돌아와, M-step에서 중심 좌표 <img src="https://latex.codecogs.com/png.latex?%5Cmu_l">과 군집 혼합 비율 <img src="https://latex.codecogs.com/png.latex?%5Cphi_j">가 어떻게 업데이트되는지 구체적으로 미분해 보겠습니다.</p></li>
-<li><p>GMM의 M-step에서 최대화해야 할 목적 함수는 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bi=1%7D%5En%20%5Csum_%7Bj=1%7D%5Ek%20w_j%5E%7B(i)%7D%20%5Clog%20%5Cfrac%7Bp(x%5E%7B(i)%7D%7Cz%5E%7B(i)%7D=j;%20%5Cmu,%20%5CSigma)%20p(z%5E%7B(i)%7D=j;%20%5Cphi)%7D%7Bw_j%5E%7B(i)%7D%7D"></p></li>
-<li><p>가우시안 확률 밀도 함수를 대입하면 식은 아래와 같이 전개됩니다. <img src="https://latex.codecogs.com/png.latex?=%20%5Csum_%7Bi=1%7D%5En%20%5Csum_%7Bj=1%7D%5Ek%20w_j%5E%7B(i)%7D%20%5Clog%20%5Cleft(%20%5Cfrac%7B%5Cfrac%7B1%7D%7B(2%5Cpi)%5E%7Bd/2%7D%7C%5CSigma_j%7C%5E%7B1/2%7D%7D%20%5Cexp%5Cleft(-%5Cfrac%7B1%7D%7B2%7D(x%5E%7B(i)%7D-%5Cmu_j)%5ET%20%5CSigma_j%5E%7B-1%7D%20(x%5E%7B(i)%7D-%5Cmu_j)%5Cright)%20%5Ccdot%20%5Cphi_j%7D%7Bw_j%5E%7B(i)%7D%7D%20%5Cright)"></p></li>
-</ul>
-<section id="mu_l-에-대한-업데이트-유도" class="level2">
-<h2 class="anchored" data-anchor-id="mu_l-에-대한-업데이트-유도">5.1. <img src="https://latex.codecogs.com/png.latex?%5Cmu_l"> 에 대한 업데이트 유도</h2>
-<ul>
-<li><p>특정 클러스터 <img src="https://latex.codecogs.com/png.latex?l">의 중심점 <img src="https://latex.codecogs.com/png.latex?%5Cmu_l">에 대해 식을 미분하여 0이 되는 지점을 찾습니다. <img src="https://latex.codecogs.com/png.latex?j%20%5Cneq%20l">인 항들은 <img src="https://latex.codecogs.com/png.latex?%5Cmu_l">과 무관하므로 소거됩니다. <img src="https://latex.codecogs.com/png.latex?%5Cnabla_%7B%5Cmu_l%7D%20%5Csum_%7Bi=1%7D%5En%20w_l%5E%7B(i)%7D%20%5Cleft(%20-%5Cfrac%7B1%7D%7B2%7D(x%5E%7B(i)%7D-%5Cmu_l)%5ET%20%5CSigma_l%5E%7B-1%7D%20(x%5E%7B(i)%7D-%5Cmu_l)%20%5Cright)"></p></li>
-<li><p>이차식의 미분 공식 <img src="https://latex.codecogs.com/png.latex?%5Cnabla_x%20(x%5ET%20A%20x)%20=%202Ax"> (단, <img src="https://latex.codecogs.com/png.latex?%5CSigma_l%5E%7B-1%7D">은 대칭행렬)를 적용하면: <img src="https://latex.codecogs.com/png.latex?=%20%5Cfrac%7B1%7D%7B2%7D%20%5Csum_%7Bi=1%7D%5En%20w_l%5E%7B(i)%7D%20%5Cnabla_%7B%5Cmu_l%7D%20%5Cleft(%202%5Cmu_l%5ET%20%5CSigma_l%5E%7B-1%7D%20x%5E%7B(i)%7D%20-%20%5Cmu_l%5ET%20%5CSigma_l%5E%7B-1%7D%20%5Cmu_l%20%5Cright)"> <img src="https://latex.codecogs.com/png.latex?=%20%5Csum_%7Bi=1%7D%5En%20w_l%5E%7B(i)%7D%20%5Cleft(%20%5CSigma_l%5E%7B-1%7D%20x%5E%7B(i)%7D%20-%20%5CSigma_l%5E%7B-1%7D%20%5Cmu_l%20%5Cright)%20=%200"></p></li>
-<li><p>양변에 <img src="https://latex.codecogs.com/png.latex?%5CSigma_l">을 곱하여 정리한 뒤 <img src="https://latex.codecogs.com/png.latex?%5Cmu_l">에 대해 풀면 최종 업데이트 식이 도출됩니다: <img src="https://latex.codecogs.com/png.latex?%5Cmu_l%20:=%20%5Cfrac%7B%5Csum_%7Bi=1%7D%5En%20w_l%5E%7B(i)%7D%20x%5E%7B(i)%7D%7D%7B%5Csum_%7Bi=1%7D%5En%20w_l%5E%7B(i)%7D%7D"></p></li>
-<li><p>직관적으로, K-means의 중심 업데이트와 매우 유사하며 단순한 1/0 지시 함수 대신 ’가중치 <img src="https://latex.codecogs.com/png.latex?w_l%5E%7B(i)%7D">’를 사용한 가중 평균을 구하게 됩니다.</p></li>
-</ul>
-</section>
-<section id="phi_j-에-대한-업데이트-유도-lagrange-multiplier" class="level2">
-<h2 class="anchored" data-anchor-id="phi_j-에-대한-업데이트-유도-lagrange-multiplier">5.2. <img src="https://latex.codecogs.com/png.latex?%5Cphi_j"> 에 대한 업데이트 유도 (Lagrange Multiplier)</h2>
-<ul>
-<li><p><img src="https://latex.codecogs.com/png.latex?%5Cphi_j"> 업데이트에는 확률의 합은 1이어야 한다는 제약조건 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bj=1%7D%5Ek%20%5Cphi_j%20=%201">이 존재하므로 <strong>라그랑주 승수법(Lagrange Multiplier)</strong>을 사용해야 합니다.</p></li>
-<li><p>목적 함수에서 <img src="https://latex.codecogs.com/png.latex?%5Cphi_j">와 관련된 항만 뽑아내어 라그랑지안 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D(%5Cphi)">를 구성합니다: <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D(%5Cphi)%20=%20%5Csum_%7Bi=1%7D%5En%20%5Csum_%7Bj=1%7D%5Ek%20w_j%5E%7B(i)%7D%20%5Clog%20%5Cphi_j%20+%20%5Cbeta%20%5Cleft(%20%5Csum_%7Bj=1%7D%5Ek%20%5Cphi_j%20-%201%20%5Cright)"></p></li>
-<li><p><img src="https://latex.codecogs.com/png.latex?%5Cphi_j">에 대해 편미분하고 0으로 설정합니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B%5Cpartial%20%5Cmathcal%7BL%7D(%5Cphi)%7D%7B%5Cpartial%20%5Cphi_j%7D%20=%20%5Csum_%7Bi=1%7D%5En%20%5Cfrac%7Bw_j%5E%7B(i)%7D%7D%7B%5Cphi_j%7D%20+%20%5Cbeta%20=%200%20%5Cimplies%20%5Cphi_j%20=%20%5Cfrac%7B%5Csum_%7Bi=1%7D%5En%20w_j%5E%7B(i)%7D%7D%7B-%5Cbeta%7D"></p></li>
-<li><p>이 해가 제약조건 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bj=1%7D%5Ek%20%5Cphi_j%20=%201">을 만족해야 하므로, 양변을 <img src="https://latex.codecogs.com/png.latex?j">에 대해 모두 합합니다. <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bj=1%7D%5Ek%20%5Cphi_j%20=%201%20=%20%5Csum_%7Bj=1%7D%5Ek%20%5Cfrac%7B%5Csum_%7Bi=1%7D%5En%20w_j%5E%7B(i)%7D%7D%7B-%5Cbeta%7D%20=%20%5Cfrac%7B%5Csum_%7Bi=1%7D%5En%20%5Csum_%7Bj=1%7D%5Ek%20w_j%5E%7B(i)%7D%7D%7B-%5Cbeta%7D"></p></li>
-<li><p>E-step의 정의상 데이터 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">에 대한 모든 확률의 합은 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bj=1%7D%5Ek%20w_j%5E%7B(i)%7D%20=%201">이므로, 분자는 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bi=1%7D%5En%201%20=%20n">이 됩니다.</p></li>
-<li><p>따라서 <img src="https://latex.codecogs.com/png.latex?-%5Cbeta%20=%20n"> 임을 알 수 있습니다.</p></li>
-<li><p>최종적으로 도출된 <img src="https://latex.codecogs.com/png.latex?%5Cphi_j">의 식은 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%5Cphi_j%20:=%20%5Cfrac%7B1%7D%7Bn%7D%20%5Csum_%7Bi=1%7D%5En%20w_j%5E%7B(i)%7D"></p></li>
-<li><p>직관적으로, 전체 <img src="https://latex.codecogs.com/png.latex?n">개의 데이터 중에서 평균적으로 얼마나 많은 비중이 클러스터 <img src="https://latex.codecogs.com/png.latex?j">에 할당되었는지를 나타내는 비율입니다.</p></li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Machine Learning</category>
-  <guid>https://shsha0110.github.io/posts/Machine Learing/14.Unsupervised-Learning/</guid>
-  <pubDate>Wed, 06 May 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Machine Learning] 15. Unsupervised Learning</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Machine Learing/15.Unsupervised-Learning/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction" class="level1">
-<h1>1. Introduction</h1>
-<ul>
-<li>본 포스트에서는 비지도 학습(Unsupervised Learning)의 핵심적인 두 가지 방법론인 <strong>Variational Auto-Encoder (VAE)</strong>와 <strong>Principal Components Analysis (PCA)</strong>에 대해 다룹니다. VAE는 고차원의 연속형 잠재 변수(Latent Variable)를 비선형 모델인 신경망을 통해 학습할 수 있도록 EM(Expectation-Maximization) 알고리즘을 확장한 생성 모델입니다. 반면 PCA는 데이터의 차원을 축소하고 중복성을 제거하기 위해 널리 사용되는 선형 변환 기법입니다. 두 방법론 모두 데이터의 숨겨진 구조(Latent Space/Subspace)를 찾아낸다는 공통된 철학을 공유합니다.</li>
-</ul>
-<hr>
-</section>
-<section id="variational-auto-encoder-vae" class="level1">
-<h1>2. Variational Auto-Encoder (VAE)</h1>
-<section id="vae의-구조와-직관" class="level2">
-<h2 class="anchored" data-anchor-id="vae의-구조와-직관">2.1. VAE의 구조와 직관</h2>
-<ul>
-<li>Variational Auto-Encoder는 기본적으로 입력 데이터를 압축하는 <strong>Encoder</strong>와 이를 다시 복원하는 <strong>Decoder</strong>로 구성됩니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Machine Learing/15.Unsupervised-Learning/images/vae_architecture.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: Variational Auto-Encoder(VAE)의 전체 아키텍처. 입력 데이터 <img src="https://latex.codecogs.com/png.latex?X">가 Encoder 신경망(초록색 블록)을 통과하여 잠재 공간(Latent Space, 빨간색 블록의 정규분포 기호)의 분포 파라미터로 매핑됩니다. 이후 이 분포에서 샘플링된 잠재 변수가 다시 연속된 Decoder 신경망(파란색 블록)을 거쳐 원본 데이터와 유사한 <img src="https://latex.codecogs.com/png.latex?x'">로 복원되는 일련의 인코딩-디코딩 과정을 시각적으로 설명하고 있습니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><p>VAE 모델은 EM 알고리즘의 아이디어를 신경망이라는 강력한 비선형 함수 근사기에 접목한 알고리즘 군을 의미합니다. 고차원의 연속형 잠재 변수를 다루기 위해 VAE는 데이터가 생성되는 확률론적 과정을 모델링합니다.</p></li>
-<li><p>잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">는 사전 분포인 표준 정규분포를 따른다고 가정합니다: <img src="https://latex.codecogs.com/png.latex?z%5Csim%5Cmathcal%7BN%7D(0,I_%7Bk%5Ctimes%20k%7D)">.</p></li>
-<li><p>데이터 <img src="https://latex.codecogs.com/png.latex?x">는 주어진 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z">에 대해 신경망(Decoder) <img src="https://latex.codecogs.com/png.latex?g(z;%5Ctheta)">에 의해 파라미터화된 정규분포에서 생성됩니다: <img src="https://latex.codecogs.com/png.latex?x%7Cz%5Csim%5Cmathcal%7BN%7D(g(z;%5Ctheta),%5Csigma%5E%7B2%7DI_%7Bd%5Ctimes%20d%7D)"> (여기서 <img src="https://latex.codecogs.com/png.latex?%5Csigma">는 알려진 스칼라 값입니다).</p></li>
-<li><p>기존의 단순한 혼합 모델에서는 잠재 변수의 사후 분포(Posterior)인 <img src="https://latex.codecogs.com/png.latex?p(z%7Cx;%5Ctheta)">를 해석적으로(Analytically) 계산할 수 있었으나, VAE처럼 복잡한 비선형 신경망 <img src="https://latex.codecogs.com/png.latex?g(z;%5Ctheta)">가 도입되면 정확한 사후 분포를 직접 계산하는 것(Intractable)이 불가능해집니다.</p></li>
-</ul>
-</section>
-<section id="elbo-evidence-lower-bound-최적화" class="level2">
-<h2 class="anchored" data-anchor-id="elbo-evidence-lower-bound-최적화">2.2. ELBO (Evidence Lower Bound) 최적화</h2>
-<ul>
-<li><p>진짜 사후 분포 <img src="https://latex.codecogs.com/png.latex?p(z%7Cx;%5Ctheta)">를 구하기 어렵기 때문에, 우리는 이를 근사하는 다루기 쉬운 분포족(Family of distributions) <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BQ%7D">에서 최적의 분포 <img src="https://latex.codecogs.com/png.latex?Q">를 찾는 변분 추론(Variational Inference) 접근을 취합니다.</p></li>
-<li><p>이를 위해 목적 함수인 <strong>ELBO(Evidence Lower Bound)</strong>를 정의하며, 우리는 이 ELBO를 최대화하는 방향으로 모델을 학습시킵니다. 단일 관측치 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">에 대한 ELBO는 다음과 같이 주어집니다:</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?ELBO(Q,%5Ctheta)=%5Csum_%7Bi=1%7D%5E%7Bn%7D%5Cmathbb%7BE%7D_%7Bz%5E%7B(i)%7D%5Csim%20Q_%7Bi%7D%7D%5Cleft%5B%5Clog%5Cfrac%7Bp(x%5E%7B(i)%7D,z%5E%7B(i)%7D;%5Ctheta)%7D%7BQ_%7Bi%7D(z%5E%7B(i)%7D)%7D%5Cright%5D"></p>
-<ul>
-<li><p>연속형 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z%5Cin%5Cmathbb%7BR%7D%5E%7Bk%7D">를 다룰 때, <img src="https://latex.codecogs.com/png.latex?Q_i">는 데이터 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">에 종속적인 평균과 분산을 가지는 정규분포로 가정합니다.</p></li>
-<li><p>즉, 신경망 <img src="https://latex.codecogs.com/png.latex?q(%5Ccdot;%5Cphi)">와 <img src="https://latex.codecogs.com/png.latex?v(%5Ccdot;%5Cpsi)">를 사용하여 분포의 파라미터를 추정합니다. <img src="https://latex.codecogs.com/png.latex?Q_%7Bi%7D=%5Cmathcal%7BN%7D(q(x%5E%7B(i)%7D;%5Cphi),%20%5Ctext%7Bdiag%7D(v(x%5E%7B(i)%7D;%5Cpsi))%5E%7B2%7D)"></p></li>
-<li><p>여기서 함수 <img src="https://latex.codecogs.com/png.latex?q,%20v">가 바로 <strong>Encoder</strong> 역할을 수행하여 데이터를 잠재 공간(Latent code)으로 매핑하며, <img src="https://latex.codecogs.com/png.latex?g(z;%5Ctheta)">는 <strong>Decoder</strong> 역할을 합니다.</p></li>
-<li><p><img src="https://latex.codecogs.com/png.latex?Q_i">가 정규분포이므로 확률 밀도를 효율적으로 계산하고 샘플링을 진행하여 기댓값 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D_%7Bz%5E%7B(i)%7D%5Csim%20Q_%7Bi%7D%7D">을 추정할 수 있습니다.</p></li>
-</ul>
-</section>
-<section id="재매개변수화-트릭-re-parameterization-trick" class="level2">
-<h2 class="anchored" data-anchor-id="재매개변수화-트릭-re-parameterization-trick">2.3. 재매개변수화 트릭 (Re-Parameterization Trick)</h2>
-<ul>
-<li>모델을 학습하기 위해 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta,%20%5Cphi,%20%5Cpsi">에 대해 경사상승법(Gradient Ascent)을 수행해야 합니다.</li>
-<li>Decoder 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">에 대한 기울기 계산은 직관적이지만, Encoder 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cphi,%20%5Cpsi">에 대한 기울기 계산은 매우 까다롭습니다. 왜냐하면 기댓값을 취하는 확률 분포 <img src="https://latex.codecogs.com/png.latex?Q_i"> 자체가 최적화해야 할 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Cphi,%20%5Cpsi">에 의존하기 때문입니다. 즉, 다음과 같이 기울기와 기댓값의 순서를 단순히 바꿀 수 없습니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cnabla%5Cmathbb%7BE%7D_%7Bz%5Csim%20Q_%7B%5Cphi%7D%7D%5Bf(%5Cphi)%5D%5Cne%5Cmathbb%7BE%7D_%7Bz%5Csim%20Q_%7B%5Cphi%7D%7D%5B%5Cnabla%20f(%5Cphi)%5D"></p>
-<ul>
-<li><p>이 문제를 해결하기 위해 <strong>재매개변수화 트릭(Re-Parameterization Trick)</strong>을 도입합니다.</p></li>
-<li><p>확률 변수 <img src="https://latex.codecogs.com/png.latex?x%5Csim%5Cmathcal%7BN%7D(%5Cmu,%5Csigma%5E%7B2%7D)">에서 직접 샘플링하는 것은 <img src="https://latex.codecogs.com/png.latex?x=%5Cmu+%5Cepsilon%5Csigma"> (<img src="https://latex.codecogs.com/png.latex?%5Cepsilon%5Csim%5Cmathcal%7BN%7D(0,1)">) 형태로 식을 변형하여 독립적인 노이즈 <img src="https://latex.codecogs.com/png.latex?%5Cepsilon">을 먼저 샘플링한 후 결정론적(Deterministic)으로 변환하는 것과 수학적으로 동치입니다.</p></li>
-<li><p>이 아이디어를 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z%5E%7B(i)%7D">에 적용하면 다음과 같이 표현할 수 있습니다: <img src="https://latex.codecogs.com/png.latex?z%5E%7B(i)%7D=q(x%5E%7B(i)%7D;%5Cphi)+v(x%5E%7B(i)%7D;%5Cpsi)%5Codot%5Cxi%5E%7B(i)%7D%20%5Cquad%20%5Ctext%7Bwhere%20%7D%20%5Cxi%5E%7B(i)%7D%5Csim%5Cmathcal%7BN%7D(0,I_%7Bk%5Ctimes%20k%7D)"></p>
-<ul>
-<li>단, <img src="https://latex.codecogs.com/png.latex?%5Codot">는 동일한 차원의 두 벡터 간의 원소별 곱(Element-wise product)을 의미합니다.</li>
-</ul></li>
-<li><p>이 트릭을 사용하면, 적분(기댓값)의 대상이 되는 확률 분포가 더 이상 모델 파라미터에 의존하지 않는 고정된 노이즈 분포 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BN%7D(0,%201)">가 됩니다. 따라서 ELBO 수식 내에서 미분 연산자 <img src="https://latex.codecogs.com/png.latex?%5Cnabla_%7B%5Cphi%7D">를 기댓값 내부로 안전하게 밀어 넣을 수 있습니다.</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cnabla_%7B%5Cphi%7D%5Cmathbb%7BE%7D_%7Bz%5E%7B(i)%7D%5Csim%20Q_%7Bi%7D%7D%5Cleft%5B%5Clog%5Cfrac%7Bp(x%5E%7B(i)%7D,z%5E%7B(i)%7D;%5Ctheta)%7D%7BQ_%7Bi%7D(z%5E%7B(i)%7D)%7D%5Cright%5D%20=%20%5Cmathbb%7BE%7D_%7B%5Cxi%5E%7B(i)%7D%5Csim%5Cmathcal%7BN%7D(0,1)%7D%5Cleft%5B%5Cnabla_%7B%5Cphi%7D%5Clog%5Cfrac%7Bp(x%5E%7B(i)%7D,z%5E%7B(i)%7D;%5Ctheta)%7D%7BQ_%7Bi%7D(z%5E%7B(i)%7D)%7D%5Cright%5D"></p>
-<ul>
-<li>이제 우리는 여러 개의 <img src="https://latex.codecogs.com/png.latex?%5Cxi%5E%7B(i)%7D">를 샘플링하는 몬테카를로 방식을 통해 기댓값과 기울기를 효율적으로 추정할 수 있게 되었으며, 신경망 역전파(Backpropagation)를 완벽하게 적용할 수 있습니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="principal-components-analysis-pca" class="level1">
-<h1>3. Principal Components Analysis (PCA)</h1>
-<section id="차원-축소의-동기-motivation" class="level2">
-<h2 class="anchored" data-anchor-id="차원-축소의-동기-motivation">3.1. 차원 축소의 동기 (Motivation)</h2>
-<ul>
-<li>자동차 데이터셋이 있다고 가정해 봅시다. 이 데이터에는 자동차의 ‘최고 속도’와 ’회전 반경’ 같은 수많은 속성(Feature) <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">가 포함되어 있습니다.</li>
-<li>만약 <img src="https://latex.codecogs.com/png.latex?x_i">는 ‘km/h’ 단위로 측정된 최고 속도이고, <img src="https://latex.codecogs.com/png.latex?x_j">는 ‘miles/h’ 단위로 측정된 최고 속도라면, 두 변수는 사실상 완전히 선형 종속적입니다. 즉, 겉보기에는 차원이 높아 보이지만 데이터는 사실상 더 낮은 <img src="https://latex.codecogs.com/png.latex?n-1"> 차원의 부분 공간(Subspace)에 놓여 있습니다. PCA는 이러한 데이터의 중복성(Redundancy)을 자동으로 감지하고 제거하는 알고리즘입니다.</li>
-</ul>
-</section>
-<section id="데이터-전처리-preprocessing" class="level2">
-<h2 class="anchored" data-anchor-id="데이터-전처리-preprocessing">3.2. 데이터 전처리 (Preprocessing)</h2>
-<ul>
-<li>PCA를 수행하기 전, 모든 특성(Feature)이 동일한 척도를 갖도록 정규화(Normalization)하는 과정이 필요합니다.</li>
-<li>각 특성의 평균이 0, 분산이 1이 되도록 다음과 같이 변환합니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?x_%7Bj%7D%5E%7B(i)%7D%5Cleftarrow%5Cfrac%7Bx_%7Bj%7D%5E%7B(i)%7D-%5Cmu_%7Bj%7D%7D%7B%5Csigma_%7Bj%7D%7D"> <img src="https://latex.codecogs.com/png.latex?%5Cmu_%7Bj%7D=%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7Dx_%7Bj%7D%5E%7B(i)%7D,%20%5Cquad%20%5Csigma_%7Bj%7D%5E%7B2%7D=%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7D(x_%7Bj%7D%5E%7B(i)%7D-%5Cmu_%7Bj%7D)%5E%7B2%7D"></p>
-<ul>
-<li>만약 모든 특성이 이미 동일한 스케일(Scale)을 가지고 있다는 사전 지식이 있다면 이 과정은 생략될 수 있습니다.</li>
-</ul>
-</section>
-<section id="주요-변동-축-major-axis-of-variation-찾기" class="level2">
-<h2 class="anchored" data-anchor-id="주요-변동-축-major-axis-of-variation-찾기">3.3. 주요 변동 축 (Major Axis of Variation) 찾기</h2>
-<ul>
-<li>데이터가 가장 넓게 퍼져 있는, 즉 데이터가 근사적으로 놓여 있는 주요 방향 벡터 <img src="https://latex.codecogs.com/png.latex?u">를 어떻게 찾을 수 있을까요?</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Machine Learing/15.Unsupervised-Learning/images/pca_projection.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 2차원 공간 상의 데이터 포인트(검은 점)들에 대한 투영(Projection) 방향의 비교. 왼쪽 그림은 데이터 포인트들을 실선 위로 투영시켰을 때, 투영된 점(x 표시)들 간의 분산(퍼짐 정도)이 가장 극대화된 상태(올바른 주성분 축)를 보여줍니다. 반면 오른쪽 그림은 수직에 가까운 축으로 투영시켜 투영된 데이터의 분산이 작아져 정보 손실이 큰 잘못된 축을 선택한 경우를 대조하여 보여줍니다. PCA는 왼쪽 그림과 같이 분산이 최대가 되는 <img src="https://latex.codecogs.com/png.latex?u"> 벡터를 찾습니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>데이터 포인트 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">를 단위 벡터 <img src="https://latex.codecogs.com/png.latex?u"> 위로 투영(Projection)했을 때의 길이는 내적 연산인 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%5Ctop%7Du"> 로 주어집니다.</li>
-<li>PCA의 목적은 투영된 데이터의 분산이 최대화되는 단위 벡터 <img src="https://latex.codecogs.com/png.latex?u">를 찾는 것입니다. 수식으로 표현하면 다음과 같습니다:</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cmax_%7B%7C%7Cu%7C%7C_%7B2%7D=1%7D%20%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7D(x%5E%7B(i)%5Ctop%7Du)%5E%7B2%7D%20=%20%5Cmax_%7B%7C%7Cu%7C%7C_%7B2%7D=1%7D%20u%5E%7B%5Ctop%7D%5Cleft(%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7Dx%5E%7B(i)%7Dx%5E%7B(i)%5Ctop%7D%5Cright)u"></p>
-<ul>
-<li>괄호 안의 식 <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7Bn%7D%5Csum_%7Bi=1%7D%5E%7Bn%7Dx%5E%7B(i)%7Dx%5E%7B(i)%5Ctop%7D">은 (평균이 0으로 맞춰진) 데이터의 <strong>경험적 공분산 행렬(Empirical Covariance Matrix)</strong> <img src="https://latex.codecogs.com/png.latex?%5CSigma">입니다.</li>
-<li>제약 조건 <img src="https://latex.codecogs.com/png.latex?%7C%7Cu%7C%7C_%7B2%7D=1"> 하에서 위 이차형식(Quadratic form)을 최대화하는 벡터 <img src="https://latex.codecogs.com/png.latex?u">는 바로 공분산 행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma">의 가장 큰 고윳값을 가지는 <strong>주요 고유벡터(Principal Eigenvector)</strong>가 됩니다 (<img src="https://latex.codecogs.com/png.latex?%5CSigma%20e=%5Clambda%20e">).</li>
-</ul>
-</section>
-<section id="k-차원-공간으로의-축소" class="level2">
-<h2 class="anchored" data-anchor-id="k-차원-공간으로의-축소">3.4. k-차원 공간으로의 축소</h2>
-<ul>
-<li><p>데이터를 단일 축이 아닌 <img src="https://latex.codecogs.com/png.latex?k">차원의 부분 공간(<img src="https://latex.codecogs.com/png.latex?k%20%3C%20d">)으로 투영하고자 할 경우, 공분산 행렬 <img src="https://latex.codecogs.com/png.latex?%5CSigma">에서 가장 큰 고윳값을 가지는 상위 <img src="https://latex.codecogs.com/png.latex?k">개의 고유벡터 <img src="https://latex.codecogs.com/png.latex?u_1,%20%5Cdots,%20u_k">를 선택하면 됩니다. 이 고유벡터들은 데이터에 대한 새로운 직교 기저(Orthogonal basis)를 형성합니다.</p></li>
-<li><p>원본 데이터 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">를 이 새로운 <img src="https://latex.codecogs.com/png.latex?k">차원 기저 상의 좌표 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D">로 변환하는 공식은 다음과 같습니다:</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D=%5Cbegin%7Bbmatrix%7D%20u_%7B1%7D%5E%7B%5Ctop%7Dx%5E%7B(i)%7D%5C%5C%20u_%7B2%7D%5E%7B%5Ctop%7Dx%5E%7B(i)%7D%5C%5C%20%5Cvdots%5C%5C%20u_%7Bk%7D%5E%7B%5Ctop%7Dx%5E%7B(i)%7D%20%5Cend%7Bbmatrix%7D%20%5Cin%5Cmathbb%7BR%7D%5E%7Bk%7D"></p>
-<ul>
-<li>이 벡터 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D">가 고차원 데이터 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">에 대한 더 낮은 <img src="https://latex.codecogs.com/png.latex?k">차원 근사치를 제공하게 되며, 이때 투영 벡터 <img src="https://latex.codecogs.com/png.latex?u_1,%20%5Cdots,%20u_k">를 데이터의 <strong>첫 <img src="https://latex.codecogs.com/png.latex?k">개의 주성분(Principal Components)</strong>이라고 부릅니다.</li>
-</ul>
-</section>
-<section id="pca의-주요-활용처" class="level2">
-<h2 class="anchored" data-anchor-id="pca의-주요-활용처">3.5. PCA의 주요 활용처</h2>
-<ul>
-<li><strong>데이터 압축 (Compression):</strong> 고차원의 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(i)%7D">를 저차원 <img src="https://latex.codecogs.com/png.latex?y%5E%7B(i)%7D">로 표현하여 저장 공간과 계산량을 줄입니다.</li>
-<li><strong>지도 학습 전처리 (Preprocessing):</strong> 학습 알고리즘을 돌리기 전 차원을 줄여 과적합(Overfitting)을 방지하는 효과가 있습니다.</li>
-<li><strong>노이즈 제거 (Noise Reduction):</strong> 안면 인식에 쓰이는 Eigenfaces 기법처럼, 데이터의 진짜 핵심 정보(사람의 얼굴 생김새)는 유지하면서 미세한 조명 변화와 같은 노이즈 성분은 버리는 데 유용합니다.</li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Machine Learning</category>
-  <guid>https://shsha0110.github.io/posts/Machine Learing/15.Unsupervised-Learning/</guid>
   <pubDate>Wed, 06 May 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>

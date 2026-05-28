@@ -525,6 +525,534 @@
   <pubDate>Wed, 27 May 2026 15:00:00 GMT</pubDate>
 </item>
 <item>
+  <title>[Machine Learning] 18. Reinforcement Learning</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Machine Learing/18.Reinforcement-Learning/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="들어가며-introduction" class="level2">
+<h2 class="anchored" data-anchor-id="들어가며-introduction">들어가며 (Introduction)</h2>
+<p>이번 포스트는 강화학습(Reinforcement Learning)의 두 번째 파트로, <strong>연속 상태·행동 공간(continuous state-action space)에서의 제어(control) 문제</strong>와 <strong>정책을 직접 최적화하는 방법</strong>을 다룹니다. 앞서 다룬 이산적인 MDP의 가치 반복(Value Iteration)이 유한한 상태 집합을 전제로 했다면, 이번에는 로봇 제어나 자율주행처럼 상태가 연속적이고 차원이 높은 현실 문제로 시야를 넓혀 보겠습니다.</p>
+<p>이번 강의에서 다룰 제어 기법들은 다음과 같습니다.</p>
+<ul>
+<li><strong>LQR (Linear Quadratic Regulator):</strong> 시스템 동역학이 <strong>선형(linear)</strong>이고 비용 함수가 <strong>이차식(quadratic)</strong>인 경우. 정확한 해(exact solution)를 비교적 쉽게 구할 수 있습니다.</li>
+<li><strong>DDP (Differential Dynamic Programming):</strong> 동역학과 비용 함수가 <strong>비선형(nonlinear)</strong>이지만, 국소적으로 <strong>선형 / 2차 근사(local linear / 2nd-order approximation)</strong>를 취해 LQR 틀로 환원하는 방법입니다.</li>
+<li><strong>LQG (Linear Quadratic Gaussian):</strong> LQR에 <strong>프로세스 노이즈(process noise)와 관측 노이즈(observation noise)</strong>가 더해진, 부분 관측 환경을 위한 방법입니다.</li>
+</ul>
+<p>그리고 마지막으로, 가치함수나 Q함수의 개념 없이 정책 자체를 경사 상승으로 학습하는 <strong>Policy Gradient</strong> 방법까지 살펴보겠습니다.</p>
+<hr>
+</section>
+<section id="유한-시계-mdp-finite-horizon-mdps" class="level2">
+<h2 class="anchored" data-anchor-id="유한-시계-mdp-finite-horizon-mdps">1. 유한 시계 MDP (Finite-Horizon MDPs)</h2>
+<p>본격적인 제어 기법에 앞서, 이들의 토대가 되는 <strong>유한 시계 MDP</strong>를 복습하겠습니다.</p>
+<section id="최적-가치함수와-정책의-재정의" class="level3">
+<h3 class="anchored" data-anchor-id="최적-가치함수와-정책의-재정의">1.1. 최적 가치함수와 정책의 재정의</h3>
+<p>기존의 무한 시계(infinite-horizon) MDP에서 최적 가치함수와 최적 정책은 다음과 같이 정의되었습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AV%5E%7B%5Cpi%5E*%7D(s)%20=%20R(s)%20+%20%5Cmax_%7Ba%20%5Cin%20%5Cmathcal%7BA%7D%7D%20%5Cgamma%20%5Csum_%7Bs'%20%5Cin%20%5Cmathcal%7BS%7D%7D%20P_%7Bsa%7D(s')%20V%5E%7B%5Cpi%5E*%7D(s')%0A"></p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cpi%5E*(s)%20=%20%5Carg%5Cmax_%7Ba%20%5Cin%20%5Cmathcal%7BA%7D%7D%20%5Cgamma%20%5Csum_%7Bs'%20%5Cin%20%5Cmathcal%7BS%7D%7D%20P_%7Bsa%7D(s')%20V%5E%7B%5Cpi%5E*%7D(s')%0A"></p>
+<p>이번에는 <strong>이산(discrete)과 연속(continuous) 두 경우를 모두 포괄</strong>하기 위해 표기를 통일하겠습니다.</p>
+<ul>
+<li>이산 합 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bs'%20%5Cin%20%5Cmathcal%7BS%7D%7D%20P_%7Bsa%7D(s')%20V%5E%7B%5Cpi%5E*%7D(s')"> 대신 기댓값 표기 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D_%7Bs'%20%5Csim%20P_%7Bsa%7D%7D%5BV%5E%7B%5Cpi%5E*%7D(s')%5D">를 사용합니다.</li>
+<li>또한 보상이 상태뿐 아니라 <strong>행동에도 의존한다고 가정</strong>합니다. 즉 <img src="https://latex.codecogs.com/png.latex?R(s,%20a)"> 형태입니다.</li>
+</ul>
+<p>이를 반영하면 최적 정책은 다음과 같이 쓸 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cpi%5E*(s)%20=%20%5Carg%5Cmax_%7Ba%20%5Cin%20%5Cmathcal%7BA%7D%7D%20%5C;%20R(s,%20a)%20+%20%5Cgamma%20%5C,%20%5Cmathbb%7BE%7D_%7Bs'%20%5Csim%20P_%7Bsa%7D%7D%5BV%5E%7B%5Cpi%5E*%7D(s')%5D%0A"></p>
+</section>
+<section id="유한-시계-mdp의-정의" class="level3">
+<h3 class="anchored" data-anchor-id="유한-시계-mdp의-정의">1.2. 유한 시계 MDP의 정의</h3>
+<p>유한 시계 MDP에서는 <strong>시간 지평(time horizon) <img src="https://latex.codecogs.com/png.latex?T%20%3E%200"></strong>가 존재하므로, MDP의 정의 자체가 약간 달라집니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A(%5Cmathcal%7BS%7D,%20%5Cmathcal%7BA%7D,%20P_%7Bsa%7D%5E%7B(t)%7D,%20T,%20R%5E%7B(t)%7D)%0A"></p>
+<p>여기서 핵심적인 변화를 짚어보겠습니다.</p>
+<ul>
+<li><p><strong>누적 보상(Payoff)의 변화:</strong> 무한 합 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bt=0%7D%5E%7B%5Cinfty%7D%20R(s_t,%20a_t)%5Cgamma%5Et"> 대신, 유한한 합 <img src="https://latex.codecogs.com/png.latex?%0AR(s_0,%20a_0)%20+%20R(s_1,%20a_1)%20+%20%5Ccdots%20+%20R(s_T,%20a_T)%0A"> 가 됩니다.</p></li>
+<li><p><strong>할인율(discount factor)의 불필요성:</strong> 사실 더 이상 할인율 <img src="https://latex.codecogs.com/png.latex?%5Cgamma">를 쓸 필요가 없습니다. 원래 <img src="https://latex.codecogs.com/png.latex?%5Cgamma">를 도입한 이유 중 하나는 무한 합을 유한하게 만들기 위함이었습니다. 보상이 상수 <img src="https://latex.codecogs.com/png.latex?%5Cbar%7BR%7D">로 유계(bounded)라고 가정하면, <img src="https://latex.codecogs.com/png.latex?%0A%5Csum_%7Bt=0%7D%5E%7B%5Cinfty%7D%20R(s_t)%5Cgamma%5Et%20%5Cle%20%5Cbar%7BR%7D%20%5Csum_%7Bt=0%7D%5E%7B%5Cinfty%7D%20%5Cgamma%5Et%0A"> 처럼 등비급수의 합으로 수렴함이 보장되었기 때문입니다. 유한 시계에서는 합 자체가 유한하므로 이 장치가 필요 없습니다.</p></li>
+</ul>
+</section>
+<section id="비정상-정책-non-stationary-policy" class="level3">
+<h3 class="anchored" data-anchor-id="비정상-정책-non-stationary-policy">1.3. 비정상 정책 (Non-stationary Policy)</h3>
+<p>유한 시계 MDP의 가장 중요한 특징 중 하나는 <strong>최적 정책이 비정상(non-stationary)일 수 있다</strong>는 점입니다. 즉, 시간에 따라 최적 행동이 달라질 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cpi%5E%7B(t)%7D%20:%20%5Cmathcal%7BS%7D%20%5Crightarrow%20%5Cmathcal%7BA%7D%5E%7B(t)%7D%0A"></p>
+<p>여기서 위첨자 <img src="https://latex.codecogs.com/png.latex?(t)">는 시점 <img src="https://latex.codecogs.com/png.latex?t">에서의 정책을 의미합니다.</p>
+<ul>
+<li><strong>왜 이런 일이 발생할까요?</strong> 직관적인 예를 들어 보겠습니다. +10의 보상을 얻는 데에는 오랜 시간이 걸리지만, +1의 보상은 즉시 얻을 수 있다고 합시다. 만약 <strong>남은 스텝이 충분하지 않다면</strong>, 큰 보상 +10을 노리기보다 즉시 얻을 수 있는 +1을 선택하는 것이 합리적입니다.</li>
+<li>즉, <strong>환경(Environment)뿐 아니라 남은 시간(Time Left)이 우리의 정책에 영향을 미칩니다.</strong></li>
+</ul>
+<p>이런 이유로 전이 확률 분포와 보상 역시 시간에 따라 달라질 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0As_%7Bt+1%7D%20%5Csim%20P_%7Bs_t,%20a_t%7D%5E%7B(t)%7D,%20%5Cqquad%20R%5E%7B(t)%7D(s_t,%20a_t)%0A"></p>
+</section>
+<section id="가치함수와-동적-계획법-dynamic-programming" class="level3">
+<h3 class="anchored" data-anchor-id="가치함수와-동적-계획법-dynamic-programming">1.4. 가치함수와 동적 계획법 (Dynamic Programming)</h3>
+<p>유한 시계에서 가치함수는 시점 <img src="https://latex.codecogs.com/png.latex?t">에 의존하는 형태가 됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AV_t(s)%20=%20%5Cmathbb%7BE%7D%5Cleft%5B%20R%5E%7B(t)%7D(s_t,%20a_t)%20+%20%5Ccdots%20+%20R%5E%7B(T)%7D(s_T,%20a_T)%20%5C,%5Cmiddle%7C%5C,%20s_t%20=%20s,%20%5Cpi%20%5Cright%5D%0A"></p>
+<p>그렇다면 이 설정에서 최적 가치함수를 어떻게 찾을 수 있을까요? 핵심은 <strong>뒤에서부터 거꾸로 풀어가는(backward) 관찰</strong>입니다.</p>
+<ul>
+<li><p><strong>게임의 끝(<img src="https://latex.codecogs.com/png.latex?t%20=%20T">):</strong> 마지막 시점에서는 미래가 없으므로 최적 가치가 자명합니다. 단순히 그 시점의 보상을 최대화하면 됩니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cforall%20s%20%5Cin%20%5Cmathcal%7BS%7D:%20%5Cquad%20V_T%5E*(s)%20:=%20%5Cmax_%7Ba%20%5Cin%20%5Cmathcal%7BA%7D%7D%20R%5E%7B(T)%7D(s,%20a)%0A"></p></li>
+<li><p><strong>다른 시점(<img src="https://latex.codecogs.com/png.latex?0%20%5Cle%20t%20%3C%20T">):</strong> 만약 다음 시점의 최적 가치 <img src="https://latex.codecogs.com/png.latex?V_%7Bt+1%7D%5E*(s)">를 이미 알고 있다면, 벨만 방정식(Bellman equation) 형태로 현재 시점의 최적 가치를 구할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cforall%20t%20%3C%20T,%20s%20%5Cin%20%5Cmathcal%7BS%7D:%20%5Cquad%20V_t%5E*(s)%20:=%20%5Cmax_%7Ba%20%5Cin%20%5Cmathcal%7BA%7D%7D%20%5Cleft%5B%20R%5E%7B(t)%7D(s,%20a)%20+%20%5Cmathbb%7BE%7D_%7Bs'%20%5Csim%20P_%7Bsa%7D%5E%7B(t)%7D%7D%20%5BV_%7Bt+1%7D%5E*(s')%5D%20%5Cright%5D%0A"></p></li>
+</ul>
+<p>이는 미래(<img src="https://latex.codecogs.com/png.latex?T">)에서 현재(<img src="https://latex.codecogs.com/png.latex?0">)로 거슬러 올라가며 푸는 전형적인 <strong>동적 계획법</strong> 구조입니다.</p>
+<section id="알고리즘-v_t-계산" class="level4">
+<h4 class="anchored" data-anchor-id="알고리즘-v_t-계산">알고리즘: <img src="https://latex.codecogs.com/png.latex?V_t%5E*"> 계산</h4>
+<p>위 관찰을 알고리즘으로 정리하면 다음과 같습니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Machine Learing/18.Reinforcement-Learning/images/algorithm10_finite_horizon.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 유한 시계 MDP의 최적 가치함수 <img src="https://latex.codecogs.com/png.latex?V_t%5E*">를 계산하는 알고리즘(Algorithm 10). 먼저 마지막 시점 <img src="https://latex.codecogs.com/png.latex?T">에서 <img src="https://latex.codecogs.com/png.latex?V_T%5E*(s)%20=%20%5Cmax_a%20R%5E%7B(T)%7D(s,a)">로 초기화한 뒤, <img src="https://latex.codecogs.com/png.latex?t%20=%20T-1">부터 <img src="https://latex.codecogs.com/png.latex?0">까지 시간을 거꾸로 내려가면서(backward loop) 벨만 갱신식 <img src="https://latex.codecogs.com/png.latex?V_t%5E*(s)%20=%20%5Cmax_a%20%5BR%5E%7B(t)%7D(s,a)%20+%20%5Cmathbb%7BE%7D_%7Bs'%20%5Csim%20P_%7Bsa%7D%5E%7B(t)%7D%7D%5BV_%7Bt+1%7D%5E*(s')%5D%5D">을 반복 적용한다. 이 그림은 유한 시계 동적 계획법이 ’미래의 해를 알면 현재의 해가 결정된다’는 후방 귀납(backward induction) 구조임을 보여준다.</figcaption>
+</figure>
+</div>
+<ol type="1">
+<li><img src="https://latex.codecogs.com/png.latex?V_T%5E*(s)%20:=%20%5Cmax_%7Ba%20%5Cin%20%5Cmathcal%7BA%7D%7D%20R%5E%7B(T)%7D(s,%20a)"> 를 계산한다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?t%20=%20T-1,%20%5Ccdots,%200"> 에 대해 다음을 반복한다:</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cquad%20V_t%5E*(s)%20:=%20%5Cmax_%7Ba%20%5Cin%20%5Cmathcal%7BA%7D%7D%20%5Cleft%5B%20R%5E%7B(t)%7D(s,%20a)%20+%20%5Cmathbb%7BE%7D_%7Bs'%20%5Csim%20P_%7Bsa%7D%5E%7B(t)%7D%7D%5BV_%7Bt+1%7D%5E*(s')%5D%20%5Cright%5D"> 를 계산한다.</li>
+</ol>
+</section>
+<section id="advanced-벨만-연산자의-수축성-contraction" class="level4">
+<h4 class="anchored" data-anchor-id="advanced-벨만-연산자의-수축성-contraction">(ADVANCED) 벨만 연산자의 수축성 (Contraction)</h4>
+<p>흥미롭게도 우리가 익숙한 <strong>표준 가치 반복(Value Iteration)은 이 일반화된 알고리즘에서 시간을 추적하지 않는 특수한 경우</strong>로 해석할 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?V_t">를 <img src="https://latex.codecogs.com/png.latex?t">번째 스텝의 가치함수라 할 때, 다음을 증명할 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5C%7CV_%7Bt+1%7D%20-%20V%5E*%5C%7C_%5Cinfty%20=%20%5C%7CB(V_t)%20-%20V%5E*%5C%7C_%5Cinfty%20%5Cle%20%5Cgamma%20%5C%7CV_t%20-%20V%5E*%5C%7C_%5Cinfty%20%5Cle%20%5Cgamma%5Et%20%5C%7CV_1%20-%20V%5E*%5C%7C_%5Cinfty%0A"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?B">는 <strong>벨만 갱신(Bellman update) 연산자</strong>를 의미하며, <img src="https://latex.codecogs.com/png.latex?%5C%7Cf(x)%5C%7C_%5Cinfty%20:=%20%5Csup_x%20%7Cf(x)%7C">는 <strong>무한대 노름(sup-norm)</strong>입니다.</li>
+<li>이 부등식이 의미하는 바는, 벨만 연산자 <img src="https://latex.codecogs.com/png.latex?B">가 적용될 때마다 최적 가치 <img src="https://latex.codecogs.com/png.latex?V%5E*">와의 거리가 매번 <img src="https://latex.codecogs.com/png.latex?%5Cgamma">배 이하로 줄어든다는 것입니다.</li>
+<li>따라서 벨만 연산자 <img src="https://latex.codecogs.com/png.latex?B">는 <strong><img src="https://latex.codecogs.com/png.latex?%5Cgamma">-수축 연산자(<img src="https://latex.codecogs.com/png.latex?%5Cgamma">-contracting operator)</strong>입니다. <img src="https://latex.codecogs.com/png.latex?%5Cgamma%20%3C%201">이므로 반복적으로 적용하면 거리가 <img src="https://latex.codecogs.com/png.latex?%5Cgamma%5Et">로 기하급수적으로 줄어들어, 가치 반복이 유일한 고정점(fixed point)인 <img src="https://latex.codecogs.com/png.latex?V%5E*">로 수렴함이 보장됩니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+</section>
+<section id="선형-이차-조절기-linear-quadratic-regulation-lqr" class="level2">
+<h2 class="anchored" data-anchor-id="선형-이차-조절기-linear-quadratic-regulation-lqr">2. 선형 이차 조절기 (Linear Quadratic Regulation, LQR)</h2>
+<section id="lqr의-설정" class="level3">
+<h3 class="anchored" data-anchor-id="lqr의-설정">2.1. LQR의 설정</h3>
+<p><strong>LQR은 유한 시계 MDP의 특수한 경우로, 정확한 해를 비교적 쉽게 구할 수 있는 경우</strong>입니다. 로봇공학(robotics) 등에서 널리 활용됩니다.</p>
+<p>연속 설정 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BS%7D%20=%20%5Cmathbb%7BR%7D%5Ed,%20%5Cmathcal%7BA%7D%20=%20%5Cmathbb%7BR%7D%5Ed">를 가정하고, 다음 두 가지 핵심 가정을 둡니다.</p>
+<p><strong>(1) 선형 전이 with 노이즈 (Linear transitions with noise):</strong></p>
+<p><img src="https://latex.codecogs.com/png.latex?%0As_%7Bt+1%7D%20=%20A_t%20s_t%20+%20B_t%20a_t%20+%20w_t%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?A_t,%20B_t%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd%20%5Ctimes%20d%7D">는 시스템 동역학을 정의하는 행렬입니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?w_t%20%5Csim%20%5Cmathcal%7BN%7D(0,%20%5CSigma_t)">는 평균이 0인 가우시안 노이즈입니다.</li>
+<li>뒤에서 밝혀지겠지만, <strong>이 (평균 0의) 노이즈는 최적 정책에 영향을 주지 않습니다.</strong> 이는 LQR의 매우 중요한 성질입니다.</li>
+</ul>
+<p><strong>(2) 이차 보상 (Quadratic rewards):</strong></p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AR%5E%7B(t)%7D(s_t,%20a_t)%20=%20-s_t%5E%5Ctop%20U_t%20s_t%20-%20a_t%5E%5Ctop%20W_t%20a_t%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?U_t%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd%20%5Ctimes%20d%7D,%20W_t%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd%20%5Ctimes%20d%7D">는 양의 정부호(positive definite) 행렬입니다. 따라서 보상은 항상 음수(<img src="https://latex.codecogs.com/png.latex?R%5E%7B(t)%7D%20%3C%200">)가 됩니다.</li>
+<li>이 보상의 의미를 직관적으로 살펴보겠습니다. 만약 <img src="https://latex.codecogs.com/png.latex?U_t%20=%20W_t%20=%20I_d"> (항등행렬)라면, <img src="https://latex.codecogs.com/png.latex?%0AR_t%20=%20-%5C%7Cs_t%5C%7C%5E2%20-%20%5C%7Ca_t%5C%7C%5E2%0A"> 가 됩니다. 즉, 상태 <img src="https://latex.codecogs.com/png.latex?s_t">가 <strong>원점(origin)에 가까울수록</strong>, 그리고 행동 <img src="https://latex.codecogs.com/png.latex?a_t">가 <strong>작을수록</strong> 보상이 커집니다.</li>
+<li>이는 <strong>정규화(Regularization)</strong>로 해석할 수 있습니다. 상태를 목표 지점(원점)에 가깝게 유지하면서도 과도한 제어 입력을 쓰지 않도록 유도하는 것입니다. (자율주행차가 차선 중앙을 유지하되 핸들을 거칠게 꺾지 않는 상황을 떠올리면 됩니다.)</li>
+</ul>
+</section>
+<section id="lqr-알고리즘의-두-단계" class="level3">
+<h3 class="anchored" data-anchor-id="lqr-알고리즘의-두-단계">2.2. LQR 알고리즘의 두 단계</h3>
+<p>LQR 알고리즘은 크게 두 단계로 구성됩니다.</p>
+<ul>
+<li><strong>Step 1.</strong> 행렬 <img src="https://latex.codecogs.com/png.latex?A,%20B,%20%5CSigma">를 추정한다.</li>
+<li><strong>Step 2.</strong> 행렬을 안다고 가정하고, 동적 계획법을 이용해 최적 정책을 유도한다.</li>
+</ul>
+</section>
+<section id="lqr---step-1-행렬-추정" class="level3">
+<h3 class="anchored" data-anchor-id="lqr---step-1-행렬-추정">2.3. LQR - Step 1: 행렬 추정</h3>
+<p>행렬 <img src="https://latex.codecogs.com/png.latex?A,%20B,%20%5CSigma">는 어떻게 추정할 수 있을까요? 가치 근사(Value Approximation)와 유사한 아이디어를 사용합니다.</p>
+<ul>
+<li><strong>(1) 전이 데이터 수집:</strong> 임의의 정책 <img src="https://latex.codecogs.com/png.latex?%5Cpi">를 실행하여 전이 데이터 <img src="https://latex.codecogs.com/png.latex?(s_t,%20a_t,%20s_%7Bt+1%7D)">를 수집합니다.</li>
+<li><strong>(2) 선형 회귀(Linear Regression):</strong> 다음 최소제곱 문제를 풀어 <img src="https://latex.codecogs.com/png.latex?A,%20B">를 찾습니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Carg%5Cmin_%7BA,%20B%7D%20%5Csum_%7Bi=1%7D%5E%7Bn%7D%20%5Csum_%7Bt=0%7D%5E%7BT-1%7D%20%5Cleft%5C%7C%20s_%7Bt+1%7D%5E%7B(i)%7D%20-%20%5Cleft(A%20s_t%5E%7B(i)%7D%20+%20B%20a_t%5E%7B(i)%7D%5Cright)%20%5Cright%5C%7C%5E2%0A"> 이는 다음 상태 <img src="https://latex.codecogs.com/png.latex?s_%7Bt+1%7D">를 현재 상태와 행동의 선형 결합 <img src="https://latex.codecogs.com/png.latex?As_t%20+%20Ba_t">로 가장 잘 예측하도록 행렬을 맞추는 과정입니다.</li>
+<li><strong>(3) 노이즈 공분산 <img src="https://latex.codecogs.com/png.latex?%5CSigma"> 추정:</strong> GDA(Gaussian Discriminant Analysis)에서 본 기법을 활용합니다. 먼저 각 샘플의 잔차(residual)를 계산합니다. <img src="https://latex.codecogs.com/png.latex?%0Aw_t%5E%7B(i)%7D%20=%20s_%7Bt+1%7D%5E%7B(i)%7D%20-%20A%20s_t%5E%7B(i)%7D%20-%20B%20a_t%5E%7B(i)%7D%0A"> 그 다음 잔차들의 외적(outer product) 평균으로 공분산을 추정합니다. <img src="https://latex.codecogs.com/png.latex?%0A%5CSigma%20=%20%5Cfrac%7B1%7D%7BN%7D%20%5Csum_i%20w_t%5E%7B(i)%7D%20(w_t%5E%7B(i)%7D)%5E%5Ctop%0A"></li>
+</ul>
+</section>
+<section id="lqr---step-2-최적-정책-유도" class="level3">
+<h3 class="anchored" data-anchor-id="lqr---step-2-최적-정책-유도">2.4. LQR - Step 2: 최적 정책 유도</h3>
+<p>이제 행렬 <img src="https://latex.codecogs.com/png.latex?A,%20B,%20%5CSigma">를 안다고 가정하고, 동적 계획법으로 최적 정책을 유도하겠습니다. 우리에게 주어진 것은 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bcases%7D%20s_%7Bt+1%7D%20=%20A_t%20s_t%20+%20B_t%20a_t%20+%20w_t%20&amp;%20A_t,%20B_t,%20U_t,%20W_t,%20%5CSigma_t%20%5Ctext%7B%20known%7D%20%5C%5C%20R%5E%7B(t)%7D(s_t,%20a_t)%20=%20-s_t%5E%5Ctop%20U_t%20s_t%20-%20a_t%5E%5Ctop%20W_t%20a_t%20%5Cend%7Bcases%7D%0A"></p>
+<p>목표는 <img src="https://latex.codecogs.com/png.latex?V_t%5E*">를 계산하는 것입니다.</p>
+<section id="마지막-시점-t의-풀이" class="level4">
+<h4 class="anchored" data-anchor-id="마지막-시점-t의-풀이">마지막 시점 <img src="https://latex.codecogs.com/png.latex?T">의 풀이</h4>
+<p>먼저 마지막 시점 <img src="https://latex.codecogs.com/png.latex?T">를 살펴보겠습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0AV_T%5E*(s_T)%20&amp;=%20%5Cmax_%7Ba_T%20%5Cin%20%5Cmathcal%7BA%7D%7D%20R_T(s_T,%20a_T)%20%5C%5C%0A&amp;=%20%5Cmax_%7Ba_T%20%5Cin%20%5Cmathcal%7BA%7D%7D%20%5Cleft(%20-s_T%5E%5Ctop%20U_T%20s_T%20-%20a_T%5E%5Ctop%20W_T%20a_T%20%5Cright)%20%5C%5C%0A&amp;=%20-s_T%5E%5Ctop%20U_T%20s_T%0A%5Cend%7Baligned%7D%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?W_T">가 양의 정부호이므로 <img src="https://latex.codecogs.com/png.latex?-a_T%5E%5Ctop%20W_T%20a_T%20%5Cle%200">이고, 이 항은 <img src="https://latex.codecogs.com/png.latex?a_T%20=%200">일 때 최대(=0)가 됩니다.</li>
+<li>따라서 마지막 시점의 최적 행동은 <img src="https://latex.codecogs.com/png.latex?a_T%20=%200">이며, 최적 가치는 <img src="https://latex.codecogs.com/png.latex?-s_T%5E%5Ctop%20U_T%20s_T">만 남습니다.</li>
+</ul>
+<p>이제 <img src="https://latex.codecogs.com/png.latex?t%20%3C%20T">에 대해, <img src="https://latex.codecogs.com/png.latex?V_%7Bt+1%7D%5E*">를 안다고 가정하고 점화식(recurrence)을 유도하기 위해 몇 가지 보조정리(lemma)를 도입하겠습니다.</p>
+</section>
+<section id="advanced-핵심-보조정리들" class="level4">
+<h4 class="anchored" data-anchor-id="advanced-핵심-보조정리들">(ADVANCED) 핵심 보조정리들</h4>
+<p><strong>Lemma 1. (이차 형식의 보존)</strong> 만약 <img src="https://latex.codecogs.com/png.latex?V_%7Bt+1%7D%5E*">가 <img src="https://latex.codecogs.com/png.latex?s_%7Bt+1%7D">에 대한 이차함수(quadratic function)라면, <img src="https://latex.codecogs.com/png.latex?V_t%5E*"> 역시 이차함수입니다.</p>
+<ul>
+<li>즉, 어떤 행렬 <img src="https://latex.codecogs.com/png.latex?%5CPhi">와 스칼라 <img src="https://latex.codecogs.com/png.latex?%5CPsi">가 존재하여 다음과 같이 쓸 수 있습니다. <img src="https://latex.codecogs.com/png.latex?%0AV_%7Bt+1%7D%5E*(s_%7Bt+1%7D)%20=%20s_%7Bt+1%7D%5E%5Ctop%20%5CPhi_%7Bt+1%7D%20s_%7Bt+1%7D%20+%20%5CPsi_%7Bt+1%7D,%20%5Cqquad%20V_t%5E*(s_t)%20=%20s_t%5E%5Ctop%20%5CPhi_t%20s_t%20+%20%5CPsi_t%0A"></li>
+<li>앞서 본 마지막 시점 <img src="https://latex.codecogs.com/png.latex?t%20=%20T">의 경우, <img src="https://latex.codecogs.com/png.latex?V_T%5E*(s)%20=%20-s%5E%5Ctop%20U_T%20s"> 였으므로 초기값은 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%0A%5CPhi_T%20=%20-U_T,%20%5Cqquad%20%5CPsi_T%20=%200%0A"></li>
+</ul>
+<p><strong>Lemma 2. (선형 정책)</strong> 최적 정책은 상태에 대한 선형 함수임을 보일 수 있습니다. 즉, 최적 행동을 다음 형태로 쓸 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Aa_t%5E*%20=%20L_t%20s_t%0A"></p>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?L_t">는 시점 <img src="https://latex.codecogs.com/png.latex?t">에 따라 달라지는 (상태와 무관한) 행렬입니다.</p>
+</section>
+<section id="advanced-점화식-유도" class="level4">
+<h4 class="anchored" data-anchor-id="advanced-점화식-유도">(ADVANCED) 점화식 유도</h4>
+<p>Lemma 1에 의해, <img src="https://latex.codecogs.com/png.latex?V_%7Bt+1%7D%5E*">를 안다는 것은 <img src="https://latex.codecogs.com/png.latex?%5CPhi_%7Bt+1%7D">과 <img src="https://latex.codecogs.com/png.latex?%5CPsi_%7Bt+1%7D">을 안다는 것과 동치입니다. 벨만 갱신식을 전개해 보겠습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0AV_t%5E*(s_t)%20&amp;=%20s_t%5E%5Ctop%20%5CPhi_t%20s_t%20+%20%5CPsi_t%20%5C%5C%0A&amp;=%20%5Cmax_%7Ba_t%7D%20%5Cleft%5B%20R%5E%7B(t)%7D(s_t,%20a_t)%20+%20%5Cmathbb%7BE%7D_%7Bs_%7Bt+1%7D%20%5Csim%20P_%7Bs_t,%20a_t%7D%5E%7B(t)%7D%7D%5BV_%7Bt+1%7D%5E*(s_%7Bt+1%7D)%5D%20%5Cright%5D%20%5C%5C%0A&amp;=%20%5Cmax_%7Ba_t%7D%20%5Cleft%5B%20-s_t%5E%5Ctop%20U_t%20s_t%20-%20a_t%5E%5Ctop%20W_t%20a_t%20+%20%5Cmathbb%7BE%7D_%7Bs_%7Bt+1%7D%20%5Csim%20%5Cmathcal%7BN%7D(A_t%20s_t%20+%20B_t%20a_t,%20%5C,%20%5CSigma_t)%7D%20%5Cleft%5B%20s_%7Bt+1%7D%5E%5Ctop%20%5CPhi_%7Bt+1%7D%20s_%7Bt+1%7D%20+%20%5CPsi_%7Bt+1%7D%20%5Cright%5D%20%5Cright%5D%0A%5Cend%7Baligned%7D%0A"></p>
+<ul>
+<li>마지막 항은 <img src="https://latex.codecogs.com/png.latex?a_t">에 대한 이차함수이므로, 편미분(partial derivative)을 0으로 두어 쉽게 최적화할 수 있습니다. (직접 유도해 보세요.)</li>
+<li>이 과정에서 다음과 같은 <strong>가우시안 노이즈의 이차형식 기댓값</strong> 성질이 사용됩니다. <img src="https://latex.codecogs.com/png.latex?w_t%20%5Csim%20%5Cmathcal%7BN%7D(0,%20%5CSigma_t)">일 때, <img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbb%7BE%7D%5Cleft%5B%20w_t%5E%5Ctop%20%5CPhi_%7Bt+1%7D%20w_t%20%5Cright%5D%20=%20%5Ctext%7Btr%7D(%5CSigma_t%20%5CPhi_%7Bt+1%7D)%0A"> 이는 노이즈가 <img src="https://latex.codecogs.com/png.latex?%5CPsi"> 항(상수항)에만 영향을 주고, <img src="https://latex.codecogs.com/png.latex?%5CPhi"> 항(상태 의존 항)에는 영향을 주지 않음을 시사합니다. 이것이 노이즈가 최적 정책과 무관해지는 이유의 핵심입니다.</li>
+</ul>
+</section>
+<section id="advanced-최적-행동과-이산-리카티-방정식" class="level4">
+<h4 class="anchored" data-anchor-id="advanced-최적-행동과-이산-리카티-방정식">(ADVANCED) 최적 행동과 이산 리카티 방정식</h4>
+<p>위 최적화를 수행하면 다음과 같은 최적 행동을 얻습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Aa_t%5E*%20=%20%5Cleft%5B%20%5Cleft(B_t%5E%5Ctop%20%5CPhi_%7Bt+1%7D%20B_t%20-%20W_t%5Cright)%5E%7B-1%7D%20B_t%20%5CPhi_%7Bt+1%7D%20A_t%20%5Cright%5D%20%5Ccdot%20s_t%20=%20L_t%20s_t%0A"></p>
+<ul>
+<li>보시다시피 <strong>최적 정책은 상태 <img src="https://latex.codecogs.com/png.latex?s_t">에 대해 선형(linear)</strong>입니다 (Lemma 2 확인).</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5CPhi_t,%20%5CPsi_t">에 대해 풀면, 다음의 <strong>이산 리카티 방정식(Discrete Riccati Equations)</strong>을 얻습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5CPhi_t%20=%20A_t%5E%5Ctop%20%5Cleft(%20%5CPhi_%7Bt+1%7D%20-%20%5CPhi_%7Bt+1%7D%20B_t%20%5Cleft(B_t%5E%5Ctop%20%5CPhi_%7Bt+1%7D%20B_t%20-%20W_t%5Cright)%5E%7B-1%7D%20B_t%20%5CPhi_%7Bt+1%7D%20%5Cright)%20A_t%20-%20U_t%0A"></p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5CPsi_t%20=%20-%5Ctext%7Btr%7D(%5CSigma_t%20%5CPhi_%7Bt+1%7D)%20+%20%5CPsi_%7Bt+1%7D%0A"></p>
+<p><strong>Lemma 3. (노이즈 독립성)</strong> <img src="https://latex.codecogs.com/png.latex?%5CPhi_t">는 <img src="https://latex.codecogs.com/png.latex?%5CPsi">에도, 노이즈 <img src="https://latex.codecogs.com/png.latex?%5CSigma_t">에도 의존하지 않습니다.</p>
+<ul>
+<li>위 리카티 방정식을 보면 <img src="https://latex.codecogs.com/png.latex?%5CPhi_t">의 점화식에는 <img src="https://latex.codecogs.com/png.latex?%5CSigma_t">가 전혀 등장하지 않습니다. 오직 <img src="https://latex.codecogs.com/png.latex?%5CPsi_t">의 점화식에만 <img src="https://latex.codecogs.com/png.latex?-%5Ctext%7Btr%7D(%5CSigma_t%20%5CPhi_%7Bt+1%7D)"> 형태로 등장합니다.</li>
+<li>그런데 최적 정책 <img src="https://latex.codecogs.com/png.latex?L_t">는 <img src="https://latex.codecogs.com/png.latex?A_t,%20B_t,%20%5CPhi_%7Bt+1%7D">만의 함수이므로, <strong>최적 정책 역시 노이즈에 의존하지 않습니다.</strong></li>
+<li>정리하면, <img src="https://latex.codecogs.com/png.latex?%5CPsi_t">는 <img src="https://latex.codecogs.com/png.latex?%5CSigma_t">에 의존하고 <img src="https://latex.codecogs.com/png.latex?V_t%5E*">도 <img src="https://latex.codecogs.com/png.latex?%5CSigma_t">에 의존하지만, 우리가 정책을 구하기 위해 실제로 추적해야 하는 것은 <img src="https://latex.codecogs.com/png.latex?%5CPhi_t">뿐입니다. <strong>Lemma 3 덕분에 <img src="https://latex.codecogs.com/png.latex?%5CPhi_t">만 갱신하면 충분합니다.</strong></li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>핵심 요약:</strong> LQR에서는 (1) 노이즈 추정 없이도 정책을 구할 수 있고, (2) <img src="https://latex.codecogs.com/png.latex?%5CPhi_t">에 대한 리카티 방정식을 마지막 시점부터 거꾸로 풀기만 하면 선형 최적 정책 <img src="https://latex.codecogs.com/png.latex?a_t%5E*%20=%20L_t%20s_t">를 얻을 수 있습니다.</p>
+</blockquote>
+<hr>
+</section>
+</section>
+</section>
+<section id="동역학의-선형화-linearization-of-dynamics" class="level2">
+<h2 class="anchored" data-anchor-id="동역학의-선형화-linearization-of-dynamics">3. 동역학의 선형화 (Linearization of Dynamics)</h2>
+<p>현실에는 <strong>비선형 동역학(nonlinear dynamics)</strong>이 무수히 많습니다. LQR은 선형 시스템을 전제하므로, 비선형 시스템을 LQR로 다루려면 <strong>선형화(linearization)</strong>가 필요합니다.</p>
+<ul>
+<li>선형화가 효과적인 조건은, <strong>시스템이 대부분의 시간을 어떤 상태 <img src="https://latex.codecogs.com/png.latex?%5Cbar%7Bs%7D_t"> 근처에서 보내고, 우리가 취하는 행동도 <img src="https://latex.codecogs.com/png.latex?%5Cbar%7Ba%7D_t"> 근처일 때</strong>입니다. (차선 중앙을 유지하려는 자율주행차를 떠올리면 됩니다.)</li>
+</ul>
+<section id="테일러-전개를-이용한-선형화" class="level3">
+<h3 class="anchored" data-anchor-id="테일러-전개를-이용한-선형화">3.1. 테일러 전개를 이용한 선형화</h3>
+<p>선형화는 <strong>테일러 전개(Taylor Expansion)</strong>로 수행합니다.</p>
+<ul>
+<li><strong>1차원, 상태만 의존하는 경우:</strong> 전이 함수 <img src="https://latex.codecogs.com/png.latex?F">가 상태에만 의존한다면, <img src="https://latex.codecogs.com/png.latex?%0As_%7Bt+1%7D%20=%20F(s_t)%20%5Capprox%20F(%5Cbar%7Bs%7D_t)%20+%20F'(%5Cbar%7Bs%7D_t)%20%5Ccdot%20(s_t%20-%20%5Cbar%7Bs%7D_t)%0A"></li>
+<li><strong>일반적인 경우 (상태와 행동 모두 의존):</strong> <img src="https://latex.codecogs.com/png.latex?%0As_%7Bt+1%7D%20%5Capprox%20F(%5Cbar%7Bs%7D_t,%20%5Cbar%7Ba%7D_t)%20+%20%5Cnabla_s%20F(%5Cbar%7Bs%7D_t,%20%5Cbar%7Ba%7D_t)%20%5Ccdot%20(s_t%20-%20%5Cbar%7Bs%7D_t)%20+%20%5Cnabla_a%20F(%5Cbar%7Bs%7D_t,%20%5Cbar%7Ba%7D_t)%20%5Ccdot%20(a_t%20-%20%5Cbar%7Ba%7D_t)%0A"></li>
+</ul>
+<p>이 식을 정리하면 다음과 같은 <strong>아핀(affine) 형태</strong>가 됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0As_%7Bt+1%7D%20%5Capprox%20A%20s_t%20+%20B%20a_t%20+%20%5Ckappa%0A"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?A%20=%20%5Cnabla_s%20F">, <img src="https://latex.codecogs.com/png.latex?B%20=%20%5Cnabla_a%20F">이고 <img src="https://latex.codecogs.com/png.latex?%5Ckappa">는 상수항입니다.</li>
+<li>따라서 <img src="https://latex.codecogs.com/png.latex?s_%7Bt+1%7D">은 <img src="https://latex.codecogs.com/png.latex?s_t,%20a_t">에 대해 (상수항 <img src="https://latex.codecogs.com/png.latex?%5Ckappa">를 제외하면) <strong>선형</strong>이 되며, 이렇게 근사된 시스템에 LQR을 적용할 수 있습니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="미분-동적-계획법-differential-dynamic-programming-ddp" class="level2">
+<h2 class="anchored" data-anchor-id="미분-동적-계획법-differential-dynamic-programming-ddp">4. 미분 동적 계획법 (Differential Dynamic Programming, DDP)</h2>
+<p><strong>DDP는 시스템이 어떤 궤적(trajectory)을 따라가야 하는 상황</strong>(예: 로켓의 비행 경로)을 다룹니다. 핵심 아이디어는 궤적을 이산적인 시점들로 쪼갠 뒤, 각 궤적 점 주변에서 선형화를 적용할 수 있도록 중간 목표(intermediary goal)들을 설정하는 것입니다.</p>
+<p>DDP는 다음 네 단계로 구성됩니다.</p>
+<ol type="1">
+<li>우리가 따라가고자 하는 궤적을 근사하는 궤적 <img src="https://latex.codecogs.com/png.latex?s_t%5E*">를 마련한다.</li>
+<li>각 궤적 점 주변에서 동역학을 선형화한다.</li>
+<li>이제 문제가 LQR 틀로 재작성되었으므로, LQR로 최적 정책 <img src="https://latex.codecogs.com/png.latex?%5Cpi_t">를 구한다.</li>
+<li>새 정책으로 새 궤적을 생성하고, Step 2로 돌아간다.</li>
+</ol>
+<section id="ddp---step-1-초기-궤적-샘플링" class="level3">
+<h3 class="anchored" data-anchor-id="ddp---step-1-초기-궤적-샘플링">4.1. DDP - Step 1: 초기 궤적 샘플링</h3>
+<p>먼저 단순한(naive) 컨트롤러를 사용해 궤적을 하나 샘플링합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0As_0%5E*,%20a_0%5E*%20%5Crightarrow%20s_1%5E*,%20a_1%5E*%20%5Crightarrow%20%5Ccdots%0A"></p>
+<ul>
+<li>이것은 DDP의 <strong>‘시작점(initial point)’</strong>에 불과하므로, 정확할 필요가 없습니다. 이후 반복을 통해 점차 개선됩니다.</li>
+</ul>
+</section>
+<section id="ddp---step-2-동역학과-보상의-근사" class="level3">
+<h3 class="anchored" data-anchor-id="ddp---step-2-동역학과-보상의-근사">4.2. DDP - Step 2: 동역학과 보상의 근사</h3>
+<p>각 궤적 점 <img src="https://latex.codecogs.com/png.latex?s_t%5E*"> 주변에서 동역학을 선형화합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0As_%7Bt+1%7D%20%5Capprox%20F(s_t%5E*,%20a_t%5E*)%20+%20%5Cnabla_s%20F(s_t%5E*,%20a_t%5E*)%20%5Ccdot%20(s_t%20-%20s_t%5E*)%20+%20%5Cnabla_a%20F(s_t%5E*,%20a_t%5E*)%20%5Ccdot%20(a_t%20-%20a_t%5E*)%0A"></p>
+<ul>
+<li>이는 <img src="https://latex.codecogs.com/png.latex?s_%7Bt+1%7D%20%5Capprox%20A%20s_t%20+%20B%20a_t%20+%20%5Ckappa"> 형태가 됩니다. 여기서 상수항 <img src="https://latex.codecogs.com/png.latex?%5Ckappa">가 거슬리는데, <strong>상태 <img src="https://latex.codecogs.com/png.latex?s_t">에 차원 하나를 추가(absorption)</strong>하면 <img src="https://latex.codecogs.com/png.latex?%5Ckappa">를 흡수하여 깔끔하게 <img src="https://latex.codecogs.com/png.latex?%0As_%7Bt+1%7D%20%5Capprox%20A_t%20s_t%20+%20B_t%20a_t%0A"> 형태로 만들 수 있습니다.</li>
+</ul>
+<section id="advanced-보상의-2차-테일러-전개" class="level4">
+<h4 class="anchored" data-anchor-id="advanced-보상의-2차-테일러-전개">(ADVANCED) 보상의 2차 테일러 전개</h4>
+<p>보상 <img src="https://latex.codecogs.com/png.latex?R%5E%7B(t)%7D">에 대해서도 유사한 유도를 적용하는데, 이번에는 <strong>2차(second-order) 테일러 전개</strong>를 사용합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0AR(s_t,%20a_t)%20%5Capprox%20%5C;%20&amp;%20R(s_t%5E*,%20a_t%5E*)%20+%20%5Cnabla_s%20R(s_t%5E*,%20a_t%5E*)(s_t%20-%20s_t%5E*)%20+%20%5Cnabla_a%20R(s_t%5E*,%20a_t%5E*)(a_t%20-%20a_t%5E*)%20%5C%5C%0A&amp;%20+%20%5Cfrac%7B1%7D%7B2%7D(s_t%20-%20s_t%5E*)%5E%5Ctop%20H_%7Bss%7D(s_t%20-%20s_t%5E*)%20+%20(s_t%20-%20s_t%5E*)%5E%5Ctop%20H_%7Bsa%7D(a_t%20-%20a_t%5E*)%20%5C%5C%0A&amp;%20+%20%5Cfrac%7B1%7D%7B2%7D(a_t%20-%20a_t%5E*)%5E%5Ctop%20H_%7Baa%7D(a_t%20-%20a_t%5E*)%0A%5Cend%7Baligned%7D%0A"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?H_%7Bxy%7D">는 보상 <img src="https://latex.codecogs.com/png.latex?R">의 헤시안(Hessian) 행렬에서 <img src="https://latex.codecogs.com/png.latex?x">와 <img src="https://latex.codecogs.com/png.latex?y">에 대한 항을 의미합니다. (<img src="https://latex.codecogs.com/png.latex?H_%7Bss%7D">는 상태-상태, <img src="https://latex.codecogs.com/png.latex?H_%7Baa%7D">는 행동-행동, <img src="https://latex.codecogs.com/png.latex?H_%7Bsa%7D">는 상태-행동 교차항입니다.)</li>
+</ul>
+</section>
+<section id="이차-보상-형태로의-환원" class="level4">
+<h4 class="anchored" data-anchor-id="이차-보상-형태로의-환원">이차 보상 형태로의 환원</h4>
+<p>이 2차 전개는 결국 LQR의 이차 보상 형태로 환원될 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AR%5E%7B(t)%7D(s_t,%20a_t)%20%5Capprox%20-s_t%5E%5Ctop%20U_t%20s_t%20-%20a_t%5E%5Ctop%20W_t%20a_t%0A"></p>
+<ul>
+<li>이 환원을 이해하기 위해, 1차원 예시로 다음 항등식을 떠올려 보겠습니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bbmatrix%7D%201%20&amp;%20x%20%5Cend%7Bbmatrix%7D%20%5Ccdot%20%5Cbegin%7Bbmatrix%7D%20a%20&amp;%20b%20%5C%5C%20b%20&amp;%20c%20%5Cend%7Bbmatrix%7D%20%5Ccdot%20%5Cbegin%7Bbmatrix%7D%201%20%5C%5C%20x%20%5Cend%7Bbmatrix%7D%20=%20a%20+%202bx%20+%20cx%5E2%0A"></li>
+<li>즉, 상수항·1차항·2차항이 모두 포함된 표현을 (확장된 좌표를 사용하면) 하나의 이차형식(quadratic form)으로 묶을 수 있습니다. 이것이 1차/2차 테일러 항들을 LQR의 이차 보상 형태로 흡수하는 원리입니다.</li>
+</ul>
+</section>
+</section>
+<section id="ddp---step-3-lqr-적용" class="level3">
+<h3 class="anchored" data-anchor-id="ddp---step-3-lqr-적용">4.3. DDP - Step 3: LQR 적용</h3>
+<p>이제 동역학 <img src="https://latex.codecogs.com/png.latex?s_%7Bt+1%7D%20%5Capprox%20A_t%20s_t%20+%20B_t%20a_t">와 보상 <img src="https://latex.codecogs.com/png.latex?R%5E%7B(t)%7D(s_t,%20a_t)%20%5Capprox%20-s_t%5E%5Ctop%20U_t%20s_t%20-%20a_t%5E%5Ctop%20W_t%20a_t">를 얻었으므로, <strong>문제가 완전히 LQR 틀로 재작성</strong>되었습니다. 따라서 앞서 배운 LQR을 그대로 적용해 최적 정책 <img src="https://latex.codecogs.com/png.latex?%5Cpi_t">를 구하면 됩니다.</p>
+</section>
+<section id="ddp---step-4-궤적-갱신-및-반복" class="level3">
+<h3 class="anchored" data-anchor-id="ddp---step-4-궤적-갱신-및-반복">4.4. DDP - Step 4: 궤적 갱신 및 반복</h3>
+<p>새 정책 <img src="https://latex.codecogs.com/png.latex?%5Cpi_t">가 생겼으므로, 이를 이용해 새로운 궤적을 샘플링합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0As_0%5E*,%20%5Cpi_0(s_0%5E*)%20%5Crightarrow%20s_1%5E*,%20%5Cpi_1(s_1%5E*)%20%5Crightarrow%20%5Ccdots%20%5Crightarrow%20s_T%5E*%0A"></p>
+<ul>
+<li><strong>중요:</strong> 이 궤적을 계산할 때는 선형 근사가 아니라 <strong>실제 동역학 <img src="https://latex.codecogs.com/png.latex?F"></strong>를 사용합니다. 즉, <img src="https://latex.codecogs.com/png.latex?%0As_%7Bt+1%7D%5E*%20=%20F(s_t%5E*,%20a_t%5E*)%0A"></li>
+<li>이렇게 갱신된 궤적을 얻으면 다시 Step 2로 돌아가, 어떤 정지 조건(stopping criterion)이 만족될 때까지 반복합니다. 반복을 거듭하며 선형화 기준점이 점점 더 좋은 궤적으로 이동하므로 근사 품질이 향상됩니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="부분-관측-mdp-partially-observable-mdps-pomdps" class="level2">
+<h2 class="anchored" data-anchor-id="부분-관측-mdp-partially-observable-mdps-pomdps">5. 부분 관측 MDP (Partially Observable MDPs, POMDPs)</h2>
+<section id="pomdp의-동기와-정의" class="level3">
+<h3 class="anchored" data-anchor-id="pomdp의-동기와-정의">5.1. POMDP의 동기와 정의</h3>
+<p>현실에서는 종종 <strong>완전한 상태 <img src="https://latex.codecogs.com/png.latex?s">를 관측할 수 없습니다.</strong></p>
+<ul>
+<li>예를 들어 자율주행차는 카메라로 다양한 이미지를 수집하지만, 여전히 주변의 ‘완전한’ 상태를 관측할 수는 없습니다.</li>
+</ul>
+<p>이런 상황을 모델링하기 위해 <strong>부분 관측 MDP(POMDP)</strong>가 필요합니다. 새로운 변수인 <strong>관측(observation) <img src="https://latex.codecogs.com/png.latex?o_t"></strong>를 도입하는데, 이는 현재 상태 <img src="https://latex.codecogs.com/png.latex?s_t">가 주어졌을 때 어떤 조건부 분포를 따릅니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ao_t%20%7C%20s_t%20%5Csim%20O(o%20%7C%20s)%0A"></p>
+<p>유한 시계 POMDP는 다음 튜플로 정의됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A(%5Cmathcal%7BS%7D,%20%5Cmathcal%7BO%7D,%20%5Cmathcal%7BA%7D,%20P_%7Bsa%7D,%20T,%20R)%0A"></p>
+</section>
+<section id="신념-상태-belief-state" class="level3">
+<h3 class="anchored" data-anchor-id="신념-상태-belief-state">5.2. 신념 상태 (Belief State)</h3>
+<p>POMDP에서는 관측에 기반하여 <strong>신념 상태(belief state)</strong>를 유지해야 합니다. POMDP에서의 정책은 이 신념 상태를 행동으로 매핑합니다.</p>
+<ul>
+<li>예를 들어, 자율주행차가 카메라 앞에서 어떤 물체를 감지했을 때, 그것이 보행자일 확률 80%, 다른 차일 확률 20%처럼 <strong>확률 분포 형태로 상태를 추정</strong>할 수 있습니다.</li>
+</ul>
+<p>이번 강의에서는 관측 <img src="https://latex.codecogs.com/png.latex?o_1,%20%5Ccdots,%20o_t">를 다음과 같은 선형-가우시안 형태로 가정합니다. <img src="https://latex.codecogs.com/png.latex?y_t%20%5Cin%20%5Cmathbb%7BR%7D%5En">이고 <img src="https://latex.codecogs.com/png.latex?m%20%3C%20n">일 때,</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bcases%7D%20y_t%20=%20C%20%5Ccdot%20s_t%20+%20v_t%20%5C%5C%20s_%7Bt+1%7D%20=%20A%20%5Ccdot%20s_t%20+%20B%20%5Ccdot%20a_t%20+%20w_t%20%5Cend%7Bcases%7D%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?C%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bn%20%5Ctimes%20d%7D">는 <strong>압축 행렬(compression matrix)</strong>로, 고차원 상태를 저차원 관측으로 사영합니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?v_t">는 가우시안 <strong>센서 노이즈(sensor noise)</strong>입니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="선형-이차-가우시안-linear-quadratic-gaussian-lqg" class="level2">
+<h2 class="anchored" data-anchor-id="선형-이차-가우시안-linear-quadratic-gaussian-lqg">6. 선형 이차 가우시안 (Linear Quadratic Gaussian, LQG)</h2>
+<p>LQG는 부분 관측 환경을 위한 LQR의 확장으로, 크게 세 단계로 진행됩니다. 핵심은 <strong>관측으로부터 상태 분포를 추정(Kalman Filter)한 뒤, 그 추정치에 LQR을 적용</strong>하는 것입니다.</p>
+<section id="lqg---step-1-상태-분포-추정" class="level3">
+<h3 class="anchored" data-anchor-id="lqg---step-1-상태-분포-추정">6.1. LQG - Step 1: 상태 분포 추정</h3>
+<p>먼저 우리가 가진 관측들에 기반하여 가능한 상태들에 대한 분포를 계산합니다. 즉, 다음 분포의 파라미터 <img src="https://latex.codecogs.com/png.latex?s_%7Bt%7Ct%7D,%20%5CSigma_%7Bt%7Ct%7D">를 구하려 합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0As_t%20%7C%20y_1,%20%5Ccdots,%20y_t%20%5Csim%20%5Cmathcal%7BN%7D(s_%7Bt%7Ct%7D,%20%5CSigma_%7Bt%7Ct%7D)%0A"></p>
+<p>이를 위해 <strong>칼만 필터 알고리즘(Kalman Filter Algorithm)</strong>을 사용합니다.</p>
+</section>
+<section id="칼만-필터-알고리즘-kalman-filter-algorithm" class="level3">
+<h3 class="anchored" data-anchor-id="칼만-필터-알고리즘-kalman-filter-algorithm">6.2. 칼만 필터 알고리즘 (Kalman Filter Algorithm)</h3>
+<section id="advanced-동기-왜-칼만-필터가-필요한가" class="level4">
+<h4 class="anchored" data-anchor-id="advanced-동기-왜-칼만-필터가-필요한가">(ADVANCED) 동기: 왜 칼만 필터가 필요한가</h4>
+<p>논의를 단순화하기 위해 동역학에 <strong>행동 의존성이 없다고 가정</strong>하겠습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bcases%7D%20s_%7Bt+1%7D%20=%20A%20s_t%20+%20w_t,%20&amp;%20w_t%20%5Csim%20%5Cmathcal%7BN%7D(0,%20%5CSigma_s)%20%5C%5C%20y_t%20=%20C%20s_t%20+%20v_t,%20&amp;%20v_t%20%5Csim%20%5Cmathcal%7BN%7D(0,%20%5CSigma_y)%20%5Cend%7Bcases%7D%0A"></p>
+<ul>
+<li>모든 노이즈가 가우시안이므로, 결합 분포 <img src="https://latex.codecogs.com/png.latex?(s_1%20%5Ccdots%20s_t%20%5C;%20y_1%20%5Ccdots%20y_t)%5E%5Ctop"> 역시 가우시안임이 자명합니다. <img src="https://latex.codecogs.com/png.latex?%0A(s_1%20%5Ccdots%20s_t%20%5C;%20y_1%20%5Ccdots%20y_t)%5E%5Ctop%20%5Csim%20%5Cmathcal%7BN%7D(%5Cmu,%20%5CSigma)%20%5Cquad%20%5Ctext%7Bfor%20some%20%7D%20%5Cmu,%20%5CSigma%0A"></li>
+<li>그렇다면 가우시안의 주변화(marginalization) 공식을 써서 <img src="https://latex.codecogs.com/png.latex?s_t%20%7C%20y_1,%20%5Ccdots,%20y_t%20%5Csim%20%5Cmathcal%7BN%7D(s_%7Bt%7Ct%7D,%20%5CSigma_%7Bt%7Ct%7D)">를 직접 구할 수도 있습니다.</li>
+<li><strong>그러나 이는 계산적으로 매우 비쌉니다.</strong> <img src="https://latex.codecogs.com/png.latex?t%20%5Ctimes%20t"> 크기의 행렬을 다뤄야 하는데, 행렬 역산(inversion) 비용이 <img src="https://latex.codecogs.com/png.latex?O(t%5E3)">이며, 매 시점 반복하면 <img src="https://latex.codecogs.com/png.latex?O(t%5E4)">에 달합니다. 시간이 갈수록 비용이 폭발합니다.</li>
+</ul>
+</section>
+<section id="advanced-효율적인-해법-predict-update" class="level4">
+<h4 class="anchored" data-anchor-id="advanced-효율적인-해법-predict-update">(ADVANCED) 효율적인 해법: Predict &amp; Update</h4>
+<p><strong>칼만 필터는 훨씬 효율적인 방법</strong>을 제공합니다.</p>
+<ul>
+<li>평균과 분산을 시간에 따라 <strong>상수 시간(constant time in <img src="https://latex.codecogs.com/png.latex?t">)</strong>으로 갱신합니다. (전체적으로 <img src="https://latex.codecogs.com/png.latex?O(t)">.)</li>
+<li>두 가지 기본 단계로 구성됩니다: <strong>예측(Predict)</strong>과 <strong>갱신(Update)</strong>.</li>
+<li><img src="https://latex.codecogs.com/png.latex?s_t%20%7C%20y_1,%20%5Ccdots,%20y_t">의 분포를 안다고 가정하고, 먼저 <img src="https://latex.codecogs.com/png.latex?s_%7Bt+1%7D%20%7C%20y_1,%20%5Ccdots,%20y_t">(예측)를 계산한 뒤, <img src="https://latex.codecogs.com/png.latex?s_%7Bt+1%7D%20%7C%20y_1,%20%5Ccdots,%20y_%7Bt+1%7D">(갱신)로 업데이트하며 시점을 반복합니다.</li>
+</ul>
+<p><strong>예측 단계 (Predict Step):</strong></p>
+<p>현재 분포 <img src="https://latex.codecogs.com/png.latex?s_t%20%7C%20y_1,%20%5Ccdots,%20y_t%20%5Csim%20%5Cmathcal%7BN%7D(s_%7Bt%7Ct%7D,%20%5CSigma_%7Bt%7Ct%7D)">를 안다고 합시다. 그러면 다음 상태의 분포 역시 가우시안입니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0As_%7Bt+1%7D%20%7C%20y_1,%20%5Ccdots,%20y_t%20%5Csim%20%5Cmathcal%7BN%7D(s_%7Bt+1%7Ct%7D,%20%5CSigma_%7Bt+1%7Ct%7D)%0A"></p>
+<p>여기서 파라미터는 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bcases%7D%20s_%7Bt+1%7Ct%7D%20=%20A%20s_%7Bt%7Ct%7D%20%5C%5C%20%5CSigma_%7Bt+1%7Ct%7D%20=%20A%20%5CSigma_%7Bt%7Ct%7D%20A%5E%5Ctop%20+%20%5CSigma_s%20%5Cend%7Bcases%7D%0A"></p>
+<ul>
+<li>직관적으로, 평균은 동역학 <img src="https://latex.codecogs.com/png.latex?A">를 통과시켜 예측하고, 공분산은 <img src="https://latex.codecogs.com/png.latex?A">로 변환된 불확실성(<img src="https://latex.codecogs.com/png.latex?A%5CSigma_%7Bt%7Ct%7DA%5E%5Ctop">)에 프로세스 노이즈의 불확실성(<img src="https://latex.codecogs.com/png.latex?%5CSigma_s">)을 더해 증가시킵니다. <strong>예측만 하면 불확실성이 커집니다.</strong></li>
+</ul>
+<p><strong>갱신 단계 (Update Step):</strong></p>
+<p>예측된 분포 <img src="https://latex.codecogs.com/png.latex?s_%7Bt+1%7Ct%7D,%20%5CSigma_%7Bt+1%7Ct%7D"> (즉 <img src="https://latex.codecogs.com/png.latex?s_%7Bt+1%7D%20%7C%20y_1,%20%5Ccdots,%20y_t%20%5Csim%20%5Cmathcal%7BN%7D(s_%7Bt+1%7Ct%7D,%20%5CSigma_%7Bt+1%7Ct%7D)">)가 주어지면, 새로운 관측 <img src="https://latex.codecogs.com/png.latex?y_%7Bt+1%7D">을 반영하여 다음을 증명할 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0As_%7Bt+1%7D%20%7C%20y_1,%20%5Ccdots,%20y_%7Bt+1%7D%20%5Csim%20%5Cmathcal%7BN%7D(s_%7Bt+1%7Ct+1%7D,%20%5CSigma_%7Bt+1%7Ct+1%7D)%0A"></p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Bcases%7D%20s_%7Bt+1%7Ct+1%7D%20=%20s_%7Bt+1%7Ct%7D%20+%20K_t(y_%7Bt+1%7D%20-%20C%20s_%7Bt+1%7Ct%7D)%20%5C%5C%20%5CSigma_%7Bt+1%7Ct+1%7D%20=%20%5CSigma_%7Bt+1%7Ct%7D%20-%20K_t%20C%20%5CSigma_%7Bt+1%7Ct%7D%20%5Cend%7Bcases%7D%0A"></p>
+<ul>
+<li>여기서 <strong>칼만 게인(Kalman Gain) <img src="https://latex.codecogs.com/png.latex?K_t"></strong>는 다음과 같이 정의됩니다. <img src="https://latex.codecogs.com/png.latex?%0AK_t%20:=%20%5CSigma_%7Bt+1%7Ct%7D%20C%5E%5Ctop%20(C%20%5CSigma_%7Bt+1%7Ct%7D%20C%5E%5Ctop%20+%20%5CSigma_y)%5E%7B-1%7D%0A"></li>
+<li>직관적으로, <img src="https://latex.codecogs.com/png.latex?(y_%7Bt+1%7D%20-%20C%20s_%7Bt+1%7Ct%7D)">는 <strong>예측 관측과 실제 관측의 차이(innovation)</strong>입니다. 칼만 게인은 이 오차를 얼마나 신뢰하여 추정치를 보정할지 결정하는 가중치입니다. 관측 노이즈 <img src="https://latex.codecogs.com/png.latex?%5CSigma_y">가 크면 게인이 작아져 관측을 덜 믿고, 작으면 게인이 커져 관측을 더 신뢰합니다. <strong>관측을 반영하면 불확실성이 줄어듭니다.</strong></li>
+<li><strong>핵심:</strong> 갱신 단계는 <strong>시점 <img src="https://latex.codecogs.com/png.latex?t"> 이전의 관측들을 전혀 필요로 하지 않습니다.</strong> 오직 직전 분포에만 의존하므로, 과거 전체를 저장하지 않아도 되어 효율적입니다.</li>
+</ul>
+</section>
+</section>
+<section id="lqg---step-23-lqr과의-결합" class="level3">
+<h3 class="anchored" data-anchor-id="lqg---step-23-lqr과의-결합">6.3. LQG - Step 2/3: LQR과의 결합</h3>
+<p>이제 분포 <img src="https://latex.codecogs.com/png.latex?s_t%20%7C%20y_1,%20%5Ccdots,%20y_t">를 계산했으므로, 그 <strong>평균 <img src="https://latex.codecogs.com/png.latex?s_%7Bt%7Ct%7D">를 상태 <img src="https://latex.codecogs.com/png.latex?s_t">의 최선의 근사치</strong>로 사용합니다.</p>
+<p>그리고 행동을 다음과 같이 설정합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Aa_t%20:=%20L_t%20s_%7Bt%7Ct%7D%0A"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?L_t">는 <strong>일반적인 LQR 알고리즘에서 나온 정책 행렬</strong>입니다.</li>
+</ul>
+<p><strong>왜 이것이 동작할까요?</strong></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?s_%7Bt%7Ct%7D">는 실제 상태 <img src="https://latex.codecogs.com/png.latex?s_t">의 노이즈가 섞인 근사치입니다. 따라서 <img src="https://latex.codecogs.com/png.latex?a_t%20=%20L_t%20s_%7Bt%7Ct%7D">를 쓰는 것은 LQR에 <strong>노이즈를 더 추가하는 것</strong>과 동등합니다.</li>
+<li>그런데 우리는 앞서 <strong>LQR이 노이즈에 독립(independent of noise)</strong>임을 증명했습니다 (Lemma 3). 따라서 추정된 상태를 그대로 LQR 정책에 대입해도 최적성이 유지됩니다. 이것이 LQG가 추정(estimation)과 제어(control)를 분리해서 풀 수 있는 이유입니다. (이를 <strong>분리 원리(separation principle)</strong>라고도 합니다.)</li>
+</ul>
+</section>
+<section id="lqg-요약" class="level3">
+<h3 class="anchored" data-anchor-id="lqg-요약">6.4. LQG 요약</h3>
+<p>LQG 알고리즘 전체를 정리하면 다음과 같습니다.</p>
+<ul>
+<li><strong>순방향 패스(Forward Pass):</strong> 칼만 필터를 돌려 <img src="https://latex.codecogs.com/png.latex?K_t,%20%5CSigma_%7Bt%7Ct%7D,%20s_%7Bt%7Ct%7D">를 계산합니다.</li>
+<li><strong>역방향 패스(Backward Pass):</strong> LQR 갱신(리카티 방정식)을 돌려 <img src="https://latex.codecogs.com/png.latex?%5CPsi_t,%20%5CPhi_t,%20L_t">를 계산합니다.</li>
+<li><strong>최종 정책 복원:</strong> 두 결과를 결합하여 최적 정책을 얻습니다. <img src="https://latex.codecogs.com/png.latex?%0Aa_t%5E*%20=%20L_t%20s_%7Bt%7Ct%7D%0A"></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="정책-경사-policy-gradient" class="level2">
+<h2 class="anchored" data-anchor-id="정책-경사-policy-gradient">7. 정책 경사 (Policy Gradient)</h2>
+<section id="policy-gradient의-동기와-설정" class="level3">
+<h3 class="anchored" data-anchor-id="policy-gradient의-동기와-설정">7.1. Policy Gradient의 동기와 설정</h3>
+<p>지금까지의 방법들(가치 반복, LQR 등)은 가치함수나 Q함수를 매개로 정책을 구했습니다. 반면 <strong>Policy Gradient는 정책 자체를 직접 최적화하는 알고리즘</strong>입니다.</p>
+<ul>
+<li><strong>가치/Q 함수의 개념이 필요 없습니다.</strong></li>
+</ul>
+<p>이번 강의에서는 유한 시계(finite horizon)를 가정하고, 궤적을 다음과 같이 표기합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctau%20=%20(s_0,%20a_0,%20%5Ccdots,%20s_%7BT-1%7D,%20a_%7BT-1%7D,%20s_T),%20%5Cqquad%20T%20%3C%20%5Cinfty%0A"></p>
+<ul>
+<li>이 방법은 <strong>확률적 정책(randomized policy) <img src="https://latex.codecogs.com/png.latex?%5Cpi_%5Ctheta(a%7Cs)"></strong>를 학습하는 데에만 적용됩니다.</li>
+<li>우리가 가정하는 것은 다음과 같습니다.
+<ul>
+<li>전이 확률 <img src="https://latex.codecogs.com/png.latex?%5C%7BP_%7Bsa%7D%5C%7D">로부터 <strong>샘플링</strong>할 수 있다.</li>
+<li>상태 <img src="https://latex.codecogs.com/png.latex?s">와 행동 <img src="https://latex.codecogs.com/png.latex?a">에서 보상 함수 <img src="https://latex.codecogs.com/png.latex?R(s,%20a)">를 <strong>질의(query)</strong>할 수 있다.</li>
+<li>단, 전이 확률이나 보상 함수의 <strong>해석적(analytical) 형태를 알 필요는 없습니다.</strong></li>
+</ul></li>
+<li>또한 <img src="https://latex.codecogs.com/png.latex?%5C%7BP_%7Bsa%7D%5C%7D">나 <img src="https://latex.codecogs.com/png.latex?R(s,%20a)">를 <strong>명시적으로 학습하지도 않습니다.</strong> 이것이 LQR/LQG와 결정적으로 다른 점입니다 (LQR은 동역학 행렬을 추정했음을 떠올려 보세요).</li>
+</ul>
+</section>
+<section id="목적-함수" class="level3">
+<h3 class="anchored" data-anchor-id="목적-함수">7.2. 목적 함수</h3>
+<p>초기 상태 <img src="https://latex.codecogs.com/png.latex?s_0">가 어떤 분포 <img src="https://latex.codecogs.com/png.latex?%5Cmu">에서 샘플링된다고 합시다. 우리의 목표는 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">에 대해 정책 <img src="https://latex.codecogs.com/png.latex?%5Cpi_%5Ctheta">의 <strong>기대 총 보상(expected total payoff)</strong>을 최대화하는 것입니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ceta(%5Ctheta)%20:=%20%5Cmathbb%7BE%7D%5Cleft%5B%20%5Csum_%7Bt=0%7D%5E%7BT-1%7D%20%5Cgamma%5Et%20R(s_t,%20a_t)%20%5Cright%5D%0A"></p>
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?s_t%20%5Csim%20P_%7Bs_%7Bt-1%7D%20a_%7Bt-1%7D%7D">, <img src="https://latex.codecogs.com/png.latex?a_t%20%5Csim%20%5Cpi_%5Ctheta(%5Ccdot%20%7C%20s_t)">입니다.</li>
+<li>유한/무한 시계의 차이를 무시하면, 이는 <img src="https://latex.codecogs.com/png.latex?%5Ceta(%5Ctheta)%20=%20%5Cmathbb%7BE%7D_%7Bs_0%20%5Csim%20P%7D%5BV%5E%7B%5Cpi_%5Ctheta%7D(s_0)%5D">로 볼 수 있습니다.</li>
+</ul>
+<p>우리는 경사 상승(gradient ascent)으로 <img src="https://latex.codecogs.com/png.latex?%5Ceta(%5Ctheta)">를 최대화하고자 합니다. 문제는 <strong><img src="https://latex.codecogs.com/png.latex?R(s,%20a)">나 <img src="https://latex.codecogs.com/png.latex?P_%7Bsa%7D">의 형태를 모르는 채로 <img src="https://latex.codecogs.com/png.latex?%5Cnabla_%5Ctheta%20%5Ceta(%5Ctheta)">를 어떻게 계산하느냐</strong>입니다.</p>
+</section>
+<section id="재매개변수화-트릭이-불가능한-이유" class="level3">
+<h3 class="anchored" data-anchor-id="재매개변수화-트릭이-불가능한-이유">7.3. 재매개변수화 트릭이 불가능한 이유</h3>
+<p><img src="https://latex.codecogs.com/png.latex?P_%5Ctheta(%5Ctau)">를 궤적 <img src="https://latex.codecogs.com/png.latex?%5Ctau">의 분포라 하고, <img src="https://latex.codecogs.com/png.latex?f(%5Ctau)%20=%20%5Csum_%7Bt=0%7D%5E%7BT-1%7D%20%5Cgamma%5Et%20R(s_t,%20a_t)">로 정의하면, 목적 함수를 다음과 같이 다시 쓸 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ceta(%5Ctheta)%20=%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%5Bf(%5Ctau)%5D%0A"></p>
+<ul>
+<li>이는 VAE 설정과 유사하게, <strong>기댓값 안에 등장하는 변수(분포 <img src="https://latex.codecogs.com/png.latex?P_%5Ctheta">)가 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">에 의존</strong>하는 상황입니다.</li>
+<li>하지만 우리는 <img src="https://latex.codecogs.com/png.latex?f">의 기울기를 계산하는 방법을 모르므로(보상 함수의 형태를 모르므로), VAE에서처럼 <strong>재매개변수화 트릭(reparameterization trick)을 사용할 수 없습니다.</strong></li>
+</ul>
+</section>
+<section id="advanced-log-derivative-trick을-통한-경사-유도" class="level3">
+<h3 class="anchored" data-anchor-id="advanced-log-derivative-trick을-통한-경사-유도">7.4. (ADVANCED) Log-Derivative Trick을 통한 경사 유도</h3>
+<p>대신 <strong>로그 미분 트릭(log-derivative trick)</strong>을 사용합니다. 핵심 유도는 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cnabla_%5Ctheta%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%5Bf(%5Ctau)%5D%20&amp;=%20%5Cnabla_%5Ctheta%20%5Cint%20P_%5Ctheta(%5Ctau)%20f(%5Ctau)%20%5C,%20d%5Ctau%20%5C%5C%0A&amp;=%20%5Cint%20%5Cnabla_%5Ctheta%20%5Cleft(%20P_%5Ctheta(%5Ctau)%20f(%5Ctau)%20%5Cright)%20d%5Ctau%20%5C%5C%0A&amp;=%20%5Cint%20%5Cleft(%20%5Cnabla_%5Ctheta%20P_%5Ctheta(%5Ctau)%20%5Cright)%20f(%5Ctau)%20%5C,%20d%5Ctau%20%5Cqquad%20(%5Cbecause%20f%20%5Ctext%7B%20does%20not%20depend%20on%20%7D%20%5Ctheta)%20%5C%5C%0A&amp;=%20%5Cint%20P_%5Ctheta(%5Ctau)%20%5Cleft(%20%5Cnabla_%5Ctheta%20%5Clog%20P_%5Ctheta(%5Ctau)%20%5Cright)%20f(%5Ctau)%20%5C,%20d%5Ctau%20%5Cqquad%20%5Cleft(%5Cbecause%20%5Cnabla%20%5Clog%20P_%5Ctheta(%5Ctau)%20=%20%5Cfrac%7B%5Cnabla%20P_%5Ctheta(%5Ctau)%7D%7BP_%5Ctheta(%5Ctau)%7D%20%5Cright)%20%5C%5C%0A&amp;=%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%20%5Cleft%5B%20%5Cleft(%20%5Cnabla_%5Ctheta%20%5Clog%20P_%5Ctheta(%5Ctau)%20%5Cright)%20f(%5Ctau)%20%5Cright%5D%0A%5Cend%7Baligned%7D%0A"></p>
+<ul>
+<li><strong>핵심 단계는 네 번째 줄입니다.</strong> <img src="https://latex.codecogs.com/png.latex?%5Cnabla_%5Ctheta%20P_%5Ctheta%20=%20P_%5Ctheta%20%5Ccdot%20%5Cnabla_%5Ctheta%20%5Clog%20P_%5Ctheta">라는 항등식을 이용하여, 미분된 형태를 다시 <strong>기댓값 형태로 되돌렸습니다.</strong> 이로써 샘플링으로 추정 가능한 형태가 되었습니다.</li>
+</ul>
+</section>
+<section id="advanced-샘플-기반-추정량" class="level3">
+<h3 class="anchored" data-anchor-id="advanced-샘플-기반-추정량">7.5. (ADVANCED) 샘플 기반 추정량</h3>
+<p>이제 위 결과로부터 샘플 기반 추정량(estimator)을 만들 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cnabla_%5Ctheta%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%5Bf(%5Ctau)%5D%20=%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%5Cleft%5B%20(%5Cnabla_%5Ctheta%20%5Clog%20P_%5Ctheta(%5Ctau))%20f(%5Ctau)%20%5Cright%5D%20%5Capprox%20%5Cfrac%7B1%7D%7Bn%7D%20%5Csum_%7Bi=1%7D%5E%7Bn%7D%20(%5Cnabla_%5Ctheta%20%5Clog%20P_%5Ctheta(%5Ctau%5E%7B(i)%7D))%20f(%5Ctau%5E%7B(i)%7D)%0A"></p>
+<p>이제 <img src="https://latex.codecogs.com/png.latex?%5Clog%20P_%5Ctheta(%5Ctau)">를 전개해 보겠습니다. 궤적의 확률은 초기 분포, 정책, 전이 확률의 곱으로 분해됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AP_%5Ctheta(%5Ctau)%20=%20%5Cmu(s_0)%20%5Cpi_%5Ctheta(a_0%20%7C%20s_0)%20P_%7Bs_0%20a_0%7D(s_1)%20%5Cpi_%5Ctheta(a_1%20%7C%20s_1)%20P_%7Bs_1%20a_1%7D(s_2)%20%5Ccdots%20P_%7Bs_%7BT-1%7D%20a_%7BT-1%7D%7D(s_T)%0A"></p>
+<p>곱에 로그를 취하면 합으로 바뀝니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Clog%20P_%5Ctheta(%5Ctau)%20=%20%5Clog%20%5Cmu(s_0)%20+%20%5Clog%20%5Cpi_%5Ctheta(a_0%20%7C%20s_0)%20+%20%5Ccdots%20+%20%5Clog%20P_%7Bs_%7BT-1%7D%20a_%7BT-1%7D%7D(s_T)%0A"></p>
+</section>
+<section id="advanced-핵심-결과-전이-확률이-사라진다" class="level3">
+<h3 class="anchored" data-anchor-id="advanced-핵심-결과-전이-확률이-사라진다">7.6. (ADVANCED) 핵심 결과: 전이 확률이 사라진다</h3>
+<p>이제 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">에 대해 기울기를 취합니다. 핵심은 <strong><img src="https://latex.codecogs.com/png.latex?%5Ctheta">와 무관한 항(초기 분포 <img src="https://latex.codecogs.com/png.latex?%5Cmu">와 전이 확률 <img src="https://latex.codecogs.com/png.latex?P">)들이 모두 사라진다</strong>는 점입니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cnabla_%5Ctheta%20%5Clog%20P_%5Ctheta(%5Ctau)%20=%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_0%20%7C%20s_0)%20+%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_1%20%7C%20s_1)%20+%20%5Ccdots%20+%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_%7BT-1%7D%20%7C%20s_%7BT-1%7D)%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Cmu(s_0)">와 전이 확률 <img src="https://latex.codecogs.com/png.latex?P_%7Bs_t%20a_t%7D(s_%7Bt+1%7D)">는 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">에 의존하지 않으므로 그 기울기가 0이 됩니다. 살아남는 것은 <strong>정책 항 <img src="https://latex.codecogs.com/png.latex?%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)">의 기울기</strong>뿐입니다. <strong>이것이 전이 확률과 보상의 형태를 몰라도 경사를 계산할 수 있는 결정적인 이유입니다.</strong></li>
+</ul>
+<p>따라서 최종 경사는 다음과 같이 결론지을 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cnabla_%5Ctheta%20%5Ceta(%5Ctheta)%20=%20%5Cnabla_%5Ctheta%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%5Bf(%5Ctau)%5D%20=%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%20%5Cleft%5B%20%5Cleft(%20%5Csum_%7Bt=0%7D%5E%7BT-1%7D%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5Cright)%20%5Ccdot%20%5Cleft(%20%5Csum_%7Bt=0%7D%5E%7BT-1%7D%20%5Cgamma%5Et%20R(s_t,%20a_t)%20%5Cright)%20%5Cright%5D%0A"></p>
+<ul>
+<li>우변을 경험적 샘플 궤적으로 추정하며, 이 추정량은 <strong>편향되지 않습니다(unbiased).</strong></li>
+<li>Policy Gradient 알고리즘은 이렇게 추정한 경사를 이용해 경사 상승으로 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 반복적으로 갱신합니다.</li>
+</ul>
+</section>
+<section id="policy-gradient의-해석-interpretation" class="level3">
+<h3 class="anchored" data-anchor-id="policy-gradient의-해석-interpretation">7.7. Policy Gradient의 해석 (Interpretation)</h3>
+<p>경사 공식의 의미를 직관적으로 뜯어보겠습니다.</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bt=0%7D%5E%7BT-1%7D%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)"> 는 <strong>그 궤적 <img src="https://latex.codecogs.com/png.latex?%5Ctau">가 더 잘 일어나도록 만드는 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">의 변화 방향</strong>입니다. (즉, 행동 <img src="https://latex.codecogs.com/png.latex?a_0,%20%5Ccdots,%20a_%7BT-1%7D">을 선택할 확률을 높이는 방향.)</li>
+<li><img src="https://latex.codecogs.com/png.latex?f(%5Ctau)"> 는 <strong>그 궤적의 총 보상</strong>입니다.</li>
+</ul>
+<p>따라서 경사 스텝을 밟는다는 것은, 모든 궤적의 발생 가능성(likelihood)을 <strong>각기 다른 가중치로</strong> 높이려는 시도입니다.</p>
+<ul>
+<li>궤적 <img src="https://latex.codecogs.com/png.latex?%5Ctau">가 매우 보상이 크다면(<img src="https://latex.codecogs.com/png.latex?f(%5Ctau)">가 크면), 그 궤적의 확률을 높이는 방향으로 <strong>강하게</strong> 움직입니다.</li>
+<li>반대로 <img src="https://latex.codecogs.com/png.latex?%5Ctau">의 보상이 낮다면, <strong>약한</strong> 가중치로 덜 움직입니다.</li>
+</ul>
+</section>
+<section id="advanced-베이스라인baseline과-분산-감소" class="level3">
+<h3 class="anchored" data-anchor-id="advanced-베이스라인baseline과-분산-감소">7.8. (ADVANCED) 베이스라인(Baseline)과 분산 감소</h3>
+<p><strong>흥미로운 사실 하나</strong>를 소개하겠습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%20%5Cleft%5B%20%5Csum_%7Bt=0%7D%5E%7BT-1%7D%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5Cright%5D%20=%200%0A"></p>
+<ul>
+<li><strong>(비공식) 증명:</strong> 앞선 경사 공식에서 <img src="https://latex.codecogs.com/png.latex?f(%5Ctau)%20=%201"> (보상이 항상 상수)로 두고 대입하면 됩니다. 상수 함수에 대한 경사는 0이어야 하기 때문입니다.</li>
+</ul>
+<p>이 성질로부터, 경사 공식의 <strong>인과성(causality)</strong>을 활용한 변형을 유도할 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cnabla_%5Ctheta%20%5Ceta(%5Ctheta)%20&amp;=%20%5Csum_%7Bt=0%7D%5E%7BT-1%7D%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5Ccdot%20%5Csum_%7Bj=0%7D%5E%7BT-1%7D%20%5Cgamma%5Ej%20R(s_j,%20a_j)%20%5C%5C%0A&amp;=%20%5Csum_%7Bt=0%7D%5E%7BT-1%7D%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5Ccdot%20%5Csum_%7Bj%20%5Cle%20t%7D%20%5Cgamma%5Ej%20R(s_j,%20a_j)%0A%5Cend%7Baligned%7D%0A"></p>
+<p>잠깐, 위 두 줄의 등식이 어떻게 성립할까요? 이는 다음 등식에서 따라옵니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A&amp;%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%20%5C,%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5Ccdot%20%5Csum_%7B0%20%5Cle%20j%20%3C%20t%7D%20%5Cgamma%5Ej%20R(s_j,%20a_j)%20%5C%5C%0A&amp;=%20%5Cmathbb%7BE%7D%5Cleft%5B%20%5Cmathbb%7BE%7D%5Cleft%5B%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5C,%5Cmiddle%7C%5C,%20s_0,%20a_0,%20%5Ccdots,%20s_%7Bt-1%7D,%20a_%7Bt-1%7D,%20s_t%20%5Cright%5D%20%5Ccdot%20%5Csum_%7B0%20%5Cle%20j%20%3C%20t%7D%20%5Cgamma%5Ej%20R(s_j,%20a_j)%20%5Cright%5D%20%5C%5C%0A&amp;=%200%20%5Cqquad%20%5Cleft(%5Cbecause%20%5Cmathbb%7BE%7D%5Cleft%5B%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5C,%5Cmiddle%7C%5C,%20s_0,%20a_0,%20%5Ccdots,%20s_t%20%5Cright%5D%20=%200%20%5Cright)%0A%5Cend%7Baligned%7D%0A"></p>
+<ul>
+<li>여기서 바깥쪽 기댓값은 <img src="https://latex.codecogs.com/png.latex?s_0,%20a_0,%20%5Ccdots,%20a_%7Bt-1%7D,%20s_t">의 무작위성에 대한 것이고, 안쪽 기댓값은 <img src="https://latex.codecogs.com/png.latex?a_t">에 대한 것입니다.</li>
+<li><strong>직관:</strong> 시점 <img src="https://latex.codecogs.com/png.latex?t">의 행동 <img src="https://latex.codecogs.com/png.latex?a_t">는 <strong>과거(<img src="https://latex.codecogs.com/png.latex?j%20%3C%20t">)의 보상에 영향을 줄 수 없습니다.</strong> 따라서 과거 보상과 곱해진 항은 기댓값이 0이 되어 사라집니다. 미래의 보상(<img src="https://latex.codecogs.com/png.latex?j%20%5Cge%20t">)만 남기는 것이 합리적입니다.</li>
+</ul>
+<p><strong>베이스라인(Baseline)의 도입:</strong> 더 나아가, <strong>상태 <img src="https://latex.codecogs.com/png.latex?s_t">에만 의존하는 임의의 함수 <img src="https://latex.codecogs.com/png.latex?B(s_t)"></strong>에 대해 다음이 성립합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A&amp;%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%20%5Cleft%5B%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5Ccdot%20B(s_t)%20%5Cright%5D%20%5C%5C%0A&amp;=%20%5Cmathbb%7BE%7D%5Cleft%5B%20%5Cmathbb%7BE%7D%5Cleft%5B%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5C,%5Cmiddle%7C%5C,%20s_0,%20a_0,%20%5Ccdots,%20s_%7Bt-1%7D,%20a_%7Bt-1%7D,%20s_t%20%5Cright%5D%20B(s_t)%20%5Cright%5D%20%5C%5C%0A&amp;=%200%0A%5Cend%7Baligned%7D%0A"></p>
+<p>이로부터 베이스라인을 뺀 경사 추정량을 얻습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cbegin%7Baligned%7D%0A%5Cnabla_%5Ctheta%20%5Ceta(%5Ctheta)%20&amp;=%20%5Csum_%7Bt=0%7D%5E%7BT-1%7D%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%20%5C,%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5Ccdot%20%5Cleft(%20%5Csum_%7Bj%20%5Cle%20t%7D%20%5Cgamma%5Ej%20R(s_j,%20a_j)%20-%20%5Cgamma%5Et%20B(s_t)%20%5Cright)%20%5C%5C%0A&amp;=%20%5Csum_%7Bt=0%7D%5E%7BT-1%7D%20%5Cmathbb%7BE%7D_%7B%5Ctau%20%5Csim%20P_%5Ctheta%7D%20%5C,%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5Ccdot%20%5Cgamma%5Et%20%5Cleft(%20%5Csum_%7Bj%20%5Cle%20t%7D%20%5Cgamma%5E%7Bj-t%7D%20R(s_j,%20a_j)%20-%20B(s_t)%20%5Cright)%0A%5Cend%7Baligned%7D%0A"></p>
+<p><strong>베이스라인의 효과:</strong></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?B(%5Ccdot)">의 선택에 따라 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20%5Ceta(%5Ctheta)">에 대한 서로 <strong>다른 추정량</strong>을 얻게 됩니다.</li>
+<li>적절한 베이스라인 <img src="https://latex.codecogs.com/png.latex?B(%5Ccdot)">를 도입하는 이점은 <strong>추정량의 분산(variance)을 줄여준다</strong>는 것입니다. (평균은 그대로 유지되므로 편향은 생기지 않습니다.)</li>
+<li><strong>거의 최적인 베이스라인</strong>은 기대 미래 보상 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BE%7D%5Cleft%5B%20%5Csum_%7Bj%20%5Cle%20t%7D%20%5Cgamma%5E%7Bj-t%7D%20R(s_j,%20a_j)%20%5C,%5Cmiddle%7C%5C,%20s_t%20%5Cright%5D">이며, 이는 (유한/무한 시계의 차이를 무시하면) 사실상 가치함수 <img src="https://latex.codecogs.com/png.latex?V%5E%7B%5Cpi_%5Ctheta%7D(s_t)">와 같습니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?V%5E%7B%5Cpi_%5Ctheta%7D(%5Ccdot)">는 <strong>대략적으로(crude) 추정해도 무방</strong>합니다. 그 정확한 값은 추정량의 평균에는 영향을 주지 않고 오직 분산에만 영향을 주기 때문입니다.</li>
+</ul>
+</section>
+<section id="알고리즘-베이스라인을-사용한-바닐라-정책-경사" class="level3">
+<h3 class="anchored" data-anchor-id="알고리즘-베이스라인을-사용한-바닐라-정책-경사">7.9. 알고리즘: 베이스라인을 사용한 바닐라 정책 경사</h3>
+<p>이상의 내용을 알고리즘으로 정리하면 다음과 같습니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Machine Learing/18.Reinforcement-Learning/images/algorithm11_policy_gradient.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 베이스라인을 사용한 바닐라 정책 경사 알고리즘(Algorithm 11). 매 반복마다 (1) 현재 정책을 실행해 궤적 집합을 수집하고 미래 누적 보상 <img src="https://latex.codecogs.com/png.latex?R_%7B%5Cge%20t%7D%20=%20%5Csum_%7Bj%20%5Cge%20t%7D%5Cgamma%5E%7Bj-t%7DR(s_j,a_j)">를 계산한다. (2) <img src="https://latex.codecogs.com/png.latex?%5Csum_%5Ctau%20%5Csum_t%20(R_%7B%5Cge%20t%7D%20-%20B(s_t))%5E2">을 최소화하여 베이스라인 함수 <img src="https://latex.codecogs.com/png.latex?B">를 적합(fit)한다. 즉 베이스라인을 미래 보상의 회귀 예측치로 학습한다. (3) 경사 추정량 <img src="https://latex.codecogs.com/png.latex?%5Csum_%5Ctau%20%5Csum_t%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%7Cs_t)%20%5Ccdot%20(R_%7B%5Cge%20t%7D%20-%20B(s_t))">로 정책 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 갱신한다. 이 그림은 ’advantage(<img src="https://latex.codecogs.com/png.latex?R_%7B%5Cge%20t%7D%20-%20B(s_t)">)에 따라 행동 확률을 높이거나 낮춘다’는 정책 경사의 핵심 루프를 보여준다.</figcaption>
+</figure>
+</div>
+<p><code>for</code> <img src="https://latex.codecogs.com/png.latex?i%20=%201,%202,%20%5Ccdots"> 에 대해:</p>
+<ol type="1">
+<li>현재 정책을 실행하여 궤적 집합을 수집한다. <img src="https://latex.codecogs.com/png.latex?R_%7B%5Cge%20t%7D">를 <img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bj%20%5Cge%20t%7D%5E%7BT-1%7D%20%5Cgamma%5E%7Bj-t%7D%20R(s_j,%20a_j)">의 축약 표기로 사용한다.</li>
+<li>다음을 최소화하는 함수 <img src="https://latex.codecogs.com/png.latex?B">를 찾아 베이스라인을 적합한다. <img src="https://latex.codecogs.com/png.latex?%0A%5Csum_%5Ctau%20%5Csum_t%20(R_%7B%5Cge%20t%7D%20-%20B(s_t))%5E2%0A"></li>
+<li>다음 경사 추정량으로 정책 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 갱신한다. <img src="https://latex.codecogs.com/png.latex?%0A%5Csum_%5Ctau%20%5Csum_t%20%5Cnabla_%5Ctheta%20%5Clog%20%5Cpi_%5Ctheta(a_t%20%7C%20s_t)%20%5Ccdot%20(R_%7B%5Cge%20t%7D%20-%20B(s_t))%0A"></li>
+</ol>
+<blockquote class="blockquote">
+<p><strong>핵심 요약:</strong> Policy Gradient는 (1) 동역학과 보상의 해석적 형태 없이도 정책 항의 로그 기울기만으로 경사를 계산하며, (2) 베이스라인을 빼서 분산을 줄이고, (3) 미래 보상에서 베이스라인을 뺀 <strong>이점(advantage)</strong>의 부호에 따라 좋은 행동의 확률은 높이고 나쁜 행동의 확률은 낮춥니다.</p>
+</blockquote>
+<hr>
+</section>
+</section>
+<section id="마치며-conclusion" class="level2">
+<h2 class="anchored" data-anchor-id="마치며-conclusion">마치며 (Conclusion)</h2>
+<p>이번 포스트에서는 연속 제어 문제를 다루는 세 가지 고전적 기법과 정책 직접 최적화 방법을 살펴보았습니다.</p>
+<ul>
+<li><strong>LQR</strong>은 선형 동역학·이차 보상이라는 강한 가정 위에서 리카티 방정식을 통해 깔끔한 선형 최적 정책을 제공하며, 놀랍게도 노이즈에 독립적입니다.</li>
+<li><strong>DDP</strong>는 비선형 시스템을 궤적 주변에서 반복적으로 선형화하여 LQR 틀로 환원합니다.</li>
+<li><strong>LQG</strong>는 칼만 필터로 상태를 추정한 뒤 LQR을 적용하는데, LQR의 노이즈 독립성 덕분에 추정과 제어를 분리할 수 있습니다.</li>
+<li><strong>Policy Gradient</strong>는 모델을 전혀 몰라도(model-free) 로그 미분 트릭으로 정책을 직접 학습하며, 베이스라인으로 분산을 다스립니다.</li>
+</ul>
+<p>이 기법들은 현대 강화학습(예: TRPO, PPO, Actor-Critic 등)의 직접적인 토대가 됩니다.</p>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Machine Learning</category>
+  <guid>https://shsha0110.github.io/posts/Machine Learing/18.Reinforcement-Learning/</guid>
+  <pubDate>Wed, 27 May 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
   <title>[Data Mining] 22. Mining Data Streams (Part 1)</title>
   <dc:creator>유성현 </dc:creator>
   <link>https://shsha0110.github.io/posts/Data Mining/22.Mining-Data-Streams-1/22.1/</link>
@@ -3416,177 +3944,6 @@ font-style: inherit;">7.</span>     Q_old를 Q_new로 업데이트합니다.</sp
   <category>Optimization</category>
   <guid>https://shsha0110.github.io/posts/Optimization/20.Douglas-Rachford-Splitting-and-ADMM/20.1/</guid>
   <pubDate>Tue, 12 May 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Data Mining] 18. ML On Graphs (Part 1)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.1/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-그래프-데이터에서의-기계학습-태스크" class="level1">
-<h1>1. Introduction: 그래프 데이터에서의 기계학습 태스크</h1>
-<ul>
-<li>그래프(Graph)는 웹(Web)의 하이퍼링크 구조뿐만 아니라 소셜 네트워크, 분자 구조, 교통망 등 객체 간의 복잡한 관계를 나타내는 다양한 형태의 데이터를 일반화하는 강력한 자료구조입니다. 전통적인 데이터 마이닝에서는 다음과 같은 알고리즘들을 통해 그래프의 특성을 분석해 왔습니다.
-<ul>
-<li><strong>PageRank</strong>: 네트워크 내에서 각 노드(Node)의 상대적 중요도(Importance)를 계산.</li>
-<li><strong>Proximity</strong>: 노드 간의 물리적 혹은 위상수학적 거리(Distance)를 측정.</li>
-<li><strong>Community Detection</strong>: 밀도 높게 연결된 노드들의 군집(Dense node communities)을 탐지.</li>
-</ul></li>
-<li>하지만 현대의 기계학습(Machine Learning)은 단순히 구조를 분석하는 것을 넘어, 예측 모델링을 수행하는 데 초점을 맞춥니다. 그래프 기계학습의 대표적인 두 가지 태스크는 다음과 같습니다.</li>
-</ul>
-<section id="노드-분류-node-classification" class="level2">
-<h2 class="anchored" data-anchor-id="노드-분류-node-classification">1.1. 노드 분류 (Node Classification)</h2>
-<ul>
-<li>네트워크 내에서 레이블이 주어지지 않은 노드의 속성이나 범주를 예측하는 태스크입니다. 예를 들어, 소셜 네트워크 상에서 특정 사용자의 정치적 성향을 식별하거나, 추천 시스템에서 사용자와 아이템을 특정 카테고리로 분류하는 작업이 이에 해당합니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.1/images/node_classification.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 노드 분류(Node Classification)를 설명하는 도식. 왼쪽의 원본 네트워크 상에는 이미 초록색과 빨간색으로 클래스가 알려진 노드들과, 레이블을 알 수 없는 미지의 노드들(‘?’)이 혼재해 있습니다. 기계학습(Machine Learning) 알고리즘을 거치면 오른쪽 그림과 같이 미지의 노드들이 주변 이웃들의 연결 패턴과 위상적 정보를 바탕으로 초록색 또는 빨간색 클래스로 정확히 분류됩니다. 본문에서 노드 간의 연결망이 분류 모델의 핵심 피처로 작용함을 시각적으로 보여줍니다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="링크-예측-link-prediction" class="level2">
-<h2 class="anchored" data-anchor-id="링크-예측-link-prediction">1.2. 링크 예측 (Link Prediction)</h2>
-<ul>
-<li>현재는 존재하지 않지만 미래에 생성될 가능성이 높거나, 혹은 관측 과정에서 누락된 간선(Edge)을 예측하는 태스크입니다. 소셜 네트워크에서 ’알 수도 있는 사람(새로운 친구)’을 추천하거나, 넷플릭스와 같은 시스템에서 사용자가 좋아할 만한 새로운 영화를 추천하는 것이 전형적인 링크 예측 문제입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.1/images/link_prediction.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 링크 예측(Link Prediction)을 설명하는 도식. 왼쪽 그림의 점선(‘?’)은 현재는 존재하지 않지만 생성 가능성이 있는 후보 간선들을 나타냅니다. 기계학습 모델은 그래프의 구조적 특징을 학습하여 오른쪽 그림과 같이 두 노드 사이에 실제 연결이 발생할 확률이 높은 곳에는 ’체크(✓)’를, 확률이 낮은 곳에는 ’엑스(X)’를 표시합니다. 이는 추천 시스템의 근간이 되는 예측 과정을 잘 나타냅니다.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="전통적-그래프-표현-방식과-그-한계" class="level1">
-<h1>2. 전통적 그래프 표현 방식과 그 한계</h1>
-<ul>
-<li>그래프 구조에 기계학습 모델을 적용하기 위해서는 그래프를 컴퓨터가 연산할 수 있는 수학적 형태로 표현해야 합니다.</li>
-</ul>
-<section id="인접-행렬-adjacency-matrix을-통한-표현" class="level2">
-<h2 class="anchored" data-anchor-id="인접-행렬-adjacency-matrix을-통한-표현">2.1. 인접 행렬 (Adjacency Matrix)을 통한 표현</h2>
-<ul>
-<li>가장 직관적인 방법은 그래프 <img src="https://latex.codecogs.com/png.latex?G%20=%20(V,%20E)">를 크기 <img src="https://latex.codecogs.com/png.latex?N%20%5Ctimes%20N">의 인접 행렬(Adjacency Matrix) <img src="https://latex.codecogs.com/png.latex?A%20%5Cin%20%5C%7B0,%201%5C%7D%5E%7BN%20%5Ctimes%20N%7D">로 나타내는 것입니다. (단, <img src="https://latex.codecogs.com/png.latex?N">은 총 노드의 수 <img src="https://latex.codecogs.com/png.latex?%7CV%7C">를 의미합니다).</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.1/images/adjacency_matrix.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 그래프의 인접 행렬(Adjacency Matrix) 표현 방식. 왼쪽의 6개 노드(0~5번)로 구성된 그래프가 오른쪽의 <img src="https://latex.codecogs.com/png.latex?6%20%5Ctimes%206"> 2차원 배열(행렬)로 변환된 모습입니다. 노드 간에 간선이 존재하면 초록색 셀에 ’1’로, 연결되지 않았으면 ’0’으로 표기됩니다. 각 행(또는 열)은 특정 노드의 이웃 연결 상태를 나타내는 다중 원-핫 벡터(Multi-hot vector) 역할을 합니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><p>행렬의 각 원소 <img src="https://latex.codecogs.com/png.latex?a_%7Bij%7D">는 위 도식과 같이 노드 <img src="https://latex.codecogs.com/png.latex?i">와 노드 <img src="https://latex.codecogs.com/png.latex?j">의 연결 여부에 따라 다음과 같이 정의됩니다: <img src="https://latex.codecogs.com/png.latex?a_%7Bij%7D%20=%20%5Cbegin%7Bcases%7D%201,%20&amp;%20%5Ctext%7Bif%20nodes%20%7D%20i%20%5Ctext%7B%20and%20%7D%20j%20%5Ctext%7B%20are%20connected%7D%20%5C%5C%200,%20&amp;%20%5Ctext%7Botherwise%7D%20%5Cend%7Bcases%7D"></p></li>
-<li><p>이 방식에 따르면, 네트워크 상의 특정 노드 <img src="https://latex.codecogs.com/png.latex?i">는 자신과 연결된 다른 노드들의 정보를 담고 있는 크기 <img src="https://latex.codecogs.com/png.latex?N">의 다중 원-핫 벡터(Multi-hot vector) <img src="https://latex.codecogs.com/png.latex?a_i">로 표현됩니다.</p></li>
-</ul>
-</section>
-<section id="단순-접근법의-한계점-limitations-of-the-naïve-approach" class="level2">
-<h2 class="anchored" data-anchor-id="단순-접근법의-한계점-limitations-of-the-naïve-approach">2.2. 단순 접근법의 한계점 (Limitations of the Naïve Approach)</h2>
-<ul>
-<li>하지만 노드 <img src="https://latex.codecogs.com/png.latex?i">를 다중 원-핫 벡터 <img src="https://latex.codecogs.com/png.latex?a_i">로 표상하여 기계학습 모델의 입력으로 사용하는 단순(Naïve) 접근법에는 치명적인 한계가 존재합니다.</li>
-<li><ol type="1">
-<li><strong>차원의 저주와 희소성 (High-dimensional and Sparse)</strong></li>
-</ol>
-<ul>
-<li>노드 벡터 <img src="https://latex.codecogs.com/png.latex?a_i">의 차원은 전체 노드의 수 <img src="https://latex.codecogs.com/png.latex?N">과 같습니다. 수억 개의 노드를 가진 네트워크에서는 벡터의 차원이 지나치게 크고, 대부분이 0으로 채워진 극단적인 희소 행렬(Sparse matrix)이 되어 연산 효율성이 극도로 떨어집니다.</li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>치환 불변성 (Permutation Invariance)의 부재</strong></li>
-</ol>
-<ul>
-<li>인접 행렬 <img src="https://latex.codecogs.com/png.latex?A">는 유일(Unique)하지 않습니다. 그래프의 기하학적 구조가 완전히 동일하더라도, 노드에 번호를 매기는 순서가 달라지면 행렬 <img src="https://latex.codecogs.com/png.latex?A">의 모습이 변합니다. <img src="https://latex.codecogs.com/png.latex?A%5E%7B(1)%7D%20=%20%5Cbegin%7Bbmatrix%7D%200%20&amp;%201%20&amp;%201%20%5C%5C%201%20&amp;%200%20&amp;%200%20%5C%5C%201%20&amp;%200%20&amp;%200%20%5Cend%7Bbmatrix%7D,%20%5Cquad%20A%5E%7B(2)%7D%20=%20%5Cbegin%7Bbmatrix%7D%200%20&amp;%200%20&amp;%201%20%5C%5C%200%20&amp;%200%20&amp;%201%20%5C%5C%201%20&amp;%201%20&amp;%200%20%5Cend%7Bbmatrix%7D"></li>
-<li>이러한 입력 변동성은 모델을 불안정하게 만듭니다.</li>
-</ul></li>
-</ul>
-</section>
-</section>
-<section id="그래프-표현-학습-graph-representation-learning" class="level1">
-<h1>3. 그래프 표현 학습 (Graph Representation Learning)</h1>
-<ul>
-<li>위의 한계를 극복하기 위해 등장한 패러다임이 <strong>그래프 표현 학습(Graph Representation Learning)</strong>입니다. 핵심 목표는 이산적이고 고차원적인 그래프 구조를 컴퓨터가 처리하기 쉬운 저차원의 연속적인 벡터 공간(Continuous vector space)으로 매핑하는 것입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.1/images/representation_learning.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 그래프 표현 학습의 기본 개념도. 왼쪽의 복잡한 원본 네트워크(original network) 상에 있는 노드 <img src="https://latex.codecogs.com/png.latex?u">와 <img src="https://latex.codecogs.com/png.latex?v">가 매핑 함수를 통해 오른쪽의 저차원 임베딩 공간(embedding space) 내의 연속형 벡터 점 <img src="https://latex.codecogs.com/png.latex?z_u">, <img src="https://latex.codecogs.com/png.latex?z_v">로 각각 변환되는 과정을 보여줍니다. 점선 화살표는 원래 그래프에서의 위상적(Topological) 연결 정보가 기하학적 벡터 공간으로 손실 없이 투영됨을 의미합니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>가장 중요한 대전제는 <strong>“원본 그래프에서의 기하학적, 구조적 관계가 저차원 임베딩 공간에서도 그대로 보존되어야 한다”</strong>는 것입니다.</li>
-</ul>
-<section id="노드-임베딩과-활용" class="level2">
-<h2 class="anchored" data-anchor-id="노드-임베딩과-활용">3.1. 노드 임베딩과 활용</h2>
-<ul>
-<li>특히 각 노드를 개별적인 벡터로 변환하는 ’노드 임베딩(Node Embedding)’은 딥러닝 그래프 모델의 가장 뼈대가 됩니다. 이렇게 학습된 노드 임베딩 벡터는 앞서 살펴본 Node Classification, Link Prediction은 물론 Community Detection에도 매우 유용하게 쓰입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.1/images/karate_club.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: Zachary’s Karate Club 네트워크 임베딩 적용 예시. 왼쪽(Input)은 실제 가라데 클럽 회원(노드)들 간의 친소 관계를 나타낸 34차원 희소 그래프 네트워크입니다. 회원들의 파벌에 따라 보라색, 붉은색, 청록색, 연두색 등 4개의 커뮤니티로 나뉘어 있습니다. 오른쪽(Output)은 이를 2차원 연속 공간으로 차원 축소 임베딩(Embedding)한 산점도입니다. 원본 그래프에서의 복잡한 간선 구조를 명시적으로 주지 않았음에도, 같은 커뮤니티에 속한 노드들이 2D 임베딩 공간에서 스스로 밀집(Cluster)하여 기하학적으로 명확히 분리되는 놀라운 결과를 보여줍니다.</figcaption>
-</figure>
-</div>
-</section>
-</section>
-<section id="노드-임베딩의-수학적-정식화-mathematical-formulation" class="level1">
-<h1>4. 노드 임베딩의 수학적 정식화 (Mathematical Formulation)</h1>
-<ul>
-<li>구조를 보존하는 임베딩은 수식으로 어떻게 정의될까요? 주어진 그래프 <img src="https://latex.codecogs.com/png.latex?G%20=%20(V,%20E)">에서 우리의 목표는 각 노드 <img src="https://latex.codecogs.com/png.latex?u%20%5Cin%20V">를 연속적인 <img src="https://latex.codecogs.com/png.latex?d">-차원 벡터 <img src="https://latex.codecogs.com/png.latex?z_u%20%5Cin%20%5Cmathbb%7BR%7D%5Ed">로 매핑하는 인코더(Encoder) 함수 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BENC%7D(%5Ccdot)">을 찾는 것입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.1/images/encoder_formulation.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 인코더(Encoder) 함수의 역할 도식. 원본 네트워크의 이산적 노드 <img src="https://latex.codecogs.com/png.latex?u">와 <img src="https://latex.codecogs.com/png.latex?v">가 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BENC%7D(u)">와 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BENC%7D(v)">라는 인코더 함수를 통과하여, 임베딩 공간 상의 벡터 <img src="https://latex.codecogs.com/png.latex?z_u">와 <img src="https://latex.codecogs.com/png.latex?z_v">로 표현됨을 수식과 함께 명시적으로 보여줍니다. 여기서 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BENC%7D(%5Ccdot)">가 기계학습 모델이 최적화해야 할 핵심 대상이 됩니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>위 그림에서처럼 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BENC%7D(v)%20=%20z_v"> 가 정의되었다면, 임베딩의 품질을 결정하는 핵심 원칙은 <strong>유사도 보존(Similarity Preservation)</strong>입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.1/images/similarity_goal.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 임베딩 학습의 핵심 목표(Goal) 도식. “<img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bsimilarity%7D(u,%20v)%20%5Capprox%20z_v%5E%5Ctop%20z_u">” 라는 공식이 본 프레임워크의 심장입니다. 좌변의 원본 네트워크에서의 유사도 척도와 우변의 임베딩 공간에서의 내적(Dot Product) 값이 최대한 같아지도록 인코더 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BENC%7D">를 학습시켜야 함을 나타냅니다. ’Need to define!’이라는 붉은 상자는 좌변(원본 네트워크의 유사도)을 어떻게 수학적으로 정의할 것인지가 앞으로 해결해야 할 핵심 과제임을 시사합니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><p>수식으로 다시 쓰면 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bsimilarity%7D_%7BG%7D(u,%20v)%20%5Capprox%20%5Ctext%7Bsimilarity%7D_%7B%5Cmathbb%7BR%7D%5Ed%7D(z_u,%20z_v)"></p></li>
-<li><p>즉, 원본 네트워크에서 이웃을 많이 공유하거나 거리가 가까워 구조적으로 유사한 두 노드는, 임베딩 공간에서도 서로 가까운 위치(높은 유사도)를 가져야 합니다.</p></li>
-</ul>
-<section id="임베딩-유사도-척도-내적-dot-product" class="level2">
-<h2 class="anchored" data-anchor-id="임베딩-유사도-척도-내적-dot-product">4.1. 임베딩 유사도 척도: 내적 (Dot Product)</h2>
-<ul>
-<li><p>임베딩 공간 <img src="https://latex.codecogs.com/png.latex?%5Cmathbb%7BR%7D%5Ed">에서의 두 벡터 간 유사도 함수로는 <strong>내적(Dot Product)</strong>을 주로 사용합니다. <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bsimilarity%7D_%7B%5Cmathbb%7BR%7D%5Ed%7D(z_u,%20z_v)%20=%20z_u%5E%5Ctop%20z_v"></p></li>
-<li><p>내적은 정규화되지 않은 코사인 유사도와 같습니다. 두 벡터의 사이각이 좁을수록(비슷한 방향을 향할수록) 내적 값이 커집니다.</p>
-<ul>
-<li><strong>장점 (Pros)</strong>: 행렬 곱셈만으로 병렬 연산이 가능하여 계산이 매우 빠릅니다.</li>
-<li><strong>단점 (Cons)</strong>: 벡터의 스케일(Scale)에 민감합니다. 하지만 학습 과정에서 정규화를 거치면 큰 문제가 되지 않습니다.</li>
-</ul></li>
-</ul>
-</section>
-<section id="인코더의-구조-임베딩-룩업-embedding-lookup" class="level2">
-<h2 class="anchored" data-anchor-id="인코더의-구조-임베딩-룩업-embedding-lookup">4.2. 인코더의 구조: 임베딩 룩업 (Embedding Lookup)</h2>
-<ul>
-<li>인코더 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BENC%7D(%5Ccdot)">를 구현하는 가장 얕고 단순한 방법은, 자연어 처리의 Word2Vec처럼 고유 벡터를 직접 매핑하는 <strong>임베딩 룩업(Embedding Lookup)</strong>입니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Ctext%7BENC%7D(v)%20=%20Z%20%5C,%201_v"></p>
-<ul>
-<li><p><img src="https://latex.codecogs.com/png.latex?Z%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd%20%5Ctimes%20%7CV%7C%7D">: 최적화해야 할 전체 임베딩 파라미터 행렬 (각 열이 각 노드의 임베딩 벡터).</p></li>
-<li><p><img src="https://latex.codecogs.com/png.latex?1_v%20%5Cin%20%5C%7B0,%201%5C%7D%5E%7B%7CV%7C%7D">: 노드 <img src="https://latex.codecogs.com/png.latex?v">의 위치만 1인 원-핫 지시 벡터.</p></li>
-<li><p>결론적으로, 이 행렬 연산은 커다란 <img src="https://latex.codecogs.com/png.latex?Z"> 행렬 창고에서 <img src="https://latex.codecogs.com/png.latex?v">번째 노드 전용 벡터를 쏙 빼오는(Lookup) 역할을 합니다.</p></li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Data Mining</category>
-  <guid>https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.1/</guid>
-  <pubDate>Mon, 11 May 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>
 </rss>

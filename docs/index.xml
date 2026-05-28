@@ -10,7 +10,520 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>스흐의 공부 블로그</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Mon, 25 May 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Wed, 27 May 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>[Data Mining] 23. Mining Data Streams (Part 1)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.1/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="문제-정의-및-동기-problem-definition-motivation" class="level1">
+<h1>1. 문제 정의 및 동기 (Problem Definition &amp; Motivation)</h1>
+<section id="데이터-스트림과-고유-원소" class="level2">
+<h2 class="anchored" data-anchor-id="데이터-스트림과-고유-원소">1.1. 데이터 스트림과 고유 원소</h2>
+<ul>
+<li><p>데이터 스트림 환경에서는 데이터가 연속적으로 흘러들어오며, 우리는 이를 한 번에 모두 저장하거나 여러 번 순회할 수 없습니다. 이때 각 데이터 원소는 크기가 <img src="https://latex.codecogs.com/png.latex?N">인 전체 집합(Universal set)에서 선택된다고 가정합니다. 우리의 목표는 <strong>지금까지 관찰된 데이터 스트림 내에서 고유한(distinct) 원소의 개수를 유지하고 추정하는 것</strong>입니다.</p></li>
+<li><p>이러한 문제는 실제 비즈니스 환경에서 매우 빈번하게 발생합니다.</p>
+<ul>
+<li><strong>웹사이트 트래픽 분석:</strong> 이번 달에 웹사이트를 방문한 고유 사용자(Unique user)는 몇 명인가? (전체 집합: 모든 사용자 집단 / 스트림 원소: 각 사용자의 로그인 이벤트 )</li>
+<li><strong>이커머스 판매 분석:</strong> 지난주 동안 판매된 서로 다른 상품의 종류는 몇 개방인가? (전체 집합: 전체 판매 상품 목록 / 스트림 원소: 각 상품이 판매될 때마다 발생하는 로그 )</li>
+</ul></li>
+</ul>
+</section>
+<section id="기존-접근법의-한계" class="level2">
+<h2 class="anchored" data-anchor-id="기존-접근법의-한계">1.2. 기존 접근법의 한계</h2>
+<ul>
+<li><p>가장 직관적이고 명백한(Obvious) 접근법은 지금까지 본 모든 고유 원소를 <strong>해시 테이블(Hash table)</strong>에 기록하는 것입니다.</p></li>
+<li><p>하지만 이 방식은 치명적인 한계를 가집니다. 만약 스트림 내 고유 원소의 개수가 수억, 수십억 개 단위로 매우 커진다면 어떻게 될까요? 해시 테이블을 메모리에 유지하기 위한 <strong>저장 공간(Storage)이 극도로 제한적</strong>이라는 문제에 직면하게 됩니다. 따라서 메모리 사용량을 획기적으로 줄이면서도 통계적으로 유의미한 추정치를 제공하는 확률적 알고리즘이 필요합니다.</p></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="flajolet-martin-algorithm의-직관과-구조" class="level1">
+<h1>2. Flajolet-Martin Algorithm의 직관과 구조</h1>
+<ul>
+<li>이러한 메모리 한계를 극복하기 위해 제안된 것이 바로 <strong>Flajolet-Martin 알고리즘</strong>입니다.</li>
+</ul>
+<section id="핵심-아이디어-intuition" class="level2">
+<h2 class="anchored" data-anchor-id="핵심-아이디어-intuition">2.1. 핵심 아이디어 (Intuition)</h2>
+<ul>
+<li><p>알고리즘의 핵심은 <strong>“각 원소를 충분히 긴 비트 문자열(bit string)로 해싱(Hashing)한다”</strong>는 것입니다.</p></li>
+<li><p>이때 해시 함수는 모든 원소를 서로 다른 비트 문자열로 매핑할 수 있을 만큼 충분히 길어야 합니다. 해시된 비트 문자열의 다양성(Diversity)은 곧 고유 원소의 개수와 직결됩니다. 즉, 더 다양한 비트 문자열이 나타났다는 것은 더 많은 고유 원소가 존재함을 의미합니다.</p></li>
+<li><p>그렇다면 이 <strong>“다양성”을 어떻게 측정할 것인가?</strong></p></li>
+<li><p>F lajolet-Martin 알고리즘은 <strong>지금까지 관찰된 모든 비트 문자열 중 “연속된 0으로 끝나는 꼬리의 최대 길이(Maximum number of trailing 0s)”</strong>를 다양성의 척도로 사용합니다.</p></li>
+</ul>
+</section>
+<section id="알고리즘-작동-단계" class="level2">
+<h2 class="anchored" data-anchor-id="알고리즘-작동-단계">2.2. 알고리즘 작동 단계</h2>
+<ul>
+<li>구체적인 알고리즘의 동작은 다음과 같이 3단계로 이루어집니다.
+<ul>
+<li><ol type="1">
+<li><strong>Step 1:</strong> 임의의 원소를 이진 문자열로 반환하는 해시 함수 <img src="https://latex.codecogs.com/png.latex?h">를 선택합니다.</li>
+</ol>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?N">개의 원소를 고유하게 매핑하기 위해서는 최소 <img src="https://latex.codecogs.com/png.latex?%5Clog_%7B2%7DN"> 비트가 필요합니다.</li>
+<li>예: 만약 <img src="https://latex.codecogs.com/png.latex?N=16">이라면, 원소 <img src="https://latex.codecogs.com/png.latex?a">에 대해 <img src="https://latex.codecogs.com/png.latex?h(a)=1100_%7B(2)%7D">과 같이 해싱됩니다.</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>Step 2:</strong> <img src="https://latex.codecogs.com/png.latex?h(a)">의 끝에 연속으로 나타나는 0의 개수(trailing 0s)를 <img src="https://latex.codecogs.com/png.latex?r(a)">라고 정의합니다.</li>
+</ol>
+<ul>
+<li>예: <img src="https://latex.codecogs.com/png.latex?h(a)=1100">이라면 뒤에 0이 2개 있으므로 <img src="https://latex.codecogs.com/png.latex?r(a)=2">가 됩니다.</li>
+</ul></li>
+<li><ol start="3" type="1">
+<li><strong>Step 3:</strong> 지금까지 관찰된 모든 원소에 대해 <img src="https://latex.codecogs.com/png.latex?r(a)">의 최댓값 <img src="https://latex.codecogs.com/png.latex?R%20=%20%5Cmax_%7Ba%7Dr(a)">를 지속적으로 갱신하고 기록합니다.</li>
+</ol></li>
+</ul></li>
+<li><strong>결론(Claim):</strong> 전체 스트림 내 고유 원소의 개수는 <img src="https://latex.codecogs.com/png.latex?2%5E%7BR%7D">로 추정할 수 있습니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="수학적-증명-및-유도-과정-mathematical-derivation" class="level1">
+<h1>3. 수학적 증명 및 유도 과정 (Mathematical Derivation)</h1>
+<ul>
+<li>왜 <img src="https://latex.codecogs.com/png.latex?2%5E%7BR%7D">이 고유 원소의 개수를 나타내는 훌륭한 추정량이 될까요? 확률론적 관점에서 이를 단계별로 유도해 보겠습니다.</li>
+</ul>
+<section id="경험적-직관-heuristic-intuition" class="level2">
+<h2 class="anchored" data-anchor-id="경험적-직관-heuristic-intuition">3.1. 경험적 직관 (Heuristic Intuition)</h2>
+<ul>
+<li>해시 함수 <img src="https://latex.codecogs.com/png.latex?h(a)">는 원소 <img src="https://latex.codecogs.com/png.latex?a">를 <img src="https://latex.codecogs.com/png.latex?N">개의 값 중 하나로 균등한 확률로 매핑한다고 가정합니다.</li>
+<li>어떤 비트 문자열이 끝에 <img src="https://latex.codecogs.com/png.latex?r">개의 0을 가질 확률은 다음과 같습니다. <img src="https://latex.codecogs.com/png.latex?Pr(%5Ctext%7Btail%20of%20%7D%20r%20%5Ctext%7B%20zeros%7D)%20=%20%5Cfrac%7B1%7D%7B2%5E%7Br%7D%7D">
+<ul>
+<li>약 50%의 원소는 해시 결과가 <code>***0</code>으로 끝납니다 (<img src="https://latex.codecogs.com/png.latex?r=1">).</li>
+<li>약 25%의 원소는 해시 결과가 <code>**00</code>으로 끝납니다 (<img src="https://latex.codecogs.com/png.latex?r=2">).</li>
+</ul></li>
+<li>즉, 끝에 <img src="https://latex.codecogs.com/png.latex?r">개의 연속된 0을 가지는 꼬리를 발견하기 위해서는 평균적으로 <strong>약 <img src="https://latex.codecogs.com/png.latex?2%5E%7Br%7D">개의 고유한 아이템을 해싱</strong>해야 합니다. 따라서 관찰된 최대 꼬리 길이 <img src="https://latex.codecogs.com/png.latex?R">을 이용해 고유 원소 개수를 <img src="https://latex.codecogs.com/png.latex?2%5E%7BR%7D">로 역산출하는 것은 꽤 합리적인 휴리스틱입니다.</li>
+</ul>
+</section>
+<section id="정형화된-수학적-확률-유도-formal-derivation" class="level2">
+<h2 class="anchored" data-anchor-id="정형화된-수학적-확률-유도-formal-derivation">3.2. 정형화된 수학적 확률 유도 (Formal Derivation)</h2>
+<ul>
+<li><p>이제 이를 조금 더 엄밀하게 분석해 보겠습니다.</p></li>
+<li><p>지금까지 스트림에서 관찰된 고유 원소의 실제 개수를 <img src="https://latex.codecogs.com/png.latex?m">이라고 합시다.</p></li>
+<li><p>어떤 특정 비트 문자열이 <img src="https://latex.codecogs.com/png.latex?r">개의 연속된 0 꼬리를 <strong>가지지 않을</strong> 확률은 <img src="https://latex.codecogs.com/png.latex?1%20-%20%5Cfrac%7B1%7D%7B2%5E%7Br%7D%7D">입니다.</p></li>
+<li><p>스트림을 통해 들어온 서로 다른 <img src="https://latex.codecogs.com/png.latex?m">개의 원소 중 <strong>어느 하나도</strong> <img src="https://latex.codecogs.com/png.latex?r">개의 0 꼬리를 가지지 않을 확률은 독립성을 가정할 때 <img src="https://latex.codecogs.com/png.latex?(1%20-%20%5Cfrac%7B1%7D%7B2%5E%7Br%7D%7D)%5E%7Bm%7D">이 됩니다.</p></li>
+<li><p>따라서, 여사건의 원리를 이용해 <strong>“적어도 하나의 원소가 <img src="https://latex.codecogs.com/png.latex?r">개의 연속된 0 꼬리를 가질 확률 <img src="https://latex.codecogs.com/png.latex?Pr(R%20%5Cge%20r)">”</strong>은 다음과 같이 정의됩니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?Pr(R%20%5Cge%20r)%20=%201%20-%20%5Cleft(1%20-%20%5Cfrac%7B1%7D%7B2%5E%7Br%7D%7D%5Cright)%5E%7Bm%7D"></p>
+</section>
+<section id="근사식의-전개와-해석-taylor-limit-approximation" class="level2">
+<h2 class="anchored" data-anchor-id="근사식의-전개와-해석-taylor-limit-approximation">3.3. 근사식의 전개와 해석 (Taylor / Limit Approximation)</h2>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?2%5E%7Br%7D%20%5Cto%20%5Cinfty">로 커지는 상황을 가정하여 위 수식을 자연상수 <img src="https://latex.codecogs.com/png.latex?e">의 정의를 이용해 근사해보겠습니다.</li>
+<li>지수 법칙을 활용하여 수식을 전개하면 아래와 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?1%20-%20%5Cleft(1%20-%20%5Cfrac%7B1%7D%7B2%5E%7Br%7D%7D%5Cright)%5E%7Bm%7D%20=%201%20-%20%5Cleft%5B%20%5Cleft(1%20-%20%5Cfrac%7B1%7D%7B2%5E%7Br%7D%7D%5Cright)%5E%7B2%5E%7Br%7D%7D%20%5Cright%5D%5E%7B%5Cfrac%7Bm%7D%7B2%5E%7Br%7D%7D%7D"></p>
+<ul>
+<li>이때 미적분학의 극한 성질인 <img src="https://latex.codecogs.com/png.latex?%5Clim_%7Bx%20%5Cto%20%5Cinfty%7D%20(1%20-%20%5Cfrac%7B1%7D%7Bx%7D)%5E%7Bx%7D%20=%20e%5E%7B-1%7D">을 적용하면 (<img src="https://latex.codecogs.com/png.latex?x%20=%202%5E%7Br%7D">), 괄호 안의 식은 <img src="https://latex.codecogs.com/png.latex?e%5E%7B-1%7D">에 근사합니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Capprox%201%20-%20%5Cleft(e%5E%7B-1%7D%5Cright)%5E%7B%5Cfrac%7Bm%7D%7B2%5E%7Br%7D%7D%7D%20=%201%20-%20e%5E%7B-%5Cfrac%7Bm%7D%7B2%5E%7Br%7D%7D%7D"></p>
+<ul>
+<li>이 최종적인 확률식 <img src="https://latex.codecogs.com/png.latex?Pr(R%20%5Cge%20r)%20%5Capprox%201%20-%20e%5E%7B-%5Cfrac%7Bm%7D%7B2%5E%7Br%7D%7D%7D">의 거동을 <img src="https://latex.codecogs.com/png.latex?2%5E%7Br%7D">의 크기에 따라 두 가지 케이스로 나누어 분석해 봅시다.
+<ul>
+<li><ol type="1">
+<li><strong>Case 1:</strong> <img src="https://latex.codecogs.com/png.latex?2%5E%7Br%7D%20%5Cll%20m"> 인 경우</li>
+</ol>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?2%5E%7Br%7D">이 <img src="https://latex.codecogs.com/png.latex?m">에 비해 매우 작으면, <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bm%7D%7B2%5E%7Br%7D%7D">의 값은 매우 커집니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?e%5E%7B-%5Cinfty%7D%20%5Capprox%200"> 이므로, <img src="https://latex.codecogs.com/png.latex?Pr(R%20%5Cge%20r)%20%5Capprox%201%20-%200%20=%201">이 됩니다.</li>
+<li>즉, 고유 원소 수보다 훨씬 작은 범위에서는 해당 길이의 꼬리가 무조건 관찰됩니다.</li>
+</ul></li>
+<li><ol start="2" type="1">
+<li><strong>Case 2:</strong> <img src="https://latex.codecogs.com/png.latex?2%5E%7Br%7D%20%5Cgg%20m"> 인 경우</li>
+</ol>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?2%5E%7Br%7D">이 <img src="https://latex.codecogs.com/png.latex?m">에 비해 압도적으로 크면, <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bm%7D%7B2%5E%7Br%7D%7D">의 값은 0에 가까워집니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?e%5E%7B0%7D%20=%201"> 이므로, <img src="https://latex.codecogs.com/png.latex?Pr(R%20%5Cge%20r)%20%5Capprox%201%20-%201%20=%200">이 됩니다.</li>
+</ul></li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.1/images/fm_probability_transition.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: <img src="https://latex.codecogs.com/png.latex?Pr(R%20%5Cge%20r)">의 확률 전이 그래프(개념도). X축은 <img src="https://latex.codecogs.com/png.latex?2%5Er">의 크기를, Y축은 <img src="https://latex.codecogs.com/png.latex?r">개 이상의 0 꼬리가 관찰될 확률 <img src="https://latex.codecogs.com/png.latex?Pr(R%20%5Cge%20r)">을 나타냅니다. 그래프는 <img src="https://latex.codecogs.com/png.latex?2%5Er">이 <img src="https://latex.codecogs.com/png.latex?m">보다 작을 때는 1에 머물다가, <img src="https://latex.codecogs.com/png.latex?2%5Er%20%5Capprox%20m">이 되는 임계 지점(Threshold)을 통과하면서 0을 향해 급격히 하락하는 S자형 로지스틱 커브(Logistic Curve) 형태를 보입니다. 이는 <img src="https://latex.codecogs.com/png.latex?2%5ER"> 값이 실제 고유 원소 수 <img src="https://latex.codecogs.com/png.latex?m"> 부근에서 성장을 멈춘다는 것을 시각적으로 증명합니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>해석:</strong> 결과적으로 확률 <img src="https://latex.codecogs.com/png.latex?Pr(R%20%5Cge%20r)">은 <img src="https://latex.codecogs.com/png.latex?2%5E%7Br%7D%20%5Capprox%20m">이 되는 지점을 중심으로 1에서 0으로 급격히 전환(transition)됩니다. 알고리즘이 데이터를 읽어가면서 <img src="https://latex.codecogs.com/png.latex?2%5E%7BR%7D"> 값은 <img src="https://latex.codecogs.com/png.latex?m">에 도달할 때까지 계속 증가하다가, <img src="https://latex.codecogs.com/png.latex?m"> 부근에서 멈추게 될 것임을 의미합니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="한계점-및-보완책-limitations-and-workarounds" class="level1">
+<h1>4. 한계점 및 보완책 (Limitations and Workarounds)</h1>
+<ul>
+<li>Flajolet-Martin 알고리즘의 직관은 매우 훌륭하지만, 현업에서 단일 해시 함수만으로 이 알고리즘을 사용하기에는 큰 약점이 있습니다.</li>
+</ul>
+<section id="왜-단일-모델로는-실패하는가" class="level2">
+<h2 class="anchored" data-anchor-id="왜-단일-모델로는-실패하는가">4.1. 왜 단일 모델로는 실패하는가?</h2>
+<ul>
+<li><p>수학적으로 <img src="https://latex.codecogs.com/png.latex?2%5E%7BR%7D">의 기댓값 <img src="https://latex.codecogs.com/png.latex?E%5B2%5E%7BR%7D%5D">을 구해보면 실제로는 <img src="https://latex.codecogs.com/png.latex?m">이 아니라 <strong>무한대(infinite)</strong>가 나옵니다.</p></li>
+<li><p>그 이유는 꼬리 길이 <img src="https://latex.codecogs.com/png.latex?R">이 <img src="https://latex.codecogs.com/png.latex?R%20%5Cto%20R+1">로 증가할 때 확률은 절반으로 줄어들지만, 우리가 추정하는 값 <img src="https://latex.codecogs.com/png.latex?2%5E%7BR%7D">은 두 배로 뻥튀기(doubles) 되기 때문입니다.</p></li>
+<li><p>앞선 슬라이드의 분석을 통해 “일반적으로(typically) <img src="https://latex.codecogs.com/png.latex?2%5E%7BR%7D">이 <img src="https://latex.codecogs.com/png.latex?m"> 근처에 분포한다”는 사실은 확인했지만 , 아주 가끔 예외적으로 긴 꼬리(000…0)가 우연히 등장하게 되면 추정치가 실제 <img src="https://latex.codecogs.com/png.latex?m">을 아득히 초과하여 오버슛(overshoot)하는 <strong>극심한 불안정성(unstable)</strong>을 초래합니다.</p></li>
+</ul>
+</section>
+<section id="해결책-다중-해시-함수와-중앙값-workaround" class="level2">
+<h2 class="anchored" data-anchor-id="해결책-다중-해시-함수와-중앙값-workaround">4.2. 해결책: 다중 해시 함수와 중앙값 (Workaround)</h2>
+<ul>
+<li>이러한 분산(Variance) 문제를 해결하기 위한 보완책은 앙상블 기법과 유사합니다.
+<ul>
+<li>단일 해시 함수가 아닌 <strong>서로 독립적인 여러 개의 해시 함수 <img src="https://latex.codecogs.com/png.latex?h_%7Bi%7D">를 사용</strong>하여 다양한 관측치 <img src="https://latex.codecogs.com/png.latex?R_%7Bi%7D">를 수집합니다.</li>
+<li>도출된 여러 추정값들을 단순히 평균 내는 것은 아웃라이어(overshoot)에 여전히 취약하므로, <strong>중앙값(Medians)과 같은 강건한(robust) 통계량</strong>을 활용하여 최종 고유 원소 개수를 산출합니다.</li>
+</ul></li>
+</ul>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.1/</guid>
+  <pubDate>Wed, 27 May 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 23. Mining Data Streams (Part 2)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.2/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="문제-정의-및-슬라이딩-윈도우의-한계" class="level1">
+<h1>1. 문제 정의 및 슬라이딩 윈도우의 한계</h1>
+<ul>
+<li>스트림 데이터에서 빈발 아이템을 찾는 문제는 크게 두 가지 성격으로 나뉩니다.
+<ul>
+<li>첫째는 전체 스트림을 통틀어 가장 많이 등장한 요소를 찾는 것이며 , 둘째는 <strong>“최근에(recently)” 가장 많이 등장한 요소를 찾는 것</strong>입니다.</li>
+</ul></li>
+<li>현실의 많은 비즈니스 문제들은 후자에 해당합니다.
+<ul>
+<li><strong>영화 예매:</strong> “현재” 가장 인기 있는 영화는 무엇인가?</li>
+<li><strong>이커머스(Amazon):</strong> “최근” 가장 많이 팔리는 상품은 무엇인가?</li>
+<li><strong>소셜 미디어(Twitter):</strong> “현재” 가장 활발하게 활동하는 유저는 누구인가?</li>
+</ul></li>
+</ul>
+<section id="최근을-어떻게-정의할-것인가" class="level2">
+<h2 class="anchored" data-anchor-id="최근을-어떻게-정의할-것인가">1.1. “최근”을 어떻게 정의할 것인가?</h2>
+<ul>
+<li>그렇다면 “최근”에 들어온 요소라는 것을 어떻게 정의할 수 있을까요?
+<ul>
+<li>가장 직관적인 한 가지 접근법은 크기가 <img src="https://latex.codecogs.com/png.latex?N">인 <strong>슬라이딩 윈도우(Sliding Window)</strong>를 설정하는 것입니다. 가장 최근에 들어온 윈도우 내에서의 등장 횟수(count)를 추정하는 방식입니다.</li>
+</ul></li>
+<li>하지만 이 방식에는 치명적인 한계가 존재합니다. 바로 윈도우 안의 데이터와 윈도우 밖의 데이터 사이에 너무 <strong>칼같이 명확한 구분(Sharp distinction)</strong>을 두어 단절을 만들어낸다는 점입니다.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="지수-감쇠-윈도우-exponentially-decaying-window" class="level1">
+<h1>2. 지수 감쇠 윈도우 (Exponentially Decaying Window)</h1>
+<ul>
+<li>앞선 슬라이딩 윈도우의 한계를 극복하기 위한 우아한 해결책이 바로 <strong>지수 감쇠 윈도우(Exponentially Decaying Window)</strong>입니다. 이 방식은 스트림의 모든 원소를 버리지 않고 취하되 , <strong>최근에 등장한 요소일수록 더 무겁게 가중치(Weight)를 부여</strong>하는 방식입니다.</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.2/images/exponential_decay_window.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 지수 감쇠 윈도우의 개념적 시각화. 우측 끝의 현재 시점에서 가장 높은 가중치를 보이며, 왼쪽(과거)으로 갈수록 데이터의 영향력이 부드러운 곡선을 그리며 감소(decay)하는 형태를 띱니다. 과거 데이터를 일도양단으로 무시하는 슬라이딩 윈도우와 달리, 모든 스트림 요소를 점진적으로 반영하는 특성을 직관적으로 보여줍니다.</figcaption>
+</figure>
+</div>
+<section id="이진-스트림으로의-변환" class="level2">
+<h2 class="anchored" data-anchor-id="이진-스트림으로의-변환">2.1. 이진 스트림으로의 변환</h2>
+<ul>
+<li>문제를 단순화하기 위해, 거대한 스트림 데이터가 주어졌을 때 이를 각 개별 아이템 단위의 <strong>이진 스트림(Binary stream)</strong>으로 분리하여 생각합니다.
+<ul>
+<li>특정 아이템이 현재 시점에 존재하면 <strong>1</strong></li>
+<li>특정 아이템이 현재 시점에 존재하지 않으면 <strong>0</strong></li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.2/images/binary_stream_conversion.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 원본 데이터 스트림을 개별 아이템 기준의 이진 스트림(Binary Stream)으로 변환하는 과정. 상단의 노란색 박스는 무작위 알파벳으로 이루어진 전체 데이터 스트림을 나타내며, 하단의 파란색 박스는 그 중 특정 아이템인 ’b’에 대해서만 존재 여부를 1과 0으로 매핑한 결과를 보여줍니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="가중치의-수학적-정의와-업데이트" class="level2">
+<h2 class="anchored" data-anchor-id="가중치의-수학적-정의와-업데이트">2.2. 가중치의 수학적 정의와 업데이트</h2>
+<ul>
+<li>모든 이진 스트림에 지수 감쇠 윈도우를 적용해 봅시다. 특정 시간 <img src="https://latex.codecogs.com/png.latex?T">에서 특정 아이템 <img src="https://latex.codecogs.com/png.latex?x">의 가중치 <img src="https://latex.codecogs.com/png.latex?w_T(x)">는 다음과 같이 계산됩니다. <img src="https://latex.codecogs.com/png.latex?w_T(x)%20=%20%5Csum_%7Bt=1%7D%5E%7BT%7D%5Cdelta_t%20%5Ccdot%20(1-c)%5E%7BT-t%7D%20=%20%5Cdelta_T%20+%20%5Cdelta_%7BT-1%7D(1-c)%20+%20%5Cdots%20+%20%5Cdelta_1(1-c)%5E%7BT-1%7D">
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cdelta_t">는 시점 <img src="https://latex.codecogs.com/png.latex?t">에 들어온 원소 <img src="https://latex.codecogs.com/png.latex?a_t">가 찾고자 하는 아이템 <img src="https://latex.codecogs.com/png.latex?x">와 같으면 1, 아니면 0을 가지는 값입니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?c">는 1보다 작은 상수로, 주로 <img src="https://latex.codecogs.com/png.latex?10%5E%7B-6%7D">이나 <img src="https://latex.codecogs.com/png.latex?10%5E%7B-9%7D">처럼 추정상 매우 작은 값을 사용합니다.</li>
+</ul></li>
+<li>이 수식의 강력한 점은 시점 <img src="https://latex.codecogs.com/png.latex?T">에서의 가중치 <img src="https://latex.codecogs.com/png.latex?w_T(x)">와 새로운 데이터 <img src="https://latex.codecogs.com/png.latex?%5Cdelta_%7BT+1%7D">만 주어지면, 새로운 시점 <img src="https://latex.codecogs.com/png.latex?T+1">에서의 가중치를 다음과 같은 점화식으로 즉시 구할 수 있다는 것입니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?w_%7BT+1%7D(x)%20=%20(1-c)w_T(x)%20+%20%5Cdelta_%7BT+1%7D"></p>
+<hr>
+</section>
+</section>
+<section id="메모리-제한과-효율적인-카운팅-알고리즘" class="level1">
+<h1>3. 메모리 제한과 효율적인 카운팅 알고리즘</h1>
+<ul>
+<li><p>수식은 훌륭하지만, 현실적으로 전체 <img src="https://latex.codecogs.com/png.latex?N">개의 모든 아이템에 대해 각각의 카운터를 추적하고 유지하는 것은 불가능에 가깝습니다 (<img src="https://latex.codecogs.com/png.latex?N">이 매우 클 수 있기 때문입니다).</p></li>
+<li><p>따라서 어떤 아이템들을 ‘인기 있는’ 것으로 간주할지 정의하기 위해 임계값(threshold) <img src="https://latex.codecogs.com/png.latex?%5Ctheta">를 설정합니다. 즉, 아이템 <img src="https://latex.codecogs.com/png.latex?x">는 <img src="https://latex.codecogs.com/png.latex?w_T(x)%20%3E%20%5Ctheta"> 일 때 인기 있는 것으로 판단됩니다. 그렇다면 카운팅되는 아이템의 개수를 어떻게 제한할 수 있을까요?</p></li>
+</ul>
+<section id="무한-등비급수와-최대-가중치" class="level2">
+<h2 class="anchored" data-anchor-id="무한-등비급수와-최대-가중치">3.1. 무한 등비급수와 최대 가중치</h2>
+<ul>
+<li>이 시스템이 가지는 중요한 수학적 성질 중 하나는 모든 가중치의 총합이 제한된다는 점입니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%5Csum_x%20w_T(x)%20%3C%20%5Csum_%7Bt=0%7D%5E%7B%5Cinfty%7D(1-c)%5Et%20=%20%5Cfrac%7B1%7D%7B1-(1-c)%7D%20=%20%5Cfrac%7B1%7D%7Bc%7D"></p>
+<ul>
+<li>어떤 특정 아이템의 이진 스트림이 <code>[1, 1, 1, ...]</code>으로 연속해서 들어온다면 그 아이템의 가중치는 <img src="https://latex.codecogs.com/png.latex?1/c">가 됩니다. 즉, 어떠한 아이템도 <img src="https://latex.codecogs.com/png.latex?1/c">보다 큰 가중치를 가질 수는 없습니다.</li>
+</ul>
+</section>
+<section id="카운터-개수의-상한선-증명" class="level2">
+<h2 class="anchored" data-anchor-id="카운터-개수의-상한선-증명">3.2. 카운터 개수의 상한선 증명</h2>
+<ul>
+<li><p>이제 임계값을 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%20=%201/2">로 가정해 보겠습니다.</p></li>
+<li><p>가중치가 <img src="https://latex.codecogs.com/png.latex?1/2">보다 큰 아이템은 최대 몇 개까지 존재할 수 있을까요? 정답은 <strong>“<img src="https://latex.codecogs.com/png.latex?2/c"> 개를 초과할 수 없다”</strong>입니다.</p></li>
+<li><p>그 이유는 모든 가중치의 총합이 <img src="https://latex.codecogs.com/png.latex?1/c">보다 작아야 하기 때문입니다. 따라서 이 <img src="https://latex.codecogs.com/png.latex?2/c">라는 값이 카운팅되는 아이템 숫자의 엄격한 한계치(limit)가 되며 , 이것이 카운팅을 위한 메모리 사용량을 확정적으로 제한할 수 있는 핵심적인 관찰(Core observation)입니다.</p></li>
+</ul>
+</section>
+<section id="최종-제안-알고리즘-proposed-algorithm" class="level2">
+<h2 class="anchored" data-anchor-id="최종-제안-알고리즘-proposed-algorithm">3.3. 최종 제안 알고리즘 (Proposed Algorithm)</h2>
+<ul>
+<li>이를 바탕으로 가중치 <img src="https://latex.codecogs.com/png.latex?%3E%201/2">인 아이템을 찾는 알고리즘은 다음과 같이 구성됩니다.
+<ul>
+<li><ol type="1">
+<li><strong>초기화:</strong> 정확히 <img src="https://latex.codecogs.com/png.latex?2/c"> 개의 카운터를 유지하고 이를 모두 0으로 초기화합니다.</li>
+</ol></li>
+<li><ol start="2" type="1">
+<li><strong>스트림 처리:</strong> 스트림에 새로운 아이템 <img src="https://latex.codecogs.com/png.latex?a_t">가 도착할 때마다:</li>
+</ol>
+<ul>
+<li>모든 카운터 값에 <img src="https://latex.codecogs.com/png.latex?(1-c)">를 곱합니다.</li>
+<li>만약 <img src="https://latex.codecogs.com/png.latex?a_t">가 현재 카운터 목록에 이미 존재한다면, 그 카운터의 값에 1을 증가시키고, 값이 <img src="https://latex.codecogs.com/png.latex?1/2"> 미만인 카운터들은 모두 버립니다(Drop).</li>
+<li>만약 <img src="https://latex.codecogs.com/png.latex?a_t">가 목록에 없다면, 빈 카운터를 <img src="https://latex.codecogs.com/png.latex?a_t">에 새로 할당하고 값을 1로 설정합니다.</li>
+</ul></li>
+<li><ol start="3" type="1">
+<li><strong>결과:</strong> 스트림의 어느 시점에서든 이 카운터 세트 안에 들어있는 아이템들이 최근 가장 빈번하게 등장한 아이템이 됩니다.</li>
+</ol></li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="알고리즘의-한계와-보장성-guarantees" class="level1">
+<h1>4. 알고리즘의 한계와 보장성 (Guarantees)</h1>
+<ul>
+<li>그렇다면 이 알고리즘은 가중치가 <img src="https://latex.codecogs.com/png.latex?1/2">보다 큰 모든 아이템을 완벽하게 찾아낼 것을 보장할 수 있을까요?
+<ul>
+<li>결론부터 말하면 <strong>“불가능하다(No)”</strong> 입니다. 알고리즘이 매 반복(iteration)마다 가중치가 <img src="https://latex.codecogs.com/png.latex?1/2"> 미만인 아이템을 과감히 버리기 때문입니다. 이 작았던 가중치들이 미래에 필요해질 수도 있습니다.</li>
+</ul></li>
+<li>이 누락 과정을 수학적으로 분해해보겠습니다. 시점 <img src="https://latex.codecogs.com/png.latex?T">에서의 전체 가중치 <img src="https://latex.codecogs.com/png.latex?w_T(x)">는 다음과 같이 쪼개어 볼 수 있습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?w_T(x)%20=%20w_%7BT:T-K+1%7D(x)%20+%20(1-c)%5EK%20w_%7BT-K%7D(x)"></p>
+<ul>
+<li>만약 아래의 세 가지 조건이 동시에 참(true)이 되는 상황이 발생하면, 아이템 <img src="https://latex.codecogs.com/png.latex?x">는 카운트되지 못하고 누락됩니다.
+<ul>
+<li><ol type="1">
+<li>과거 시점 <img src="https://latex.codecogs.com/png.latex?T-K">에서 카운터가 버려짐: <img src="https://latex.codecogs.com/png.latex?w_%7BT-K%7D(x)%20%3C%201/2"></li>
+</ol></li>
+<li><ol start="2" type="1">
+<li>최근에 누적된 “새로운” 가중치도 막 버려지기 직전임: <img src="https://latex.codecogs.com/png.latex?w_%7BT:T-K+1%7D(x)%20%3C%201/2"></li>
+</ol></li>
+<li><ol start="3" type="1">
+<li>하지만 실제 누적 가중치 총합은 임계값을 초과함: <img src="https://latex.codecogs.com/png.latex?w_T(x)%20%3E%201/2"></li>
+</ol></li>
+</ul></li>
+<li>즉, 과거의 부분 가중치와 최근의 부분 가중치가 단독으로는 각각 기준을 넘지 못해 버려졌지만 둘을 합치면 임계값을 넘었어야 하는 경우, 알고리즘 구조상 이를 놓치게 되는 한계가 있습니다.</li>
+</ul>
+
+
+
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.2/</guid>
+  <pubDate>Wed, 27 May 2026 15:00:00 GMT</pubDate>
+</item>
+<item>
+  <title>[Data Mining] 23. Mining Data Streams (Part 3)</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.3/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="스트림-환경에서의-데이터-행렬-data-as-a-matrix" class="level1">
+<h1>1. 스트림 환경에서의 데이터 행렬 (Data as a Matrix)</h1>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.3/images/data_matrix_stream.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 스트림 환경에서 관찰되는 데이터 행렬의 개념도. 왼쪽의 커다란 직사각형은 전체 데이터 행렬 <img src="https://latex.codecogs.com/png.latex?A">를 나타내며, 오른쪽의 얇은 막대 <img src="https://latex.codecogs.com/png.latex?a_i">는 새롭게 스트림으로 들어오는 하나의 행 벡터(row vector)를 의미합니다. 화살표는 끊임없이 유입되는 단일 데이터 포인트(<img src="https://latex.codecogs.com/png.latex?a_i">)가 누적되어 전체 행렬(<img src="https://latex.codecogs.com/png.latex?A">)의 한 줄을 구성하는 과정을 직관적으로 보여줍니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>수많은 머신러닝 응용 분야에서 우리는 전체 데이터를 행렬 <img src="https://latex.codecogs.com/png.latex?A%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bn%20%5Ctimes%20d%7D">로 표현합니다.
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?n">은 표본(samples)의 개수를 의미합니다.</li>
+<li><img src="https://latex.codecogs.com/png.latex?d">는 변수(variables)의 개수를 의미하며, 일반적으로 표본의 수가 변수의 수보다 압도적으로 많은 <img src="https://latex.codecogs.com/png.latex?n%20%5Cgg%20d">의 상황을 가정합니다.</li>
+</ul></li>
+<li>문제는 이 데이터 행렬이 한 번에 주어지는 것이 아니라, <strong>스트림(Stream)의 형태로 끊임없이 관찰된다는 점</strong>입니다. 매 시점마다 길이가 <img src="https://latex.codecogs.com/png.latex?d">인 행 벡터 <img src="https://latex.codecogs.com/png.latex?a_i">가 하나씩 추가되는 상황입니다. 다수의 센서에서 동시에 수집되는 데이터 로그를 떠올리면 이해하기 쉽습니다. 전체 행렬을 저장할 수 없을 때, 우리는 어떻게 이 스트리밍 행렬을 샘플링하고 요약할 수 있을까요?</li>
+</ul>
+<hr>
+</section>
+<section id="기존-방법론의-한계-svd와-cur-분해" class="level1">
+<h1>2. 기존 방법론의 한계: SVD와 CUR 분해</h1>
+<ul>
+<li>이 문제를 해결하기 위한 단초를 얻기 위해 전통적인 행렬 근사 기법들을 먼저 짚고 넘어가겠습니다.</li>
+</ul>
+<section id="특이값-분해-singular-value-decomposition-svd" class="level2">
+<h2 class="anchored" data-anchor-id="특이값-분해-singular-value-decomposition-svd">2.1. 특이값 분해 (Singular Value Decomposition, SVD)</h2>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.3/images/svd_rank_k_approximation.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 특이값 분해(SVD)를 통한 Rank-k 행렬 근사 과정 시각화. 파란색 원본 행렬 <img src="https://latex.codecogs.com/png.latex?A_k">(크기 <img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20d">)가 세 개의 행렬 곱으로 분해되는 모습을 나타냅니다. 주황색 행렬 <img src="https://latex.codecogs.com/png.latex?U_k">(<img src="https://latex.codecogs.com/png.latex?n%20%5Ctimes%20k">), 노란색 대각행렬 <img src="https://latex.codecogs.com/png.latex?S_k">(<img src="https://latex.codecogs.com/png.latex?k%20%5Ctimes%20k">), 그리고 분홍색 행렬 <img src="https://latex.codecogs.com/png.latex?V_k%5ET">(<img src="https://latex.codecogs.com/png.latex?k%20%5Ctimes%20d">)로 구성되어 있으며, 복잡한 고차원 원본 데이터를 <img src="https://latex.codecogs.com/png.latex?k"> 차원의 핵심 잠재 공간(latent space)으로 압축하여 가장 완벽하게 근사하는 SVD의 수학적 원리를 보여줍니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li>전통적인 선형대수학에서 행렬 <img src="https://latex.codecogs.com/png.latex?A">의 최적의 Rank-<img src="https://latex.codecogs.com/png.latex?k"> 근사(Rank-k approximation)를 구하는 가장 완벽한 방법은 특이값 분해(SVD)를 사용하는 것입니다. <img src="https://latex.codecogs.com/png.latex?A%20%5Capprox%20B%20=%20U_k%20S_k%20V_k%5E%5Ctop">
+<ul>
+<li>여기서 <img src="https://latex.codecogs.com/png.latex?U_k%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bn%20%5Ctimes%20k%7D">, <img src="https://latex.codecogs.com/png.latex?S_k%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bk%20%5Ctimes%20k%7D">, <img src="https://latex.codecogs.com/png.latex?V_k%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd%20%5Ctimes%20k%7D"> 입니다. 그러나 SVD는 전체 행렬 <img src="https://latex.codecogs.com/png.latex?A">가 메모리에 존재해야 연산이 가능하므로 스트림 환경에서는 직접 사용할 수 없습니다.</li>
+</ul></li>
+</ul>
+</section>
+<section id="cur-분해와의-비교" class="level2">
+<h2 class="anchored" data-anchor-id="cur-분해와의-비교">2.2. CUR 분해와의 비교</h2>
+<ul>
+<li><p>또 다른 방법론으로 행렬의 실제 행(Row)과 열(Column)을 샘플링하여 근사하는 CUR 분해(<img src="https://latex.codecogs.com/png.latex?A%20%5Capprox%20CUR">)가 있습니다. 하지만 스트림 환경에서는 행 단위로만 데이터가 들어오기 때문에, 전체 데이터를 보지 않고서는 열 행렬 <img src="https://latex.codecogs.com/png.latex?C">를 추출할 방법이 아예 존재하지 않습니다.</p></li>
+<li><p>따라서 스트림 마이닝에서는 오직 추출된 행으로 구성된 스케치 행렬 <img src="https://latex.codecogs.com/png.latex?R%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bk%20%5Ctimes%20d%7D">을 구성하는 데에만 집중합니다. 이렇게 만들어진 <img src="https://latex.codecogs.com/png.latex?R">은 SVD에서의 <img src="https://latex.codecogs.com/png.latex?V%5E%5Ctop">와 유사한 역할을 수행하여 <img src="https://latex.codecogs.com/png.latex?k">차원의 잠재 공간을 형성하게 됩니다. (단, <img src="https://latex.codecogs.com/png.latex?R">의 행들은 실제 데이터에서 추출되었으므로 직교하지 않는다는 차이가 있습니다.)</p></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="행-표본-추출-기법-row-sampling-methods" class="level1">
+<h1>3. 행 표본 추출 기법 (Row Sampling Methods)</h1>
+<ul>
+<li>행렬 <img src="https://latex.codecogs.com/png.latex?A">에서 일부 행을 추출하여 스케치 행렬 <img src="https://latex.codecogs.com/png.latex?R">을 만드는 방법에는 크게 두 가지가 있습니다.</li>
+</ul>
+<section id="균등-행-표본-추출-uniform-row-sampling" class="level2">
+<h2 class="anchored" data-anchor-id="균등-행-표본-추출-uniform-row-sampling">3.1. 균등 행 표본 추출 (Uniform Row Sampling)</h2>
+<ul>
+<li>가장 단순한 접근법은 <img src="https://latex.codecogs.com/png.latex?A">의 행들을 <strong>동일한 확률(uniformly at random)</strong>로 샘플링하는 것입니다. 각 행을 독립적인 요소로 간주하고 레저보어 샘플링(Reservoir sampling)을 적용합니다. 하지만 모든 행이 행렬 스케칭에 동일한 중요도를 가지는 것은 아닙니다. 행의 크기(Norm)에 따라 L2 오차 항에 기여하는 바가 전혀 다르기 때문입니다.</li>
+</ul>
+</section>
+<section id="가중-행-표본-추출-weighted-row-sampling" class="level2">
+<h2 class="anchored" data-anchor-id="가중-행-표본-추출-weighted-row-sampling">3.2. 가중 행 표본 추출 (Weighted Row Sampling)</h2>
+<ul>
+<li><p>위의 한계를 극복하기 위해, 행의 L2 노름의 제곱인 <img src="https://latex.codecogs.com/png.latex?%5C%7Ca_i%5C%7C_2%5E2">에 비례하는 샘플링 확률 <img src="https://latex.codecogs.com/png.latex?q_i">를 부여하여 비균등하게 샘플링하는 방법이 제안되었습니다.</p></li>
+<li><p><strong>알고리즘 상세 및 수학적 증명</strong></p>
+<ul>
+<li>일반적인 레저보어 샘플링을 가중치 기반으로 일반화하기 위해, 각 행에 무작위 ’키(key)’를 생성하고 가장 큰 키를 유지하는 트릭을 사용합니다.
+<ul>
+<li>각 행 <img src="https://latex.codecogs.com/png.latex?a_i">가 들어올 때 (0, 1) 사이의 균등 분포에서 난수 <img src="https://latex.codecogs.com/png.latex?r_i">를 추출합니다.</li>
+<li>해당 행의 키를 <img src="https://latex.codecogs.com/png.latex?k_i%20=%20%5Cfrac%7B%5Clog(r_i)%7D%7Bq_i%7D"> 로 할당합니다.</li>
+<li>보관소에 있는 가장 작은 키 <img src="https://latex.codecogs.com/png.latex?k_l">을 가진 행 <img src="https://latex.codecogs.com/png.latex?a_l">을 찾고, <img src="https://latex.codecogs.com/png.latex?k_i%20%3E%20k_l"> 이라면 <img src="https://latex.codecogs.com/png.latex?a_l">을 <img src="https://latex.codecogs.com/png.latex?a_i">로 교체합니다.</li>
+</ul></li>
+</ul></li>
+<li><p>이 방식이 목표한 가중 확률을 만족할까요? <img src="https://latex.codecogs.com/png.latex?q_1%20=%20c%20q_2"> 라고 가정할 때, <img src="https://latex.codecogs.com/png.latex?a_1">이 <img src="https://latex.codecogs.com/png.latex?a_2">보다 선택될 확률은 키 값의 비교 확률 <img src="https://latex.codecogs.com/png.latex?Pr(k_1%20%3E%20k_2)">와 같습니다.</p></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?k_1%20%3E%20k_2%20%5CRightarrow%20%5Cfrac%7B%5Clog(r_1)%7D%7Bq_1%7D%20%3E%20%5Cfrac%7B%5Clog(r_2)%7D%7Bq_2%7D"> <img src="https://latex.codecogs.com/png.latex?%5CRightarrow%20%5Clog(r_1)%20%3E%20c%20%5Ccdot%20%5Clog(r_2)"> <img src="https://latex.codecogs.com/png.latex?%5CRightarrow%20r_1%20%3E%20r_2%5Ec"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?r_1,%20r_2%20%5Csim%20%5Ctext%7BUniform%7D(0,%201)"> 이므로, <img src="https://latex.codecogs.com/png.latex?r_2">가 주어졌을 때의 조건부 확률은 <img src="https://latex.codecogs.com/png.latex?1%20-%20r_2%5Ec"> 입니다. 이를 전체 구간에 대해 평균 내면 다음과 같습니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?Pr(k_1%20%3E%20k_2)%20=%20%5Cint_0%5E1%20(1%20-%20r_2%5Ec)%20dr_2%20=%20%5Cleft%5B%20r_2%20-%20%5Cfrac%7Br_2%5E%7Bc+1%7D%7D%7Bc+1%7D%20%5Cright%5D_0%5E1%20=%201%20-%20%5Cfrac%7B1%7D%7Bc+1%7D%20=%20%5Cfrac%7Bc%7D%7Bc+1%7D"></p>
+<ul>
+<li><p>따라서 <img src="https://latex.codecogs.com/png.latex?a_1">이 <img src="https://latex.codecogs.com/png.latex?a_2">보다 정확히 <img src="https://latex.codecogs.com/png.latex?c">배 더 많이 선택된다는 것이 증명됩니다.</p></li>
+<li><p><strong>오차 한계 (Theoretical Bound)</strong></p>
+<ul>
+<li>가중 행 표본 추출로 크기 <img src="https://latex.codecogs.com/png.latex?t%20=%20(k/%5Cepsilon)%5E2%20%5Ccdot%20%5Clog(1/%5Cdelta)"> 인 행렬 <img src="https://latex.codecogs.com/png.latex?R%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bt%20%5Ctimes%20d%7D">을 구성하면, 최소 <img src="https://latex.codecogs.com/png.latex?1-%5Cdelta">의 확률로 다음의 오차 한계를 보장받습니다. <img src="https://latex.codecogs.com/png.latex?%7C%7CA%20-%20%5CPi_R(A)%7C%7C_F%5E2%20%5Cle%20%7C%7CA%20-%20A_k%7C%7C_F%5E2%20+%20%5Cepsilon%7C%7CA%7C%7C_F">
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?A_k">는 최고 Rank-k 근사 행렬, <img src="https://latex.codecogs.com/png.latex?%5CPi_R">은 원본 행렬을 <img src="https://latex.codecogs.com/png.latex?R"> 공간으로 매핑하는 함수를 의미합니다.</li>
+</ul></li>
+</ul></li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="빈발-방향-frequent-directions-알고리즘" class="level1">
+<h1>4. 빈발 방향 (Frequent Directions) 알고리즘</h1>
+<ul>
+<li>가중 행 표본 추출은 훌륭한 방법이지만 샘플링된 행들이 서로 직교하지 않으므로 행렬 내에 <strong>중복된 정보(redundant information)</strong>가 포함되는 한계가 있습니다. 이를 해결하기 위해 행렬 <img src="https://latex.codecogs.com/png.latex?A">에서 서로 직교하는 가장 핵심적인 방향 벡터들을 찾는 <strong>빈발 방향(Frequent Directions)</strong> 알고리즘이 제안되었습니다.</li>
+</ul>
+<section id="알고리즘-수행-단계-시각화" class="level2">
+<h2 class="anchored" data-anchor-id="알고리즘-수행-단계-시각화">4.1. 알고리즘 수행 단계 시각화</h2>
+<ul>
+<li><strong>Step 1: 빈 스케치 행렬 초기화</strong>
+<ul>
+<li>가장 먼저 <img src="https://latex.codecogs.com/png.latex?l%20%5Ctimes%20d"> 크기의 비어있는 스케치 행렬 <img src="https://latex.codecogs.com/png.latex?B">를 생성합니다.</li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.3/images/fd_step1_init.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Frequent Directions 알고리즘의 첫 번째 단계. 메모리 제한을 고려하여 크기가 한정된(<img src="https://latex.codecogs.com/png.latex?l%20%5Ctimes%20d">) 빈 스케치 행렬 <img src="https://latex.codecogs.com/png.latex?B">를 초기화하는 모습입니다. 알고리즘 박스 내에 B 행렬을 빈 공간으로 할당하는 슈도코드가 포함되어 있습니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>Step 2: 스트림 데이터 삽입</strong>
+<ul>
+<li>스트림에서 들어오는 행 <img src="https://latex.codecogs.com/png.latex?a_i">를 행렬 <img src="https://latex.codecogs.com/png.latex?B">의 비어있는 행에 순차적으로 삽입합니다.</li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.3/images/fd_step2_insert.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 알고리즘의 두 번째 단계. 끊임없이 유입되는 데이터 스트림 행 벡터 <img src="https://latex.codecogs.com/png.latex?a_i">를 빈 행렬 <img src="https://latex.codecogs.com/png.latex?B">에 순차적으로 채워 넣는 과정을 보여줍니다. 행렬 <img src="https://latex.codecogs.com/png.latex?B">가 가득 찰 때(B is full)까지 화살표를 따라 위에서 아래로 차례대로 데이터가 적재됩니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>Step 3: 꽉 찬 행렬에 대한 SVD 연산</strong>
+<ul>
+<li>행렬 <img src="https://latex.codecogs.com/png.latex?B">가 꽉 차게 되면 SVD를 수행하여 직교 성분을 추출합니다. <img src="https://latex.codecogs.com/png.latex?%5BU,%20S,%20V%5D%20%5Cleftarrow%20%5Ctext%7Bsvd%7D(B)">.</li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.3/images/fd_step3_svd.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 알고리즘의 세 번째 단계. 스케치 행렬 <img src="https://latex.codecogs.com/png.latex?B">가 가득 차면, 이에 대해 특이값 분해(SVD)를 수행합니다. 우측 다이어그램에서 행렬 <img src="https://latex.codecogs.com/png.latex?B">가 회전 변환을 의미하는 직교 행렬 <img src="https://latex.codecogs.com/png.latex?U">와 핵심 성분을 담은 빨간색 특이값 행렬 <img src="https://latex.codecogs.com/png.latex?SV%5ET">로 분해되는 것을 시각적으로 표현하고 있습니다. 이 과정을 통해 중복되는 방향들이 직교하는 축으로 정렬됩니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>Step 4: 특이값 축소 및 빈 공간 확보</strong>
+<ul>
+<li>특이값을 담은 대각 행렬 <img src="https://latex.codecogs.com/png.latex?S">에서 정보량이 가장 적은 절반의 영향을 제거하기 위해 특이값을 다음과 같이 깎아냅니다. <img src="https://latex.codecogs.com/png.latex?%5Ctilde%7BS%7D%20%5Cleftarrow%20%5B%5Csqrt%7BS_1%5E2%20-%20S_%7Bl/2%7D%5E2%7D,%20%5Csqrt%7BS_2%5E2%20-%20S_%7Bl/2%7D%5E2%7D,%20%5Cdots,%200,%20%5Cdots,%200%5D"></li>
+<li>이후 새로운 <img src="https://latex.codecogs.com/png.latex?B">를 <img src="https://latex.codecogs.com/png.latex?B%20%5Cleftarrow%20%5Ctilde%7BS%7DV%5E%5Ctop"> 로 업데이트하여 중요도가 낮은 정보를 버리고 새로운 데이터를 받을 빈 공간을 만듭니다.</li>
+</ul></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.3/images/fd_step4_shrink.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 알고리즘의 마지막 단계. SVD로 추출된 특이값 중 가장 정보량이 적은 절반을 0으로 만들어(Zero-out) 삭제하는 과정입니다. 우측 빨간색 행렬 <img src="https://latex.codecogs.com/png.latex?SV%5ET">의 하단 절반이 흰색 빈 공간으로 변환된 것은, <img src="https://latex.codecogs.com/png.latex?%5Ctilde%7BS%7D"> 연산을 통해 중요도가 낮은 성분을 지워버리고 다음 스트림 데이터를 받을 새로운 공간을 성공적으로 확보했음을 나타냅니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="frequent-directions의-분석과-장점" class="level2">
+<h2 class="anchored" data-anchor-id="frequent-directions의-분석과-장점">4.2. Frequent Directions의 분석과 장점</h2>
+<ul>
+<li>이 알고리즘은 앞선 샘플링 기법보다 훨씬 타이트한(tighter) 오차 한계를 가집니다. <img src="https://latex.codecogs.com/png.latex?t%20=%20k%20+%20k/%5Cepsilon"> 크기의 공간만으로 다음 한계를 확정적으로 보장합니다.</li>
+<li>단순 표본 추출 방식이 <img src="https://latex.codecogs.com/png.latex?%5C%7CA%5C%7C_F"> 라는 큰 페널티 항을 가졌던 반면, 이 방식은 최적 오차 <img src="https://latex.codecogs.com/png.latex?%5C%7CA%20-%20A_k%5C%7C_F%5E2">에 단순히 <img src="https://latex.codecogs.com/png.latex?(1+%5Cepsilon)">을 곱한 수준으로 근사 오차가 억제되는 강력한 안정성을 보여줍니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%7C%7CA%20-%20%5CPi_B(A)%7C%7C_F%5E2%20%5Cle%20(1+%5Cepsilon)%7C%7CA%20-%20A_k%7C%7C_F%5E2"></p>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Data Mining</category>
+  <guid>https://shsha0110.github.io/posts/Data Mining/23.Mining-Data-Streams-2/23.3/</guid>
+  <pubDate>Wed, 27 May 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>[Data Mining] 22. Mining Data Streams (Part 1)</title>
   <dc:creator>유성현 </dc:creator>
@@ -3074,863 +3587,6 @@ font-style: inherit;">7.</span>     Q_old를 Q_new로 업데이트합니다.</sp
   <category>Data Mining</category>
   <guid>https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.1/</guid>
   <pubDate>Mon, 11 May 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Data Mining] 18. ML On Graphs (Part 2)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.2/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-word2vec의-아이디어를-그래프로-motivation" class="level1">
-<h1>1. Introduction: Word2Vec의 아이디어를 그래프로 (Motivation)</h1>
-<ul>
-<li><p>이전 포스트에서 우리는 노드 임베딩의 목표가 “원본 네트워크에서의 유사도(<img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bsimilarity%7D_G(u,v)">)를 임베딩 공간의 내적(<img src="https://latex.codecogs.com/png.latex?z_u%5E%5Ctop%20z_v">)으로 근사하는 것”임을 확인했습니다. 그렇다면 <strong>“그래프 상에서 두 노드가 유사하다”</strong>는 것은 수학적으로 어떻게 정의할 수 있을까요?</p></li>
-<li><p>이 질문에 답하기 위해 DeepWalk는 자연어 처리(NLP) 분야의 혁명이었던 <strong>Word2Vec</strong>의 아이디어를 차용합니다. Word2Vec은 “하나의 문장 안에서 윈도우 크기(Window size, <img src="https://latex.codecogs.com/png.latex?L">) 내에 인접하여 함께 등장하는 두 단어 <img src="https://latex.codecogs.com/png.latex?u">와 <img src="https://latex.codecogs.com/png.latex?v">는 의미적으로 유사하다”고 가정합니다.</p></li>
-<li><p>그렇다면 그래프에서는 어떨까요? 노드 간의 연결망 위를 무작위로 이동하는 <strong>무작위 보행(Random Walk)</strong>을 통해 방문한 노드들의 시퀀스 <img src="https://latex.codecogs.com/png.latex?u_1,%20u_2,%20%5Cdots,%20u_n">을 하나의 ’문장’으로 간주해 보는 것입니다. 이 시퀀스 안에서 <img src="https://latex.codecogs.com/png.latex?L"> 스텝 이내에 함께 등장하는 노드 <img src="https://latex.codecogs.com/png.latex?u_i">와 <img src="https://latex.codecogs.com/png.latex?u_j">를 유사하다고 정의하는 것이 바로 DeepWalk의 핵심 동기입니다.</p></li>
-</ul>
-<section id="왜-무작위-보행random-walks인가" class="level2">
-<h2 class="anchored" data-anchor-id="왜-무작위-보행random-walks인가">1.1. 왜 무작위 보행(Random Walks)인가?</h2>
-<ul>
-<li>Random Walk를 통해 생성된 시퀀스에서 노드 <img src="https://latex.codecogs.com/png.latex?u">와 <img src="https://latex.codecogs.com/png.latex?v">가 자주 함께 등장(Co-occur)한다면, 우리는 다음 두 가지 사실을 유추할 수 있습니다.
-<ul>
-<li><ol type="1">
-<li>두 노드가 그래프 상에서 위상적으로 가깝다. (최대 <img src="https://latex.codecogs.com/png.latex?L">-hop 거리 내에 존재)</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li>두 노드가 강한 연결성을 가진다. (많은 이웃을 공유함)</li>
-</ol></li>
-</ul></li>
-<li>따라서 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7Bsimilarity%7D_G(u,%20v)">를 <strong>“무작위 보행에서 두 노드가 함께 등장할 빈도(Frequency)”</strong>로 정의하고, 이것이 임베딩의 내적 <img src="https://latex.codecogs.com/png.latex?z_u%5E%5Ctop%20z_v">에 비례하도록 학습시킵니다. 이 방식은 모든 노드 쌍 간의 거리를 직접 계산(All-pair proximity)하는 것보다 연산 효율성이 훨씬 뛰어납니다.</li>
-</ul>
-</section>
-</section>
-<section id="최적화-문제로서의-특징-학습-feature-learning-as-optimization" class="level1">
-<h1>2. 최적화 문제로서의 특징 학습 (Feature Learning as Optimization)</h1>
-<ul>
-<li>그래프 <img src="https://latex.codecogs.com/png.latex?G=(V,E)">가 주어졌을 때, 우리의 목표는 각 노드를 <img src="https://latex.codecogs.com/png.latex?d">차원 공간으로 매핑하는 임베더 <img src="https://latex.codecogs.com/png.latex?f_%5Ctheta:%20V%20%5Crightarrow%20%5Cmathbb%7BR%7D%5Ed">를 학습하는 것입니다.
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?f_%5Ctheta(v)%20=%20z_v"></li>
-</ul></li>
-<li>이 학습 과정은 특정 노드 임베딩 <img src="https://latex.codecogs.com/png.latex?z_u">가 주어졌을 때, 그 노드의 주변 이웃들을 얼마나 잘 예측하는지 측정하는 <strong>최대 우도 추정(Maximum Likelihood Estimation, MLE)</strong> 문제로 정식화됩니다. <img src="https://latex.codecogs.com/png.latex?%5Cmax_%5Ctheta%20%5Csum_%7Bu%20%5Cin%20V%7D%20%5Clog%20p(N_R(u)%20%7C%20z_u)">
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?N_R(u)">: 무작위 보행자(Random walker) <img src="https://latex.codecogs.com/png.latex?R">에 의해 생성된 노드 <img src="https://latex.codecogs.com/png.latex?u">의 이웃(Neighborhood) 집합.</li>
-</ul></li>
-</ul>
-<section id="목적-함수의-분해와-softmax-random-walk-optimization" class="level2">
-<h2 class="anchored" data-anchor-id="목적-함수의-분해와-softmax-random-walk-optimization">2.1. 목적 함수의 분해와 Softmax (Random Walk Optimization)</h2>
-<ul>
-<li><p>위의 식을 계산 가능한 형태로 만들기 위해 두 가지 중요한 가정을 도입합니다.</p></li>
-<li><p><strong>가정 1. 조건부 독립성 (Conditional Independence)</strong></p>
-<ul>
-<li>주변 이웃 노드를 관측할 확률은 다른 노드들의 관측 여부와 독립적이라고 가정합니다. 이를 통해 결합 확률을 개별 확률의 합으로 분해할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?%5Clog%20p(N_R(u)%20%7C%20z_u)%20=%20%5Csum_%7Bv%20%5Cin%20N_R(u)%7D%20%5Clog%20p(z_v%20%7C%20z_u)"></li>
-</ul></li>
-<li><p><strong>가정 2. Softmax 매개변수화 (Softmax Parameterization)</strong></p>
-<ul>
-<li>특정 노드 <img src="https://latex.codecogs.com/png.latex?u">가 주어졌을 때 <img src="https://latex.codecogs.com/png.latex?v">가 이웃으로 등장할 확률 <img src="https://latex.codecogs.com/png.latex?p(z_v%20%7C%20z_u)">를, 전체 노드 집합 <img src="https://latex.codecogs.com/png.latex?V">에 대한 다중 클래스 분류(Multi-class classification, <img src="https://latex.codecogs.com/png.latex?%7CV%7C">-way) 문제로 정의하고 Softmax 함수를 적용합니다. <img src="https://latex.codecogs.com/png.latex?p(z_v%20%7C%20z_u)%20=%20%5Cfrac%7B%5Cexp(z_u%5E%5Ctop%20z_v)%7D%7B%5Csum_%7Bn%20%5Cin%20V%7D%20%5Cexp(z_u%5E%5Ctop%20z_n)%7D"></li>
-<li>우리는 그래프 내의 수많은 노드 중 대상 노드 <img src="https://latex.codecogs.com/png.latex?v">가 <img src="https://latex.codecogs.com/png.latex?u">와 가장 높은 내적값(유사도)을 가지기를 원하므로, 분자에는 <img src="https://latex.codecogs.com/png.latex?u">와 <img src="https://latex.codecogs.com/png.latex?v">의 내적이, 분모에는 <img src="https://latex.codecogs.com/png.latex?u">와 전체 노드 <img src="https://latex.codecogs.com/png.latex?n"> 간의 내적 합이 들어갑니다.</li>
-</ul></li>
-</ul>
-</section>
-<section id="특징-공간에서의-대칭성-symmetry-in-feature-space" class="level2">
-<h2 class="anchored" data-anchor-id="특징-공간에서의-대칭성-symmetry-in-feature-space">2.2. 특징 공간에서의 대칭성 (Symmetry in Feature Space)</h2>
-<ul>
-<li><p>참고로 원본 Word2Vec 알고리즘은 중심 단어용 가중치 <img src="https://latex.codecogs.com/png.latex?W">와 주변 단어용 가중치 <img src="https://latex.codecogs.com/png.latex?W'"> 두 개의 행렬을 사용하여 <img src="https://latex.codecogs.com/png.latex?p_%7Bij%7D%20=%20%5Ctext%7Bsoftmax%7D(W'%20z_i)"> 형태로 계산합니다.</p></li>
-<li><p>하지만 DeepWalk에서는 매개변수의 중복을 줄이고 구조의 대칭성을 살리기 위해 <strong>단일 행렬 <img src="https://latex.codecogs.com/png.latex?W%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd%20%5Ctimes%20%7CV%7C%7D"></strong> 만을 사용합니다 (<img src="https://latex.codecogs.com/png.latex?W%5E%5Ctop%20=%20W_2">로 취급). 결과적으로 두 노드 벡터의 직접적인 내적인 <img src="https://latex.codecogs.com/png.latex?z_i%5E%5Ctop%20z_j"> 꼴을 활용하게 되며, 이는 임베딩 공간에서 <img src="https://latex.codecogs.com/png.latex?i">와 <img src="https://latex.codecogs.com/png.latex?j">의 기하학적 유사도를 직관적으로 표현하는 장점이 있습니다.</p></li>
-</ul>
-</section>
-</section>
-<section id="최종-목적-함수와-연산량의-한계" class="level1">
-<h1>3. 최종 목적 함수와 연산량의 한계</h1>
-<ul>
-<li>위의 수식들을 모두 결합하여 최소화해야 할 최종 손실 함수(Objective Function) <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D">을 도출하면 다음과 같습니다. (최대 우도 추정의 <img src="https://latex.codecogs.com/png.latex?%5Cmax">를 <img src="https://latex.codecogs.com/png.latex?-%5Clog">를 취해 <img src="https://latex.codecogs.com/png.latex?%5Cmin"> 문제로 바꾼 형태입니다.)</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D%20=%20%5Csum_%7Bu%20%5Cin%20V%7D%20%5Csum_%7Bv%20%5Cin%20N_R(u)%7D%20-%5Clog%20%5Cleft(%20%5Cfrac%7B%5Cexp(z_u%5E%5Ctop%20z_v)%7D%7B%5Csum_%7Bn%20%5Cin%20V%7D%20%5Cexp(z_u%5E%5Ctop%20z_n)%7D%20%5Cright)"></p>
-<ul>
-<li>수식의 각 부분은 다음을 의미합니다:
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bu%20%5Cin%20V%7D">: 네트워크 상의 모든 노드 <img src="https://latex.codecogs.com/png.latex?u">에 대하여 합산</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Csum_%7Bv%20%5Cin%20N_R(u)%7D">: <img src="https://latex.codecogs.com/png.latex?u">에서 출발한 무작위 보행에서 관측된 노드 <img src="https://latex.codecogs.com/png.latex?v">들에 대하여 합산</li>
-<li><img src="https://latex.codecogs.com/png.latex?-%5Clog(%5Cdots)">: 대상 노드 <img src="https://latex.codecogs.com/png.latex?u">에서 출발한 보행 중 <img src="https://latex.codecogs.com/png.latex?v">가 등장할 예측 확률에 대한 음의 로그 우도(Negative Log-Likelihood)</li>
-</ul></li>
-</ul>
-<section id="연산-비용의-문제-computational-cost" class="level2">
-<h2 class="anchored" data-anchor-id="연산-비용의-문제-computational-cost">3.1. 연산 비용의 문제 (Computational Cost)</h2>
-<ul>
-<li>이론적으로는 완벽해 보이지만, 이 목적 함수에는 치명적인 약점이 있습니다. 바로 Softmax 분모의 <strong>정규화 항(Normalization term)</strong> 계산에 <img src="https://latex.codecogs.com/png.latex?O(%7CV%7C)">의 비용이 든다는 것입니다.</li>
-<li>노드 쌍 하나를 계산할 때마다 그래프 내의 <em>모든</em> 노드와의 내적을 구해야 하므로, 전체 시간 복잡도가 <img src="https://latex.codecogs.com/png.latex?O(%7CV%7C%5E2)">가 되어 Facebook이나 Twitter 같이 수억 개의 노드를 가진 거대한 그래프에서는 계산이 불가능(Intractable)해집니다.</li>
-</ul>
-</section>
-</section>
-<section id="정규화-병목-현상에-대한-3가지-솔루션" class="level1">
-<h1>4. 정규화 병목 현상에 대한 3가지 솔루션</h1>
-<ul>
-<li>이러한 막대한 계산 비용을 해결하기 위해 어떤 방법들을 고려해볼 수 있을까요?</li>
-</ul>
-<section id="솔루션-1-정규화-항-제거-no-normalization" class="level2">
-<h2 class="anchored" data-anchor-id="솔루션-1-정규화-항-제거-no-normalization">4.1. 솔루션 1: 정규화 항 제거 (No Normalization)</h2>
-<ul>
-<li><p>단순히 연산량이 많은 분모 항을 통째로 날려버리면 어떨까요? <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D%20=%20%5Csum_%7Bu%20%5Cin%20V%7D%20%5Csum_%7Bv%20%5Cin%20N_R(u)%7D%20-%5Clog(%5Cexp(z_u%5E%5Ctop%20z_v))"></p></li>
-<li><p>얼핏 보면 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D">을 최소화하는 것이 곧 내적 <img src="https://latex.codecogs.com/png.latex?z_u%5E%5Ctop%20z_v">를 최대화하는 것이므로 목적에 부합해 보입니다.</p></li>
-<li><p>하지만 이 방식은 <strong>자명한 해(Trivial solution)</strong>라는 치명적인 문제를 낳습니다. 모델이 단순히 그래프 상의 모든 노드의 임베딩을 완벽히 똑같은 벡터로 만들어버리면, 내적 값이 무한히 커지면서 Loss가 최소화되기 때문입니다. 즉, 노드 간의 차이를 구분하는 학습이 아예 이루어지지 않습니다.</p></li>
-</ul>
-</section>
-<section id="솔루션-2-계층적-소프트맥스-hierarchical-softmax" class="level2">
-<h2 class="anchored" data-anchor-id="솔루션-2-계층적-소프트맥스-hierarchical-softmax">4.2. 솔루션 2: 계층적 소프트맥스 (Hierarchical Softmax)</h2>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?N">개의 클래스를 분류하는 다중 분류 문제를 <img src="https://latex.codecogs.com/png.latex?O(%5Clog%20N)"> 번의 이진 분류(Binary classification) 문제로 근사하는 기법입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.2/images/hierarchical_softmax.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: Hierarchical Softmax를 설명하는 이진 트리 도식. 최상위 루트 노드(Context C)에서 시작하여 특정 리프 노드(예: 단어 “I’m”)에 도달할 때까지의 경로를 따라가며 이진 분류 확률(좌/우로 갈 확률)을 연속적으로 곱해 나갑니다. 이를 통해 전체 노드를 다 탐색하지 않고도 해당 단어의 등장 확률 <img src="https://latex.codecogs.com/png.latex?p(w%7CC)">를 효율적으로 계산할 수 있음을 보여줍니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>계층적 소프트맥스의 적용 단계는 다음과 같습니다.
-<ul>
-<li><ol type="1">
-<li>그래프의 모든 노드가 리프(Leaf)가 되도록 이진 트리(Binary tree)를 구축합니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li>타겟 노드 <img src="https://latex.codecogs.com/png.latex?v">에 대해 루트(Root)에서 <img src="https://latex.codecogs.com/png.latex?v">까지 도달하는 경로 <img src="https://latex.codecogs.com/png.latex?S(v)">를 찾습니다.</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li>경로상의 노드 <img src="https://latex.codecogs.com/png.latex?n">들에 대해 좌/우 분기 확률을 계산하여 목적 함수를 최소화합니다. <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BL%7D%20=%20%5Csum_%7Bu%20%5Cin%20V%7D%20%5Csum_%7Bv%20%5Cin%20N_R(u)%7D%20%5Csum_%7Bn%20%5Cin%20S(v)%7D%20-%5Clog%20%5Cleft(%20%5Cfrac%7B%5Cexp(z_u%5E%5Ctop%20z_n)%7D%7B%5Cexp(z_u%5E%5Ctop%20z_n)%20+%20%5Cexp(z_u%5E%5Ctop%20z_%7Bn'%7D)%7D%20%5Cright)"></li>
-</ol>
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?n'">은 트리의 분기점에서 <img src="https://latex.codecogs.com/png.latex?n">의 반대쪽(Opposite side)에 위치한 노드를 의미합니다. 이 방식을 쓰면 계산량을 <img src="https://latex.codecogs.com/png.latex?O(%7CV%7C)">에서 <img src="https://latex.codecogs.com/png.latex?O(%5Clog%20%7CV%7C)">로 획기적으로 줄일 수 있습니다.</li>
-</ul></li>
-</ul></li>
-</ul>
-</section>
-<section id="솔루션-3-네거티브-샘플링-negative-sampling" class="level2">
-<h2 class="anchored" data-anchor-id="솔루션-3-네거티브-샘플링-negative-sampling">4.3. 솔루션 3: 네거티브 샘플링 (Negative Sampling)</h2>
-<ul>
-<li>Node2vec 등에서 가장 널리 쓰이는 실용적인 해결책입니다. Softmax의 정규화 목적은 결국 타겟이 아닌 노드(<img src="https://latex.codecogs.com/png.latex?n%20%5Cne%20v">)들과의 내적 <img src="https://latex.codecogs.com/png.latex?z_u%5E%5Ctop%20z_n"> 값을 낮추는(Push down) 것입니다. 그렇다면 모든 노드를 다 계산할 필요 없이, 소수의 <strong><img src="https://latex.codecogs.com/png.latex?k">개 노드만 무작위로 추출하여 가짜 데이터(Negative samples)로 사용</strong>하자는 아이디어입니다. <img src="https://latex.codecogs.com/png.latex?%5Clog%20%5Cfrac%7B%5Cexp(z_u%5E%5Ctop%20z_v)%7D%7B%5Csum_%7Bn%20%5Cin%20V%7D%20%5Cexp(z_u%5E%5Ctop%20z_n)%7D%20%5Capprox%20%5Clog(%5Csigma(z_u%5E%5Ctop%20z_v))%20-%20%5Csum_%7Bi=1%7D%5Ek%20%5Clog(%5Csigma(z_u%5E%5Ctop%20z_%7Bn_i%7D))">
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?n_i">: 전체 그래프 노드 중 무작위로 샘플링된 네거티브 노드.</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Csigma">: 시그모이드 함수. 내적 값이 발산하지 않도록 각 쌍의 기여도를 <img src="https://latex.codecogs.com/png.latex?%5B0,%201%5D">로 바운딩(Bound)해줍니다.</li>
-<li>위 식은 진짜 이웃과의 내적 유사도는 높이면서(첫 번째 항), 무작위로 뽑은 <img src="https://latex.codecogs.com/png.latex?k">개의 가짜 노드와의 내적은 낮추는(두 번째 뺄셈 항) 형태로 근사합니다.</li>
-</ul></li>
-<li><strong>샘플링 전략 및 K의 선택</strong>
-<ul>
-<li>보통 네거티브 노드는 각 노드의 연결수(Degree)에 비례하여 샘플링합니다. 왜냐하면 연결수가 많은 노드(허브 노드)일수록 무작위 보행 중에 우연히 등장할 확률이 높기 때문에, 이들을 집중적으로 네거티브 샘플링하여 페널티를 주는 것이 학습에 더 효과적이기 때문입니다.</li>
-<li>일반적으로 샘플 개수 <img src="https://latex.codecogs.com/png.latex?k">는 5에서 20 사이의 값을 사용합니다. <img src="https://latex.codecogs.com/png.latex?k">가 커질수록 추정이 정교해지지만 연산 비용도 함께 증가하는 트레이드오프(Trade-off)가 존재합니다.</li>
-</ul></li>
-</ul>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Data Mining</category>
-  <guid>https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.2/</guid>
-  <pubDate>Mon, 11 May 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Data Mining] 18. ML On Graphs (Part 3)</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.3/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-왜-편향된-탐색이-필요한가-motivation" class="level1">
-<h1>1. Introduction: 왜 편향된 탐색이 필요한가? (Motivation)</h1>
-<ul>
-<li><p>DeepWalk가 가정한 “무작위 보행에서 자주 함께 등장하는 노드는 유사하다”는 논리는 주로 위상학적으로 가까이 뭉쳐 있는 군집(Community)을 찾는 데 탁월합니다. 하지만 실제 네트워크에서는 <strong>거리가 멀리 떨어져 있더라도 그래프 내에서 매우 유사한 ’역할’을 수행하는 노드</strong>들이 존재합니다.</p></li>
-<li><p>가장 대표적인 예가 항공망(Airport Network)입니다. 대한민국의 인천국제공항과 미국의 JFK 공항은 지리적, 위상학적 거리는 멀 수 있지만 ’국제 허브 공항’이라는 동일한 <strong>구조적 역할(Structural Role)</strong>을 가집니다. 반면, 허브 공항 주변의 수많은 지역 소규모 공항들은 서로 다른 군집에 속해 있더라도 주변을 연결하는 ’스포크(Spoke)’라는 유사한 역할을 갖습니다.</p></li>
-<li><p>DeepWalk와 같은 단순 무작위 보행(Simple random walks)은 주로 전자(군집)의 경우만 잘 포착할 뿐, 후자(역할)를 학습하는 데는 취약합니다. 이러한 한계를 극복하기 위해 제안된 것이 바로 탐색의 방향을 의도적으로 조절하는 <strong>Node2vec</strong>입니다.</p></li>
-</ul>
-</section>
-<section id="유연한-그래프-탐색-bfs-vs-dfs" class="level1">
-<h1>2. 유연한 그래프 탐색: BFS vs DFS</h1>
-<ul>
-<li>Node2vec의 핵심 아이디어는 그래프 탐색의 두 가지 극단적인 전략인 <strong>너비 우선 탐색(BFS, Breadth-First Search)</strong>과 <strong>깊이 우선 탐색(DFS, Depth-First Search)</strong>을 무작위 보행에 통합하여, 이 둘 사이를 유연하게 조절(Interpolate)하는 것입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.3/images/bfs_dfs_routing.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 네트워크 상에서 시작 노드 <img src="https://latex.codecogs.com/png.latex?u">를 기준으로 한 너비 우선 탐색(BFS)과 깊이 우선 탐색(DFS) 전략의 차이 도식. 붉은색 화살표는 <img src="https://latex.codecogs.com/png.latex?u">의 직속 이웃인 <img src="https://latex.codecogs.com/png.latex?s_1,%20s_2,%20s_3"> 등 가까운 노드들을 먼저 순회하는 BFS를 나타내며, 푸른색 화살표는 <img src="https://latex.codecogs.com/png.latex?u%20%5Crightarrow%20s_4%20%5Crightarrow%20s_5%20%5Crightarrow%20s_6"> 방향으로 출발지에서 점차 멀어지며 깊게 파고드는 DFS를 직관적으로 보여줍니다.</figcaption>
-</figure>
-</div>
-<section id="깊이-우선-탐색-dfs-depth-first-search" class="level2">
-<h2 class="anchored" data-anchor-id="깊이-우선-탐색-dfs-depth-first-search">2.1. 깊이 우선 탐색 (DFS: Depth-First Search)</h2>
-<ul>
-<li>DFS 성향을 띠는 보행은 위 도식의 푸른색 화살표처럼 출발 노드 <img src="https://latex.codecogs.com/png.latex?u">로부터 점점 더 멀어지는 바깥 방향(Outgoing direction)으로 트리를 따라가듯 이동합니다.
-<ul>
-<li>무작위 보행 시 <img src="https://latex.codecogs.com/png.latex?N_%7BDFS%7D(u)%20=%20%5Bs_4,%20s_5,%20s_6%5D">와 같이 거리가 먼 노드들이 이웃으로 샘플링될 확률이 높습니다.</li>
-<li>이는 네트워크의 거시적인 뷰(Macroscopic view)를 제공하며, 거리가 어느 정도 있는 노드들까지 하나의 문맥(Context)으로 묶어 <strong>동종 선호(Homophily, 유사한 속성을 가진 노드들이 군집을 이루는 성질)</strong>를 포착하는 데 유리합니다. DeepWalk의 특성과 매우 유사합니다.</li>
-</ul></li>
-</ul>
-</section>
-<section id="너비-우선-탐색-bfs-breadth-first-search" class="level2">
-<h2 class="anchored" data-anchor-id="너비-우선-탐색-bfs-breadth-first-search">2.2. 너비 우선 탐색 (BFS: Breadth-First Search)</h2>
-<ul>
-<li>BFS 성향을 띠는 보행은 붉은색 화살표처럼 출발 노드 <img src="https://latex.codecogs.com/png.latex?u">의 바로 주변, 즉 가까운 이웃들만을 맴돌며 탐색합니다.
-<ul>
-<li>무작위 보행 시 <img src="https://latex.codecogs.com/png.latex?N_%7BBFS%7D(u)%20=%20%5Bs_1,%20s_2,%20s_3%5D">와 같이 근거리 노드들이 이웃으로 집중적으로 샘플링됩니다.</li>
-<li>좁은 지역의 연결망 구조(Microscopic view)를 세밀하게 파악하기 때문에, 주변 이웃의 연결 형태가 비슷한 허브(Hub)인지 주변부(Peripheral)인지 등의 <strong>구조적 동치성(Structural equivalence)</strong>을 파악하는 데 특화되어 있습니다.</li>
-</ul></li>
-</ul>
-</section>
-</section>
-<section id="편향된-무작위-보행-설계-biased-random-walks" class="level1">
-<h1>3. 편향된 무작위 보행 설계 (Biased Random Walks)</h1>
-<ul>
-<li><p>그렇다면 BFS와 DFS의 비율을 어떻게 수학적으로 제어할 수 있을까요? Node2vec은 보행자(Walker)가 직전에 머물렀던 노드 정보를 활용하는 2차 마르코프 체인(2nd-order * Markov chain) 방식을 채택합니다.</p></li>
-<li><p>보행자가 방금 전 노드 <img src="https://latex.codecogs.com/png.latex?s_1">에서 현재의 타겟 노드 <img src="https://latex.codecogs.com/png.latex?w">로 이동해 왔다고 가정해 봅시다. 이제 <img src="https://latex.codecogs.com/png.latex?w">에서 다음으로 이동할 노드 <img src="https://latex.codecogs.com/png.latex?t%20%5Cin%20%5C%7Bs_1,%20s_2,%20s_3%5C%7D">를 결정해야 합니다. Node2vec은 직전 노드 <img src="https://latex.codecogs.com/png.latex?s_1">과 다음 후보 노드 <img src="https://latex.codecogs.com/png.latex?t"> 사이의 최단 거리 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BDist%7D(s_1,%20t)">를 기준으로 탐색의 편향성을 부여합니다.</p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.3/images/biased_random_walk_distances.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 편향된 무작위 보행(Biased Random Walk)을 위한 직전 노드 기준의 거리 개념도. 보행자가 이전 노드 <img src="https://latex.codecogs.com/png.latex?s_1">에서 출발하여 현재 노드 <img src="https://latex.codecogs.com/png.latex?w">에 도착했을 때, 다음으로 이동할 후보 노드들의 상태를 거리에 따라 분류합니다. 1) <img src="https://latex.codecogs.com/png.latex?s_1">으로 되돌아가는 경우(Back to <img src="https://latex.codecogs.com/png.latex?s_1">, 푸른/노란색 화살표, Dist=0), 2) <img src="https://latex.codecogs.com/png.latex?w">의 이웃이면서 <img src="https://latex.codecogs.com/png.latex?s_1">과 동일한 거리에 있는 <img src="https://latex.codecogs.com/png.latex?s_2">로 가는 경우(Same distance to <img src="https://latex.codecogs.com/png.latex?s_1">, 붉은색 화살표, Dist=1), 3) <img src="https://latex.codecogs.com/png.latex?s_1">에서 더 멀어지는 <img src="https://latex.codecogs.com/png.latex?s_3">로 가는 경우(Farther from <img src="https://latex.codecogs.com/png.latex?s_1">, 갈색 화살표, Dist=2)를 명확히 구분하여 보여줍니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>이를 조절하기 위해 두 가지 하이퍼파라미터 <img src="https://latex.codecogs.com/png.latex?p">와 <img src="https://latex.codecogs.com/png.latex?q">를 도입합니다.</li>
-</ul>
-<section id="하이퍼파라미터-p와-q의-역할" class="level2">
-<h2 class="anchored" data-anchor-id="하이퍼파라미터-p와-q의-역할">3.1. 하이퍼파라미터 <img src="https://latex.codecogs.com/png.latex?p">와 <img src="https://latex.codecogs.com/png.latex?q">의 역할</h2>
-<ul>
-<li><ol type="1">
-<li><strong>Return parameter <img src="https://latex.codecogs.com/png.latex?p"> (회귀 파라미터)</strong></li>
-</ol>
-<ul>
-<li>보행자가 직전 노드 <img src="https://latex.codecogs.com/png.latex?s_1">으로 다시 되돌아갈 확률을 제어합니다. (가중치: <img src="https://latex.codecogs.com/png.latex?1/p">)</li>
-<li><img src="https://latex.codecogs.com/png.latex?p">값이 작을수록 직전 노드로 돌아갈 확률이 커지므로 보행자가 매우 좁은 지역에 갇히게 됩니다. 반대로 <img src="https://latex.codecogs.com/png.latex?p">가 크면 이미 방문한 노드로 돌아가는 것을 억제합니다.</li>
-</ul></li>
-<li><ol start="2" type="1">
-<li><strong>In-out parameter <img src="https://latex.codecogs.com/png.latex?q"> (안팎 파라미터)</strong></li>
-</ol>
-<ul>
-<li>보행자가 출발지 <img src="https://latex.codecogs.com/png.latex?s_1">을 기준으로 <strong>멀어질지(Outward)</strong> 아니면 <strong>유지할지(Inward)</strong>를 결정합니다. 직관적으로 <img src="https://latex.codecogs.com/png.latex?q">는 “BFS 대비 DFS의 비율”을 의미합니다.</li>
-<li><strong>DFS 촉진 (<img src="https://latex.codecogs.com/png.latex?q%20%3C%201">)</strong>: <img src="https://latex.codecogs.com/png.latex?s_1">에서 거리가 멀어지는 노드(<img src="https://latex.codecogs.com/png.latex?s_3,%20s_4">)로 이동할 가중치(<img src="https://latex.codecogs.com/png.latex?1/q">)가 1보다 커지므로 밖으로 뻗어나가는 성향을 가집니다.</li>
-<li><strong>BFS 촉진 (<img src="https://latex.codecogs.com/png.latex?q%20%3E%201">)</strong>: 거리가 멀어지는 노드로 갈 가중치(<img src="https://latex.codecogs.com/png.latex?1/q">)가 작아지므로, 현재 거리(Dist=1)를 유지할 가중치(<img src="https://latex.codecogs.com/png.latex?1">)가 상대적으로 커져 주변을 맴도는 성향을 가집니다.</li>
-</ul></li>
-</ul>
-</section>
-<section id="수학적-전이-확률-transition-probabilities" class="level2">
-<h2 class="anchored" data-anchor-id="수학적-전이-확률-transition-probabilities">3.2. 수학적 전이 확률 (Transition Probabilities)</h2>
-<ul>
-<li>위 내용을 종합하여, 현재 노드 <img src="https://latex.codecogs.com/png.latex?w">에서 다음 타겟 <img src="https://latex.codecogs.com/png.latex?t">로 갈 가중치를 정규화되지 않은 전이 확률 행렬로 나타내면 다음과 같습니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.3/images/node2vec_probabilities.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: Node2vec의 전이 확률(Transition Probabilities) 가중치 할당 도식. 이전 그림의 거리 개념에 하이퍼파라미터 <img src="https://latex.codecogs.com/png.latex?p">와 <img src="https://latex.codecogs.com/png.latex?q">를 적용한 결과를 나타냅니다. 직전 노드 <img src="https://latex.codecogs.com/png.latex?s_1">으로 되돌아가는 경로(Dist=0)에는 <img src="https://latex.codecogs.com/png.latex?1/p">, 동일한 거리의 <img src="https://latex.codecogs.com/png.latex?s_2">(Dist=1)에는 1, 더 멀어지는 <img src="https://latex.codecogs.com/png.latex?s_3,%20s_4">(Dist=2)에는 <img src="https://latex.codecogs.com/png.latex?1/q">의 가중치가 부여됩니다. 우측의 표는 타겟 노드 <img src="https://latex.codecogs.com/png.latex?t">에 대한 거리(Dist)와 최종 전이 확률 가중치(Prob.)의 매핑 관계를 요약하여 보여줍니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>수식표로 정리하면 거리 <img src="https://latex.codecogs.com/png.latex?%5Ctext%7BDist%7D(s_1,%20t)">에 따라 가중치가 결정됨을 명확히 알 수 있습니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cbegin%7Barray%7D%7Bl%7Cc%7Cc%7D%20%5Ctext%7BTarget%20%7D%20t%20&amp;%20%5Ctext%7BDist%7D(s_1,%20t)%20&amp;%20%5Ctext%7BProb.%20Weight%7D%20%5C%5C%20%5Chline%20s_1%20&amp;%200%20&amp;%201/p%20%5C%5C%20s_2%20&amp;%201%20&amp;%201%20%5C%5C%20s_3,%20s_4%20&amp;%202%20&amp;%201/q%20%5Cend%7Barray%7D"></p>
-<ul>
-<li><strong>극단적 파라미터 셋업 예시:</strong>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?p%20%5Cgg%201,%20q%20%5Cgg%201">: 바깥으로도 안 가고 직전으로도 안 가므로, 주변의 <img src="https://latex.codecogs.com/png.latex?s_2">와 같이 동일 거리에 있는 이웃들만 맴도는 국소적 탐색(Circling triangles, 완벽한 BFS 성향)을 합니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?p%20%5Cgg%201,%20q%20%5Cll%201">: 뒤로 돌아가지 않으면서 계속해서 거리를 벌리기 때문에 밖으로 깊게 파고드는 DFS 성향을 강하게 띱니다.</li>
-<li><img src="https://latex.codecogs.com/png.latex?p%20%5Cll%201,%20q%20%5Cll%201">: 밖으로도 나가려 하지만 직전 노드로도 강하게 돌아가려 하므로, 나뭇가지(Tree)를 앞뒤로 왔다갔다 하는 형태의 탐색을 보입니다.</li>
-</ul></li>
-</ul>
-</section>
-</section>
-<section id="node2vec-알고리즘-통합" class="level1">
-<h1>4. Node2vec 알고리즘 통합</h1>
-<ul>
-<li>탐색을 통해 얻은 편향된 이웃들의 시퀀스 <img src="https://latex.codecogs.com/png.latex?N">을 바탕으로, 임베딩 행렬 <img src="https://latex.codecogs.com/png.latex?Z">를 학습하는 최종 Node2vec 알고리즘 과정은 다음과 같이 요약됩니다.
-<ul>
-<li><ol type="1">
-<li><img src="https://latex.codecogs.com/png.latex?Z%20%5Cleftarrow"> 노드 임베딩 파라미터 행렬 초기화</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>For each node <img src="https://latex.codecogs.com/png.latex?r%20%5Cin%20V">:</strong> (Root node, 기준 노드)</li>
-</ol></li>
-<li><ol start="3" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?%5Cquad%20N%20%5Cleftarrow"> 앞서 정의한 <img src="https://latex.codecogs.com/png.latex?p,%20q"> 기반의 Biased Random Walk를 통해 <img src="https://latex.codecogs.com/png.latex?r">의 이웃 시퀀스 샘플링</li>
-</ol></li>
-<li><ol start="4" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?%5Cquad"> <strong>For each node <img src="https://latex.codecogs.com/png.latex?u"> in <img src="https://latex.codecogs.com/png.latex?N">:</strong> (Target node, 문맥의 중심 노드)</li>
-</ol></li>
-<li><ol start="5" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?%5Cquad%20%5Cquad"> <strong>For each node <img src="https://latex.codecogs.com/png.latex?v"> around <img src="https://latex.codecogs.com/png.latex?u"> in <img src="https://latex.codecogs.com/png.latex?N">:</strong> (Source node, 문맥 주변 윈도우 내 노드)</li>
-</ol></li>
-<li><ol start="6" type="1">
-<li><img src="https://latex.codecogs.com/png.latex?%5Cquad%20%5Cquad%20%5Cquad%20Z%20%5Cleftarrow%20Z%20-%20%5Ceta%20%5Ccdot%20%5Cnabla_Z%20L(u,%20v)"> (두 노드 간의 손실 함수 <img src="https://latex.codecogs.com/png.latex?L">을 통해 기울기 하강법으로 파라미터 업데이트)</li>
-</ol></li>
-</ul></li>
-<li>요약하자면, Node2vec은 DeepWalk의 최적화 파이프라인(Skip-gram, Negative Sampling)을 그대로 계승하면서도, 데이터를 생성하는 무작위 보행 단계에 파라미터 <img src="https://latex.codecogs.com/png.latex?p,%20q">를 도입하여 그래프 탐색의 유연성을 극대화한 알고리즘입니다.</li>
-</ul>
-
-
-
-</section>
-
- ]]></description>
-  <category>Data Mining</category>
-  <guid>https://shsha0110.github.io/posts/Data Mining/18.ML-On-Graphs-1/18.3/</guid>
-  <pubDate>Mon, 11 May 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Deep Learning] 19. Deep Generative Models 3</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Deep Learning/19.Deep-Generative-Models-3/19.1/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="introduction-생성-모델의-분류-taxonomy-of-generative-models" class="level1">
-<h1>1. Introduction: 생성 모델의 분류 (Taxonomy of Generative Models)</h1>
-<ul>
-<li><p>이전 강의에서 우리는 변분 오토인코더(Variational Autoencoders, VAE)에 대해 다루었습니다. 이미지 데이터 <img src="https://latex.codecogs.com/png.latex?x">에 대한 우도(Likelihood) 인 <img src="https://latex.codecogs.com/png.latex?%5Clog%20p_%7B%5Ctheta%7D(x)">를 직접 최적화하는 것은 계산적으로 매우 어렵기 때문에(Intractable), VAE는 대신 증거 하한(Evidence Lower Bound, ELBO)을 유도하여 이를 최대화하는 간접적인 방식을 취했습니다.</p></li>
-<li><p>딥러닝 기반 생성 모델은 확률 밀도(Density)를 어떻게 다루느냐에 따라 크게 세 가지로 분류할 수 있습니다. 본 포스트에서는 VAE와 대비되는 <strong>자기회귀 모델(Autoregressive Models)</strong>과 그 구체적 구현체인 PixelRNN/PixelCNN을 중점적으로 살펴봅니다.</p></li>
-</ul>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-</colgroup>
-<thead>
-<tr class="header">
-<th style="text-align: left;">모델 유형</th>
-<th style="text-align: left;">밀도(Density) 평가</th>
-<th style="text-align: left;">훈련 목적 함수 (Training Objective)</th>
-<th style="text-align: left;">샘플링 방식 (Sampling)</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;"><strong>VAE</strong></td>
-<td style="text-align: left;"><img src="https://latex.codecogs.com/png.latex?p_%7B%5Ctheta%7D(x)=%5Cint%20p(z)p_%7B%5Ctheta%7D(x%7Cz)dz"> (직접 계산 불가)</td>
-<td style="text-align: left;">ELBO 최대화 (Maximize ELBO)</td>
-<td style="text-align: left;">빠름: 잠재 변수 <img src="https://latex.codecogs.com/png.latex?z%20%5Csim%20p(z)"> 샘플링 후 디코딩</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"><strong>Autoregressive</strong></td>
-<td style="text-align: left;"><img src="https://latex.codecogs.com/png.latex?p_%7B%5Ctheta%7D(x)=%5Cprod_%7Bi%7Dp_%7B%5Ctheta%7D(x_%7Bi%7D%7Cx_%7B%3Ci%7D)"> (명시적 계산 가능)</td>
-<td style="text-align: left;">정확한 로그 우도 최대화 (Maximize exact log-likelihood)</td>
-<td style="text-align: left;">느림: 한 번에 하나의 픽셀/토큰씩 순차적 샘플링</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;"><strong>GAN</strong></td>
-<td style="text-align: left;"><img src="https://latex.codecogs.com/png.latex?p_%7B%5Ctheta%7D(x)"> 를 명시적으로 평가하지 않음 (Implicit)</td>
-<td style="text-align: left;">적대적 두 플레이어 게임 (Adversarial two-player game)</td>
-<td style="text-align: left;">빠름: <img src="https://latex.codecogs.com/png.latex?x=G_%7B%5Ctheta%7D(z)"></td>
-</tr>
-</tbody>
-</table>
-<ul>
-<li>위 표에서 볼 수 있듯, 자기회귀 모델의 가장 큰 특징은 VAE나 GAN과 달리 <strong>정확한 우도(Exact Likelihood)를 제공</strong>한다는 점입니다.</li>
-</ul>
-<hr>
-</section>
-<section id="자기회귀-모델의-수학적-공식화-mathematical-formulation" class="level1">
-<h1>2. 자기회귀 모델의 수학적 공식화 (Mathematical Formulation)</h1>
-<section id="연쇄-법칙chain-rule을-통한-인수분해" class="level2">
-<h2 class="anchored" data-anchor-id="연쇄-법칙chain-rule을-통한-인수분해">2.1. 연쇄 법칙(Chain Rule)을 통한 인수분해</h2>
-<ul>
-<li>자기회귀 모델은 복잡한 결합 확률 분포를 조건부 확률의 곱으로 분해합니다. 어떤 순서를 가진 확률 변수들의 집합 <img src="https://latex.codecogs.com/png.latex?x%20=%20(x_1,%20x_2,%20%5Cdots,%20x_T)">가 주어졌을 때, 확률의 연쇄 법칙에 의해 결합 확률 <img src="https://latex.codecogs.com/png.latex?p(x)">는 다음과 같이 전개됩니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?p(x)%20=%20p(x_1)p(x_2%7Cx_1)p(x_3%7Cx_1,x_2)%20%5Cdots%20p(x_T%7Cx_%7B%3CT%7D)"></p>
-<ul>
-<li>이를 수식으로 간결하게 표현하면 다음과 같습니다:</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?p(x)%20=%20%5Cprod_%7Bt=1%7D%5E%7BT%7D%20p(x_t%20%7C%20x_%7B%3Ct%7D)"></p>
-<ul>
-<li><strong>자기회귀 모델링(Autoregressive Modeling)</strong>은 이 수식에 기반하여, 변수들의 순서를 정한 뒤 신경망을 훈련시켜 이전 변수들(<img src="https://latex.codecogs.com/png.latex?x_%7B%3Ct%7D">)이 주어졌을 때 다음 변수(<img src="https://latex.codecogs.com/png.latex?x_t">)의 확률 분포를 예측하도록 만드는 기법입니다.</li>
-</ul>
-</section>
-<section id="이미지-데이터로의-확장-래스터-스캔-순서-raster-scan-ordering" class="level2">
-<h2 class="anchored" data-anchor-id="이미지-데이터로의-확장-래스터-스캔-순서-raster-scan-ordering">2.2. 이미지 데이터로의 확장: 래스터 스캔 순서 (Raster-scan Ordering)</h2>
-<ul>
-<li><p>이미지 데이터에 자기회귀 모델을 적용하기 위해서는 2차원 그리드 형태의 픽셀들을 1차원 시퀀스로 평탄화(Flatten)해야 합니다. 이를 위해 보통 <strong>래스터 스캔 순서(Raster-scan order)</strong>를 사용합니다.</p></li>
-<li><p>픽셀들은 위에서 아래로, 좌에서 우로 (마치 글을 읽듯) 행 단위로 정렬됩니다.</p></li>
-<li><p>따라서 <img src="https://latex.codecogs.com/png.latex?t"> 번째 픽셀을 생성할 때, 조건이 되는 ’이전 픽셀들’은 이미지 상에서 <img src="https://latex.codecogs.com/png.latex?t"> 번째 픽셀의 위쪽(Above) 또는 왼쪽(Left)에 위치한 픽셀들이 됩니다.</p></li>
-<li><p>이미지의 크기가 <img src="https://latex.codecogs.com/png.latex?H%20%5Ctimes%20W%20%5Ctimes%20C"> (높이, 너비, 채널 수)일 때, 총 변수의 개수 <img src="https://latex.codecogs.com/png.latex?T">는 <img src="https://latex.codecogs.com/png.latex?T%20=%20H%20%5Ctimes%20W%20%5Ctimes%20C">가 됩니다. 이때 로그 우도는 다음과 같이 전개됩니다:</p></li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Clog%20p_%7B%5Ctheta%7D(x)%20=%20%5Csum_%7Bt=1%7D%5E%7BT%7D%20%5Clog%20p_%7B%5Ctheta%7D(x_t%20%7C%20x_%7B%3Ct%7D)"></p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/19.Deep-Generative-Models-3/19.1/images/raster_scan.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: Raster-scan ordering. 파란색 영역은 현재 픽셀(<img src="https://latex.codecogs.com/png.latex?x_t">, 붉은색)을 예측하기 위해 조건부로 주어지는 이전 컨텍스트(Previous context) 픽셀들을 나타낸다. 하얀색 영역은 아직 생성되지 않은 미래의 픽셀들이다. 모든 생성은 좌상단 <img src="https://latex.codecogs.com/png.latex?x_1">에서 시작하여 우하단 <img src="https://latex.codecogs.com/png.latex?x_T">에서 종료된다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="rgb-채널-순서링-rgb-channel-ordering" class="level2">
-<h2 class="anchored" data-anchor-id="rgb-채널-순서링-rgb-channel-ordering">2.3. RGB 채널 순서링 (RGB Channel Ordering)</h2>
-<ul>
-<li>컬러 이미지의 경우 각 픽셀 <img src="https://latex.codecogs.com/png.latex?i">는 3개의 색상 채널 <img src="https://latex.codecogs.com/png.latex?(x_%7Bi,R%7D,%20x_%7Bi,G%7D,%20x_%7Bi,B%7D)">를 가집니다. 이 채널 간에도 의존성을 부여하기 위해 추가적인 인수분해를 수행합니다. 일반적으로 R <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> G <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> B 순서로 조건을 부여합니다:</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?p(x_i%20%7C%20x_%7B%3Ci%7D)%20=%20p(x_%7Bi,R%7D%20%7C%20x_%7B%3Ci%7D)%20%5Ccdot%20p(x_%7Bi,G%7D%20%7C%20x_%7B%3Ci%7D,%20x_%7Bi,R%7D)%20%5Ccdot%20p(x_%7Bi,B%7D%20%7C%20x_%7B%3Ci%7D,%20x_%7Bi,R%7D,%20x_%7Bi,G%7D)"></p>
-<ul>
-<li>어떤 순서(예: B <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> G <img src="https://latex.codecogs.com/png.latex?%5Crightarrow"> R)를 사용하든 수학적으로 무방하지만, 모델을 구성할 때 반드시 하나의 순서를 고정해야 합니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="훈련-및-샘플링-training-and-sampling" class="level1">
-<h1>3. 훈련 및 샘플링 (Training and Sampling)</h1>
-<section id="정확한-로그-우도-최대화를-통한-훈련" class="level2">
-<h2 class="anchored" data-anchor-id="정확한-로그-우도-최대화를-통한-훈련">3.1. 정확한 로그 우도 최대화를 통한 훈련</h2>
-<ul>
-<li>자기회귀 모델은 VAE의 하한(ELBO) 근사와 달리, <strong>정확한 로그 우도(Exact log-likelihood)를 직접 최대화</strong>하는 방식으로 훈련됩니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cmax_%7B%5Ctheta%7D%20%5Cmathbb%7BE%7D_%7Bx%20%5Csim%20%5Cmathcal%7BD%7D_%7Btrain%7D%7D%20%5Cleft%5B%20%5Csum_%7Bt=1%7D%5E%7BT%7D%20%5Clog%20p_%7B%5Ctheta%7D(x_t%20%7C%20x_%7B%3Ct%7D)%20%5Cright%5D"></p>
-<ul>
-<li>이것은 지도 학습(Supervised-learning)의 관점으로 해석할 수 있습니다. 이전 픽셀들 <img src="https://latex.codecogs.com/png.latex?x_%7B%3Ct%7D"> 가 입력(Feature)으로 주어졌을 때, 다음 픽셀 <img src="https://latex.codecogs.com/png.latex?x_t"> (Target)를 예측하는 분류 문제와 같습니다. 픽셀 값이 이산적(Discrete, 예: 0~255)이므로, 각 조건부 확률 분포는 픽셀 값에 대한 범주형 분포(Categorical distribution)로 모델링할 수 있습니다.</li>
-</ul>
-</section>
-<section id="순차적-샘플링과-trade-off" class="level2">
-<h2 class="anchored" data-anchor-id="순차적-샘플링과-trade-off">3.2. 순차적 샘플링과 Trade-off</h2>
-<ul>
-<li>훈련 시에는 정답 이미지 <img src="https://latex.codecogs.com/png.latex?x">가 모두 주어져 있으므로 연산을 병렬화할 수 있는 여지가 있지만, <strong>새로운 이미지를 생성(Sampling)할 때는 반드시 순차적(Sequential)이어야 합니다</strong>.</li>
-</ul>
-<ol type="1">
-<li><img src="https://latex.codecogs.com/png.latex?x_1%20%5Csim%20p_%7B%5Ctheta%7D(x_1)"></li>
-<li><img src="https://latex.codecogs.com/png.latex?x_2%20%5Csim%20p_%7B%5Ctheta%7D(x_2%20%7C%20x_1)"></li>
-<li><img src="https://latex.codecogs.com/png.latex?x_3%20%5Csim%20p_%7B%5Ctheta%7D(x_3%20%7C%20x_1,%20x_2)"></li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cdots"></li>
-<li><img src="https://latex.codecogs.com/png.latex?x_T%20%5Csim%20p_%7B%5Ctheta%7D(x_T%20%7C%20x_%7B%3CT%7D)"></li>
-</ol>
-<ul>
-<li>여기서 자기회귀 모델의 핵심적인 딜레마(Tradeoff)가 발생합니다. 모델은 <strong>정확한 우도를 계산할 수 있고 훈련이 안정적</strong>이라는 큰 장점이 있지만, <strong>생성 과정은 픽셀을 한 번에 하나씩 샘플링해야 하므로 매우 느리다</strong>는 단점이 있습니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="pixelrnn과-pixelcnn" class="level1">
-<h1>4. PixelRNN과 PixelCNN</h1>
-<ul>
-<li>이미지의 이전 컨텍스트 <img src="https://latex.codecogs.com/png.latex?x_%7B%3Ct%7D">를 모델링하기 위해 어떤 신경망 아키텍처를 사용할 것인지에 따라 두 가지 주요 모델로 나뉩니다.</li>
-</ul>
-<section id="pixelrnn" class="level2">
-<h2 class="anchored" data-anchor-id="pixelrnn">4.1. PixelRNN</h2>
-<ul>
-<li><strong>구조:</strong> 픽셀 공간 전체에 걸쳐 순환 신경망(RNN, Recurrent Neural Networks) 연결을 사용합니다.</li>
-<li><strong>장점:</strong> RNN의 메모리 특성 덕분에 이미지 내의 매우 긴 의존성(Long-range dependencies)을 효과적으로 포착할 수 있습니다.</li>
-<li><strong>단점:</strong> 연산이 순차적이므로 훈련 시 병렬 처리가 어렵고 계산 비용이 매우 높습니다.</li>
-</ul>
-</section>
-<section id="pixelcnn과-마스크-합성곱-masked-convolution" class="level2">
-<h2 class="anchored" data-anchor-id="pixelcnn과-마스크-합성곱-masked-convolution">4.2. PixelCNN과 마스크 합성곱 (Masked Convolution)</h2>
-<ul>
-<li><p>PixelRNN의 훈련 속도 문제를 극복하기 위해 제안된 것이 <strong>PixelCNN</strong>입니다. CNN(Convolutional Neural Networks)을 사용하면 훈련 시 모든 픽셀에 대한 특성(Features)을 한 번에 병렬로 계산할 수 있습니다. 하지만, 일반적인 CNN 필터는 ‘미래의 픽셀’ 정보까지 참조할 수 있기 때문에, 자기회귀 조건(미래 정보를 보면 안 됨)을 위반하게 됩니다.</p></li>
-<li><p>이를 방지하기 위해 PixelCNN은 <strong>마스크 합성곱(Masked Convolution)</strong>을 도입합니다.</p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/19.Deep-Generative-Models-3/19.1/images/masked_conv.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: Masked Convolution in PixelCNN. 중앙의 붉은 픽셀 <img src="https://latex.codecogs.com/png.latex?x_t">를 예측하기 위해 적용되는 합성곱 필터의 형태. 필터 내에서 미래의 픽셀에 해당하는 가중치는 0으로 마스킹(Masked out)되어, 예측 네트워크가 <img src="https://latex.codecogs.com/png.latex?x_t">나 미래 픽셀을 “보지 못하도록(Cannot see)” 차단한다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>합성곱 계층에서 <img src="https://latex.codecogs.com/png.latex?p_%7B%5Ctheta%7D(x_t%20%7C%20x_%7B%3Ct%7D)">는 미래의 픽셀 <img src="https://latex.codecogs.com/png.latex?x_t,%20x_%7Bt+1%7D,%20%5Cdots">에 의존해서는 안 됩니다. 이를 구현하기 위해 합성곱 필터 가중치 행렬에 마스크를 곱하여 미래 픽셀 방향의 가중치를 0으로 만듭니다.</li>
-</ul>
-<section id="mask-a-vs-mask-b" class="level3">
-<h3 class="anchored" data-anchor-id="mask-a-vs-mask-b">Mask A vs Mask B</h3>
-<ul>
-<li><p>안정적인 정보 흐름을 제어하기 위해 PixelCNN은 두 종류의 마스크를 혼용합니다.</p></li>
-<li><p><strong>1. Mask A (첫 번째 레이어 적용)</strong></p>
-<ul>
-<li>네트워크의 첫 번째 레이어에서는 필터 정중앙(현재 픽셀 위치)의 값도 0으로 마스킹해야 합니다. 현재 입력이 자기 자신의 값을 그대로 다음 레이어로 전달해 버리면(Cheating), 올바른 조건부 확률 학습이 이루어지지 않기 때문입니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7BMask%20A%7D%20=%0A%5Cbegin%7Bbmatrix%7D%0A1%20&amp;%201%20&amp;%201%20&amp;%201%20&amp;%201%20%5C%5C%0A1%20&amp;%201%20&amp;%201%20&amp;%201%20&amp;%201%20%5C%5C%0A1%20&amp;%201%20&amp;%200%20&amp;%200%20&amp;%200%20%5C%5C%0A0%20&amp;%200%20&amp;%200%20&amp;%200%20&amp;%200%20%5C%5C%0A0%20&amp;%200%20&amp;%200%20&amp;%200%20&amp;%200%0A%5Cend%7Bbmatrix%7D%0A"></li>
-</ul></li>
-<li><p><strong>2. Mask B (이후 레이어 적용)</strong></p>
-<ul>
-<li>두 번째 레이어부터는 이미 현재 공간적 위치의 은닉 특성(Hidden feature)이 이전 픽셀들 정보만으로 구성되어 있습니다. 따라서 중앙 위치의 값을 사용할 수 있도록 중앙 가중치를 1로 둡니다. 단, 미래 픽셀 영역은 여전히 0으로 유지합니다. <img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7BMask%20B%7D%20=%0A%5Cbegin%7Bbmatrix%7D%0A1%20&amp;%201%20&amp;%201%20&amp;%201%20&amp;%201%20%5C%5C%0A1%20&amp;%201%20&amp;%201%20&amp;%201%20&amp;%201%20%5C%5C%0A1%20&amp;%201%20&amp;%201%20&amp;%200%20&amp;%200%20%5C%5C%0A0%20&amp;%200%20&amp;%200%20&amp;%200%20&amp;%200%20%5C%5C%0A0%20&amp;%200%20&amp;%200%20&amp;%200%20&amp;%200%0A%5Cend%7Bbmatrix%7D%0A"></li>
-</ul></li>
-<li><p>이러한 마스킹 기법 덕분에, PixelCNN은 <strong>훈련 시에는 전체 이미지에 대해 병렬 연산(Fast training)</strong>을 수행하고, <strong>샘플링 시에는 순차 생성(Slow sampling)</strong>을 하는 비대칭적 효율성을 얻게 됩니다.</p></li>
-</ul>
-<hr>
-</section>
-</section>
-</section>
-<section id="summary-자기회귀-모델-요약" class="level1">
-<h1>5. Summary: 자기회귀 모델 요약</h1>
-<ul>
-<li>마지막으로 PixelRNN과 PixelCNN의 핵심 특성을 요약 비교합니다.</li>
-</ul>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 33%">
-<col style="width: 33%">
-<col style="width: 33%">
-</colgroup>
-<thead>
-<tr class="header">
-<th style="text-align: left;">특징</th>
-<th style="text-align: left;">PixelRNN</th>
-<th style="text-align: left;">PixelCNN</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;"><strong>메커니즘 (Mechanism)</strong></td>
-<td style="text-align: left;">픽셀에 걸친 순환 의존성 (Recurrent dependencies)</td>
-<td style="text-align: left;">마스크 합성곱 (Masked convolutions)</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"><strong>훈련 속도 (Training)</strong></td>
-<td style="text-align: left;">매우 순차적 (More sequential)</td>
-<td style="text-align: left;">픽셀 전체 병렬 연산 (Parallel over pixels)</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;"><strong>샘플링 (Sampling)</strong></td>
-<td style="text-align: left;">순차적 (Sequential)</td>
-<td style="text-align: left;">순차적 (Sequential)</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"><strong>강점 (Strength)</strong></td>
-<td style="text-align: left;">긴 의존성 포착 가능 (Long-range dependencies)</td>
-<td style="text-align: left;">효율적인 훈련 속도 (Efficient training)</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;"><strong>약점 (Weakness)</strong></td>
-<td style="text-align: left;">계산 비용이 막대함 (Computationally expensive)</td>
-<td style="text-align: left;">네트워크가 깊거나 Dilated 필터가 아니면 수용 영역(Receptive field)이 제한됨</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"><strong>우도 평가 (Likelihood)</strong></td>
-<td style="text-align: left;">정확함 (Exact)</td>
-<td style="text-align: left;">정확함 (Exact)</td>
-</tr>
-</tbody>
-</table>
-<ul>
-<li><strong>핵심 요약 (Takeaway):</strong>
-<ul>
-<li>자기회귀 모델은 안정적인 훈련이 가능하며 입력 데이터의 확률 밀도(Likelihood)를 정확하게 평가할 수 있는 강력한 프레임워크입니다. 하지만 생성 과정이 본질적으로 순차적이기 때문에, 실시간 고해상도 이미지 생성 등 응답성이 중요한 환경에서는 적용하기 어렵다는 한계가 존재합니다.</li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="introduction-암묵적-생성-모델-implicit-generative-models" class="level1">
-<h1>1. Introduction: 암묵적 생성 모델 (Implicit Generative Models)</h1>
-<ul>
-<li><p>이전 포스트에서 다룬 자기회귀 모델(Autoregressive Models)은 확률 밀도 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x)">를 명시적으로 정의하고 정확한 우도(Exact likelihood)를 최대화하는 모델이었습니다. 이와 달리, <strong>생성적 적대 신경망(Generative Adversarial Networks, GAN)</strong>은 명시적인 확률 밀도 함수를 추정하지 않는 <strong>암묵적 생성 모델(Implicit Generative Models)</strong>입니다.</p></li>
-<li><p>GAN은 잠재 공간(Latent space)의 노이즈 <img src="https://latex.codecogs.com/png.latex?z%20%5Csim%20p(z)">를 샘플링한 후, 생성자(Generator) 역할을 하는 신경망 <img src="https://latex.codecogs.com/png.latex?G_%5Ctheta">를 통과시켜 가짜 샘플 <img src="https://latex.codecogs.com/png.latex?x%20=%20G_%5Ctheta(z)">를 만들어냅니다. 즉, 데이터의 확률 밀도 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x)">에 대한 다루기 쉬운(Tractable) 수식을 제공하지 않으며, 결과적으로 우도를 직접 최대화하는 방식을 사용하지 않습니다. 대신, 두 신경망 간의 <strong>적대적 게임(Adversarial game)</strong>을 통해 모델을 학습시킵니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="적대적-두-플레이어-게임-adversarial-two-player-game" class="level1">
-<h1>2. 적대적 두 플레이어 게임 (Adversarial Two-Player Game)</h1>
-<ul>
-<li>GAN의 핵심 아이디어는 위조지폐범(Generator)과 경찰(Discriminator)의 경쟁으로 자주 비유됩니다.
-<ul>
-<li><ol type="1">
-<li><strong>생성자 (Generator, <img src="https://latex.codecogs.com/png.latex?G_%5Ctheta">)</strong>: 노이즈 <img src="https://latex.codecogs.com/png.latex?z%20%5Csim%20p(z)">를 입력받아 실제 데이터와 구별할 수 없는 가짜 샘플 <img src="https://latex.codecogs.com/png.latex?G_%5Ctheta(z)">를 생성하는 것이 목표입니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>식별자 (Discriminator, <img src="https://latex.codecogs.com/png.latex?D_%5Cpsi">)</strong>: 입력된 데이터 <img src="https://latex.codecogs.com/png.latex?x">가 실제 데이터 분포 <img src="https://latex.codecogs.com/png.latex?p_%7Bdata%7D">에서 온 것인지(Real, <img src="https://latex.codecogs.com/png.latex?y=1">), 생성자가 만든 것인지(Fake, <img src="https://latex.codecogs.com/png.latex?y=0">)를 판별합니다. 즉, <img src="https://latex.codecogs.com/png.latex?D_%5Cpsi(x)%20%5Capprox%20P(y=1%7Cx)">를 출력하며 그 값은 <img src="https://latex.codecogs.com/png.latex?(0,1)"> 범위를 가집니다.</li>
-</ol></li>
-</ul></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/19.Deep-Generative-Models-3/19.1/images/gan_architecture.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: GAN의 기본 구조 도식. 잠재 노이즈 <img src="https://latex.codecogs.com/png.latex?z">에서 출발한 생성자의 출력 <img src="https://latex.codecogs.com/png.latex?G_%5Ctheta(z)">와 실제 데이터 <img src="https://latex.codecogs.com/png.latex?x%20%5Csim%20p_%7Bdata%7D">가 식별자 <img src="https://latex.codecogs.com/png.latex?D_%5Cpsi">에 입력되어 Real or Fake를 판별하는 과정을 보여준다.</figcaption>
-</figure>
-</div>
-<section id="minimax-목적-함수" class="level2">
-<h2 class="anchored" data-anchor-id="minimax-목적-함수">2.1. Minimax 목적 함수</h2>
-<ul>
-<li>이러한 경쟁 관계는 다음과 같은 <strong>Minimax 목적 함수(Objective)</strong>로 공식화됩니다:</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cmin_G%20%5Cmax_D%20V(G,D)%20=%20%5Cmathbb%7BE%7D_%7Bx%20%5Csim%20p_%7Bdata%7D%7D%5B%5Clog%20D(x)%5D%20+%20%5Cmathbb%7BE%7D_%7Bz%20%5Csim%20p(z)%7D%5B%5Clog(1%20-%20D(G(z)))%5D"></p>
-<ul>
-<li><strong>Discriminator의 목표 (<img src="https://latex.codecogs.com/png.latex?%5Cmax_D">)</strong>: 실제 데이터에 대해서는 <img src="https://latex.codecogs.com/png.latex?D(x)%20%5Crightarrow%201">을, 가짜 데이터에 대해서는 <img src="https://latex.codecogs.com/png.latex?D(G(z))%20%5Crightarrow%200">을 예측하여 위 목적 함수를 최대화하고자 합니다.</li>
-<li><strong>Generator의 목표 (<img src="https://latex.codecogs.com/png.latex?%5Cmin_G">)</strong>: 식별자를 속여 <img src="https://latex.codecogs.com/png.latex?D(G(z))%20%5Crightarrow%201">이 되도록 만들어, 두 번째 항의 값을 최소화하고자 합니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="훈련-메커니즘과-generator-loss의-개선" class="level1">
-<h1>3. 훈련 메커니즘과 Generator Loss의 개선</h1>
-<ul>
-<li>실제 훈련 시에는 하나의 최적화 문제를 푸는 대신, 두 네트워크를 교대로 업데이트(Alternating updates)합니다.
-<ul>
-<li><ol type="1">
-<li><strong>Discriminator 업데이트</strong>: 식별자를 강화하기 위해 목적 함수를 <img src="https://latex.codecogs.com/png.latex?%5Cmax_D"> 방향으로 경사 상승법(Gradient Ascent)을 적용합니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>Generator 업데이트</strong>: 생성자를 강화하기 위해 <img src="https://latex.codecogs.com/png.latex?%5Cmin_G"> 방향으로 경사 하강법(Gradient Descent)을 적용합니다.</li>
-</ol></li>
-</ul></li>
-</ul>
-<section id="포화saturating-vs-비포화non-saturating-generator-loss" class="level2">
-<h2 class="anchored" data-anchor-id="포화saturating-vs-비포화non-saturating-generator-loss">3.1. 포화(Saturating) vs 비포화(Non-saturating) Generator Loss</h2>
-<ul>
-<li><p>초기 GAN 학습의 가장 큰 문제 중 하나는 식별자가 생성자보다 너무 빨리 학습될 때 발생하는 <strong>기울기 소실(Vanishing gradient)</strong>입니다.</p></li>
-<li><p>오리지널 Generator 손실 함수는 <img src="https://latex.codecogs.com/png.latex?%5Cmin_G%20%5Cmathbb%7BE%7D_z%5B%5Clog(1%20-%20D(G(z)))%5D"> 입니다. 만약 생성자가 만든 이미지가 너무 조악해서 식별자가 완벽하게 가짜로 판별한다면(<img src="https://latex.codecogs.com/png.latex?D(G(z))%20%5Capprox%200">), 이 함수의 기울기는 매우 평탄해져(Saturated) 학습이 사실상 멈추게 됩니다.</p></li>
-<li><p>이를 해결하기 위해 <strong>비포화 생성자 손실(Non-saturating generator loss)</strong> 트릭을 사용합니다: <img src="https://latex.codecogs.com/png.latex?%5Cmax_G%20%5Cmathbb%7BE%7D_z%5B%5Clog%20D(G(z))%5D%20%5Cquad%20%5Ctext%7B%EB%98%90%EB%8A%94%7D%20%5Cquad%20%5Cmin_G%20-%5Cmathbb%7BE%7D_z%5B%5Clog%20D(G(z))%5D"></p></li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/19.Deep-Generative-Models-3/19.1/images/generator_loss.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: Generator Loss 그래프. 파란색 선은 오리지널 목적 함수 <img src="https://latex.codecogs.com/png.latex?%5Clog(1-D)">로, 판별자가 D=0에 가까울 때(왼쪽 끝) 기울기가 매우 평평해짐을 알 수 있다. 반면 빨간색 선 <img src="https://latex.codecogs.com/png.latex?-%5Clog%20D">는 D=0 부근에서 가파른 기울기를 제공하여, 생성자가 형편없을 때 강한 학습 신호(Strong gradient)를 받을 수 있도록 한다.</figcaption>
-</figure>
-</div>
-<ul>
-<li>이러한 변경으로 인해 생성자는 훈련 초기에 훨씬 더 강력한 기울기 신호를 받아 안정적인 훈련이 가능해집니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="이론적-분석-최적-식별자와-jensen-shannon-divergence" class="level1">
-<h1>4. 이론적 분석: 최적 식별자와 Jensen-Shannon Divergence</h1>
-<ul>
-<li>GAN의 수학적 우수성은 이 모델이 분포 간의 차이를 측정하는 발산(Divergence)을 최소화한다는 점을 증명할 수 있다는 데 있습니다.</li>
-</ul>
-<section id="고정된-생성자에-대한-최적-식별자-optimal-discriminator" class="level2">
-<h2 class="anchored" data-anchor-id="고정된-생성자에-대한-최적-식별자-optimal-discriminator">4.1. 고정된 생성자에 대한 최적 식별자 (Optimal Discriminator)</h2>
-<ul>
-<li>어떤 고정된 생성자 <img src="https://latex.codecogs.com/png.latex?G">에 대해 가짜 샘플의 분포를 <img src="https://latex.codecogs.com/png.latex?p_g">라고 합시다 (<img src="https://latex.codecogs.com/png.latex?x%20=%20G(z)%20%5Csim%20p_g">). 이때 식별자가 최대화하려는 목적 함수는 적분 형태로 나타낼 수 있습니다:</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?V(G,D)%20=%20%5Cint%20%5Cleft%5B%20p_%7Bdata%7D(x)%5Clog%20D(x)%20+%20p_g(x)%5Clog(1%20-%20D(x))%20%5Cright%5D%20dx"></p>
-<ul>
-<li><p>각 공간적 위치 <img src="https://latex.codecogs.com/png.latex?x">에 대해 피적분 함수를 개별적으로 최대화할 수 있습니다. 계산을 단순화하기 위해 변수를 치환해 보겠습니다:</p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?a%20=%20p_%7Bdata%7D(x)">, <img src="https://latex.codecogs.com/png.latex?b%20=%20p_g(x)">, <img src="https://latex.codecogs.com/png.latex?y%20=%20D(x)"> 라고 두면, 최대화할 함수는 <img src="https://latex.codecogs.com/png.latex?f(y)%20=%20a%20%5Clog%20y%20+%20b%20%5Clog(1%20-%20y)"> 가 됩니다.</li>
-</ul></li>
-<li><p>이 식을 <img src="https://latex.codecogs.com/png.latex?y">에 대해 미분하여 극대값을 찾습니다: <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7Bdf%7D%7Bdy%7D%20=%20%5Cfrac%7Ba%7D%7By%7D%20-%20%5Cfrac%7Bb%7D%7B1%20-%20y%7D%20=%200"> <img src="https://latex.codecogs.com/png.latex?a(1%20-%20y)%20=%20by%20%5Cimplies%20y%20=%20%5Cfrac%7Ba%7D%7Ba%20+%20b%7D"></p></li>
-<li><p>따라서, 고정된 <img src="https://latex.codecogs.com/png.latex?G">에 대한 <strong>최적의 식별자 <img src="https://latex.codecogs.com/png.latex?D_G%5E*(x)"></strong> 는 다음과 같이 정의됩니다: <img src="https://latex.codecogs.com/png.latex?D_G%5E*(x)%20=%20%5Cfrac%7Bp_%7Bdata%7D(x)%7D%7Bp_%7Bdata%7D(x)%20+%20p_g(x)%7D"></p></li>
-<li><p><strong>해석 (Interpretation):</strong> 최적 식별자는 실제 데이터 분포 밀도가 가짜 분포 밀도보다 상대적으로 얼마나 큰지를 측정하는 <strong>밀도비 추정기(Density-ratio estimator)</strong> 역할을 수행합니다. <img src="https://latex.codecogs.com/png.latex?%5Cfrac%7BD_G%5E*(x)%7D%7B1%20-%20D_G%5E*(x)%7D%20=%20%5Cfrac%7Bp_%7Bdata%7D(x)%7D%7Bp_g(x)%7D">가 성립합니다.</p></li>
-</ul>
-</section>
-<section id="gan은-jsd를-최소화한다" class="level2">
-<h2 class="anchored" data-anchor-id="gan은-jsd를-최소화한다">4.2. GAN은 JSD를 최소화한다</h2>
-<ul>
-<li>이제 찾아낸 최적 식별자 <img src="https://latex.codecogs.com/png.latex?D_G%5E*(x)">를 원래의 Minimax 목적 함수에 대입해봅시다. 생성자의 최적화 목표 <img src="https://latex.codecogs.com/png.latex?C(G)%20=%20%5Cmax_D%20V(G,D)">는 다음과 같이 전개됩니다.</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?C(G)%20=%20%5Cmathbb%7BE%7D_%7Bx%20%5Csim%20p_%7Bdata%7D%7D%20%5Cleft%5B%20%5Clog%20%5Cfrac%7Bp_%7Bdata%7D(x)%7D%7Bp_%7Bdata%7D(x)%20+%20p_g(x)%7D%20%5Cright%5D%20+%20%5Cmathbb%7BE%7D_%7Bx%20%5Csim%20p_g%7D%20%5Cleft%5B%20%5Clog%20%5Cfrac%7Bp_g(x)%7D%7Bp_%7Bdata%7D(x)%20+%20p_g(x)%7D%20%5Cright%5D"></p>
-<ul>
-<li><p>여기서 분포 간 거리 측도인 <strong>Jensen-Shannon Divergence (JSD)</strong> 의 정의를 떠올려 봅시다. <img src="https://latex.codecogs.com/png.latex?JSD(p%7C%7Cq)%20=%20%5Cfrac%7B1%7D%7B2%7DKL(p%7C%7Cm)%20+%20%5Cfrac%7B1%7D%7B2%7DKL(q%7C%7Cm)"></p>
-<ul>
-<li>단, <img src="https://latex.codecogs.com/png.latex?m%20=%20%5Cfrac%7Bp+q%7D%7B2%7D"></li>
-</ul></li>
-<li><p>식을 JSD 형태로 변형하기 위해 식의 분모와 분자에 <img src="https://latex.codecogs.com/png.latex?2">를 곱하고 나누어 식을 조정합니다: <img src="https://latex.codecogs.com/png.latex?C(G)%20=%20%5Cmathbb%7BE%7D_%7Bx%20%5Csim%20p_%7Bdata%7D%7D%20%5Cleft%5B%20%5Clog%20%5Cleft(%20%5Cfrac%7Bp_%7Bdata%7D(x)%7D%7B%5Cfrac%7Bp_%7Bdata%7D(x)%20+%20p_g(x)%7D%7B2%7D%7D%20%5Ccdot%20%5Cfrac%7B1%7D%7B2%7D%20%5Cright)%20%5Cright%5D%20+%20%5Cmathbb%7BE%7D_%7Bx%20%5Csim%20p_g%7D%20%5Cleft%5B%20%5Clog%20%5Cleft(%20%5Cfrac%7Bp_g(x)%7D%7B%5Cfrac%7Bp_%7Bdata%7D(x)%20+%20p_g(x)%7D%7B2%7D%7D%20%5Ccdot%20%5Cfrac%7B1%7D%7B2%7D%20%5Cright)%20%5Cright%5D"> <img src="https://latex.codecogs.com/png.latex?=%20-%5Clog%204%20+%20KL%5Cleft(p_%7Bdata%7D%20%5CBig%7C%5CBig%7C%20%5Cfrac%7Bp_%7Bdata%7D+p_g%7D%7B2%7D%5Cright)%20+%20KL%5Cleft(p_g%20%5CBig%7C%5CBig%7C%20%5Cfrac%7Bp_%7Bdata%7D+p_g%7D%7B2%7D%5Cright)"> <img src="https://latex.codecogs.com/png.latex?=%20-%5Clog%204%20+%202%20%5Ccdot%20JSD(p_%7Bdata%7D%7C%7Cp_g)"></p></li>
-<li><p>결론적으로 <img src="https://latex.codecogs.com/png.latex?%5Cmin_G%20C(G)">를 푸는 것은 <img src="https://latex.codecogs.com/png.latex?JSD(p_%7Bdata%7D%7C%7Cp_g)">를 최소화하는 것과 같습니다. JSD의 최솟값은 두 분포가 완벽히 일치할 때(<img src="https://latex.codecogs.com/png.latex?p_g%20=%20p_%7Bdata%7D">) <img src="https://latex.codecogs.com/png.latex?0">이 되며, 이 <strong>전역 최적해(Global optimum)</strong> 에서 <img src="https://latex.codecogs.com/png.latex?C(G)%20=%20-%5Clog%204">가 되고, 판별자는 완벽한 혼란 상태인 <img src="https://latex.codecogs.com/png.latex?D_G%5E*(x)%20=%20%5Cfrac%7B1%7D%7B2%7D">를 출력하게 됩니다.</p></li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="심층-구조로의-확장-dcgan과-잠재-공간latent-space" class="level1">
-<h1>5. 심층 구조로의 확장: DCGAN과 잠재 공간(Latent Space)</h1>
-<ul>
-<li>GAN은 학습이 매우 불안정하다는 여러 실패 모드(Failure modes - Mode collapse, Oscillatory dynamics 등)를 겪습니다. 이를 완화하기 위해 합성곱(Convolution) 구조를 성공적으로 도입한 것이 <strong>DCGAN(Deep Convolutional GANs)</strong>입니다.</li>
-</ul>
-<section id="transposed-convolution" class="level2">
-<h2 class="anchored" data-anchor-id="transposed-convolution">5.1. Transposed Convolution</h2>
-<ul>
-<li>이미지를 생성해야 하는 Generator는 저해상도의 잠재 벡터 <img src="https://latex.codecogs.com/png.latex?z"> (예: <img src="https://latex.codecogs.com/png.latex?100">차원)에서 시작하여 점진적으로 공간적 해상도(Spatial resolution)를 키워나가야 합니다. 이를 위해 학습 가능한 업샘플링(Upsampling) 연산인 <strong>전치 합성곱(Transposed Convolution)</strong> 또는 Fractional-strided convolution을 사용합니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/19.Deep-Generative-Models-3/19.1/images/transposed_conv.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 3: Transposed Convolution의 연산 구조. 파란색의 저해상도 피처맵 입력이 주어지면, 필터를 거쳐 공간 해상도가 더 넓은 청록색의 고해상도 출력 피처맵으로 변환된다. Generator의 핵심 구성 요소이다.</figcaption>
-</figure>
-</div>
-</section>
-<section id="dcgan-아키텍처-가이드라인-architecture-guidelines" class="level2">
-<h2 class="anchored" data-anchor-id="dcgan-아키텍처-가이드라인-architecture-guidelines">5.2. DCGAN 아키텍처 가이드라인 (Architecture Guidelines)</h2>
-<ul>
-<li>DCGAN 논문(Radford et al., 2016)은 안정적인 적대적 학습을 위해 다음과 같은 구조적 규칙을 제안했습니다.
-<ul>
-<li><strong>Discriminator</strong>: Pooling 계층 대신 Strided Convolution을 사용하여 공간을 축소합니다. 활성화 함수로 <strong>LeakyReLU</strong>를 사용합니다.</li>
-<li><strong>Generator</strong>: Transposed Convolution을 사용하여 해상도를 키웁니다. 활성화 함수로 <strong>ReLU</strong>를 사용하되, 마지막 출력층에는 <strong>Tanh</strong>를 사용합니다.</li>
-<li><strong>공통</strong>: Fully Connected (FC) 은닉층을 제거하고, 두 네트워크 모두에 <strong>배치 정규화(Batch Normalization)</strong>를 적용합니다.</li>
-</ul></li>
-</ul>
-</section>
-<section id="잠재-공간-연산-latent-space-arithmetic" class="level2">
-<h2 class="anchored" data-anchor-id="잠재-공간-연산-latent-space-arithmetic">5.3. 잠재 공간 연산 (Latent-space Arithmetic)</h2>
-<ul>
-<li>GAN의 가장 매력적인 특징 중 하나는 노이즈 공간 <img src="https://latex.codecogs.com/png.latex?z">가 유의미한 의미적(Semantic) 방향성을 갖도록 학습된다는 점입니다. <img src="https://latex.codecogs.com/png.latex?z"> 벡터들 간의 선형 연산(Linear operations)이 출력 이미지의 직관적인 변화로 이어집니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/19.Deep-Generative-Models-3/19.1/images/latent_arithmetic.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 4: 잠재 공간의 의미적 산술 연산 예시. 선글라스를 낀 남성의 잠재 벡터(<img src="https://latex.codecogs.com/png.latex?z">)에서 선글라스 없는 남성의 <img src="https://latex.codecogs.com/png.latex?z">를 빼고, 선글라스 없는 여성의 <img src="https://latex.codecogs.com/png.latex?z">를 더한 뒤 Generator를 통과시키면 ‘선글라스를 낀 여성’ 이미지가 생성된다. 이는 모델이 잠재 공간 상에서 성별과 선글라스 착용 여부라는 특징을 선형적으로 분리하여 포착했음을 시사한다.</figcaption>
-</figure>
-</div>
-<hr>
-</section>
-</section>
-<section id="summary" class="level1">
-<h1>6. Summary</h1>
-<ul>
-<li>GAN은 우도를 명시적으로 모델링하는 대신, 생성자와 식별자 간의 적대적 게임을 통해 데이터 분포를 학습합니다. 수학적으로 이는 데이터 분포와 생성 분포 간의 Jensen-Shannon Divergence를 최소화하는 과정으로 증명됩니다. 학습 불안정성이라는 고질적인 문제가 있으나, 비포화 손실 함수의 적용 및 DCGAN과 같은 구조적 개선을 통해 이를 극복하고 잠재 공간의 풍부한 표현력을 활용할 수 있게 되었습니다.</li>
-</ul>
-<hr>
-</section>
-<section id="introduction-딥러닝-기반-생성-모델의-여정" class="level1">
-<h1>1. Introduction: 딥러닝 기반 생성 모델의 여정</h1>
-<ul>
-<li><p>지금까지 세 번의 포스트에 걸쳐 딥러닝을 활용한 대표적인 생성 모델(Deep Generative Models)인 <strong>변분 오토인코더(VAE)</strong>, <strong>자기회귀 모델(Autoregressive Models, AR)</strong>, 그리고 <strong>생성적 적대 신경망(GAN)</strong>을 살펴보았습니다.</p></li>
-<li><p>이들 모델은 데이터의 확률 분포를 어떻게 다루고 학습할 것인지에 대해 각기 다른 철학적, 수학적 접근을 취합니다. 본 포스트에서는 이 세 가지 모델의 특성을 종합적으로 비교하고, 자기회귀 모델과 GAN의 학습을 돕는 심화 개념(Dilated Convolution, 세부 훈련 알고리즘 등)을 정리하며 생성 모델 파트를 마무리하겠습니다.</p></li>
-</ul>
-<hr>
-</section>
-<section id="생성-모델-총정리-및-최종-비교-final-comparison" class="level1">
-<h1>2. 생성 모델 총정리 및 최종 비교 (Final Comparison)</h1>
-<ul>
-<li>세 가지 주요 생성 모델은 밀도 추정 방식, 훈련 목적 함수, 샘플링 속도 및 생성 품질 등에서 뚜렷한 장단점(Trade-offs)을 보입니다.</li>
-</ul>
-<section id="모델-간-특성-비교-요약표" class="level2">
-<h2 class="anchored" data-anchor-id="모델-간-특성-비교-요약표">2.1. 모델 간 특성 비교 요약표</h2>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-</colgroup>
-<thead>
-<tr class="header">
-<th style="text-align: left;">비교 항목 (Aspect)</th>
-<th style="text-align: left;">VAE (Variational Autoencoders)</th>
-<th style="text-align: left;">Autoregressive Models (PixelRNN/CNN)</th>
-<th style="text-align: left;">GAN (Generative Adversarial Networks)</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;"><strong>밀도 (Density)</strong></td>
-<td style="text-align: left;">암묵적 적분 (Implicit integral)</td>
-<td style="text-align: left;">명시적 우도 (Explicit likelihood)</td>
-<td style="text-align: left;">암묵적 밀도 (Implicit density)</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"><strong>목적 함수 (Objective)</strong></td>
-<td style="text-align: left;">증거 하한(ELBO) 최대화</td>
-<td style="text-align: left;">정확한 로그 우도(Exact log-likelihood) 최대화</td>
-<td style="text-align: left;">적대적 손실 (Adversarial loss) 미니맥스 게임</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;"><strong>추론 (Inference)</strong></td>
-<td style="text-align: left;">가능: 인코더 <img src="https://latex.codecogs.com/png.latex?q_%5Cphi(z%7Cx)"> 존재</td>
-<td style="text-align: left;">불가능: 간단한 저차원 잠재 코드(Low-dim code) 없음</td>
-<td style="text-align: left;">기본적으로는 불가능: 인코더가 없음</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"><strong>샘플링 (Sampling)</strong></td>
-<td style="text-align: left;">빠름 (Fast)</td>
-<td style="text-align: left;">느림, 순차적 (Slow, sequential)</td>
-<td style="text-align: left;">빠름 (Fast)</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;"><strong>샘플 품질 (Sample quality)</strong></td>
-<td style="text-align: left;">종종 부드럽거나 흐릿함 (Smooth/blurry)</td>
-<td style="text-align: left;">좋지만 생성 속도가 느림</td>
-<td style="text-align: left;">매우 선명함 (Sharp)</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"><strong>훈련 안정성 (Training)</strong></td>
-<td style="text-align: left;">안정적 (Stable)</td>
-<td style="text-align: left;">지도 학습 손실로 매우 안정적 (Stable supervised loss)</td>
-<td style="text-align: left;">불안정한 게임 다이내믹스 (Unstable game dynamics)</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;"><strong>주요 약점 (Main weakness)</strong></td>
-<td style="text-align: left;">느슨한 하한 / 흐릿한 이미지</td>
-<td style="text-align: left;">지나치게 느린 샘플링 속도</td>
-<td style="text-align: left;">모드 붕괴(Mode collapse) 및 학습 불안정</td>
-</tr>
-</tbody>
-</table>
-</section>
-<section id="핵심-요약-takeaways-및-최신-동향-modern-context" class="level2">
-<h2 class="anchored" data-anchor-id="핵심-요약-takeaways-및-최신-동향-modern-context">2.2. 핵심 요약 (Takeaways) 및 최신 동향 (Modern Context)</h2>
-<ul>
-<li><strong>자기회귀 모델 (AR Models)</strong>: 연쇄 법칙 <img src="https://latex.codecogs.com/png.latex?p_%5Ctheta(x)%20=%20%5Cprod_t%20p_%5Ctheta(x_t%20%7C%20x_%7B%3Ct%7D)"> 을 사용하여 정확한 우도를 제공하고 학습이 매우 안정적입니다. 과거 PixelCNN이 이미지 생성에서 마스크 합성곱을 통해 병렬 훈련을 이끌어냈듯, 이 <strong>자기회귀 모델링 기법은 오늘날 대규모 언어 모델(LLMs, 예: GPT)의 핵심 기반 기술</strong>로 자리 잡았습니다.</li>
-<li><strong>GAN</strong>: 잠재 공간에서 <img src="https://latex.codecogs.com/png.latex?z%20%5Csim%20p(z)">를 추출해 <img src="https://latex.codecogs.com/png.latex?x%20=%20G_%5Ctheta(z)">로 매핑하는 암묵적 생성기입니다. 훈련은 최적의 식별자를 가정할 때 <img src="https://latex.codecogs.com/png.latex?-%5Clog%204%20+%202JSD(p_%7Bdata%7D%7C%7Cp_g)"> 를 최소화하는 과정으로 해석됩니다.</li>
-<li><strong>최신 동향</strong>: GAN은 확산 모델(Diffusion Models)이 주류로 자리 잡기 전까지 고해상도의 선명한 이미지를 생성하는 데 지배적으로 사용되었습니다. 여전히 ’우도 계산의 정확성 vs 샘플의 품질 vs 샘플링 속도’라는 생성 모델의 중심적인 딜레마(Central tradeoffs)는 최신 연구에서도 중요하게 다뤄지고 있습니다.</li>
-</ul>
-<hr>
-</section>
-</section>
-<section id="보충-심화-팽창-합성곱-dilated-convolutions" class="level1">
-<h1>3. 보충 심화: 팽창 합성곱 (Dilated Convolutions)</h1>
-<ul>
-<li>이전 포스트에서 PixelCNN의 약점으로 ’네트워크가 깊어지거나 구조적 변화가 없으면 수용 영역(Receptive field)이 제한된다’는 점을 언급했습니다. 이를 극복하기 위해 자기회귀 모델(특히 합성곱 기반)에서 널리 쓰이는 기법이 <strong>팽창 합성곱(Dilated Convolutions)</strong>입니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/19.Deep-Generative-Models-3/19.1/images/dilated_conv.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: Dilated Convolution 구조. 일반적인 합성곱 필터와 달리 커널의 가중치 사이에 일정한 간격(Skip)을 두어 피처맵을 연산한다. 이를 통해 동일한 파라미터 수로도 훨씬 넓은 영역의 공간적 컨텍스트를 한 번에 포착할 수 있다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><strong>작동 원리</strong>: 필터 커널이 입력값을 처리할 때, 인접한 값을 바로 취하지 않고 일정한 간격(Dilation rate)만큼 건너뛰어(Skip) 연산을 수행합니다.</li>
-<li><strong>효과</strong>: 모델의 <strong>파라미터 수나 연산량을 늘리지 않고도 모델의 수용 영역을 기하급수적으로(Exponentially) 확장</strong>할 수 있습니다.</li>
-<li><strong>적용</strong>: PixelCNN이나 Wavenet과 같은 구조에서 과거의 넓은 컨텍스트(Expanding context)를 참조하여 현재 픽셀/음성 샘플을 예측해야 할 때 핵심적인 역할을 합니다.</li>
-</ul>
-<hr>
-</section>
-<section id="보충-심화-오리지널-gan-훈련-알고리즘-original-gan-training-algorithm" class="level1">
-<h1>4. 보충 심화: 오리지널 GAN 훈련 알고리즘 (Original GAN Training Algorithm)</h1>
-<ul>
-<li><p>이전 포스트에서 다룬 수식을 실제 코드 기반의 훈련 알고리즘(Mini-batch Stochastic Gradient Ascent)으로 정리하면 다음과 같습니다.</p></li>
-<li><p>GAN은 식별자(Discriminator)를 <img src="https://latex.codecogs.com/png.latex?k">번 업데이트할 때 생성자(Generator)를 1번 업데이트하는 방식으로 학습 비율을 조정하기도 합니다. (단, 최적의 <img src="https://latex.codecogs.com/png.latex?k">값은 문제마다 다릅니다.)</p></li>
-<li><p><strong>알고리즘: GAN 훈련 루프</strong></p>
-<ul>
-<li><ol type="1">
-<li>훈련 반복(Iterations) 횟수만큼 다음을 수행합니다.</li>
-</ol></li>
-<li><ol start="2" type="1">
-<li><strong>식별자 업데이트 (For <img src="https://latex.codecogs.com/png.latex?k"> steps):</strong></li>
-</ol>
-<ul>
-<li>노이즈 사전 분포 <img src="https://latex.codecogs.com/png.latex?p_g(z)">에서 크기가 <img src="https://latex.codecogs.com/png.latex?m">인 미니배치 <img src="https://latex.codecogs.com/png.latex?%5C%7Bz%5E%7B(1)%7D,%20%5Cdots,%20z%5E%7B(m)%7D%5C%7D">를 샘플링합니다.</li>
-<li>실제 데이터 분포 <img src="https://latex.codecogs.com/png.latex?p_%7Bdata%7D(x)">에서 크기가 <img src="https://latex.codecogs.com/png.latex?m">인 미니배치 <img src="https://latex.codecogs.com/png.latex?%5C%7Bx%5E%7B(1)%7D,%20%5Cdots,%20x%5E%7B(m)%7D%5C%7D">를 샘플링합니다.</li>
-<li>다음 목적 함수를 식별자의 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta_d">에 대해 <strong>확률적 경사 상승법(Stochastic Gradient Ascent)</strong>으로 업데이트하여 최대화합니다. <img src="https://latex.codecogs.com/png.latex?%5Cnabla_%7B%5Ctheta_d%7D%20%5Cfrac%7B1%7D%7Bm%7D%20%5Csum_%7Bi=1%7D%5E%7Bm%7D%20%5Cleft%5B%20%5Clog%20D_%7B%5Ctheta_d%7D(x%5E%7B(i)%7D)%20+%20%5Clog(1%20-%20D_%7B%5Ctheta_d%7D(G_%7B%5Ctheta_g%7D(z%5E%7B(i)%7D)))%20%5Cright%5D"></li>
-</ul></li>
-<li><ol start="3" type="1">
-<li><strong>생성자 업데이트 (1 step):</strong></li>
-</ol>
-<ul>
-<li>다시 사전 분포 <img src="https://latex.codecogs.com/png.latex?p_g(z)">에서 미니배치 <img src="https://latex.codecogs.com/png.latex?%5C%7Bz%5E%7B(1)%7D,%20%5Cdots,%20z%5E%7B(m)%7D%5C%7D">를 샘플링합니다.</li>
-<li>초기 학습 지연(Saturating gradient)을 막기 위한 <strong>개선된 목적 함수(Non-saturating objective)</strong>를 사용하여, 생성자의 파라미터 <img src="https://latex.codecogs.com/png.latex?%5Ctheta_g">에 대해 경사 상승법으로 업데이트합니다. <img src="https://latex.codecogs.com/png.latex?%5Cnabla_%7B%5Ctheta_g%7D%20%5Cfrac%7B1%7D%7Bm%7D%20%5Csum_%7Bi=1%7D%5E%7Bm%7D%20%5Clog(D_%7B%5Ctheta_d%7D(G_%7B%5Ctheta_g%7D(z%5E%7B(i)%7D)))"></li>
-</ul></li>
-</ul></li>
-</ul>
-<hr>
-</section>
-<section id="보충-심화-잠재-공간의-의미론적-산술-latent-vector-arithmetic" class="level1">
-<h1>5. 보충 심화: 잠재 공간의 의미론적 산술 (Latent-vector Arithmetic)</h1>
-<ul>
-<li>GAN의 흥미로운 성질인 <img src="https://latex.codecogs.com/png.latex?z"> 벡터의 의미론적(Semantic) 선형 연산을 좀 더 명확한 예시로 확인해보겠습니다.</li>
-</ul>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Deep Learning/19.Deep-Generative-Models-3/19.1/images/latent_arithmetic_smile.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 2: 잠재 벡터의 산술 연산 (Latent-vector arithmetic). 여러 장의 ‘미소 짓는 여성(Smiling woman)’ 이미지들의 잠재 벡터 평균값에서 ’무표정한 여성(Neutral woman)’의 벡터 평균값을 빼면 ’미소(Smile)’라는 의미적 방향성을 얻게 됩니다. 여기에 ’무표정한 남성(Neutral man)’의 벡터를 더한 후 Generator를 통과시키면 완벽하게 ’미소 짓는 남성(Smiling Man)’이 생성됩니다.</figcaption>
-</figure>
-</div>
-<ul>
-<li><p>위 그림처럼, 생성 모델이 데이터를 단순히 암기하는 것이 아니라, 잠재 공간(Latent space) 내에 ‘성별(Gender)’, ‘표정(Expression)’, ’안경 착용 여부(Glasses)’와 같은 <strong>추상적이고 고차원적인 특징들을 선형적으로 분리(Disentanglement)</strong>하여 학습했음을 보여주는 강력한 증거입니다.</p></li>
-<li><p>이러한 성공 이후 GAN의 구조를 응용한 수백 가지의 변형 모델들이 쏟아져 나왔으며, 이를 학계에서는 우스갯소리로 “The GAN Zoo(동물원)”라고 부르기도 합니다(예: CycleGAN, InfoGAN, StyleGAN 등).</p></li>
-</ul>
-
-
-
-</section>
-
- ]]></description>
-  <category>Deep Learning</category>
-  <guid>https://shsha0110.github.io/posts/Deep Learning/19.Deep-Generative-Models-3/19.1/</guid>
-  <pubDate>Sun, 10 May 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>
 </rss>

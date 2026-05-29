@@ -1,0 +1,560 @@
+---
+title: "[Deep Learning] 21. Diffusion Models 2"
+description: "Score-Based View and Modern Extensions"
+author: "유성현"
+date: "2026-05-18"
+categories: [Deep Learning]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 들어가며 (Recap & Motivation)
+
+지난 강의에서는 DDPM(Denoising Diffusion Probabilistic Models)의 **순방향 노이징(forward noising)**과 **역방향 샘플링(reverse sampling)**을 다루었습니다. 핵심 수식을 정리하면 다음과 같습니다.
+
+**순방향 노이징:**
+
+$$x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1 - \bar{\alpha}_t}\, \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)$$
+
+**학습 목표:**
+
+$$\mathbb{E}\left[\|\epsilon - \epsilon_\theta(x_t, t)\|_2^2\right]$$
+
+**샘플링:**
+
+$$x_T \sim \mathcal{N}(0, I), \quad x_T \to x_{T-1} \to \cdots \to x_0$$
+
+이번 강의의 핵심 질문은 다음과 같습니다.
+
+> **"노이즈 제거 네트워크 $\epsilon_\theta$는 실제로 무엇을 학습하고 있는가?"**
+
+그 답은 **score function(스코어 함수)**에 있습니다. 오늘은 score 기반 관점에서 DDPM을 재해석하고, 이를 현대 확산 모델의 이론적 토대와 연결해 보겠습니다.
+
+---
+
+# 1. Score 기반 생성 모델 (Score-Based Generative Models)
+
+## 1.1 Score Function이란?
+
+확률 밀도 함수 $p(x)$에 대해 **score function**은 다음과 같이 정의됩니다.
+
+$$s(x) = \nabla_x \log p(x)$$
+
+- **직관:** score는 현재 위치 $x$에서 확률 밀도가 가장 빠르게 증가하는 방향을 가리킵니다.
+- 즉, score를 따라 이동하면 고밀도 영역(데이터가 많이 모여 있는 곳)으로 이동하게 됩니다.
+
+![Figure: 2D 공간에서의 score field. 각 점 $(x_1, x_2)$에서의 화살표가 $\nabla_x \log p(x)$를 나타내며, 화살표들이 고밀도 모드(mode) 방향을 향하고 있음을 보여줍니다.](./images/score_field.png)
+
+## 1.2 Score만으로 샘플링이 가능한가?
+
+score가 밀도가 높아지는 방향을 알려주니, 그냥 score를 따라가면 샘플을 생성할 수 있지 않을까요?
+
+**순수한 그래디언트 어센트(gradient ascent)를 적용하면:**
+
+$$x_{k+1} = x_k + \eta \nabla_x \log p(x_k)$$
+
+**문제점:** 이렇게 하면 모든 샘플이 고밀도 **최빈값(mode)** 으로만 수렴합니다. 분포 전체를 샘플링하지 못하고 특정 점들로만 붕괴(collapse)됩니다.
+
+**해결책:** score 방향으로 이동하되, **가우시안 노이즈를 주입**하여 랜덤성을 유지합니다. 이것이 바로 **Langevin dynamics**입니다.
+
+## 1.3 Langevin Dynamics
+
+**Langevin dynamics**는 두 가지 힘을 결합합니다.
+
+* **결정론적 드리프트(deterministic drift):** score를 이용해 고밀도 방향으로 이동
+* **확률론적 노이즈(stochastic noise):** 가우시안 노이즈를 주입하여 분포 전체를 탐색
+
+업데이트 규칙은 다음과 같습니다.
+
+$$x_{k+1} = x_k + \frac{\eta}{2} \nabla_x \log p(x_k) + \sqrt{\eta}\, z_k, \quad z_k \sim \mathcal{N}(0, I)$$
+
+- **첫 번째 항** $\frac{\eta}{2}\nabla_x \log p(x_k)$: 고밀도 방향으로의 이동
+- **두 번째 항** $\sqrt{\eta}\, z_k$: 체인이 붕괴되지 않도록 랜덤성 유지
+- 적절한 조건 하에서, 이 업데이트를 반복하면 체인이 $p(x)$로 수렴합니다.
+
+**Score 기반 생성 모델의 핵심 아이디어:**
+
+진짜 score $\nabla_x \log p(x)$를 모르니, **신경망**으로 근사합니다.
+
+$$s_\theta(x) \approx \nabla_x \log p(x)$$
+
+그리고 Langevin dynamics로 샘플링합니다.
+
+$$x_{k+1} = x_k + \frac{\eta}{2} s_\theta(x_k) + \sqrt{\eta}\, z_k$$
+
+![Figure: Score 기반 생성 모델의 샘플링 파이프라인. 초기 노이즈 $x_0$에서 출발하여, score 네트워크 $s_\theta(x)$를 반복적으로 적용한 Langevin 업데이트를 통해 최종 샘플이 생성됩니다. 각 화살표는 하나의 Langevin 업데이트 스텝을 나타냅니다.](./images/score_sampling_pipeline.png)
+
+**남은 핵심 질문:** 참 score를 모르는 상황에서 $s_\theta(x)$를 어떻게 학습할 수 있을까요?
+
+---
+
+# 2. Score Matching
+
+## 2.1 이상적인 학습 목표 (Ideal Objective)
+
+자연스러운 학습 목표는 **Fisher divergence**를 최소화하는 것입니다.
+
+$$\frac{1}{2} \mathbb{E}_{x \sim p}\left[\|s_\theta(x) - \nabla_x \log p(x)\|_2^2\right]$$
+
+**문제:** $\nabla_x \log p(x)$는 실제 데이터 분포에 대한 것으로, 우리가 알 수 없습니다.
+
+**Score matching**은 이 미지의 항을 제거할 수 있는 대안적 목표를 제공합니다.
+
+## 2.2 Fisher Divergence의 전개
+
+Fisher divergence를 전개해 보겠습니다.
+
+$$\frac{1}{2}\mathbb{E}_p\left[\|\nabla_x \log p(x) - s_\theta(x)\|_2^2\right]$$
+
+제곱을 전개하면:
+
+$$= \frac{1}{2}\mathbb{E}_p\left[\|\nabla_x \log p(x)\|_2^2 + \|s_\theta(x)\|_2^2 - 2\langle s_\theta(x),\, \nabla_x \log p(x)\rangle\right]$$
+
+첫 번째 항은 $\theta$와 무관하므로 상수 $C$로 표기합니다.
+
+$$= C + \mathbb{E}_p\left[\frac{1}{2}\|s_\theta(x)\|_2^2 - \langle s_\theta(x),\, \nabla_x \log p(x)\rangle\right]$$
+
+**문제:** 교차항(cross term) $\langle s_\theta(x), \nabla_x \log p(x)\rangle$에 여전히 미지의 score가 있습니다. 이를 **부분 적분(integration by parts)**으로 제거합니다.
+
+## 2.3 부분 적분을 이용한 Score 제거
+
+교차항을 정리해 보겠습니다.
+
+**Step 1.** 데이터 score를 로그 미분으로 표현합니다.
+
+$$\nabla_x \log p(x) = \frac{\nabla_x p(x)}{p(x)}$$
+
+**Step 2.** 기댓값을 적분 형태로 씁니다.
+
+$$\mathbb{E}_p\left[\langle s_\theta(x), \nabla_x \log p(x)\rangle\right] = \int \left\langle s_\theta(x), \frac{\nabla_x p(x)}{p(x)}\right\rangle p(x)\, dx = \int \langle s_\theta(x), \nabla_x p(x)\rangle\, dx$$
+
+**Step 3.** 좌표별로 분해합니다.
+
+$$= \sum_{i=1}^D \int s_{\theta,i}(x) \frac{\partial p(x)}{\partial x_i}\, dx$$
+
+**Step 4.** 각 좌표에 부분 적분(경계항이 소멸한다고 가정)을 적용합니다.
+
+$$\int s_{\theta,i}(x) \frac{\partial p(x)}{\partial x_i}\, dx = -\int p(x) \frac{\partial s_{\theta,i}(x)}{\partial x_i}\, dx$$
+
+**Step 5.** 합산하면 발산(divergence)이 됩니다.
+
+$$\mathbb{E}_p\left[\langle s_\theta(x), \nabla_x \log p(x)\rangle\right] = -\mathbb{E}_p\left[\sum_{i=1}^D \frac{\partial s_{\theta,i}(x)}{\partial x_i}\right] = -\mathbb{E}_p\left[\nabla_x \cdot s_\theta(x)\right]$$
+
+$\nabla_x \cdot s_\theta(x)$는 야코비안(Jacobian)의 트레이스(trace)이기도 합니다.
+
+$$\nabla_x \cdot s_\theta(x) = \text{tr}(\nabla_x s_\theta(x))$$
+
+따라서:
+
+$$-\mathbb{E}_p\left[\langle s_\theta(x), \nabla_x \log p(x)\rangle\right] = \mathbb{E}_p\left[\text{tr}(\nabla_x s_\theta(x))\right]$$
+
+## 2.4 Trace 기반 Score Matching 목표
+
+앞의 결과를 적용하면, Fisher divergence는 다음과 동치입니다.
+
+$$\mathbb{E}_p\left[\text{tr}(\nabla_x s_\theta(x)) + \frac{1}{2}\|s_\theta(x)\|_2^2\right]$$
+
+**핵심:** 미지의 데이터 score $\nabla_x \log p(x)$가 목표에서 **완전히 사라졌습니다!**
+
+* 이 목표는 데이터 샘플 $x \sim p$만 있으면 계산할 수 있습니다.
+* 그러나 고차원에서 야코비안의 전체 트레이스를 계산하는 것은 매우 비쌉니다.
+
+## 2.5 Hutchinson Trace Estimator와 Sliced Score Matching
+
+트레이스 계산의 비용을 줄이기 위해 **Hutchinson trace estimator**를 사용합니다.
+
+**보조 정리 (Lemma):** 임의의 정방행렬 $A$에 대해,
+
+$$\mathbb{E}_{v \sim \mathcal{N}(0,I)}\left[v^\top A v\right] = \text{tr}(A)$$
+
+**증명:**
+
+$$\mathbb{E}[v^\top A v] = \mathbb{E}[\text{tr}(v^\top A v)] = \mathbb{E}[\text{tr}(A v v^\top)] = \text{tr}(A\,\mathbb{E}[vv^\top]) = \text{tr}(A \cdot I) = \text{tr}(A) \quad \blacksquare$$
+
+$A = \nabla_x s_\theta(x)$로 놓으면:
+
+$$\text{tr}(\nabla_x s_\theta(x)) \approx v^\top \nabla_x s_\theta(x)\, v$$
+
+이를 **sliced score matching**이라 하며, 전체 트레이스를 직접 계산하지 않아도 됩니다. 그러나 실용적인 대규모 확산 모델에서는 다음에 소개할 **denoising score matching**이 더 직접적인 연결고리를 제공합니다.
+
+---
+
+# 3. Denoising Score Matching
+
+## 3.1 핵심 아이디어
+
+데이터에 가우시안 노이즈를 추가하여 **오염된(corrupted) 샘플**을 만듭니다.
+
+$$\tilde{x} = x + \sigma \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)$$
+
+또는 조건부 분포로 표현하면:
+
+$$q_\sigma(\tilde{x} \mid x) = \mathcal{N}(\tilde{x};\, x,\, \sigma^2 I)$$
+
+목표는 다음의 score 네트워크를 학습하는 것입니다.
+
+$$s_\theta(\tilde{x}, \sigma) \approx \nabla_{\tilde{x}} \log q_\sigma(\tilde{x})$$
+
+## 3.2 가우시안 오염 분포의 Score 계산
+
+$q_\sigma(\tilde{x} \mid x) = \mathcal{N}(\tilde{x};\, x,\, \sigma^2 I)$의 로그 밀도는:
+
+$$\log q_\sigma(\tilde{x} \mid x) = -\frac{1}{2\sigma^2}\|\tilde{x} - x\|_2^2 + C$$
+
+$\tilde{x}$에 대한 그래디언트를 취하면:
+
+$$\nabla_{\tilde{x}} \log q_\sigma(\tilde{x} \mid x) = -\frac{\tilde{x} - x}{\sigma^2}$$
+
+**직관:** 조건부 score는 오염된 샘플 $\tilde{x}$에서 깨끗한 데이터 $x$ 방향을 가리킵니다. 즉, **노이즈 제거 방향**을 나타냅니다.
+
+## 3.3 Denoising Score Matching 목표
+
+조건부 score의 닫힌 형태(closed-form)를 알고 있으므로, 다음을 지도 학습 방식으로 학습할 수 있습니다.
+
+$$s_\theta(\tilde{x}, \sigma) \approx -\frac{\tilde{x} - x}{\sigma^2}$$
+
+**Denoising Score Matching (DSM) 목표:**
+
+$$\mathcal{L}_\text{DSM}(\theta;\sigma) = \mathbb{E}_{x \sim p}\, \mathbb{E}_{\tilde{x} \sim q_\sigma(\tilde{x}|x)}\left[\left\|s_\theta(\tilde{x}, \sigma) + \frac{\tilde{x} - x}{\sigma^2}\right\|_2^2\right]$$
+
+* $x$는 데이터 분포에서 샘플링
+* $\tilde{x}$는 $q_\sigma(\tilde{x}|x)$에서 샘플링
+* 타겟 벡터 $-\frac{\tilde{x}-x}{\sigma^2}$는 분석적으로 계산 가능
+
+이는 완전한 **지도 학습(supervised learning)** 문제입니다.
+
+## 3.4 왜 Denoising이 주변 분포의 Score를 학습하는가?
+
+노이즈가 추가된 **주변 분포(noisy marginal distribution)**:
+
+$$q_\sigma(\tilde{x}) = \int q_\sigma(\tilde{x} \mid x)\, p(x)\, dx$$
+
+이 분포의 score에 대해 다음 항등식이 성립합니다.
+
+$$\nabla_{\tilde{x}} \log q_\sigma(\tilde{x}) = \mathbb{E}_{x \sim q_\sigma(x|\tilde{x})}\left[\nabla_{\tilde{x}} \log q_\sigma(\tilde{x} \mid x) \mid \tilde{x}\right]$$
+
+**해석:** 노이즈 주변 분포의 score는 조건부 오염 score들의 사후 평균(posterior average)입니다.
+
+따라서 알려진 타겟 $-\frac{\tilde{x}-x}{\sigma^2}$으로 학습하는 것은, 결국 **노이즈 주변 분포 $q_\sigma(\tilde{x})$의 score**를 학습하는 것과 동치입니다.
+
+> **핵심 포인트:** 우리는 깨끗한 데이터 분포의 score를 직접 학습하는 것이 아니라, **다양한 노이즈 수준의 오염 분포에서의 score**를 학습합니다.
+
+---
+
+# 4. Noise Conditional Score Networks (NCSN)
+
+## 4.1 NCSN의 동기: 왜 여러 노이즈 수준이 필요한가?
+
+단일 노이즈 수준 $\sigma$만 사용하면 문제가 생깁니다.
+
+* **$\sigma$가 너무 크면:** 노이즈가 데이터 구조를 완전히 가려 세부 표현 학습이 어렵습니다.
+* **$\sigma$가 너무 작으면:** 저밀도 영역에서 score 추정이 부정확하고 전역 탐색이 어렵습니다.
+
+**해결책:** 큰 노이즈 수준에서는 전역 구조를, 작은 노이즈 수준에서는 세부 디테일을 학습합니다.
+
+## 4.2 NCSN 학습 목표
+
+**NCSN**은 여러 노이즈 수준 $\sigma_1 > \sigma_2 > \cdots > \sigma_L$에서 동시에 score를 학습합니다.
+
+$$\sum_{i=1}^{L} \lambda_i\, \mathbb{E}_{x \sim p}\, \mathbb{E}_{\tilde{x} \sim q_{\sigma_i}(\tilde{x}|x)}\left[\left\|s_\theta(\tilde{x}, \sigma_i) + \frac{\tilde{x} - x}{\sigma_i^2}\right\|_2^2\right]$$
+
+- $\lambda_i$: 각 노이즈 수준의 가중치
+- $s_\theta(x, \sigma)$: 노이즈 수준 $\sigma$를 조건으로 받는 하나의 통합 네트워크
+
+## 4.3 Annealed Langevin Dynamics: NCSN 샘플링
+
+샘플링 시에는 **노이즈 수준을 점진적으로 줄여가는(annealing)** 방식을 사용합니다.
+
+$$\sigma_1 > \sigma_2 > \cdots > \sigma_L$$
+
+각 노이즈 수준 $\sigma_i$에서 Langevin 업데이트를 수행합니다.
+
+$$x_{k+1} = x_k + \frac{\eta_i}{2} s_\theta(x_k, \sigma_i) + \sqrt{\eta_i}\, z_k$$
+
+![Figure: Annealed Langevin Dynamics의 샘플링 과정. 왼쪽 $\sigma_1$에서 시작하여 순차적으로 노이즈 수준을 줄여나가며 오른쪽 최종 샘플에 수렴합니다. 큰 $\sigma$에서는 전역적인 구조 탐색이, 작은 $\sigma$에서는 세부 디테일의 정제가 이루어집니다.](./images/annealed_langevin.png)
+
+## 4.4 NCSN 아키텍처
+
+NCSN은 노이즈 조건부 score 네트워크 $s_\theta(x, \sigma_i)$를 구현하기 위해 다음을 사용합니다.
+
+* **U-Net 스타일 아키텍처:** 인코더-디코더 구조로 다양한 해상도의 특징 포착
+* **팽창 합성곱(dilated convolutions):** 수용야(receptive field)를 넓혀 전역 구조 파악
+* **Conditional Instance Normalization (조건부 인스턴스 정규화):** 노이즈 수준 $\sigma_i$를 네트워크에 주입
+
+### Conditional Instance Normalization
+
+$$z_k = \gamma[i,k] \cdot \frac{x_k - \mu_k}{s_k} + \beta[i,k]$$
+
+- $i$: 노이즈 수준 인덱스
+- $k$: 특징맵(feature map) 인덱스
+- $\mu_k, s_k$: 특징맵 $k$의 평균과 표준편차
+- $\gamma[i,k], \beta[i,k]$: 노이즈 수준 $i$에 대해 학습된 파라미터
+
+**직관:** 서로 다른 노이즈 수준마다 다른 정규화 파라미터를 부여함으로써, 동일한 네트워크가 현재의 노이즈 스케일에 맞게 동작을 조정합니다.
+
+![Figure: NCSN으로 생성된 이미지 샘플들. 사람 얼굴, 교회 건물, 도시 풍경, 침실 등 다양한 카테고리에서 고품질 이미지가 생성된 NeurIPS 2019 논문 결과를 보여줍니다.](./images/ncsn_results.png)
+
+---
+
+# 5. DDPM과 Score의 연결 (Connecting DDPM and Scores)
+
+## 5.1 DDPM을 Score 학습으로 재해석
+
+DDPM의 순방향 노이징을 다시 살펴보겠습니다.
+
+$$x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1-\bar{\alpha}_t}\, \epsilon, \quad \epsilon \sim \mathcal{N}(0,I)$$
+
+이는 다음과 동치입니다.
+
+$$q(x_t \mid x_0) = \mathcal{N}\!\left(x_t;\, \sqrt{\bar{\alpha}_t}\, x_0,\, (1-\bar{\alpha}_t)I\right)$$
+
+상수를 제외하면:
+
+$$\log q(x_t \mid x_0) = -\frac{1}{2(1-\bar{\alpha}_t)}\left\|x_t - \sqrt{\bar{\alpha}_t}\, x_0\right\|_2^2 + C$$
+
+$x_t$에 대해 그래디언트를 취하면 조건부 score가 됩니다.
+
+$$\nabla_{x_t} \log q(x_t \mid x_0) = -\frac{x_t - \sqrt{\bar{\alpha}_t}\, x_0}{1 - \bar{\alpha}_t}$$
+
+## 5.2 노이즈 표현으로의 변환
+
+순방향 과정에서 $x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1-\bar{\alpha}_t}\, \epsilon$이므로:
+
+$$x_t - \sqrt{\bar{\alpha}_t}\, x_0 = \sqrt{1-\bar{\alpha}_t}\, \epsilon$$
+
+이를 대입하면:
+
+$$\nabla_{x_t} \log q(x_t \mid x_0) = -\frac{\sqrt{1-\bar{\alpha}_t}\, \epsilon}{1 - \bar{\alpha}_t} = -\frac{\epsilon}{\sqrt{1-\bar{\alpha}_t}}$$
+
+## 5.3 노이즈 예측 = Score 예측
+
+**DDPM은 노이즈를 예측합니다:**
+
+$$\epsilon_\theta(x_t, t) \approx \epsilon$$
+
+따라서 대응하는 **score 추정치**는:
+
+$$s_\theta(x_t, t) \approx -\frac{\epsilon_\theta(x_t, t)}{\sqrt{1 - \bar{\alpha}_t}}$$
+
+> **연결 (Connection):**
+> DDPM에서의 노이즈 예측은, 스케일 인수(scale factor) $\frac{1}{\sqrt{1-\bar\alpha_t}}$를 제외하면, **노이즈 분포의 score를 예측하는 것과 동치**입니다.
+>
+> $$\text{DDPM} \iff \text{다양한 노이즈 수준에서의 Score 기반 생성 모델}$$
+
+## 5.4 DDPM 역방향 스텝의 Score 형태
+
+DDPM의 역방향 샘플링 스텝:
+
+$$x_{t-1} = \frac{1}{\sqrt{\alpha_t}}\left(x_t - \frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}}\epsilon_\theta(x_t, t)\right) + \sigma_t z$$
+
+score 표현 $\epsilon_\theta(x_t, t) \approx -\sqrt{1-\bar\alpha_t}\, s_\theta(x_t, t)$을 대입하면:
+
+$$x_{t-1} = \frac{1}{\sqrt{\alpha_t}}\left(x_t + \beta_t\, s_\theta(x_t, t)\right) + \sigma_t z$$
+
+이 형태는 Langevin dynamics와 매우 유사한 구조를 가집니다.
+
+## 5.5 Langevin Dynamics와 DDPM 역방향 스텝의 비교
+
+| 항목 | Langevin Dynamics | DDPM 역방향 스텝 |
+|------|------------------|-----------------|
+| 현재 샘플 | $x_k$ | $x_t$ |
+| Score 방향 | $s_\theta(x_k)$ | $s_\theta(x_t, t)$ |
+| 스텝 크기 | $\eta/2$ | 스케줄 의존 ($\beta_t, \alpha_t$) |
+| 노이즈 | $\sqrt{\eta}\, z_k$ | $\sigma_t z$ |
+| 목적 | 타겟 분포에서 샘플링 | $t$에서 $t-1$로 노이즈 제거 |
+
+**공통 구조:**
+
+$$\text{새 샘플} = \text{현재 샘플} + \text{score 기반 드리프트} + \text{가우시안 노이즈}$$
+
+## 5.6 연속 시간 관점: Score 기반 SDE
+
+DDPM은 유한한 이산 타임스텝을 사용합니다.
+
+$$x_T \to x_{T-1} \to \cdots \to x_0$$
+
+이를 **연속 시간**으로 일반화하면, 순방향 확산을 **확률 미분 방정식(Stochastic Differential Equation, SDE)**으로 볼 수 있습니다.
+
+**일반 SDE (Itô 형태):**
+
+$$dx = f(x, t)\, dt + g(t)\, dW_t$$
+
+- $f(x, t)$: 드리프트(drift) 항
+- $g(t)$: 노이즈 스케일
+- $W_t$: 브라운 운동(Brownian motion)
+
+**역방향 SDE:** 놀랍게도, 순방향 SDE의 역방향 과정 역시 SDE로 표현되며, 이는 **각 시간의 score** $\nabla_x \log p_t(x)$를 포함합니다.
+
+> **핵심 아이디어:** 각 노이즈 수준에서의 score를 학습하면, 역방향 SDE를 실행하여 노이즈에서 데이터로 되돌아올 수 있습니다.
+
+## 5.7 SDE를 통한 통합 (SDE Unification)
+
+SDE 관점은 두 가지 주류 접근법을 통합합니다.
+
+* **NCSN:** 이산적인 노이즈 수준 시퀀스 + annealed Langevin dynamics
+* **DDPM:** 학습된 역방향 가우시안 전이를 가진 이산 마르코프 체인
+* **SDE 관점:** 연속 시간 순방향 노이징 + 역방향 노이즈 제거
+
+> **현대 확산 모델은 score 추정치로 안내되는 학습된 역방향 확률 과정으로 이해할 수 있습니다.**
+
+---
+
+# 6. 현대 확산 시스템 (Modern Diffusion Systems)
+
+## 6.1 조건부 확산 (Conditional Diffusion)
+
+지금까지는 비조건부 생성 모델 $p_\theta(x)$를 다루었습니다. 실용적인 응용을 위해서는 **조건부 생성**이 필요합니다.
+
+$$p_\theta(x \mid c)$$
+
+조건 $c$는 다양한 형태가 될 수 있습니다.
+
+* **클래스 레이블:** "이 이미지는 고양이다"
+* **텍스트 프롬프트:** "사막의 일몰"
+* **저해상도 이미지:** 초해상도(super-resolution)
+* **마스크된 이미지:** 인페인팅(inpainting)
+* **기타 조건 신호**
+
+노이즈 제거 네트워크가 조건을 추가로 입력받습니다.
+
+$$\epsilon_\theta(x_t, t, c)$$
+
+## 6.2 Classifier-Free Guidance (분류기 없는 가이던스)
+
+### 문제
+
+조건부 생성에서는 **조건 $c$를 얼마나 강하게 따를지** 제어하는 것이 중요합니다.
+
+### 핵심 아이디어
+
+동일한 모델을 **조건 $c$가 있을 때와 없을 때** 모두 학습합니다.
+
+- 조건 있을 때: $\epsilon_\theta(x_t, t, c)$
+- 조건 없을 때 (null token 사용): $\epsilon_\theta(x_t, t, \emptyset)$
+
+**가이던스 노이즈 예측:**
+
+$$\epsilon_\text{guided} = \epsilon_\theta(x_t, t, \emptyset) + w\left[\epsilon_\theta(x_t, t, c) - \epsilon_\theta(x_t, t, \emptyset)\right]$$
+
+- $w = 1$: 일반적인 조건부 생성
+- $w > 1$: 조건에 더 강하게 부합하는 샘플 생성 (다양성 감소)
+- $w \gg 1$: 아티팩트 발생 및 다양성 급감
+
+**직관:** $w$가 클수록 조건 $c$와 관련된 방향으로 더 강하게 밀어붙입니다. 이는 조건부 방향과 비조건부 방향의 차이를 과장하는 것과 같습니다.
+
+![Figure: Classifier-Free Guidance의 원리. $w=1$일 때는 일반적인 조건부 생성이, $w$가 커질수록 조건에 더 강하게 부합하는 고품질 이미지가 생성되지만 다양성이 감소합니다. 화살표는 비조건부 기준에서 조건부 방향으로의 편향(bias) 정도를 나타냅니다.](./images/cfg_illustration.png)
+
+## 6.3 Latent Diffusion (잠재 공간 확산)
+
+### 문제
+
+픽셀 공간에서의 확산은 **계산 비용이 매우 큽니다.**
+
+- 고해상도 이미지(예: 512×512×3)는 픽셀 수가 수십만에 달함
+- 수백~수천 타임스텝의 역방향 과정을 모두 고차원 공간에서 수행해야 함
+
+### 해결책: Latent Diffusion
+
+이미지를 먼저 **잠재 공간(latent space)**으로 압축합니다.
+
+$$x \xrightarrow{\text{encoder}} z$$
+
+확산 과정을 **잠재 공간**에서 수행합니다.
+
+$$z_T \to z_{T-1} \to \cdots \to z_0$$
+
+생성된 잠재 벡터를 다시 이미지로 복원합니다.
+
+$$z_0 \xrightarrow{\text{decoder}} x$$
+
+![Figure: Latent Diffusion의 파이프라인. 입력 이미지 $x$는 VAE 인코더를 통해 저차원 잠재 벡터 $z$로 압축됩니다. 확산 및 역방향 과정은 이 잠재 공간에서 수행되며, 최종적으로 VAE 디코더를 통해 원본 해상도의 이미지로 복원됩니다. 잠재 공간에서 작동하므로 계산 비용이 대폭 절감됩니다.](./images/latent_diffusion.png)
+
+**장점:**
+
+* 잠재 공간의 차원이 훨씬 작아 **계산 효율성**이 크게 향상됩니다.
+* 의미론적으로 압축된 표현에서 확산이 이루어져 **품질과 효율**을 동시에 잡을 수 있습니다.
+
+### Stable Diffusion의 레시피
+
+Stable Diffusion은 latent diffusion을 텍스트-이미지 생성에 대중화시킨 모델입니다.
+
+$$\text{텍스트 조건화} + \text{Classifier-Free Guidance} + \text{잠재 공간 노이즈 제거}$$
+
+![Figure: Stable Diffusion으로 생성된 판타지 풍의 우주적 이미지 예시. 텍스트 프롬프트 조건화, 잠재 공간 확산, Classifier-Free Guidance를 결합하여 매우 사실적이고 예술적인 이미지를 생성합니다.](./images/stable_diffusion_example.png)
+
+---
+
+# 7. 응용 (Applications)
+
+## 7.1 이미지 복원 (Image Restoration)
+
+확산 모델은 다양한 조건부 복원 문제를 해결할 수 있습니다.
+
+* **인페인팅(Inpainting):** 마스크된 영역을 문맥에 맞게 채우기
+* **컬러화(Colorization):** 흑백 이미지를 자연스럽게 색칠하기
+
+![Figure: Score 기반 SDE 모델을 활용한 인페인팅(왼쪽)과 컬러화(오른쪽) 결과. 인페인팅에서는 마스크 영역 내에 MNIST 숫자를 삽입하고 나머지 건물 이미지 영역을 조건으로 복원한 결과를 보여주며, 컬러화에서는 흑백 건물 이미지에 자연스러운 색상이 채워진 결과를 보여줍니다.](./images/image_restoration.png)
+
+## 7.2 텍스트-이미지 생성 (Text-to-Image Generation)
+
+텍스트를 조건으로 사용하면 매우 다양하고 고품질의 이미지를 생성할 수 있습니다.
+
+$$\epsilon_\theta(x_t, t, \text{text})$$
+
+텍스트 인코더(예: CLIP, T5)로 텍스트를 임베딩하고, 이를 노이즈 제거 네트워크에 크로스-어텐션(cross-attention)으로 주입합니다.
+
+**예시 프롬프트 (GLIDE 모델):**
+- "a hedgehog using a calculator"
+- "a corgi wearing a bowtie and a purple party hat"
+- "robots meditating in a vipassana retreat"
+- "a surrealist dream-like oil painting by salvador dali of a cat playing checkers"
+
+![Figure: GLIDE 모델의 텍스트-이미지 생성 결과. 다양한 텍스트 프롬프트에 대해 고품질의 사실적 또는 예술적 이미지가 생성됩니다. 각 이미지 아래에 해당 텍스트 프롬프트가 표시되어 있으며, 텍스트 조건화와 Classifier-Free Guidance의 효과를 잘 보여줍니다.](./images/glide_results.png)
+
+---
+
+# 강의 요약 (Summary)
+
+이번 강의에서 다룬 핵심 내용을 정리합니다.
+
+**Score function:**
+
+$$\nabla_x \log p(x)$$
+
+- 확률 밀도가 증가하는 방향을 가리키는 벡터장
+
+**Langevin dynamics:**
+
+$$x_{k+1} = x_k + \frac{\eta}{2}\nabla_x \log p(x_k) + \sqrt{\eta}\, z_k$$
+
+- score를 이용하여 분포 $p(x)$에서 샘플링하는 방법
+
+**Denoising score matching:**
+
+$$s_\theta(\tilde{x}, \sigma) \approx -\frac{\tilde{x} - x}{\sigma^2}$$
+
+- 노이즈 오염 분포의 score를 지도 학습으로 학습
+
+**DDPM-Score 연결:**
+
+$$s_\theta(x_t, t) \approx -\frac{\epsilon_\theta(x_t, t)}{\sqrt{1 - \bar{\alpha}_t}}$$
+
+- DDPM의 노이즈 예측은 score 예측과 스케일 인수만큼의 차이
+
+**현대 확산 시스템의 구성 요소:**
+- **Conditional diffusion:** $\epsilon_\theta(x_t, t, c)$로 다양한 조건부 생성
+- **Classifier-Free Guidance:** 조건 강도를 가중치 $w$로 제어
+- **Latent Diffusion:** 잠재 공간에서의 확산으로 계산 효율성 향상
+
+---
+
+## 참고 문헌
+
+- Song, Y., & Ermon, S. (2019). Generative modeling by estimating gradients of the data distribution. *NeurIPS 2019*.
+- Song, Y., Sohl-Dickstein, J., Kingma, D. P., Kumar, A., Ermon, S., & Poole, B. (2021). Score-based generative modeling through stochastic differential equations. *ICLR 2021*.
+- Nichol, A., Dhariwal, P., et al. (2021). GLIDE: Towards photorealistic image generation and editing with text-guided diffusion models.

@@ -1,0 +1,658 @@
+---
+title: "[Deep Learning] 23. Reinforcement Learning 2"
+description: "Model-Free Value Learning and Deep Q-Learning"
+author: "유성현"
+date: "2026-05-27"
+categories: [Deep Learning]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+## 들어가며
+
+지난 강의(Lecture 22)에서는 **모델 기반(model-based) 강화학습**을 살펴보았습니다. 전이 확률 $T(s' \mid s, a)$와 보상 함수 $r(s, a)$가 주어졌을 때, Bellman 방정식을 활용한 동적 프로그래밍(dynamic programming)으로 최적 정책을 구할 수 있었습니다.
+
+그런데 현실에서는 환경의 모델을 정확히 알기 어렵습니다. 이번 강의에서는 **모델을 모르더라도 환경과의 상호작용(샘플 경험)만으로 가치 함수를 학습**하는 방법론들을 다룹니다. 전체 흐름은 아래와 같습니다.
+
+$$
+\text{MC / TD} \;\rightarrow\; \text{SARSA / Q-learning} \;\rightarrow\; \text{DQN}
+$$
+
+- **Model-free prediction**: 주어진 정책 $\pi$의 가치 함수 $V^\pi$ 또는 $Q^\pi$를 추정합니다.
+- **Model-free control**: 가치 함수 추정을 활용해 더 좋은(혹은 최적의) 정책을 찾습니다.
+- **Deep Q-learning**: Q-함수를 신경망으로 근사하여 고차원 상태 공간으로 확장합니다.
+
+---
+
+## 1. Model-free prediction
+
+### 1.1 Model-based vs. Model-free RL
+
+| 구분 | Model-based | Model-free |
+|------|-------------|------------|
+| 전제 | $T(s' \mid s, a)$, $r(s, a)$ 알고 있음 | $T$, $r$ 미지 |
+| 핵심 연산 | 1-step lookahead: $r(s,a) + \gamma \sum_{s'} T(s'\mid s,a) V(s')$ | 관찰된 전이 $(s_t, a_t, r_t, s_{t+1})$ 활용 |
+| 예시 | Policy evaluation, Policy iteration, Value iteration | Monte Carlo, TD learning, SARSA, Q-learning |
+
+Model-free 환경에서 에이전트가 얻을 수 있는 정보는 오직 **실제 경험한 전이(transition) 샘플** 뿐입니다. 따라서 학습은 반드시 이 경험으로부터 이루어져야 합니다.
+
+---
+
+### 1.2 Prediction과 Control의 구분
+
+- **Prediction (예측)**: 고정된 정책 $\pi$가 주어졌을 때, $V^\pi(s)$ 또는 $Q^\pi(s, a)$를 샘플 궤적으로부터 추정하는 문제입니다.
+- **Control (제어)**: 좋은 혹은 최적의 정책을 샘플 전이로부터 직접 찾는 문제입니다.
+
+이번 강의에서 prediction은 **Monte Carlo(MC)와 TD(Temporal-Difference) 학습**으로, control은 **SARSA와 Q-learning**으로 다룹니다.
+
+---
+
+### 1.3 Return(수익) 표기법
+
+시간 $t$에서의 즉각 보상을 $r_t$, 그리고 $t$ 이후의 누적 할인 보상(return)을 $G_t$로 정의합니다.
+
+$$
+G_t = r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots = \sum_{k=t}^{H} \gamma^{k-t} r_k
+$$
+
+여기서 $\gamma \in [0, 1)$는 할인율(discount factor)입니다. 가치 함수는 이 return의 기댓값입니다.
+
+$$
+V^\pi(s) = \mathbb{E}_\pi \left[ G_t \mid s_t = s \right]
+$$
+
+Model-free prediction의 목표는 **실제 샘플 궤적으로부터 이 기댓값을 추정**하는 것입니다.
+
+---
+
+### 1.4 Monte Carlo Policy Evaluation
+
+**Monte Carlo(MC) 방법**은 **완전한 에피소드**가 끝난 후에야 업데이트할 수 있는 기법입니다.
+
+#### 알고리즘 아이디어
+
+에피소드를 끝까지 진행하면 다음 궤적을 얻습니다.
+
+$$
+s_0, a_0, r_0,\; s_1, a_1, r_1,\; \ldots,\; s_H
+$$
+
+방문한 상태 $s_t$에 대해 실제 return $G_t$를 직접 계산할 수 있습니다.
+
+$$
+G_t = \sum_{k=t}^{H} \gamma^{k-t} r_k
+$$
+
+이를 이용해 가치 추정값을 업데이트합니다.
+
+$$
+\boxed{V(s_t) \leftarrow V(s_t) + \alpha \left( G_t - V(s_t) \right)}
+$$
+
+- **직관적 해석**: 현재 추정값 $V(s_t)$를 실제 관측된 return $G_t$ 방향으로 이동시킵니다.
+
+#### 표본 평균과의 연결
+
+상태 $s$를 $N$번 방문했을 때 각 return을 $G^{(1)}, G^{(2)}, \ldots, G^{(N)}$이라 하면,
+
+$$
+V(s) = \frac{1}{N} \sum_{i=1}^{N} G^{(i)}
+$$
+
+이를 점진적(incremental) 평균으로 표현하면 다음과 같습니다.
+
+$$
+V_N(s) = V_{N-1}(s) + \frac{1}{N} \left( G^{(N)} - V_{N-1}(s) \right)
+$$
+
+이것이 학습률 $\alpha$를 사용하는 일반적인 업데이트 식으로 확장됩니다.
+
+---
+
+### 1.5 Temporal-Difference (TD) Learning
+
+MC는 에피소드가 끝나야만 업데이트할 수 있다는 단점이 있습니다. **TD 학습**은 한 스텝(step)만 진행한 후에도 즉시 업데이트할 수 있는 방법입니다.
+
+#### 핵심 아이디어: Bootstrapping
+
+Bellman 관계식을 다시 살펴보겠습니다.
+
+$$
+V^\pi(s_t) = \mathbb{E}_\pi \left[ r_t + \gamma V^\pi(s_{t+1}) \mid s_t \right]
+$$
+
+하나의 전이 샘플 $(s_t, r_t, s_{t+1})$이 주어졌을 때, **TD target**을 다음과 같이 정의합니다.
+
+$$
+y_t = r_t + \gamma V(s_{t+1})
+$$
+
+그리고 **TD error** $\delta_t$를 다음과 같이 정의하면,
+
+$$
+\delta_t = y_t - V(s_t) = r_t + \gamma V(s_{t+1}) - V(s_t)
+$$
+
+업데이트 식은 다음과 같습니다.
+
+$$
+\boxed{V(s_t) \leftarrow V(s_t) + \alpha \delta_t}
+$$
+
+- **Bootstrapping**: TD는 다른 추정값 $V(s_{t+1})$을 사용해 현재 추정값 $V(s_t)$을 업데이트합니다. 즉, **추정으로 추정을 개선**하는 방식입니다.
+
+---
+
+### 1.6 Monte Carlo vs. TD 비교
+
+두 방법 모두 동일한 업데이트 템플릿을 사용합니다.
+
+$$
+\text{estimate} \leftarrow \text{estimate} + \alpha (\text{target} - \text{estimate})
+$$
+
+| 비교 항목 | Monte Carlo | Temporal Difference |
+|-----------|-------------|---------------------|
+| **target** | $G_t = \sum_{k=t}^{H} \gamma^{k-t} r_k$ | $r_t + \gamma V(s_{t+1})$ |
+| 에피소드 종료 필요? | **예** | **아니오** |
+| 온라인 학습 가능? | 불가 (return 필요) | 가능 (매 스텝) |
+| Bootstrapping 사용? | 아니오 | **예** |
+| 편향(bias) | 낮음 | 높음 (부트스트랩 오차) |
+| 분산(variance) | 높음 (긴 경로의 누적 잡음) | 낮음 |
+| 연속 과제(continuing task) | 다소 불편 | 자연스럽게 적용 가능 |
+
+- **MC**는 실제 return을 쓰므로 편향은 없지만, 긴 에피소드에서 분산이 커집니다.
+- **TD**는 부트스트랩 타겟을 쓰므로 분산은 낮지만, 가치 추정의 오차가 편향을 유발합니다.
+
+---
+
+## 2. Model-free control
+
+### 2.1 상태 가치 함수의 한계
+
+제어(control) 문제에서는 **어느 행동을 선택해야 하는지**를 결정해야 합니다. 상태 가치 함수 $V(s)$로부터 탐욕적(greedy) 행동을 결정하려면 모델이 필요합니다.
+
+$$
+a^*(s) = \arg\max_a \left[ r(s, a) + \gamma \sum_{s'} T(s' \mid s, a) V(s') \right]
+$$
+
+하지만 model-free 환경에서는 $T$와 $r$을 모르므로, 이 계산을 수행할 수 없습니다.
+
+#### 해결책: 행동 가치 함수 $Q(s, a)$ 학습
+
+$$
+a^*(s) \in \arg\max_a Q(s, a)
+$$
+
+$Q(s, a)$를 직접 학습하면, 모델 없이도 탐욕적 행동 선택이 가능합니다.
+
+---
+
+### 2.2 탐색: $\epsilon$-greedy 정책
+
+$Q$를 잘 학습하려면 에이전트가 다양한 행동을 시도(탐색)해야 합니다. **$\epsilon$-greedy 정책**은 이 탐색-이용(exploration-exploitation) 균형을 맞추는 가장 간단한 방법입니다.
+
+$$
+a_t = \begin{cases}
+\text{무작위 행동} & \text{확률 } \epsilon \\
+\arg\max_a Q(s_t, a) & \text{확률 } 1 - \epsilon
+\end{cases}
+$$
+
+- **$\epsilon$이 클수록**: 탐색 증가, 새로운 행동을 많이 시도합니다.
+- **$\epsilon$이 작을수록**: 이용 증가, 현재 최선의 행동을 주로 선택합니다.
+- 실제 훈련에서는 $\epsilon$을 **점차 감소(annealing)**시키는 전략이 많이 사용됩니다.
+
+---
+
+### 2.3 SARSA (On-policy Control)
+
+**SARSA**는 **on-policy** 제어 알고리즘입니다. 알고리즘 이름은 업데이트에 사용되는 샘플 튜플에서 유래합니다.
+
+$$
+(s_t,\; a_t,\; r_t,\; s_{t+1},\; a_{t+1})
+$$
+
+#### SARSA 업데이트 식
+
+**SARSA target**은 실제로 선택된 다음 행동 $a_{t+1}$의 Q-값을 사용합니다.
+
+$$
+y_t = r_t + \gamma Q(s_{t+1}, a_{t+1}), \quad a_{t+1} \sim \pi(\cdot \mid s_{t+1})
+$$
+
+$$
+\boxed{Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha \left( r_t + \gamma Q(s_{t+1}, a_{t+1}) - Q(s_t, a_t) \right)}
+$$
+
+#### On-policy인 이유
+
+SARSA는 현재 행동 정책이 실제로 선택한 다음 행동 $a_{t+1}$을 사용하여 업데이트합니다. 따라서 **현재 따르고 있는 정책 자체**의 $Q^\pi$를 추정합니다.
+
+- 예: $\pi$가 $\epsilon$-greedy 정책이라면, SARSA는 탐색적인 $\epsilon$-greedy 정책의 가치를 학습합니다.
+
+---
+
+### 2.4 Q-learning (Off-policy Control)
+
+**Q-learning**은 **Bellman 최적 방정식**을 직접 근사하는 **off-policy** 알고리즘입니다.
+
+#### Q-learning target 및 업데이트 식
+
+$$
+y_t = r_t + \gamma \max_{a'} Q(s_{t+1}, a')
+$$
+
+$$
+\boxed{Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha \left( r_t + \gamma \max_{a'} Q(s_{t+1}, a') - Q(s_t, a_t) \right)}
+$$
+
+- **직관**: 다음 상태 $s_{t+1}$에서 최선의 행동을 취한다고 가정하고 target을 구성합니다.
+
+#### Off-policy인 이유
+
+데이터를 수집하는 **행동 정책(behavior policy)**은 탐색적인 $\epsilon$-greedy일 수 있지만, Q-learning의 target은 **탐욕적(greedy) 행동**을 가정합니다.
+
+$$
+\text{행동 정책: } a_t \sim \epsilon\text{-greedy}(Q) \qquad \neq \qquad \text{target 정책: } \max_{a'} Q(s_{t+1}, a')
+$$
+
+Q-learning은 탐색적으로 행동하면서도 **최적 정책의 $Q^*$**를 직접 학습합니다.
+
+---
+
+### 2.5 SARSA vs. Q-learning 비교
+
+| 비교 항목 | SARSA | Q-learning |
+|-----------|-------|------------|
+| **Target** | $r_t + \gamma Q(s_{t+1}, a_{t+1})$ | $r_t + \gamma \max_{a'} Q(s_{t+1}, a')$ |
+| 다음 행동 | 실제 샘플된 $a_{t+1}$ | 탐욕적 행동 (argmax) |
+| 정책 유형 | **On-policy** | **Off-policy** |
+| 학습하는 대상 | 행동 정책의 가치 | 탐욕적 최적 정책의 가치 |
+| 탐색이 가치에 반영? | **예** | 아니오 (target은 greedy) |
+
+---
+
+### 2.6 통합 관점: Target 기반 업데이트
+
+모든 model-free 가치 학습 방법은 동일한 구조를 공유합니다.
+
+$$
+\text{estimate} \leftarrow \text{estimate} + \alpha (\text{target} - \text{estimate})
+$$
+
+| 방법 | Target |
+|------|--------|
+| Monte Carlo | $G_t$ |
+| TD(0) | $r_t + \gamma V(s_{t+1})$ |
+| SARSA | $r_t + \gamma Q(s_{t+1}, a_{t+1})$ |
+| Q-learning | $r_t + \gamma \max_{a'} Q(s_{t+1}, a')$ |
+
+**핵심 차이는 target의 선택**에 있습니다. Target이 달라지면 편향-분산 트레이드오프, on/off-policy 여부, 수렴 특성이 모두 달라집니다.
+
+---
+
+## 3. Deep Q-learning
+
+### 3.1 Tabular Q-learning의 한계
+
+Tabular Q-learning은 모든 상태-행동 쌍 $(s, a) \in S \times A$에 대해 $Q(s, a)$ 값을 독립적으로 저장합니다. 이 방식은 다음과 같은 상황에서 현실적으로 불가능해집니다.
+
+* 상태 $s$가 **고차원 이미지**인 경우 (예: Atari 게임 화면)
+* $|S|$가 기하급수적으로 크거나 **연속적(continuous)**인 경우
+* **유사한 상태들 사이의 일반화(generalization)**가 필요한 경우
+
+#### 해결책: 신경망으로 Q-함수 근사
+
+$$
+Q_\phi(s, a) \approx Q^*(s, a)
+$$
+
+매개변수 $\phi$를 갖는 신경망으로 $Q^*$를 근사하면, 이전에 본 적 없는 상태에 대해서도 일반화할 수 있습니다.
+
+---
+
+### 3.2 Deep Q-Network (DQN) 아키텍처
+
+이산적(discrete) 행동 공간에서 DQN은 상태 $s$를 입력받아 **모든 행동에 대한 Q-값을 동시에 출력**합니다.
+
+$$
+s \;\xrightarrow{\text{CNN}}\; \left( Q_\phi(s, a_1),\; Q_\phi(s, a_2),\; \ldots,\; Q_\phi(s, a_{|A|}) \right)
+$$
+
+![Figure: DQN 아키텍처 개요. 게임 화면 이미지 $s$를 CNN에 입력하면 각 행동(left, right, ...)에 대한 Q-값이 출력된다. 에이전트는 이 값 중 최댓값에 해당하는 행동을 선택(혹은 $\epsilon$-greedy로 탐색)한다.](./images/dqn_architecture_overview.png)
+
+행동 선택은 다음과 같이 이루어집니다.
+
+$$
+a = \arg\max_a Q_\phi(s, a) \quad (\text{$\epsilon$-greedy 탐색 포함})
+$$
+
+---
+
+### 3.3 DQN의 두 가지 핵심 안정화 기법
+
+Tabular Q-learning을 신경망으로 단순히 대체하면 학습이 불안정해집니다. DQN은 이를 해결하기 위해 두 가지 핵심 기법을 도입합니다.
+
+#### ① Target Network (목표 네트워크)
+
+Tabular Q-learning의 target을 신경망으로 표현하면 다음과 같습니다.
+
+$$
+y = r + \gamma \max_{a'} Q_{\phi^-}(s', a')
+$$
+
+여기서 $Q_{\phi^-}$는 **target network**로, 파라미터 $\phi^-$는 다수의 gradient 업데이트 동안 **고정**되어 있습니다. 주기적으로만 $\phi^- \leftarrow \phi$로 복사됩니다.
+
+- **역할**: target $y$가 매 스텝마다 변하면 학습 목표가 불안정해집니다. Target network는 학습 목표를 일시적으로 고정시켜 안정성을 높입니다.
+
+#### ② Experience Replay (경험 재생)
+
+DQN은 과거 전이들을 **replay buffer** $\mathcal{D}$에 저장합니다.
+
+$$
+\mathcal{D} = \{(s_i, a_i, r_i, s'_i)\}_{i=1}^{N}
+$$
+
+훈련 시에는 $\mathcal{D}$에서 **무작위로 미니배치를 샘플링**하여 업데이트합니다.
+
+![Figure: DQN의 경험 재생 구조. 에이전트는 환경과 상호작용하여 전이 $(s_t, a_t, r_t, s_{t+1})$을 replay buffer $\mathcal{D}$에 저장한다. 학습 시에는 $\mathcal{D}$에서 무작위 미니배치를 샘플링하여 Q-network $Q_\phi$를 업데이트한다. 이 과정이 연속적인 샘플 간 상관관계를 제거하고, 과거 경험을 재활용하게 해준다.](./images/dqn_replay_buffer.png)
+
+Experience replay의 장점:
+* **연속 샘플 간 상관관계 제거**: 연속된 전이들은 서로 높은 상관관계를 가지는데, 무작위 샘플링이 이를 깨뜨립니다.
+* **데이터 효율성 향상**: 과거 경험을 여러 번 재사용합니다.
+* **지도학습과 유사한 업데이트**: i.i.d. 가정에 가까워져 안정적입니다.
+
+---
+
+### 3.4 DQN Loss
+
+전이 샘플 $(s, a, r, s')$에 대해 target을 다음과 같이 정의합니다.
+
+$$
+y = r + \gamma \max_{a'} Q_{\phi^-}(s', a')
+$$
+
+그리고 **Bellman 오차(squared Bellman error)**를 최소화하도록 $Q_\phi$를 학습합니다.
+
+$$
+L(\phi) = \left( Q_\phi(s, a) - y \right)^2
+$$
+
+미니배치 단위로는 다음과 같습니다.
+
+$$
+\boxed{L(\phi) = \mathbb{E}_{(s, a, r, s') \sim \mathcal{D}} \left[ \left( Q_\phi(s, a) - \left[ r + \gamma \max_{a'} Q_{\phi^-}(s', a') \right] \right)^2 \right]}
+$$
+
+---
+
+### 3.5 DQN 전체 알고리즘
+
+> 1. Q-network $Q_\phi$ 및 target network $Q_{\phi^-}$ 초기화
+> 2. Replay buffer $\mathcal{D}$ 초기화
+> 3. **반복**:
+>    - (3.1) $\epsilon$-greedy 정책으로 행동 선택:
+>      $$a_t = \begin{cases} \text{무작위} & \text{확률 } \epsilon \\ \arg\max_a Q_\phi(s_t, a) & \text{otherwise} \end{cases}$$
+>    - (3.2) 전이 $(s_t, a_t, r_t, s_{t+1})$ 관찰 후 $\mathcal{D}$에 저장
+>    - (3.3) $\mathcal{D}$에서 미니배치 샘플링
+>    - (3.4) Target 계산: $y_i = r_i + \gamma \max_{a'} Q_{\phi^-}(s'_i, a')$
+>    - (3.5) $\phi$ 업데이트: $\left( Q_\phi(s_i, a_i) - y_i \right)^2$ 최소화
+>    - (3.6) 주기적으로 $\phi^- \leftarrow \phi$ 복사
+
+---
+
+### 3.6 DQN for Atari
+
+DQN은 **픽셀 이미지로부터 직접 게임을 배울 수 있다**는 것을 처음으로 대규모로 입증한 landmark 연구입니다.
+
+* **State**: 최근 Atari 게임 프레임들의 스택
+* **Action**: 게임 컨트롤 (Left, Right, Up, Down 등)
+* **Reward**: 매 타임스텝의 점수 증가/감소
+
+![Figure: DQN이 플레이한 Atari 게임들(Breakout, Enduro, Space Invaders 등). 공통적으로 raw pixel을 상태로, 게임 컨트롤을 행동으로, 점수 변화를 보상으로 사용한다.](./images/dqn_atari_games.png)
+
+아래 표는 Experience Replay와 Fixed-Q(target network) 유무에 따른 성능 차이를 보여줍니다.
+
+| 게임 | Replay + Fixed-Q | Replay + Q-learning | No replay + Fixed-Q | No replay + Q-learning |
+|------|-----------------|---------------------|---------------------|------------------------|
+| Breakout | **316.81** | 240.73 | 10.16 | 3.17 |
+| Enduro | **1006.3** | 831.25 | 141.89 | 29.1 |
+| River Raid | **7446.62** | 4102.81 | 2867.66 | 1453.02 |
+| Seaquest | **2894.4** | 822.55 | 1003 | 275.81 |
+| Space Invaders | **1088.94** | 826.33 | 373.22 | 301.99 |
+
+두 기법(Experience Replay + Fixed-Q target)이 모두 적용되었을 때 성능이 압도적으로 높음을 확인할 수 있습니다.
+
+---
+
+## 4. Stability Issues in Deep Value Learning
+
+### 4.1 Deadly Triad (치명적 삼중 조합)
+
+Deep Q-learning은 다음 세 가지 요소를 동시에 사용합니다.
+
+1. **Bootstrapping**: target이 추정된 가치를 포함합니다.
+   $$y = r + \gamma \max_{a'} Q_{\phi^-}(s', a')$$
+
+2. **Off-policy learning**: 데이터가 과거 혹은 탐색적 정책에서 수집됩니다.
+
+3. **Function approximation**: $Q_\phi(s, a)$는 파라미터를 공유하는 신경망입니다.
+
+> **Deadly Triad**: 이 세 가지 요소가 **동시에** 존재할 때, TD 학습이 **발산(divergence)**할 수 있습니다.
+
+---
+
+### 4.2 함수 근사가 문제를 어떻게 바꾸는가
+
+**Tabular RL**에서는 $Q(s, a)$가 각 상태-행동 쌍에 대해 독립적인 파라미터를 가집니다. 하나의 쌍을 업데이트해도 다른 쌍에 직접적인 영향을 주지 않습니다.
+
+**함수 근사(신경망)**에서는 $Q_\phi(s, a)$가 파라미터 $\phi$를 모든 상태-행동에 걸쳐 **공유**합니다. 하나의 전이에 대한 업데이트가 **다른 모든 상태의 예측값을 변화**시킬 수 있습니다.
+
+- 결과: 부트스트랩 target의 오차가 함수 근사를 통해 전파되고 증폭될 수 있습니다.
+
+---
+
+### 4.3 함수 근사에서의 TD 학습
+
+Tabular 환경에서는 각 상태에 독립적인 값이 있었지만, 함수 근사에서는 파라미터 벡터 $w$로 가치를 표현합니다.
+
+$$
+V_w(s)
+$$
+
+이제 $V_w(s_t)$를 독립적으로 업데이트할 수 없습니다. 대신, TD target $y_t$를 향해 $V_w(s_t)$가 이동하도록 $w$를 업데이트합니다.
+
+TD target (고정된 것으로 취급):
+$$y_t = r_t + \gamma V_{w_t}(s_{t+1})$$
+
+손실 함수를 정의합니다.
+
+$$
+L_t(w) = \frac{1}{2} \left( V_w(s_t) - y_t \right)^2
+$$
+
+$y_t$를 **고정된 상수**로 취급하고 $w$에 대해 미분하면,
+
+$$
+\nabla_w L_t(w) = \left( V_w(s_t) - y_t \right) \nabla_w V_w(s_t)
+$$
+
+따라서 gradient descent 업데이트는 다음과 같습니다.
+
+$$
+w_{t+1} = w_t + \alpha \left( y_t - V_{w_t}(s_t) \right) \nabla_w V_w(s_t) \Big|_{w = w_t}
+$$
+
+---
+
+### 4.4 Semi-gradient 업데이트란?
+
+TD target은 사실 현재 가치 함수를 포함합니다.
+
+$$
+y_t = r_t + \gamma V_{w_t}(s_{t+1})
+$$
+
+따라서 $y_t$ 역시 $w$의 함수입니다. 완전한 gradient를 계산하려면 $V_{w_t}(s_{t+1})$ 항도 미분해야 합니다. 하지만 표준 TD 학습에서는 **이 항에 stop-gradient를 적용**합니다.
+
+- target을 상수처럼 다루고,
+- **현재 예측값 $V_w(s_t)$ 부분만 미분**합니다.
+
+$$
+\boxed{w_{t+1} = w_t + \alpha \delta_t \nabla_w V_w(s_t)\Big|_{w=w_t}}
+$$
+
+여기서 $\delta_t = r_t + \gamma V_{w_t}(s_{t+1}) - V_{w_t}(s_t)$는 TD error입니다.
+
+이것을 **semi-gradient 업데이트**라고 부릅니다. 딥러닝 관점에서는 target에 `stop_gradient()`를 적용하는 것과 동일합니다.
+
+> **왜 semi-gradient인가?** 진짜 gradient가 아니라 gradient의 절반(현재 예측 부분만)만 사용하기 때문입니다. 이로 인해 이론적 수렴 보장이 약해지고, 발산 가능성이 생깁니다.
+
+---
+
+### 4.5 발산 예시: $V_w(s) = ws$
+
+매우 간단한 예시로 발산을 직접 확인해 보겠습니다.
+
+**설정**:
+- 가치 근사: $V_w(s) = ws$
+- 전이: $s = 1 \to s' = 2$, 보상 $r = 0$
+- 할인율: $\gamma$
+
+**TD error 계산**:
+
+$$
+V_{w_t}(1) = w_t, \quad V_{w_t}(2) = 2w_t, \quad \nabla_w V_w(1) = 1
+$$
+
+$$
+\delta_t = r + \gamma V_{w_t}(2) - V_{w_t}(1) = 0 + \gamma(2w_t) - w_t = (2\gamma - 1)w_t
+$$
+
+**Semi-gradient 업데이트**:
+
+$$
+w_{t+1} = w_t + \alpha \delta_t \cdot \nabla_w V_w(1) = w_t + \alpha (2\gamma - 1) w_t
+$$
+
+$$
+\boxed{w_{t+1} = \left(1 + \alpha(2\gamma - 1)\right) w_t}
+$$
+
+**발산 조건 분석**:
+
+$$
+\gamma > \frac{1}{2} \implies 2\gamma - 1 > 0 \implies 1 + \alpha(2\gamma - 1) > 1
+$$
+
+임의의 $\alpha > 0$에 대해, $|w_t| \to \infty$로 발산합니다.
+
+> **교훈**: 부트스트랩 + off-policy + 함수 근사의 조합은 이 매우 작은 예시에서도 발산을 유발합니다. 이것이 deadly triad가 위험한 이유입니다.
+
+---
+
+### 4.6 DQN에서의 Deadly Triad와 안정화
+
+DQN은 deadly triad의 세 요소를 모두 가지고 있습니다.
+
+* **Bootstrapping**: $y = r + \gamma \max_{a'} Q_{\phi^-}(s', a')$
+* **Off-policy learning**: Experience replay에 저장된 과거 정책의 데이터 + Q-learning의 greedy target
+* **Function approximation**: 신경망 $Q_\phi$
+
+DQN의 안정화 메커니즘:
+* **Target network**: target을 주기적으로만 업데이트하여 moving target 문제를 완화합니다.
+* **Experience replay**: 데이터 상관관계를 줄이고 지도학습과 유사한 환경을 만듭니다.
+
+단, 이는 발산 문제를 **완화**하는 것이지 **완전히 해결**하는 것은 아닙니다.
+
+---
+
+### 4.7 Overestimation Bias (과대추정 편향)
+
+Q-learning target에는 다음과 같은 최댓값 연산이 포함됩니다.
+
+$$
+y = r + \gamma \max_{a'} Q_{\phi^-}(s', a')
+$$
+
+Q-추정치가 잡음을 포함한다고 가정합니다.
+
+$$
+Q_{\phi^-}(s', a') = Q^*(s', a') + \epsilon(a')
+$$
+
+잡음이 평균이 0이더라도, **최댓값은 양의 잡음을 가진 행동을 선택**하는 경향이 있습니다.
+
+$$
+\mathbb{E}\left[ \max_{a'} Q_{\phi^-}(s', a') \right] \geq \max_{a'} Q^*(s', a')
+$$
+
+즉, max 연산자가 **target 값을 체계적으로 과대추정**하게 만듭니다.
+
+---
+
+### 4.8 Double Q-learning으로 과대추정 완화
+
+Standard Q-learning에서 발생하는 문제를 명확히 합니다.
+
+$$
+a^* = \arg\max_{a'} Q_{\phi^-}(s', a'), \quad y = r + \gamma Q_{\phi^-}(s', a^*)
+$$
+
+**동일한 네트워크**가 (1) 행동 선택과 (2) 선택된 행동의 가치 평가를 모두 수행합니다. 과대추정된 Q-값을 가진 행동이 선택되고, 그 과대추정된 값이 target에 사용됩니다.
+
+**Double Q-learning**은 이 두 역할을 분리합니다.
+
+- **행동 선택**: online network $\phi$ 사용
+$$
+a^* = \arg\max_{a'} Q_\phi(s', a')
+$$
+
+- **가치 평가**: target network $\phi^-$ 사용
+$$
+y = r + \gamma Q_{\phi^-}(s', a^*)
+$$
+
+$$
+\boxed{y = r + \gamma Q_{\phi^-}\!\left(s',\; \arg\max_{a'} Q_\phi(s', a')\right)}
+$$
+
+- **핵심 아이디어**: 한 네트워크가 과대추정한 행동을, 독립적인 다른 네트워크로 평가하면 과대추정 편향이 줄어듭니다.
+
+---
+
+### 4.9 Multi-step Returns
+
+One-step Q-learning target의 부트스트랩 편향을 줄이기 위해, **실제 보상을 여러 스텝 더 사용**할 수 있습니다.
+
+**1-step target**:
+$$y_t^{(1)} = r_t + \gamma \max_a Q(s_{t+1}, a)$$
+
+**$n$-step target**:
+$$y_t^{(n)} = r_t + \gamma r_{t+1} + \cdots + \gamma^{n-1} r_{t+n-1} + \gamma^n \max_a Q(s_{t+n}, a)$$
+
+- 더 많은 **실제 보상**을 사용하고 부트스트랩 구간을 줄여 편향을 낮춥니다.
+- 실제 deep RL에서 성능 향상에 도움이 되는 것으로 알려져 있습니다.
+- 단, $n$이 너무 크면 분산이 증가하고, off-policy 상황에서 보정이 필요해집니다.
+
+---
+
+## 5. 강의 요약
+
+| 주제 | 핵심 내용 |
+|------|-----------|
+| **Model-free 기반** | 샘플 전이 $(s_t, a_t, r_t, s_{t+1})$로부터 학습 |
+| **Monte Carlo** | 실제 return $G_t$를 향해 업데이트; 완전한 에피소드 필요 |
+| **TD(0)** | 부트스트랩 target $r_t + \gamma V(s_{t+1})$; 매 스텝 업데이트 가능 |
+| **SARSA** | On-policy; target $r_t + \gamma Q(s_{t+1}, a_{t+1})$ |
+| **Q-learning** | Off-policy; target $r_t + \gamma \max_{a'} Q(s_{t+1}, a')$ |
+| **DQN** | Q-table을 신경망으로 대체; replay buffer + target network로 안정화 |
+| **Deadly Triad** | 부트스트랩 + off-policy + 함수 근사 → 발산 위험 |
+| **Double Q-learning** | 행동 선택과 가치 평가를 분리 → 과대추정 편향 완화 |
+| **Multi-step returns** | 실제 보상을 $n$스텝 더 사용 → 부트스트랩 편향 감소 |

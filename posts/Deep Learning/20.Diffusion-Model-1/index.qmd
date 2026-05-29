@@ -1,0 +1,443 @@
+---
+title: "[Deep Learning] 20. Diffusion Models 1"
+description: "DDPM and Noise Prediction"
+author: "유성현"
+date: "2026-05-13"
+categories: [Deep Learning]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 들어가며 (Motivation)
+
+지난 강의들에서 우리는 자기회귀 모델(PixelRNN/CNN)과 GAN(Generative Adversarial Network)을 살펴보았습니다. 이번 강의에서는 최근 이미지 생성 분야에서 가장 강력한 성능을 보여주고 있는 **확산 모델(Diffusion Models)** 을 다룹니다.
+
+확산 모델의 핵심 아이디어는 한 문장으로 요약됩니다:
+
+> **"확산 모델은 점진적인 노이즈 추가 과정을 역방향으로 복원하는 방법을 학습한다."**
+
+- **학습(Training):** 데이터에 노이즈를 추가하고, 그 노이즈를 예측하도록 모델을 훈련합니다.
+- **샘플링(Sampling):** 순수한 가우시안 노이즈에서 출발하여 단계적으로 노이즈를 제거하며 데이터를 생성합니다.
+
+$$x_0 \xrightarrow{\text{forward noising}} x_1 \rightarrow x_2 \rightarrow \cdots \rightarrow x_T \sim \mathcal{N}(0, I)$$
+$$x_T \xrightarrow{\text{learned reverse denoising}} \cdots \rightarrow x_1 \rightarrow x_0$$
+
+![Figure: 확산 모델의 전체 흐름. 위쪽 화살표(고정된 순방향 노이징)는 깨끗한 데이터 $x_0$를 조금씩 가우시안 노이즈로 오염시켜 $x_T$까지 도달하며, 아래쪽 화살표(학습된 역방향 디노이징)는 순수 노이즈 $x_T$에서 출발하여 깨끗한 데이터 $x_0$를 복원합니다.](./images/ddpm_big_picture.png)
+
+---
+
+# 1. 순방향 노이징 과정 (Forward Noising Process)
+
+## 1.1 순방향 과정의 정의
+
+순방향 과정(forward process)은 **학습 파라미터가 없는 고정된 확률 과정**입니다. 우리가 직접 설계하는 것으로, 매 타임스텝 $t$마다 이전 샘플 $x_{t-1}$에 약간의 가우시안 노이즈를 추가합니다.
+
+$$q(x_t \mid x_{t-1}) = \mathcal{N}\!\left(x_t;\, \sqrt{1-\beta_t}\, x_{t-1},\; \beta_t I\right)$$
+
+여기서 **노이즈 스케줄(noise schedule)** $\{\beta_t\}_{t=1}^T$는 하이퍼파라미터로, 각 스텝에서 얼마나 많은 노이즈를 추가할지를 결정합니다 (예: $\beta_1 = 10^{-4}$, $\beta_T = 0.02$).
+
+**표기 단순화를 위한 정의:**
+
+$$\alpha_t = 1 - \beta_t, \qquad \bar{\alpha}_t = \prod_{s=1}^{t} \alpha_s$$
+
+이를 이용하면:
+
+$$q(x_t \mid x_{t-1}) = \mathcal{N}\!\left(x_t;\, \sqrt{\alpha_t}\, x_{t-1},\; (1-\alpha_t) I\right)$$
+
+**직관적 해석:** 각 스텝에서 이전 신호를 $\sqrt{\alpha_t}$ 배로 약간 줄이고($< 1$), 분산 $(1-\alpha_t)$의 가우시안 노이즈를 더합니다. 즉 매 스텝마다 신호는 조금씩 희미해지고 노이즈는 조금씩 커집니다.
+
+전체 순방향 과정은 마르코프 연쇄(Markov chain)로 표현됩니다:
+
+$$q(x_{1:T} \mid x_0) = \prod_{t=1}^{T} q(x_t \mid x_{t-1})$$
+
+> **중요:** 순방향 과정에는 학습 가능한 파라미터가 전혀 없습니다. 우리가 직접 설계합니다.
+
+![Figure: 순방향 과정의 다이어그램. $x_0$에서 $x_T$로 갈수록 이미지가 가우시안 노이즈로 변환되며, 각 전이 $q(x_t | x_{t-1})$는 고정된 가우시안 분포입니다.](./images/forward_process_diagram.png)
+
+## 1.2 닫힌 형식의 노이징 (Closed-Form Noising)
+
+순방향 과정의 가장 강력한 특성은, **임의의 타임스텝 $t$에서의 노이즈 샘플을 $x_0$에서 직접 한 번에 계산할 수 있다**는 점입니다.
+
+**유도 과정:**
+
+$q(x_t \mid x_0)$를 구하기 위해 재매개변수화 트릭(reparameterization trick)을 반복 적용합니다.
+
+- $x_1 = \sqrt{\alpha_1}\, x_0 + \sqrt{1-\alpha_1}\, \epsilon_1$
+- $x_2 = \sqrt{\alpha_2}\, x_1 + \sqrt{1-\alpha_2}\, \epsilon_2 = \sqrt{\alpha_2\alpha_1}\, x_0 + \sqrt{1 - \alpha_2\alpha_1}\, \tilde{\epsilon}$
+- (독립 가우시안의 합은 가우시안이므로) 반복 적용하면...
+
+$$\boxed{q(x_t \mid x_0) = \mathcal{N}\!\left(x_t;\, \sqrt{\bar{\alpha}_t}\, x_0,\; (1-\bar{\alpha}_t) I\right)}$$
+
+따라서 임의의 타임스텝 $t$에서의 노이즈 샘플은 다음과 같이 직접 생성할 수 있습니다:
+
+$$\boxed{x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1 - \bar{\alpha}_t}\, \epsilon, \qquad \epsilon \sim \mathcal{N}(0, I)}$$
+
+이 식이 학습을 매우 효율적으로 만드는 핵심입니다:
+- 모든 중간 단계를 시뮬레이션할 필요 없이, **무작위 타임스텝 $t$를 선택하고 즉시 해당 노이즈 버전을 생성**할 수 있습니다.
+
+## 1.3 신호 대 잡음비 (Signal-to-Noise Ratio) 관점
+
+$$x_t = \underbrace{\sqrt{\bar{\alpha}_t}}_{\text{신호 가중치}}\, x_0 + \underbrace{\sqrt{1 - \bar{\alpha}_t}}_{\text{노이즈 가중치}}\, \epsilon$$
+
+- **$t$가 작을 때 ($\bar{\alpha}_t \approx 1$):** $x_t \approx x_0$ → 원본 이미지와 거의 동일
+- **$t$가 클 때 ($\bar{\alpha}_t \approx 0$):** $x_t \approx \epsilon$ → 순수한 가우시안 노이즈
+
+![Figure: 타임스텝 $t$에 따른 노이징 정도의 변화. $x_0$(깨끗한 이미지)에서 $x_T$(순수 가우시안 노이즈)까지 점진적으로 변환되는 모습을 보여줍니다. $\sqrt{\bar{\alpha}_t}$가 줄어들수록 원본 신호는 희미해지고, $\sqrt{1-\bar{\alpha}_t}$가 커질수록 노이즈 성분이 지배적이 됩니다.](./images/snr_visualization.png)
+
+---
+
+# 2. 역방향 디노이징 과정 (Reverse Denoising Process)
+
+## 2.1 역방향 과정의 모델링
+
+순방향 과정이 $x_0 \to x_T$ 방향으로 노이즈를 추가한다면, 역방향 과정은 $x_T \to x_0$ 방향으로 노이즈를 제거합니다. 이것이 바로 **학습해야 하는 부분**입니다.
+
+역방향 과정 역시 마르코프 연쇄로 모델링합니다:
+
+$$p_\theta(x_{0:T}) = p(x_T) \prod_{t=1}^{T} p_\theta(x_{t-1} \mid x_t)$$
+
+여기서 $p(x_T) = \mathcal{N}(0, I)$는 고정된 가우시안 사전분포이고, 각 역방향 스텝은 가우시안으로 파라미터화됩니다:
+
+$$p_\theta(x_{t-1} \mid x_t) = \mathcal{N}\!\left(x_{t-1};\, \mu_\theta(x_t, t),\; \Sigma_\theta(x_t, t)\right)$$
+
+**핵심 학습 문제:** 뉴럴 네트워크가 한 스텝 디노이징 $x_t \mapsto x_{t-1}$을 학습합니다.
+
+![Figure: 순방향 과정(고정된 $q$)과 역방향 과정(학습된 $p_\theta$)의 대비. 위쪽 화살표는 고정된 노이즈 추가, 아래쪽 화살표는 학습된 노이즈 제거를 나타냅니다.](./images/forward_reverse_comparison.png)
+
+## 2.2 왜 노이즈를 예측하는가? (Why Predict Noise?)
+
+닫힌 형식의 순방향 과정으로부터:
+
+$$x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1 - \bar{\alpha}_t}\, \epsilon$$
+
+모델은 $(x_t, t)$를 입력으로 받아 **추가된 노이즈 $\epsilon$을 예측**합니다:
+
+$$\epsilon_\theta(x_t, t) \approx \epsilon$$
+
+노이즈를 알면 깨끗한 이미지를 역으로 추정할 수 있기 때문입니다:
+
+$$\hat{x}_0 = \frac{x_t - \sqrt{1-\bar{\alpha}_t}\, \epsilon_\theta(x_t, t)}{\sqrt{\bar{\alpha}_t}}$$
+
+> **핵심 아이디어:** 노이즈 예측 = 디노이징. 이 두 가지는 동치입니다.
+
+## 2.3 세 가지 등가적 예측 타겟
+
+확산 네트워크는 다음 세 가지 타겟 중 하나를 예측하도록 파라미터화할 수 있으며, 수학적으로 서로 변환 가능합니다:
+
+| 타겟 | 의미 |
+|------|------|
+| $\epsilon_\theta(x_t, t)$ | 추가된 노이즈를 예측 (DDPM 원본) |
+| $x_{0,\theta}(x_t, t)$ | 깨끗한 원본 이미지를 예측 |
+| $v_\theta(x_t, t)$ | velocity 스타일의 조합을 예측 |
+
+이번 강의에서는 원본 DDPM 방식인 **노이즈 예측** $\epsilon_\theta(x_t, t) \approx \epsilon$에 집중합니다.
+
+---
+
+# 3. 학습 및 샘플링 (Training and Sampling)
+
+## 3.1 DDPM 학습 목적함수 (Simple Training Objective)
+
+DDPM의 실용적인 학습 손실은 매우 간결합니다.
+
+**샘플링:**
+$$x_0 \sim q(x_0), \quad t \sim \text{Uniform}(\{1, \ldots, T\}), \quad \epsilon \sim \mathcal{N}(0, I)$$
+
+**노이즈 추가:**
+$$x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1 - \bar{\alpha}_t}\, \epsilon$$
+
+**학습 손실:**
+$$\mathcal{L}_{\text{simple}} = \mathbb{E}_{x_0, t, \epsilon}\!\left[\left\|\epsilon - \epsilon_\theta(x_t, t)\right\|_2^2\right]$$
+
+이 손실은 **네트워크가 입력 $x_t$에 추가된 노이즈를 정확히 예측**하도록 유도합니다. 단순한 MSE 손실이지만, 변분적 하한(variational lower bound)에서 유도됩니다 (섹션 5 참고).
+
+## 3.2 DDPM 학습 알고리즘
+
+```python
+# DDPM 학습 알고리즘 (의사 코드)
+repeat:
+    x0  ~ q(x0)                          # 1. 깨끗한 데이터 샘플링
+    t   ~ Uniform({1, ..., T})           # 2. 무작위 타임스텝 선택
+    eps ~ N(0, I)                        # 3. 노이즈 샘플링
+
+    # 4. t 스텝에서의 노이즈 이미지 생성 (닫힌 형식)
+    xt = sqrt(alpha_bar[t]) * x0 \
+       + sqrt(1 - alpha_bar[t]) * eps
+
+    # 5. 노이즈 예측
+    eps_pred = eps_theta(xt, t)
+
+    # 6. 손실 계산 및 역전파
+    loss = ||eps - eps_pred||^2
+    update theta by gradient descent
+```
+
+**학습의 장점:**
+- 무작위로 선택한 $t$에 대해 단 한 번의 연산으로 $x_t$ 생성 가능 → **데이터에 대해 완전히 병렬화 가능**
+- 단순한 MSE 손실 → 안정적인 학습
+
+## 3.3 샘플링: 단일 역방향 스텝 유도
+
+샘플링 시 각 역방향 스텝은 다음의 가우시안으로 모델링됩니다:
+
+$$p_\theta(x_{t-1} \mid x_t) = \mathcal{N}\!\left(x_{t-1};\, \mu_\theta(x_t, t),\; \sigma_t^2 I\right)$$
+
+여기서 $\sigma_t$는 노이즈 스케줄에 의해 고정됩니다.
+
+**역방향 평균의 유도:**
+
+순방향 과정은 $x_0$를 알 때의 사후분포(posterior)를 갖습니다:
+
+$$q(x_{t-1} \mid x_t, x_0) = \mathcal{N}\!\left(x_{t-1};\, \tilde{\mu}_t(x_t, x_0),\; \tilde{\beta}_t I\right)$$
+
+이 사후 평균은 닫힌 형식으로 주어집니다:
+
+$$\tilde{\mu}_t(x_t, x_0) = \frac{\sqrt{\bar{\alpha}_{t-1}}\,\beta_t}{1 - \bar{\alpha}_t}\, x_0 + \frac{\sqrt{\alpha_t}(1 - \bar{\alpha}_{t-1})}{1 - \bar{\alpha}_t}\, x_t$$
+
+**직관:** $x_0$를 안다면 $x_t$에서 $x_{t-1}$로 가는 최적의 역방향 평균이 닫힌 형식으로 존재합니다. 그러나 샘플링 시에는 $x_0$를 모릅니다.
+
+**해결책:** 예측된 노이즈로부터 $\hat{x}_0$를 추정합니다:
+
+$$\hat{x}_0 = \frac{x_t - \sqrt{1-\bar{\alpha}_t}\,\epsilon_\theta(x_t, t)}{\sqrt{\bar{\alpha}_t}}$$
+
+이를 사후 평균에 대입하면 (대수적 간소화 후):
+
+$$\mu_\theta(x_t, t) = \frac{1}{\sqrt{\alpha_t}}\!\left(x_t - \frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}}\,\epsilon_\theta(x_t, t)\right)$$
+
+## 3.4 DDPM 샘플링의 단일 스텝 공식
+
+위 유도 결과를 종합하면, 한 스텝의 역방향 샘플링은 다음과 같습니다:
+
+$$\boxed{x_{t-1} = \frac{1}{\sqrt{\alpha_t}}\!\left(x_t - \frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}}\,\epsilon_\theta(x_t, t)\right) + \sigma_t z}$$
+
+여기서 $z \sim \mathcal{N}(0, I)$ ($t > 1$일 때), $z = 0$ ($t = 1$일 때).
+
+- $t > 1$: 마지막 스텝이 아니므로 확률적 노이즈 $\sigma_t z$를 추가
+- $t = 1$: 최종 출력 $x_0$를 생성하므로 노이즈를 추가하지 않음
+
+## 3.5 DDPM 샘플링 알고리즘
+
+```python
+# DDPM 샘플링 알고리즘 (의사 코드)
+x_T ~ N(0, I)                            # 1. 순수 가우시안 노이즈에서 시작
+
+for t = T, T-1, ..., 1:
+    if t > 1:
+        z ~ N(0, I)                      # 2. 확률적 노이즈
+    else:
+        z = 0                            # 3. 마지막 스텝: 결정적
+
+    eps_pred = eps_theta(x_t, t)         # 4. 노이즈 예측
+
+    # 5. 한 스텝 역방향 업데이트
+    x_{t-1} = (1/sqrt(alpha[t])) * \
+              (x_t - beta[t]/sqrt(1 - alpha_bar[t]) * eps_pred) \
+              + sigma[t] * z
+
+return x_0
+```
+
+## 3.6 학습 vs. 샘플링 비교
+
+| | 학습 (Training) | 샘플링 (Sampling) |
+|---|---|---|
+| 방향 | $x_0 \to x_t$ | $x_T \to x_{T-1} \to \cdots \to x_0$ |
+| 타임스텝 | 무작위 $t$ 하나 선택 | $T$개 스텝 순차 실행 |
+| 병렬성 | 데이터에 대해 완전 병렬 | 순차적(sequential) → 느림 |
+| 연산 | 한 번의 순방향 패스 | $T$번의 네트워크 호출 |
+
+> **트레이드오프:** 확산 모델은 안정적으로 학습되고 고품질 샘플을 생성하지만, **샘플링이 느리다**는 단점이 있습니다 (원본 DDPM은 $T=1000$ 스텝 사용).
+
+---
+
+# 4. 아키텍처 및 결과 (Architecture and Results)
+
+## 4.1 디노이징 네트워크 아키텍처
+
+모델 $\epsilon_\theta(x_t, t)$는 두 가지 정보를 동시에 처리해야 합니다:
+- **노이즈 이미지 $x_t$:** 공간적 구조를 갖는 이미지 데이터
+- **타임스텝 $t$:** 현재 노이즈 수준을 나타내는 스칼라
+
+DDPM에서 사용하는 표준 아키텍처는 다음과 같습니다:
+
+* **U-Net 백본:** 이미지의 다중 해상도 특성을 처리 (인코더-디코더 + 스킵 연결)
+* **잔차 블록(Residual Blocks):** 깊은 네트워크의 학습 안정화
+* **셀프 어텐션(Self-Attention):** 선택된 해상도에서 장거리 의존성 포착
+* **타임스텝 임베딩(Timestep Embedding):** $t$를 네트워크 내부로 주입
+
+> **왜 타임스텝 임베딩이 필요한가?** 동일한 네트워크가 모든 노이즈 레벨에서 디노이징을 수행하므로, 현재 입력이 얼마나 노이즈한지 알아야 합니다.
+
+## 4.2 타임스텝 임베딩 (Time Embedding)
+
+Transformer의 위치 인코딩과 유사한 **사인파 임베딩(sinusoidal embedding)** 을 사용합니다:
+
+$$\text{emb}(t)_{2i} = \sin\!\left(\frac{t}{10000^{2i/d}}\right)$$
+
+$$\text{emb}(t)_{2i+1} = \cos\!\left(\frac{t}{10000^{2i/d}}\right)$$
+
+이 임베딩은 U-Net의 각 블록에 주입되어, 네트워크가 현재 노이즈 수준에 따라 적응적으로 동작하도록 합니다.
+
+![Figure: DDPM 네트워크 구조. 타임스텝 $t$는 사인파 임베딩을 통해 벡터로 변환된 후 U-Net의 각 블록에 주입됩니다. U-Net은 노이즈 이미지 $x_t$를 입력으로 받아 예측 노이즈 $\hat{\epsilon}$을 출력합니다.](./images/ddpm_architecture.png)
+
+## 4.3 DDPM 정성적 결과 (Qualitative Results)
+
+원본 DDPM 논문의 설정:
+- **타임스텝:** $T = 1000$
+- **노이즈 스케줄:** $\beta_1 = 10^{-4}$에서 $\beta_T = 0.02$까지 선형 증가
+
+![Figure: DDPM으로 생성된 고품질 얼굴 이미지 예시. $T=1000$ 스텝의 역방향 디노이징 과정을 거쳐 사실적인 얼굴 이미지가 생성됨을 보여줍니다.](./images/ddpm_qualitative_results.png)
+
+## 4.4 DDPM 보간 (Interpolation)
+
+확산 모델의 잠재 공간을 활용한 이미지 보간 방법:
+
+1. 두 원본 이미지 $x_0$, $x_0'$를 준비합니다.
+2. 두 이미지를 타임스텝 $t$까지 순방향 노이징합니다: $x_t$, $x_t'$
+3. 노이즈 공간에서 선형 보간합니다:
+   $$z_\lambda = \lambda x_t + (1-\lambda) x_t'$$
+4. $z_\lambda$에서 역방향 디노이징을 실행합니다.
+
+**왜 픽셀 공간이 아닌 노이즈 공간에서 보간하는가?** 노이즈 공간에서의 보간이 의미 있는 중간 이미지를 생성하는 반면, 픽셀 공간에서의 보간은 두 이미지가 단순히 겹쳐 보이는 결과를 줍니다.
+
+![Figure: DDPM 보간 결과. 왼쪽 끝($\lambda=0$)과 오른쪽 끝($\lambda=1$)의 원본 이미지 사이에서 $\lambda$ 값을 0.1~0.9로 바꾸어가며 자연스럽게 변환되는 보간 결과를 보여줍니다. 노이즈 공간에서의 보간(Denoised interpolation)이 픽셀 공간에서의 보간(Pixel-space interpolation)보다 훨씬 자연스러운 결과를 만들어 냅니다.](./images/ddpm_interpolation.png)
+
+---
+
+# 5. 변분적 관점 (Variational View)
+
+## 5.1 DDPM 목적함수의 기원
+
+DDPM 학습 목적함수는 어디서 오는가? 이를 **변분적 하한(variational lower bound, ELBO)** 으로부터 유도할 수 있습니다. VAE(Variational Autoencoder)와 유사한 아이디어입니다.
+
+**설정:**
+- 관측 데이터: 깨끗한 이미지 $x_0$
+- 잠재 변수: 노이즈 궤적 $x_1, x_2, \ldots, x_T$
+
+주변 가능도(marginal likelihood)는:
+
+$$p_\theta(x_0) = \int p_\theta(x_{0:T})\, dx_{1:T}$$
+
+이 적분은 계산 불가능(intractable)합니다. 고정된 순방향 과정 $q(x_{1:T} | x_0)$를 보조 분포로 삽입하면:
+
+$$p_\theta(x_0) = \int q(x_{1:T} \mid x_0)\, \frac{p_\theta(x_{0:T})}{q(x_{1:T} \mid x_0)}\, dx_{1:T}$$
+
+**목표:** 계산 불가능한 주변 가능도를 다루기 쉬운 학습 목적함수로 변환합니다.
+
+## 5.2 변분적 하한 유도
+
+Jensen 부등식을 음의 로그 가능도(negative log-likelihood)에 적용합니다:
+
+$$-\log p_\theta(x_0) = -\log \mathbb{E}_{q(x_{1:T}|x_0)}\!\left[\frac{p_\theta(x_{0:T})}{q(x_{1:T} \mid x_0)}\right]$$
+
+$$\leq \mathbb{E}_{q(x_{1:T}|x_0)}\!\left[-\log \frac{p_\theta(x_{0:T})}{q(x_{1:T} \mid x_0)}\right]$$
+
+데이터에 대한 기대값을 취하면:
+
+$$\mathbb{E}_{x_0 \sim q}[-\log p_\theta(x_0)] \leq \mathbb{E}_{x_{0:T} \sim q}\!\left[-\log \frac{p_\theta(x_{0:T})}{q(x_{1:T} \mid x_0)}\right]$$
+
+## 5.3 하한의 전개 (Expanding the Bound)
+
+학습된 역방향 과정의 인수분해:
+
+$$p_\theta(x_{0:T}) = p(x_T) \prod_{t=1}^{T} p_\theta(x_{t-1} \mid x_t)$$
+
+고정된 순방향 과정의 인수분해:
+
+$$q(x_{1:T} \mid x_0) = \prod_{t=1}^{T} q(x_t \mid x_{t-1})$$
+
+이를 대입하면:
+
+$$-\log \frac{p_\theta(x_{0:T})}{q(x_{1:T} \mid x_0)} = -\log p(x_T) - \sum_{t=1}^{T} \log \frac{p_\theta(x_{t-1} \mid x_t)}{q(x_t \mid x_{t-1})}$$
+
+아직 이 식은 유용한 KL 항을 명시적으로 드러내지 않습니다.
+
+## 5.4 KL 항으로 재작성 (Rewriting into KL Terms)
+
+베이즈 정리와 순방향 과정의 마르코프 성질을 이용합니다. $t \geq 2$에 대해:
+
+$$q(x_t \mid x_{t-1}) = \frac{q(x_{t-1} \mid x_t, x_0)\, q(x_t \mid x_0)}{q(x_{t-1} \mid x_0)}$$
+
+이를 대입하면 망원급수(telescoping cancellation)가 발생하여:
+
+$$-\log \frac{p_\theta(x_{0:T})}{q(x_{1:T} \mid x_0)} = -\log \frac{p(x_T)}{q(x_T \mid x_0)} - \sum_{t=2}^{T} \log \frac{p_\theta(x_{t-1} \mid x_t)}{q(x_{t-1} \mid x_t, x_0)} - \log p_\theta(x_0 \mid x_1)$$
+
+각 항의 의미가 명확해졌습니다.
+
+## 5.5 DDPM 변분적 하한의 최종 형태
+
+순방향 과정에 대한 기대값을 취하면:
+
+$$\mathbb{E}_{x_0 \sim q}[-\log p_\theta(x_0)] \leq \mathbb{E}_q\!\left[L_T + \sum_{t=2}^{T} L_{t-1} + L_0\right]$$
+
+각 손실 항의 정의:
+
+$$L_T = \text{KL}\!\left(q(x_T \mid x_0) \,\|\, p(x_T)\right)$$
+
+$$L_{t-1} = \text{KL}\!\left(q(x_{t-1} \mid x_t, x_0) \,\|\, p_\theta(x_{t-1} \mid x_t)\right), \quad t = 2, \ldots, T$$
+
+$$L_0 = -\log p_\theta(x_0 \mid x_1)$$
+
+- **$L_T$:** 순방향 과정의 최종 분포가 사전분포 $p(x_T) = \mathcal{N}(0,I)$에 가깝도록 강제 → 노이즈 스케줄이 충분하면 거의 0
+- **$L_{t-1}$:** 중간 KL 항 → 역방향 전이를 훈련하는 핵심 항
+- **$L_0$:** 최종 재구성 손실
+
+> **$L_{t-1}$이 핵심입니다.** 역방향 디노이징 전이를 직접 훈련합니다.
+
+## 5.6 가우시안 KL에서 노이즈 예측으로
+
+중간 KL 항을 살펴봅니다:
+
+$$L_{t-1} = \text{KL}\!\left(q(x_{t-1} \mid x_t, x_0) \,\|\, p_\theta(x_{t-1} \mid x_t)\right)$$
+
+두 분포 모두 가우시안입니다:
+
+$$q(x_{t-1} \mid x_t, x_0) = \mathcal{N}\!\left(x_{t-1};\, \tilde{\mu}_t(x_t, x_0),\; \tilde{\beta}_t I\right)$$
+
+$$p_\theta(x_{t-1} \mid x_t) = \mathcal{N}\!\left(x_{t-1};\, \mu_\theta(x_t, t),\; \sigma_t^2 I\right)$$
+
+분산이 고정되어 있으면, 두 가우시안 사이의 KL은 평균의 차이에 의해서만 결정됩니다:
+
+$$L_{t-1} = \mathbb{E}\!\left[\frac{1}{2\sigma_t^2}\left\|\tilde{\mu}_t(x_t, x_0) - \mu_\theta(x_t, t)\right\|_2^2\right] + C$$
+
+노이즈 예측 파라미터화 $\mu_\theta$를 대입하고 정리하면, 이 항은 다음의 가중 버전이 됩니다:
+
+$$\mathbb{E}\!\left[\left\|\epsilon - \epsilon_\theta(x_t, t)\right\|_2^2\right]$$
+
+**결론:** 가중치를 무시한 단순 버전이 바로 $\mathcal{L}_\text{simple}$이며, 실제로 이것이 더 좋은 실험 결과를 보입니다.
+
+---
+
+# 강의 요약 (Lecture Summary)
+
+이번 강의에서 다룬 핵심 내용을 정리합니다:
+
+* **확산 모델의 핵심:** 점진적인 노이즈 추가 과정을 역방향으로 복원하는 것을 학습
+* **순방향 과정 (닫힌 형식):**
+  $$x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1-\bar{\alpha}_t}\, \epsilon$$
+* **학습 목적함수:**
+  $$\mathcal{L}_\text{simple} = \mathbb{E}\!\left[\left\|\epsilon - \epsilon_\theta(x_t, t)\right\|_2^2\right]$$
+* **샘플링:**
+  $$x_T \sim \mathcal{N}(0, I), \quad x_T \to x_{T-1} \to \cdots \to x_0$$
+* **네트워크:** 타임스텝 임베딩을 가진 U-Net
+* **이론적 기반:** VAE와 유사한 변분적 하한(ELBO)에서 유도
+
+다음 강의에서는 DDPM의 느린 샘플링 문제를 해결하는 방법들(DDIM 등)과 조건부 생성(Conditional Generation)을 다룰 예정입니다.
+
+---
+
+## DDPM 핵심 공식 모음
+
+$$\alpha_t = 1-\beta_t, \qquad \bar{\alpha}_t = \prod_{s=1}^t \alpha_s$$
+
+$$q(x_t|x_0) = \mathcal{N}(x_t;\,\sqrt{\bar\alpha_t}x_0,\,(1-\bar\alpha_t)I)$$
+
+$$x_t = \sqrt{\bar\alpha_t}x_0 + \sqrt{1-\bar\alpha_t}\epsilon, \quad \epsilon\sim\mathcal{N}(0,I)$$
+
+$$\mathcal{L}_{\rm simple} = \mathbb{E}_{x_0,t,\epsilon}\bigl[\|\epsilon - \epsilon_\theta(x_t,t)\|_2^2\bigr]$$
+
+$$x_{t-1} = \frac{1}{\sqrt{\alpha_t}}\!\left(x_t - \frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\epsilon_\theta(x_t,t)\right) + \sigma_t z$$

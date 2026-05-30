@@ -1,0 +1,318 @@
+---
+title: "[Optimization] 22. Quasi-Newton methods"
+description: "Quasi-Newton methods"
+author: "유성현"
+date: "2026-05-20"
+categories: [Optimization]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 1. 개요 (Outline)
+
+이번 강의에서는 **준뉴턴 방법(Quasi-Newton Methods)**을 집중적으로 다룹니다.
+
+- 뉴턴 방법(Newton's method) 복습
+- 뉴턴 방법의 수렴성(Convergence)
+- 준뉴턴 방법의 핵심 업데이트 규칙
+
+  - SR1 (Symmetric Rank-One) 업데이트
+  - BFGS (Broyden-Fletcher-Goldfarb-Shanno) 업데이트
+  - DFP (Davidon-Fletcher-Powell) 업데이트
+  - Broyden 클래스(Broyden Class)
+
+- 준뉴턴 방법의 수렴 보장
+
+---
+
+# 2. 준뉴턴 방법 (Quasi-Newton Method)
+
+## 2.1 동기 (Motivation): 경사하강법 vs. 뉴턴 방법
+
+최적화 알고리즘을 선택할 때 우리는 크게 두 가지 기준을 봅니다.
+
+- **반복당 계산 비용(Iteration Cost):** 한 번의 업데이트에 얼마나 많은 연산이 필요한가?
+- **반복 횟수(Iteration Complexity):** $\epsilon$-최적해에 도달하기까지 몇 번의 업데이트가 필요한가?
+
+두 대표 알고리즘을 비교하면 다음과 같습니다.
+
+| 방법 | 반복당 비용 | 반복 횟수 |
+|---|---|---|
+| **경사하강법(Gradient Descent)** | $O(d)$ (저렴) | $O(1/\epsilon)$ (느림) |
+| **뉴턴 방법(Newton's Method)** | $O(d^3)$ (비쌈) | $O(\log\log(1/\epsilon))$ (매우 빠름) |
+
+> **핵심 질문:** 두 방법의 장점을 동시에 취할 수는 없을까?
+
+**준뉴턴 방법**은 바로 이 질문에 대한 답입니다. 반복당 비용을 $O(d^2)$으로 줄이면서도, 반복 횟수를 $o(\log(1/\epsilon))$으로 경사하강법보다 훨씬 빠르게 달성합니다.
+
+## 2.2 준뉴턴 방법의 기본 구조
+
+준뉴턴 방법의 핵심 아이디어는 **헤시안(Hessian) $\nabla^2 f(x_t)$를 직접 계산하지 않고**, 이를 근사하는 행렬 $B_t$를 반복적으로 갱신하는 것입니다.
+
+**Algorithm 1: Quasi-Newton Method**
+
+```
+Initialize x_1 and a positive definite matrix B_1.
+for t = 1, ..., T-1 do
+    Solve B_t * g_t = -∇f(x_t)       ← 탐색 방향 계산
+    Update x_{t+1} = x_t + η_t * g_t  ← 파라미터 업데이트
+    Compute B_{t+1} from B_t           ← 헤시안 근사 행렬 갱신
+end for
+Return x_T
+```
+
+- $B_t$의 자연스러운 후보는 $\nabla^2 f(x_t)$이며, 이 경우 $g_t = -\nabla^2 f(x_t)^{-1} \nabla f(x_t)$는 뉴턴 방향이 됩니다.
+- 준뉴턴 방법에서는 $B_t$를 직접 계산하는 대신, 이전 정보를 활용하여 효율적으로 갱신합니다.
+
+## 2.3 $B_{t+1}$ 설계의 바람직한 조건
+
+$B_{t+1}$을 $B_t$로부터 어떻게 구성할지 결정할 때 다음 세 가지 조건을 만족시키는 것이 이상적입니다.
+
+1. **대칭 양정치(Symmetric Positive Definite):** $B_{t+1}$이 대칭 양정치 행렬이어야 합니다.
+2. **$B_t$와의 근접성(Closeness):** $B_{t+1}$은 $B_t$에 가깝거나, $B_t$로부터 쉽게 계산할 수 있어야 합니다.
+3. **할선 방정식(Secant Equation) 만족:**
+
+$$\nabla f(x_{t+1}) - \nabla f(x_t) = B_{t+1} g_t$$
+
+### 할선 방정식의 직관적 동기
+
+1차원 함수 $h: \mathbb{R} \to \mathbb{R}$에서, 미분의 유한 차분 근사를 생각해 보겠습니다.
+
+$$h'(x_{t+1}) \approx \frac{h(x_{t+1}) - h(x_t)}{x_{t+1} - x_t}$$
+
+이를 정리하면 $h(x_{t+1}) - h(x_t) \approx h'(x_{t+1})(x_{t+1} - x_t)$이 됩니다. 이를 다차원으로 확장하면 헤시안 근사 행렬 $B_{t+1}$이 그래디언트 변화량을 스텝 벡터로 설명해야 한다는 조건이 자연스럽게 도출됩니다.
+
+## 2.4 표기법 정리
+
+이후 설명의 편의를 위해 다음 표기법을 사용합니다.
+
+$$B^+ = B_{t+1}, \quad B = B_t, \quad s^+ = g_{t+1}, \quad s = g_t, \quad y = \nabla f(x_{t+1}) - \nabla f(x_t)$$
+
+따라서 우리의 목표는 다음을 만족하는 $B^+$를 구하는 것입니다.
+
+$$\underbrace{y = B^+ s}_{\text{할선 방정식(Secant Equation)}}$$
+
+---
+
+# 3. Symmetric Rank-One (SR1) 업데이트
+
+## 3.1 유도 과정
+
+$B^+$가 $B$에 **랭크-1(rank-one) 행렬**만큼만 차이 나도록 설계합니다.
+
+$$B^+ = B + a \mathbf{u}\mathbf{u}^\top, \quad a \in \mathbb{R},\; \mathbf{u} \in \mathbb{R}^d$$
+
+할선 방정식 $y = B^+ s$를 대입하면:
+
+$$y = Bs + a(\mathbf{u}^\top s)\mathbf{u}$$
+
+$$\Rightarrow \quad y - Bs = a(\mathbf{u}^\top s)\mathbf{u}$$
+
+우변이 스칼라와 벡터 $\mathbf{u}$의 곱임에 주목합니다. 따라서 좌변 $y - Bs$와 $\mathbf{u}$는 서로 스칼라 배수 관계여야 합니다. 가장 자연스럽게 $\mathbf{u} = y - Bs$로 설정하면:
+
+$$a = \frac{1}{(y - Bs)^\top s}$$
+
+### SR1 업데이트 규칙
+
+$$\boxed{B^+ = B + \frac{(y - Bs)(y - Bs)^\top}{(y - Bs)^\top s}}$$
+
+## 3.2 역행렬 계산: Sherman-Morrison 공식
+
+다음 스텝에서 $g_{t+1}$을 구하려면 $(B^+)^{-1}$이 필요합니다. 이를 위해 **Sherman-Morrison 공식**을 활용합니다.
+
+> **Lemma 22.1 (Sherman-Morrison 공식)**
+>
+> $B \in \mathbb{R}^{d \times d}$가 가역행렬이고 $\mathbf{u}, \mathbf{v} \in \mathbb{R}^d$이면:
+>
+> $$(B + \mathbf{u}\mathbf{v}^\top)^{-1} = B^{-1} - \frac{B^{-1}\mathbf{u}\mathbf{v}^\top B^{-1}}{1 + \mathbf{v}^\top B^{-1} \mathbf{u}}$$
+
+이를 SR1 업데이트에 적용하면:
+
+$$
+(B^+)^{-1} = B^{-1} - \frac{B^{-1}(y - Bs)(y - Bs)^\top B^{-1}}{(y - Bs)^\top s + (y - Bs)^\top B^{-1}(y - Bs)}
+= B^{-1} + \frac{(s - B^{-1}y)(s - B^{-1}y)^\top}{(s - B^{-1}y)^\top y}
+$$
+
+## 3.3 SR1의 한계
+
+SR1 업데이트는 구현이 간단하지만 **결정적인 단점**이 있습니다.
+
+- $B$가 양정치 행렬이더라도, $B^+$가 **반드시 양정치임을 보장하지 않습니다.**
+- 양정치성이 깨지면 탐색 방향 $g_t$가 하강 방향(descent direction)이 아닐 수 있어 알고리즘이 불안정해집니다.
+
+이 한계를 극복하기 위해 랭크-2 업데이트로 나아갑니다.
+
+---
+
+# 4. BFGS (Broyden-Fletcher-Goldfarb-Shanno) 업데이트
+
+## 4.1 동기: 랭크-2 업데이트
+
+SR1의 한계를 극복하기 위해, **랭크-2 행렬(두 개의 랭크-1 행렬의 합)**을 더하는 방식을 시도합니다.
+
+$$B^+ = B + a\mathbf{u}\mathbf{u}^\top + b\mathbf{v}\mathbf{v}^\top, \quad a, b \in \mathbb{R},\; \mathbf{u}, \mathbf{v} \in \mathbb{R}^d$$
+
+할선 방정식을 대입하면:
+
+$$y - Bs = a(\mathbf{u}^\top s)\mathbf{u} + b(\mathbf{v}^\top s)\mathbf{v}$$
+
+$\mathbf{u} = -Bs$, $\mathbf{v} = y$로 설정하면 자연스럽게 $a$, $b$가 결정됩니다.
+
+## 4.2 BFGS 업데이트 규칙
+
+$$\boxed{B^+ = B - \frac{Bss^\top B}{s^\top Bs} + \frac{yy^\top}{y^\top s}}$$
+
+- **첫 번째 항 $-\frac{Bss^\top B}{s^\top Bs}$:** 현재 방향 $s$에 대한 정보를 제거(old curvature 제거)
+- **두 번째 항 $+\frac{yy^\top}{y^\top s}$:** 새로운 그래디언트 변화 정보 $y$를 반영
+
+## 4.3 역행렬 계산: Woodbury 공식
+
+BFGS 업데이트에서 역행렬을 구하기 위해 **Woodbury 공식**을 활용합니다.
+
+> **Lemma 22.2 (Woodbury 공식)**
+>
+> $B$, $D$가 가역행렬이고 $U$, $V$가 적절한 차원의 행렬이면:
+>
+> $$(B + UDV)^{-1} = B^{-1} - B^{-1}U(D^{-1} + VB^{-1}U)^{-1}VB^{-1}$$
+
+BFGS 업데이트를 행렬 형태로 분해하면:
+
+$$B^+ = B + \underbrace{\begin{pmatrix} Bs & y \end{pmatrix}}_{U} \underbrace{\begin{pmatrix} -1/s^\top Bs & 0 \\ 0 & 1/y^\top s \end{pmatrix}}_{D} \underbrace{\begin{pmatrix} s^\top B \\ y^\top \end{pmatrix}}_{V}$$
+
+Woodbury 공식을 적용하면 BFGS의 **역행렬 업데이트 공식(L-BFGS의 핵심)**이 도출됩니다:
+
+$$\boxed{(B^+)^{-1} = \left(I - \frac{sy^\top}{y^\top s}\right) B^{-1} \left(I - \frac{ys^\top}{y^\top s}\right) + \frac{ss^\top}{y^\top s}}$$
+
+- 이 계산은 $(B^+)^{-1}$를 $B^{-1}$로부터 **$O(d^2)$ 연산**만으로 갱신할 수 있음을 의미합니다.
+- 뉴턴 방법의 $O(d^3)$ 역행렬 계산 대비 훨씬 효율적입니다.
+
+## 4.4 양정치성 보장
+
+BFGS 업데이트의 핵심 장점은 **양정치성이 보존된다**는 것입니다. 임의의 영벡터가 아닌 $x$에 대해:
+
+$$x^\top (B^+)^{-1} x = \underbrace{\left(x - \frac{x^\top s}{y^\top s}y\right)^\top B^{-1} \left(x - \frac{s^\top x}{y^\top s}y\right)}_{\text{항상} > 0 \;\text{(B가 양정치이므로)}} + \underbrace{\frac{(x^\top s)^2}{y^\top s}}_{\geq 0}$$
+
+여기서 $y^\top s \geq 0$임을 확인합니다. 보폭 $\eta_t$를 이용하여 분해하면:
+
+$$y^\top s = \frac{1}{\eta_t}(\nabla f(x_{t+1}) - \nabla f(x_t))^\top (x_{t+1} - x_t) \geq 0$$
+
+이는 **$f$의 볼록성(convexity)**으로부터 보장됩니다(볼록 함수의 그래디언트는 단조 증가). 따라서 $x^\top (B^+)^{-1} x > 0$이 모든 영벡터가 아닌 $x$에 대해 성립하므로 $B^+$는 양정치입니다.
+
+---
+
+# 5. DFP (Davidon-Fletcher-Powell) 업데이트
+
+## 5.1 아이디어: 역행렬에 직접 랭크-2 업데이트
+
+BFGS가 $B^+$에 랭크-2 업데이트를 가했다면, DFP는 **$B^+$의 역행렬 $(B^+)^{-1}$에 직접 랭크-2 업데이트**를 가하는 방식입니다.
+
+$$(B^+)^{-1} = B^{-1} + a\mathbf{u}\mathbf{u}^\top + b\mathbf{v}\mathbf{v}^\top$$
+
+이는 다음과 같이 쓸 수 있습니다:
+
+$$B^+ = \left(B^{-1} + a\mathbf{u}\mathbf{u}^\top + b\mathbf{v}\mathbf{v}^\top\right)^{-1}$$
+
+할선 방정식 $y = B^+ s$를 $(B^+)^{-1}y = s$ 형태로 변환하면:
+
+$$s - B^{-1}y = a(\mathbf{u}^\top y)\mathbf{u} + b(\mathbf{v}^\top y)\mathbf{v}$$
+
+BFGS 유도와 동일한 방식으로 계수를 결정하면:
+
+## 5.2 DFP 업데이트 규칙
+
+**역행렬 업데이트:**
+
+$$\boxed{(B^+)^{-1} = B^{-1} - \frac{B^{-1}yy^\top B^{-1}}{y^\top B^{-1} y} + \frac{ss^\top}{s^\top y}}$$
+
+**원래 행렬 업데이트:**
+
+$$\boxed{B^+ = \left(I - \frac{ys^\top}{s^\top y}\right) B \left(I - \frac{sy^\top}{s^\top y}\right) + \frac{yy^\top}{s^\top y}}$$
+
+- DFP 공식은 BFGS 공식과 **쌍대적(dual) 관계**에 있습니다.
+  - BFGS: $B^+$를 직접 업데이트 → $s \leftrightarrow y$로 치환하면 DFP의 역행렬 업데이트와 동일한 구조
+  - DFP: $(B^+)^{-1}$를 직접 업데이트
+
+---
+
+# 6. Broyden 클래스 (Broyden Class)
+
+## 6.1 BFGS와 DFP의 보간(Interpolation)
+
+BFGS와 DFP는 각각 하나의 업데이트 방식이지만, 이 둘을 **볼록 결합(convex combination)**으로 보간하면 더 넓은 방법들의 집합이 됩니다. 파라미터 $\varphi \in \mathbb{R}$에 대해:
+
+$$B^+ = (1 - \varphi) B^+_{\text{BFGS}} + \varphi B^+_{\text{DFP}}$$
+
+이를 전개하면:
+
+$$B^+ = B^+_{\text{BFGS}} + \varphi(B^+_{\text{DFP}} - B^+_{\text{BFGS}})$$
+
+$$= B^+_{\text{BFGS}} + \varphi (s^\top Bs) \left(\frac{y}{y^\top s} - \frac{Bs}{s^\top Bs}\right)\left(\frac{y}{y^\top s} - \frac{Bs}{s^\top Bs}\right)^\top$$
+
+## 6.2 Broyden 클래스의 구성
+
+**Broyden 클래스**는 임의의 $\varphi$에 대해 위 식으로 정의되는 업데이트 규칙들의 집합입니다.
+
+| 방법 | $\varphi$ 값 |
+|---|---|
+| **BFGS** | $\varphi = 0$ |
+| **DFP** | $\varphi = 1$ |
+| **SR1** | $\varphi = \dfrac{y^\top s}{y^\top s - s^\top Bs}$ |
+
+- SR1 업데이트 역시 Broyden 클래스에 포함됩니다.
+- 실제로는 $\varphi = 0$(BFGS)이 경험적으로 가장 좋은 성능을 보이는 경우가 많습니다.
+
+---
+
+# 7. 준뉴턴 방법의 수렴성 (Convergence of Quasi-Newton Methods)
+
+## 7.1 가정 조건
+
+수렴을 보장하기 위해 다음 조건들을 가정합니다.
+
+- $f$는 **두 번 연속 미분가능(twice continuously differentiable)**합니다.
+- $f$는 $\ell_2$ 노름에서 **$m$-강볼록(strongly convex)** 및 **$M$-매끄러움(smooth)**합니다.
+- $f$의 헤시안은 $\ell_2$ 노름에서 **$L$-립쉬츠 연속(Lipschitz continuous)**합니다.
+
+## 7.2 수렴 보장
+
+백트래킹 선탐색(backtracking line search)을 사용하는 BFGS와 DFP 모두에 대해 다음이 성립합니다.
+
+$$\|x_{t+1} - x^*\|_2 \leq c_t \|x_t - x^*\|_2$$
+
+여기서 $c_t \to 0$ as $t \to \infty$.
+
+### 경사하강법과의 비교
+
+| 방법 | 수렴 비율 | 특징 |
+|---|---|---|
+| **경사하강법** | $\|x_{t+1} - x^*\| \leq \gamma \|x_t - x^*\|$ | $\gamma$가 고정 상수 |
+| **준뉴턴(BFGS/DFP)** | $\|x_{t+1} - x^*\| \leq c_t \|x_t - x^*\|$ | $c_t \to 0$ (점점 빨라짐) |
+
+- 경사하강법은 수렴 비율이 고정 상수 $\gamma < 1$이므로 **선형 수렴(linear convergence)**을 달성합니다.
+- 준뉴턴 방법은 $c_t$가 0으로 줄어들기 때문에 **초선형 수렴(superlinear convergence)**을 달성합니다. 즉, 최적해 근방에서 수렴이 급격히 빨라집니다.
+- 동시에 각 반복의 계산 비용은 $O(d^2)$으로, 뉴턴 방법의 $O(d^3)$보다 저렴합니다.
+
+![Figure: 경사하강법(선형 수렴)과 준뉴턴 방법(초선형 수렴)의 비교. 수평축은 반복 횟수(iteration), 수직축은 $\|x_t - x^*\|$로, 경사하강법은 등비수열처럼 일정 비율로 줄어드는 반면, BFGS/DFP는 최적해 근방에서 수렴 속도가 급격히 빨라지는 초선형 수렴 패턴을 보인다.](./images/convergence_comparison.png)
+
+[이미지 생성 필요: x축=iteration number, y축=log scale로 $\|x_t - x^*\|$를 표시하고, 경사하강법(직선, 선형 수렴)과 BFGS(초선형으로 꺾이는 곡선)을 비교하는 그래프]
+
+---
+
+# 요약
+
+| 방법 | 업데이트 대상 | 업데이트 랭크 | 양정치 보장 | 반복당 비용 |
+|---|---|---|---|---|
+| **SR1** | $B^+$ | Rank-1 | ❌ 보장 안 됨 | $O(d^2)$ |
+| **BFGS** | $B^+$ (역행렬 공식도 존재) | Rank-2 | ✅ 보장 | $O(d^2)$ |
+| **DFP** | $(B^+)^{-1}$ | Rank-2 | ✅ 보장 | $O(d^2)$ |
+
+- **SR1:** 단순하지만 양정치성 미보장
+- **BFGS:** 실용적으로 가장 널리 쓰이는 준뉴턴 방법. Woodbury 공식을 이용해 역행렬도 $O(d^2)$에 갱신 가능
+- **DFP:** BFGS와 쌍대 관계. 역행렬에 직접 랭크-2 업데이트
+- **Broyden 클래스:** BFGS($\varphi=0$)와 DFP($\varphi=1$)를 보간하는 일반화된 업데이트 패밀리
+- **수렴성:** 백트래킹 선탐색 하에서 BFGS/DFP 모두 초선형 수렴 보장

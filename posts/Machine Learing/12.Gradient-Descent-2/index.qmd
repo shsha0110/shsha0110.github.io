@@ -12,140 +12,399 @@ format:
     math: true
 ---
 
-# 1. Introduction: 신경망 학습과 경사하강법 (Gradient Descent)
+# 0. 들어가며
 
-* 신경망(Neural Network) 모델을 학습시킨다는 것은 결국 목적 함수(Loss Function) $J(\theta)$의 값을 최소화하는 최적의 파라미터 $\theta$를 찾는 과정입니다. 이를 위해 우리는 경사하강법(Gradient Descent)을 사용하여 파라미터를 반복적으로 업데이트합니다. 
+이번 포스트는 **Gradient Descent Part 2** 강의 노트를 정리한 것입니다. Part 1에서 경사 하강법의 일반 이론을 다뤘다면, Part 2는 신경망 훈련의 핵심 알고리즘인 **역전파(Backpropagation)**를 집중적으로 다룹니다.
 
-* 파라미터 업데이트 수식은 다음과 같이 정의됩니다:
-$$ \theta \leftarrow \theta - \eta \nabla_{\theta} J(\theta) $$
-  * 여기서 $\eta$는 학습률(Learning rate)을 의미하며, $\nabla_{\theta} J(\theta)$는 파라미터에 대한 손실 함수의 기울기(Gradient)입니다. 
-
-* 이때 수많은 파라미터(가중치와 편향)에 대한 기울기를 어떻게 **효율적으로** 계산할 것인가가 딥러닝 최적화의 핵심 과제입니다. 역전파(Back-propagation)는 연쇄 법칙(Chain Rule)을 활용하여 이 기울기들을 매우 빠르고 체계적으로 연산하는 알고리즘입니다.
-
-# 2. 모듈화와 순전파 (Modulation & Forward Pass)
-
-## 2.1. 신경망의 모듈적 관점 (Modulation)
-* 복잡한 신경망은 사실 단순한 수학적 모듈(Module)들의 합성 함수(Composition of functions)로 이해할 수 있습니다.
-$$ J = M_k(M_{k-1}(\cdots M_1(x))) $$
-* 각 모듈 $M_i$는 선형 변환 계층(Linear layer), 활성화 함수(Activation function), 혹은 손실 함수(Loss function)가 될 수 있습니다. 
-  - **파라미터가 있는 모듈**: 선형 계층 (가중치 $W$, 편향 $b$ 포함)
-  - **파라미터가 없는 모듈**: ReLU, Sigmoid 등 활성화 함수
-
-## 2.2. 순전파 (Forward Pass)
-* 입력 $x$가 주어졌을 때, 최종 손실 $J$를 계산하기 위해 네트워크의 처음부터 끝까지 순차적으로 연산을 수행하는 과정을 순전파라고 합니다. 
-
-$$ x = u^{[0]} \rightarrow u^{[1]} \rightarrow u^{[2]} \rightarrow \cdots \rightarrow u^{[k]} = J $$
-
-* 순전파 과정의 핵심은 **모든 중간 변수(Intermediate variables) $u^{[i]}$를 메모리에 저장**해둔다는 점입니다. 
-$$ u^{[0]} = x $$
-$$ u^{[i]} = M_i(u^{[i-1]}) $$
-$$ u^{[k]} = J $$
-* 이렇게 저장된 값들은 이후 역전파 과정에서 국소적 미분(Local derivatives)을 계산할 때 필수적으로 사용됩니다.
-
-# 3. 역전파의 핵심: 연쇄 법칙 (Chain Rule)
-
-* 역전파 알고리즘은 네트워크의 끝(출력)에서부터 시작(입력) 방향으로 거꾸로 이동하며 **연쇄 법칙(Chain Rule)**을 반복적으로 적용하는 과정입니다. 
-
-* 간단한 예시를 들어보겠습니다:
-* 변수 $z \in \mathbb{R}^m$가 변수 $u \in \mathbb{R}^n$를 거쳐 스칼라 손실 함수 $J$를 도출한다고 가정합시다.
-$$ u = g(z), \quad J = f(u) $$
-
-* 이때 $z_i$가 최종 손실 $J$에 미치는 영향(미분값)은 다변수 미적분학의 연쇄 법칙에 의해 다음과 같이 전개됩니다:
-$$ \frac{\partial J}{\partial z_i} = \sum_{j=1}^n \frac{\partial J}{\partial u_j} \frac{\partial u_j}{\partial z_i} $$
-
-## 3.1. 역방향 함수 (Backward Function)
-* 각 모듈은 상류에서 흘러들어온 기울기(Upstream gradient)를 하류 기울기(Downstream gradient)로 변환해주는 고유한 **역방향 함수(Backward function)**를 갖습니다. 
-
-* 만약 상류 기울기가 $v = \frac{\partial J}{\partial u}$ 로 주어졌다면, 역방향 함수 $\mathcal{B}$는 다음과 같이 정의됩니다:
-$$ \frac{\partial J}{\partial z} = \mathcal{B}[g, z](v) $$
-* 즉, $\mathcal{B}[g, z](v)$는 모듈 $g$와 입력 $z$에 대하여, 상류의 기울기 $v$를 받아 입력 $z$에 대한 기울기를 반환하는 오퍼레이터입니다.
-
-# 4. 구성 요소별 역방향 함수 유도 (Detailed Derivations)
-
-* 각 핵심 모듈에 대한 역방향 함수를 단계별로 유도해보겠습니다.
-
-## 4.1. 선형 계층 (Linear Layer)
-* 선형 계층의 순전파 연산은 행렬 곱셈입니다:
-$$ u = Wz + b $$
-* 상류에서 전달된 기울기를 $v = \frac{\partial J}{\partial u}$ 라고 합시다.
-
-* **1. 입력 $z$에 대한 기울기:**
-  * 선형 대수의 미분 법칙을 적용해보면, $u_i = \sum_j W_{ij} z_j + b_i$ 이므로 국소 미분 $\frac{\partial u_i}{\partial z_j} = W_{ij}$ 가 됩니다. 연쇄 법칙에 의해 이를 행렬 형태로 묶으면 아래와 같습니다.
-  $$ \mathcal{B}[MM, z](v) = W^\top v $$
-
-* **2. 파라미터 $W$와 $b$에 대한 기울기:**
-  * 가중치 행렬 $W$와 편향 벡터 $b$ 역시 딥러닝에서 학습되어야 하는 대상입니다. 동일한 원리로 국소 미분을 전개하면 다음과 같은 역방향 함수 결과를 얻습니다.
-  $$ \mathcal{B}[MM, W](v) = v z^\top $$
-  $$ \mathcal{B}[MM, b](v) = v $$
-    * 참고: $v$는 열벡터 행태이므로 $v z^\top$는 외적(Outer product) 연산이 되어 $W$와 동일한 차원의 행렬 기울기가 생성됩니다.
-
-## 4.2. 활성화 함수 (Activation Functions)
-* 활성화 함수 $\sigma(z)$는 원소별(element-wise)로 적용됩니다. 원소별 연산의 자코비안은 대각 행렬이 되므로, 역전파는 단순히 요소별 곱셈(Hadamard product, $\odot$)으로 계산됩니다.
-$$ \mathcal{B}[\sigma, z](v) = \sigma'(z) \odot v $$
-
-* **예시: ReLU (Rectified Linear Unit)**
-  $$ \text{ReLU}(z) = \max(0, z) $$
-  * ReLU의 도함수는 $z > 0$일 때 1, $z < 0$일 때 0입니다. (순전파 때 저장해둔 $z$ 값을 여기서 사용합니다.)
-  $$ \text{ReLU}'(z) = \begin{cases} 1, & z > 0 \\ 0, & z < 0 \end{cases} $$
-
-## 4.3. 손실 함수 (Loss Functions)
-
-* **1. 평균 제곱 오차 (MSE Loss)**
-  $$ l_{MSE} \triangleq \frac{1}{2}(z - y)^2 $$
-  * 여기에 대한 역전파는 다음과 같이 유도됩니다:
-  $$ \mathcal{B}[l_{MSE}, z](v) = (z - y) \cdot v $$
-
-* **2. 로지스틱 손실 (Logistic Loss / Binary Cross Entropy)**
-  $$ l_{logistic}(t, y) \triangleq y \log(1 + \exp(-t)) + (1 - y)\log(1 + \exp(t)) $$
-  * 입력 $t$에 대한 미분 $\frac{\partial l_{logistic}}{\partial t}$의 단계별 유도 과정은 다음과 같습니다:
-  * 먼저, 시그모이드 함수 $\sigma(t) = \frac{1}{1+\exp(-t)} = \frac{\exp(t)}{1+\exp(t)}$ 의 성질을 이용합니다.
-  * 미분을 전개하면:
-  $$ \frac{\partial l}{\partial t} = y \left( \frac{-\exp(-t)}{1+\exp(-t)} \right) + (1-y) \left( \frac{\exp(t)}{1+\exp(t)} \right) $$
-  * 식의 뒷부분 $\frac{\exp(t)}{1+\exp(t)}$ 는 $\sigma(t)$와 같고, 앞부분은 $-(1-\sigma(t))$와 같습니다. 식을 정리하면 $y(\sigma(t)-1) + (1-y)\sigma(t) = \sigma(t) - y$가 됩니다. 즉, 예측 확률에서 실제 레이블을 뺀 아주 단순한 형태가 됩니다.
-  * 결과적으로 강의 슬라이드의 역방향 함수 공식이 성립합니다:
-  $$ \mathcal{B}[l_{logistic}, t](v) = \left( \frac{1}{1 + \exp(-t)} - y \right) \cdot v $$
-
-# 5. 다층 퍼셉트론(MLP)의 역전파 알고리즘 통합
-
-* 지금까지 구한 개별 모듈의 법칙을 연결하여 전체 MLP에 적용해 보겠습니다.
-
-## 5.1. 다층 신경망 세팅
-* $r$개의 층을 가진 MLP와 로지스틱 손실 함수를 가정합니다.
-* **Forward Pass Equations:**
-  - $z^{[1]} = W^{[1]}x + b^{[1]}$, $a^{[1]} = \sigma(z^{[1]})$
-  - $\vdots$
-  - $z^{[r]} = W^{[r]}a^{[r-1]} + b^{[r]}$
-  - $J = l_{logistic}(z^{[r]}, y)$
-
-## 5.2. 알고리즘: 역방향 흐름 (Backward Pass)
-* 역전파 알고리즘은 마지막 출력층부터 시작하여 첫 번째 층까지 반복적으로 적용됩니다.
-
-* **Step 1: 손실 함수 기울기 초기화**
-  * 가장 상단의 그래디언트는 스스로에 대한 미분이므로 1에서 시작합니다 ($v = \frac{\partial J}{\partial J} = 1$).
-  $$ \frac{\partial J}{\partial z^{[r]}} = \mathcal{B}[l_{logistic}, z^{[r]}](1) = \left( \frac{1}{1 + \exp(-z^{[r]})} - y \right) $$
-
-* **Step 2: 은닉층의 반복적 기울기 계산 (Iterative Computation)**
-  * $k = r-1$ 부터 $1$ 까지 거꾸로 이동하며 다음을 계산합니다.
-    - 선형 계층을 거슬러 올라가는 활성화 함수 단위의 기울기:
-      $$ \frac{\partial J}{\partial a^{[k]}} = \mathcal{B}[MM, a^{[k]}]\left( \frac{\partial J}{\partial z^{[k+1]}} \right) = {W^{[k+1]}}^\top \frac{\partial J}{\partial z^{[k+1]}} $$
-    - 활성화 함수를 거슬러 올라가는 $z$ 단위의 기울기:
-      $$ \frac{\partial J}{\partial z^{[k]}} = \mathcal{B}[\sigma, z^{[k]}]\left( \frac{\partial J}{\partial a^{[k]}} \right) = \sigma'(z^{[k]}) \odot \frac{\partial J}{\partial a^{[k]}} $$
-
-* **Step 3: 파라미터 업데이트를 위한 기울기 추출**
-  * 각 층의 $W$와 $b$를 업데이트하기 위한 최종 기울기입니다.
-  $$ \frac{\partial J}{\partial W^{[k+1]}} = \mathcal{B}[MM, W^{[k+1]}]\left( \frac{\partial J}{\partial z^{[k+1]}} \right) = \frac{\partial J}{\partial z^{[k+1]}} {a^{[k]}}^\top $$
-  $$ \frac{\partial J}{\partial b^{[k+1]}} = \mathcal{B}[MM, b^{[k+1]}]\left( \frac{\partial J}{\partial z^{[k+1]}} \right) = \frac{\partial J}{\partial z^{[k+1]}} $$
+역전파를 단순히 "기울기를 뒤로 전달하는 것"으로 이해하는 수준을 넘어, 각 모듈의 **국소 미분 규칙(local backward rule)** 을 합성하여 전체 네트워크의 파라미터 기울기를 효율적으로 계산하는 과정을 엄밀하게 따라가 보겠습니다.
 
 ---
 
-# 6. Summary: Back-propagation Algorithm (Algorithm 3)
+# 1. 복습: 신경망과 파라미터 업데이트 (Recall: Neural Networks)
 
-* 위 과정을 하나의 정형화된 수도코드(Pseudo-code)로 요약하면 다음과 같습니다.
-  * 1. **Forward pass:** 식을 통해 입력부터 최종 손실 $J$까지 연산하고, 모든 중간 변수 $a^{[k]}$, $z^{[k]}$ 및 $J$를 저장합니다.
-  * 2. **Backward pass (초기화):** 가장 마지막 출력층 $z^{[r]}$에 대한 손실 $J$의 기울기를 구합니다. 
-     ($\frac{\partial J}{\partial z^{[r]}} = \frac{1}{1+\exp(-z^{[r]})} - y$).
-  * 3. **Loop:** $k = r-1$ 부터 $0$ 까지 감소시키며 다음을 반복합니다.
-     - 파라미터 $W^{[k+1]}, b^{[k+1]}$에 대한 기울기 계산
-     - (단, $k \ge 1$인 경우) 이전 계층으로 오차를 전파하기 위해 은닉층 노드 $a^{[k]}, z^{[k]}$에 대한 기울기 계산
+신경망 훈련의 목적은 **손실(loss) $J$를 줄이는 방향으로 파라미터 $\theta$를 반복 갱신**하는 것입니다. 이를 수식으로 표현하면 다음과 같습니다.
 
-* 이 과정을 통해 구해진 파라미터 기울기 모음을 통해 첫 부분에서 언급한 경사하강법 업데이트가 완성됩니다.
+$$
+\theta \leftarrow \theta - \eta \nabla_\theta J(\theta)
+$$
+
+- $\eta$: 학습률 (learning rate)
+- $\nabla_\theta J(\theta)$: 파라미터에 대한 손실 함수의 기울기(gradient)
+
+그런데 복잡한 다층 신경망에서 $\nabla_\theta J(\theta)$를 어떻게 **효율적으로** 계산할 수 있을까요? 이것이 바로 **역전파(Backpropagation)** 알고리즘이 해결하는 문제입니다.
+
+---
+
+# 2. 모듈화 관점 (Modulation)
+
+역전파를 이해하는 가장 효과적인 방법은 신경망을 **작은 모듈(module)들의 합성**으로 바라보는 것입니다.
+
+## 2.1 신경망의 모듈 합성 표현
+
+$$
+J = M_k\bigl(M_{k-1}(\cdots M_1(x))\bigr)
+$$
+
+- 각 $M_i$는 네트워크를 구성하는 **하나의 연산 블록** (예: 선형 변환, 활성화 함수, 손실 함수)
+- 이 관점에서 순전파(forward pass)는 입력 $x$에 모듈을 순서대로 적용하는 과정
+
+## 2.2 파라미터 유무에 따른 모듈 분류
+
+| 모듈 유형 | 예시 | 파라미터 |
+|---|---|---|
+| **파라미터 있음** | 선형 레이어 ($W, b$) | $W \in \mathbb{R}^{m \times n}$, $b \in \mathbb{R}^m$ |
+| **파라미터 없음** | ReLU, Sigmoid | — |
+
+- 역전파의 핵심 목표는 결국 **파라미터 있는 모듈**의 기울기 $\frac{\partial J}{\partial W}$, $\frac{\partial J}{\partial b}$를 구하는 것입니다.
+
+---
+
+# 3. 순전파 (Forward Pass)
+
+역전파를 수행하기 전에 **순전파**를 통해 중간 변수들을 미리 계산하고 저장해야 합니다.
+
+## 3.1 중간 변수의 정의
+
+$$
+u^{[0]} = x, \qquad u^{[i]} = M_i\bigl(u^{[i-1]}\bigr), \qquad u^{[k]} = J
+$$
+
+- 즉, 입력에서 출력까지의 흐름:
+
+$$
+x = u^{[0]} \;\to\; u^{[1]} \;\to\; u^{[2]} \;\to\; \cdots \;\to\; u^{[k]} = J
+$$
+
+## 3.2 왜 중간 변수를 저장해야 하는가?
+
+역전파 시 각 모듈의 **국소 미분(local derivative)** 을 계산할 때 해당 모듈의 입력값이 필요합니다. 예를 들어 ReLU의 미분은 순전파 때의 입력 $z$의 부호에 의존합니다. 따라서 순전파 단계에서 $u^{[i]}$를 메모리에 저장해 두어야 합니다.
+
+---
+
+# 4. 연쇄 법칙 (Chain Rule)
+
+역전파는 결국 **연쇄 법칙(Chain Rule)** 을 네트워크 끝단에서 시작 단으로 반복 적용하는 알고리즘입니다.
+
+## 4.1 스칼라-벡터 연쇄 법칙
+
+가장 단순한 설정을 생각해 보겠습니다.
+
+- $z \in \mathbb{R}^m$: 스칼라 벡터 (입력)
+- $u \in \mathbb{R}^n$: 중간 벡터
+- $J \in \mathbb{R}$: 스칼라 손실
+
+$$
+u = g(z), \quad J = f(u)
+$$
+
+이때, $J$의 $z_i$에 대한 편미분은 다음과 같이 전개됩니다.
+
+$$
+\frac{\partial J}{\partial z_i} = \sum_{j=1}^{n} \frac{\partial J}{\partial u_j} \frac{\partial u_j}{\partial z_i}
+$$
+
+- $\frac{\partial J}{\partial u_j}$: **업스트림 기울기(upstream gradient)** — 후단에서 전달되어 오는 값
+- $\frac{\partial u_j}{\partial z_i}$: **국소 야코비안(local Jacobian)** — 현재 모듈이 직접 계산할 수 있는 값
+
+![Figure: 연쇄 법칙의 계산 흐름. 왼쪽에서 오른쪽 방향으로 $z \to g \to u \to f \to J$ 순서로 순전파가 진행되며, 역전파는 반대 방향으로 업스트림 기울기 $\frac{\partial J}{\partial u}$를 국소 야코비안 $\frac{\partial u}{\partial z}$에 곱하여 다운스트림 기울기 $\frac{\partial J}{\partial z}$를 계산한다.](./images/chain_rule_flow.png)
+
+---
+
+# 5. 역방향 함수 (Backward Function)
+
+## 5.1 정의
+
+연쇄 법칙을 모듈 단위로 캡슐화하면, 각 모듈 $g$는 **역방향 함수(backward function)** $\mathcal{B}[g, z]$를 가집니다.
+
+$$
+\frac{\partial J}{\partial z} = \mathcal{B}[g, z](v), \qquad \text{where} \quad v = \frac{\partial J}{\partial u}
+$$
+
+- **입력**: 업스트림 기울기 $v = \frac{\partial J}{\partial u}$
+- **출력**: 다운스트림 기울기 $\frac{\partial J}{\partial z}$
+
+즉, 각 모듈은 자신의 국소 야코비안을 활용하여 업스트림 기울기를 **다운스트림 기울기로 변환**하는 역할을 합니다.
+
+![Figure: 역방향 함수의 구조. 순전파 방향(왼쪽 → 오른쪽)의 $z \to g \to u \to f \to J$ 경로와 역전파 방향(오른쪽 → 왼쪽)의 흐름이 함께 표현된다. 역전파 시 $v = \frac{\partial J}{\partial u}$가 업스트림으로부터 전달되면, 모듈 $g$의 역방향 함수 $\mathcal{B}[g,z](v)$가 이를 $\frac{\partial J}{\partial z}$로 변환하여 하류로 전달한다.](./images/backward_function.png)
+
+---
+
+# 6. 각 모듈의 역방향 함수 유도 (Backward Functions)
+
+## 6.1 선형 레이어 (Linear Layer)
+
+### 순전파
+
+$$
+u = Wz + b
+$$
+
+- $W \in \mathbb{R}^{m \times n}$, $z \in \mathbb{R}^n$, $b \in \mathbb{R}^m$, $u \in \mathbb{R}^m$
+
+### 역방향 함수 유도
+
+업스트림 기울기 $v = \frac{\partial J}{\partial u} \in \mathbb{R}^m$이 주어졌을 때:
+
+**① 입력 $z$에 대한 기울기 (다운스트림 기울기)**
+
+$$
+\frac{\partial J}{\partial z_i} = \sum_j \frac{\partial J}{\partial u_j} \frac{\partial u_j}{\partial z_i} = \sum_j v_j W_{ji}
+$$
+
+이를 벡터 형태로 쓰면:
+
+$$
+\boxed{\mathcal{B}[\text{MM}, z](v) = W^\top v}
+$$
+
+**② 파라미터 $W$에 대한 기울기**
+
+$$
+\frac{\partial J}{\partial W_{ji}} = \frac{\partial J}{\partial u_j} \frac{\partial u_j}{\partial W_{ji}} = v_j z_i
+$$
+
+행렬 형태로:
+
+$$
+\boxed{\mathcal{B}[\text{MM}, W](v) = v z^\top}
+$$
+
+**③ 파라미터 $b$에 대한 기울기**
+
+$$
+\frac{\partial u_j}{\partial b_j} = 1 \implies \frac{\partial J}{\partial b_j} = v_j
+$$
+
+$$
+\boxed{\mathcal{B}[\text{MM}, b](v) = v}
+$$
+
+---
+
+## 6.2 활성화 함수 (Activation Function)
+
+활성화 함수 $\sigma$는 **원소별(element-wise)** 로 적용되므로 야코비안이 대각 행렬이 됩니다.
+
+$$
+\mathcal{B}[\sigma, z](v) = \sigma'(z) \odot v
+$$
+
+- $\odot$: 원소별 곱셈 (Hadamard product)
+- $\sigma'(z)$: 순전파 시 저장된 $z$를 사용하여 계산
+
+### ReLU의 경우
+
+$$
+\text{ReLU}(z) = \max(0, z)
+$$
+
+미분은 다음과 같습니다.
+
+$$
+\text{ReLU}'(z) = \begin{cases} 1 & z > 0 \\ 0 & z < 0 \end{cases}
+$$
+
+따라서 역방향 함수는:
+
+$$
+\mathcal{B}[\text{ReLU}, z](v) = \text{ReLU}'(z) \odot v
+$$
+
+- 순전파 시 $z > 0$이었던 원소의 기울기만 그대로 통과하고, 나머지는 0으로 차단합니다.
+- 이것이 바로 ReLU가 **기울기 소실(vanishing gradient)** 을 일부 완화하는 이유이기도 합니다.
+
+---
+
+## 6.3 손실 함수 (Loss Functions)
+
+### ① 평균 제곱 오차 (MSE)
+
+$$
+\ell_{\text{MSE}} \triangleq \frac{1}{2}(z - y)^2
+$$
+
+미분:
+
+$$
+\frac{\partial \ell_{\text{MSE}}}{\partial z} = (z - y)
+$$
+
+역방향 함수:
+
+$$
+\boxed{\mathcal{B}[\ell_{\text{MSE}}, z](v) = (z - y) \cdot v}
+$$
+
+### ② 로지스틱 손실 (Logistic Loss)
+
+$$
+\ell_{\text{logistic}}(t, y) \triangleq y \log(1 + \exp(-t)) + (1-y)\log(1 + \exp(t))
+$$
+
+- $t$: 네트워크 출력 (logit)
+- $y \in \{0, 1\}$: 실제 레이블
+
+$t$에 대한 편미분을 구해 보겠습니다.
+
+$$
+\frac{\partial \ell_{\text{logistic}}}{\partial t}
+= y \cdot \frac{-\exp(-t)}{1 + \exp(-t)} + (1-y) \cdot \frac{\exp(t)}{1 + \exp(t)}
+$$
+
+정리하면 ($\sigma(t) = \frac{1}{1+\exp(-t)}$를 시그모이드 함수라 하면):
+
+$$
+= -y(1 - \sigma(t)) + (1-y)\sigma(t) = \sigma(t) - y = \frac{1}{1+\exp(-t)} - y
+$$
+
+따라서 역방향 함수:
+
+$$
+\boxed{\mathcal{B}[\ell_{\text{logistic}}, t](v) = \left(\frac{1}{1 + \exp(-t)} - y\right) \cdot v}
+$$
+
+- 직관: 예측 확률 $\hat{p} = \sigma(t)$와 실제 레이블 $y$의 차이($\hat{p} - y$)가 기울기의 핵심이 됩니다.
+
+---
+
+# 7. MLP의 역전파 (Back-propagation for MLP)
+
+이제 각 모듈의 역방향 함수를 조립하여 **다층 퍼셉트론(MLP)** 전체에 대한 역전파를 도출해 보겠습니다.
+
+## 7.1 MLP의 순전파 정의
+
+로지스틱 손실을 사용하는 $r$-레이어 MLP의 순전파는 다음과 같습니다.
+
+$$
+\begin{aligned}
+z^{[1]} &= \text{MM}_{W^{[1]}, b^{[1]}}(x) = W^{[1]}x + b^{[1]} \\
+a^{[1]} &= \sigma(z^{[1]}) \\
+z^{[2]} &= \text{MM}_{W^{[2]}, b^{[2]}}(a^{[1]}) = W^{[2]}a^{[1]} + b^{[2]} \\
+a^{[2]} &= \sigma(z^{[2]}) \\
+&\;\vdots \\
+z^{[r]} &= \text{MM}_{W^{[r]}, b^{[r]}}(a^{[r-1]}) = W^{[r]}a^{[r-1]} + b^{[r]} \\
+J &= \ell_{\text{logistic}}(z^{[r]}, y)
+\end{aligned}
+$$
+
+## 7.2 역전파 — 단계별 유도
+
+### Step 1: 손실 레이어의 기울기
+
+최상단 레이어부터 시작합니다. $\frac{\partial J}{\partial J} = 1$이므로:
+
+$$
+\frac{\partial J}{\partial z^{[r]}} = \mathcal{B}[\ell_{\text{logistic}}, z^{[r]}](1) = \frac{1}{1 + \exp(-z^{[r]})} - y
+$$
+
+### Step 2: 레이어별 반복 계산
+
+$k = r-1$부터 $k = 1$까지 역방향으로 다음을 반복합니다.
+
+**① 이전 활성화에 대한 기울기** (선형 레이어의 입력 기울기):
+
+$$
+\frac{\partial J}{\partial a^{[k]}} = \mathcal{B}[\text{MM}, a^{[k]}]\!\left(\frac{\partial J}{\partial z^{[k+1]}}\right) = W^{[k+1]\top} \frac{\partial J}{\partial z^{[k+1]}}
+$$
+
+**② pre-activation에 대한 기울기** (활성화 함수의 기울기):
+
+$$
+\frac{\partial J}{\partial z^{[k]}} = \mathcal{B}[\sigma, z^{[k]}]\!\left(\frac{\partial J}{\partial a^{[k]}}\right) = \sigma'(z^{[k]}) \odot \frac{\partial J}{\partial a^{[k]}}
+$$
+
+### Step 3: 파라미터 기울기 계산
+
+각 레이어 $k$에 대해 파라미터 기울기를 계산합니다.
+
+$$
+\frac{\partial J}{\partial W^{[k]}} = \mathcal{B}[\text{MM}, W^{[k]}]\!\left(\frac{\partial J}{\partial z^{[k]}}\right) = \frac{\partial J}{\partial z^{[k]}} a^{[k-1]\top}
+$$
+
+$$
+\frac{\partial J}{\partial b^{[k]}} = \mathcal{B}[\text{MM}, b^{[k]}]\!\left(\frac{\partial J}{\partial z^{[k]}}\right) = \frac{\partial J}{\partial z^{[k]}}
+$$
+
+---
+
+## 7.3 완전한 역전파 알고리즘 (Algorithm 3)
+
+위의 내용을 종합하면 다음 알고리즘이 도출됩니다.
+
+---
+
+**Algorithm 3**: Back-propagation for multi-layer neural networks
+
+**1. Forward pass.**
+$a^{[k]}$, $z^{[k]}$, 그리고 $J$의 값을 다음 식에 따라 계산하고 저장합니다.
+
+$$
+z^{[k]} = W^{[k]}a^{[k-1]} + b^{[k]}, \quad a^{[k]} = \sigma(z^{[k]}), \quad J = \ell_{\text{logistic}}(z^{[r]}, y)
+$$
+
+**2. Backward pass (최상위 레이어).**
+$z^{[r]}$에 대한 손실 기울기를 계산합니다.
+
+$$
+\frac{\partial J}{\partial z^{[r]}} = \mathcal{B}[\ell_{\text{logistic}}, z^{[r]}](1) = \frac{1}{1 + \exp(-z^{[r]})} - y \tag{7.76}
+$$
+
+**3. for** $k = r-1$ **to** $0$ **do**
+
+**4.** 파라미터 $W^{[k+1]}$, $b^{[k+1]}$에 대한 기울기를 계산합니다.
+
+$$
+\frac{\partial J}{\partial W^{[k+1]}} = \mathcal{B}[\text{MM}, W^{[k+1]}]\!\left(\frac{\partial J}{\partial z^{[k+1]}}\right) = \frac{\partial J}{\partial z^{[k+1]}} a^{[k]\top} \tag{7.77}
+$$
+
+$$
+\frac{\partial J}{\partial b^{[k+1]}} = \mathcal{B}[\text{MM}, b^{[k+1]}]\!\left(\frac{\partial J}{\partial z^{[k+1]}}\right) = \frac{\partial J}{\partial z^{[k+1]}} \tag{7.78}
+$$
+
+**5.** $k \geq 1$일 때, $z^{[k]}$와 $a^{[k]}$에 대한 기울기를 계산합니다.
+
+$$
+\frac{\partial J}{\partial a^{[k]}} = \mathcal{B}[\sigma, a^{[k]}]\!\left(\frac{\partial J}{\partial z^{[k+1]}}\right) = W^{[k+1]\top} \frac{\partial J}{\partial z^{[k+1]}} \tag{7.79}
+$$
+
+$$
+\frac{\partial J}{\partial z^{[k]}} = \mathcal{B}[\sigma, z^{[k]}]\!\left(\frac{\partial J}{\partial a^{[k]}}\right) = \sigma'(z^{[k]}) \odot \frac{\partial J}{\partial a^{[k]}} \tag{7.80}
+$$
+
+---
+
+## 7.4 알고리즘 흐름 요약
+
+아래 다이어그램은 알고리즘의 흐름을 직관적으로 요약합니다.
+
+![Figure: MLP 역전파 알고리즘의 전체 흐름. 위 행은 순전파($x \to z^{[1]} \to a^{[1]} \to \cdots \to z^{[r]} \to J$)를 나타내고, 아래 행은 역전파($\frac{\partial J}{\partial z^{[r]}} \to \frac{\partial J}{\partial a^{[r-1]}} \to \frac{\partial J}{\partial z^{[r-1]}} \to \cdots \to \frac{\partial J}{\partial z^{[1]}}$)를 나타낸다. 각 노드에서 파라미터 기울기($\frac{\partial J}{\partial W^{[k]}}$, $\frac{\partial J}{\partial b^{[k]}}$)가 분기되어 계산된다. [이미지 생성 필요: 순전파와 역전파가 동시에 표현된 MLP 계산 그래프 다이어그램, 순전파는 왼쪽→오른쪽 파란 화살표, 역전파는 오른쪽→왼쪽 빨간 화살표, 각 레이어 노드에서 W와 b 기울기가 수직 방향으로 분기되는 형태]](./images/mlp_backprop_flow.png)
+
+---
+
+## 7.5 알고리즘의 핵심 통찰
+
+알고리즘을 통해 얻을 수 있는 주요 통찰은 다음과 같습니다.
+
+* **메모리 vs. 계산 트레이드오프**: 순전파 시 $a^{[k]}$, $z^{[k]}$를 모두 저장하면 역전파에서 야코비안 재계산 없이 효율적으로 기울기를 구할 수 있습니다. 이것이 역전파의 핵심 아이디어입니다.
+
+* **국소성(Locality)**: 각 모듈은 오직 자신의 입력과 업스트림 기울기만으로 다운스트림 기울기를 계산합니다. 전체 네트워크 구조를 알 필요가 없어 **모듈화 및 자동 미분(autograd)** 구현이 가능합니다.
+
+* **행렬 곱셈의 지배적 역할**: 선형 레이어의 역방향 연산은 모두 **행렬 곱셈**으로 표현되며, 이는 GPU 가속의 핵심 이유입니다.
+
+* **파라미터 기울기의 구조**: $\frac{\partial J}{\partial W^{[k]}} = \delta^{[k]} a^{[k-1]\top}$ (단, $\delta^{[k]} \triangleq \frac{\partial J}{\partial z^{[k]}}$)는 **rank-1 행렬**의 합 형태로, mini-batch를 사용하면 배치 내 샘플에 대한 평균으로 자연스럽게 확장됩니다.
+
+---
+
+# 8. 마무리
+
+이번 포스트에서는 신경망을 모듈의 합성으로 바라보는 관점에서 출발하여, 연쇄 법칙 → 역방향 함수 → 각 모듈(선형 레이어, ReLU, MSE/로지스틱 손실)의 역방향 규칙 → MLP 전체 알고리즘의 순서로 역전파를 체계적으로 유도했습니다.
+
+핵심을 한 줄로 요약하면:
+
+> **역전파는 각 모듈의 국소 미분 규칙을 연쇄 법칙으로 연결하여, 순전파 시 저장된 중간값을 재활용함으로써 모든 파라미터 기울기를 $O(|\theta|)$ 시간에 계산하는 알고리즘이다.**
+
+다음 포스트에서는 이 알고리즘 위에서 작동하는 다양한 **최적화 알고리즘(SGD, Momentum, Adam 등)** 을 살펴볼 예정입니다.
+
+---
+
+> 이 강의 노트는 MIT 6.036 (2019 Fall), Stanford CS229 (2023–2024 Summer) 강의 자료를 참고하여 작성된 SNU 4190.428 Introduction to Machine Learning 수업 내용을 기반으로 합니다.

@@ -13,162 +13,600 @@ format:
     theme: cosmo
 ---
 
-* 본 포스트에서는 수리 및 수치 최적화(Mathematical and Numerical Optimization) 강의의 20번째 주제인 **Douglas-Rachford Splitting과 ADMM(Alternating Direction Method of Multipliers)**에 대해 다룹니다. 볼록 최적화(Convex Optimization) 문제를 풀기 위한 중요한 도구인 단조 작용소(Monotone Operator)와 레졸번트(Resolvent)의 개념부터 시작하여, 작용소 분할(Operator Splitting) 기법이 어떻게 ADMM과 수학적으로 연결되는지 상세히 살펴보겠습니다.
+# 들어가며
+
+이번 강의(Lecture 20)에서는 볼록 최적화 문제를 푸는 강력한 도구인
+**Douglas-Rachford Splitting(DRS)**과 **ADMM(Alternating Direction Method of Multipliers)**을
+단조 작용소 이론의 관점에서 통합적으로 다룹니다.
+
+전체 흐름을 미리 요약하면 다음과 같습니다.
+
+* **단조 작용소(Monotone Operator):** 최적 조건 $0 \in A(x) + B(x)$의 추상적 틀
+* **리졸벤트(Resolvent):** 근위 연산자(proximal operator)의 일반화
+* **Peaceman-Rachford Splitting → Douglas-Rachford Splitting:** 수렴을 보장하기 위한 수정
+* **DRS for Convex Optimization:** proximal operator 두 개만으로 $\min f(x)+g(x)$ 해결
+* **ADMM ↔ DRS:** ADMM이 쌍대 문제에 대한 DRS와 정확히 동치임을 증명
 
 ---
 
-# 1. Monotone Operators (단조 작용소)
+# 1. 단조 작용소 (Monotone Operators)
 
-* 최적화 문제를 다룰 때, 함수의 미분(또는 서브디퍼렌셜)이 가지는 특성을 일반화한 개념이 바로 단조 작용소(Monotone Operator)입니다. 
+## 1.1 정의
 
-* 어떤 작용소 $\mathbb{T}:\mathbb{R}^{d}\Rightarrow\mathbb{R}^{d}$가 **단조(Monotone)**라는 것은, 모든 $x, y\in\mathbb{R}^{d}$ 와 $u\in\mathbb{T}(x)$, $v\in\mathbb{T}(y)$ 에 대하여 다음 부등식을 만족하는 경우를 의미합니다:
+**작용소(operator)** $T : \mathbb{R}^d \rightrightarrows \mathbb{R}^d$는
+점 $x$에 집합 $T(x) \subseteq \mathbb{R}^d$를 대응시키는 집합값 함수(set-valued map)입니다.
 
-$$\langle u-v, x-y \rangle \ge 0$$ 
+::: {.callout-note title="정의: 단조 작용소"}
+작용소 $T$가 **단조(monotone)**라 함은, 모든 $x, y \in \mathbb{R}^d$,
+$u \in T(x)$, $v \in T(y)$에 대해
 
-* 이는 작용소의 출력을 함수 값처럼 표기하여 다음과 같이 쓰기도 합니다:
+$$
+\langle u - v,\; x - y \rangle \;\geq\; 0
+$$
 
-$$\langle \mathbb{T}(x)-\mathbb{T}(y), x-y \rangle \ge 0 \quad \text{for all } x, y\in\mathbb{R}^{d}.$$ 
+이 성립하는 것을 말합니다. 단일값(single-valued)인 경우에는
 
-* 나아가, 어떤 단조 작용소 $\mathbb{T}$가 **최대(Maximal)**라는 것은 (또는 maximally monotone), $\mathbb{T}(x)\subseteq\mathbb{S}(x)$를 만족하면서 $\mathbb{T}(x)\ne\mathbb{S}(x)$가 되는 다른 단조 작용소 $\mathbb{S}$가 존재하지 않음을 뜻합니다. 즉, 더 이상 확장할 수 없는 가장 '꽉 찬' 단조 작용소입니다.
+$$
+\langle T(x) - T(y),\; x - y \rangle \;\geq\; 0 \quad \forall\, x, y \in \mathbb{R}^d
+$$
 
-> **Example 20.1** > 함수 $f$가 볼록(convex)하고 proper하다면, $f$의 서브디퍼렌셜(subdifferential) $\partial f$는 단조 작용소입니다. 여기서 proper 함수란 모든 $x\in\mathbb{R}^{d}$에 대해 $f(x)>-\infty$이며, 적어도 하나의 점에서 유한한 값을 가지는 함수를 말합니다. 특히 $f$가 closed, convex, proper 하다면, $\partial f$는 최대 단조 작용소(maximally monotone)가 됩니다.
+로 간결하게 쓸 수 있습니다.
+:::
 
+직관적으로, 단조 작용소는 "출력의 차이와 입력의 차이가 같은 방향을 가리키는" 성질을 가집니다.
+1차원 실수 함수로 비유하면 **비감소 함수(non-decreasing function)**와 유사한 개념입니다.
 
----
+## 1.2 최대 단조 작용소 (Maximal Monotone Operator)
 
-# 2. Resolvents (레졸번트)
+::: {.callout-note title="정의: 최대 단조 작용소"}
+단조 작용소 $T$가 **최대 단조(maximally monotone)**라 함은,
+$T(x) \subseteq S(x)$ for all $x$이고 $T(x) \neq S(x)$ for some $x$를 만족하는
+다른 단조 작용소 $S$가 존재하지 않는 것을 말합니다.
+즉, $T$는 단조성을 유지하면서 더 이상 확장될 수 없는 **"최대" 원소**입니다.
+:::
 
-* 레졸번트는 단조 작용소를 다룰 때 매우 유용한 도구로, 근접 작용소(Proximal Operator)의 일반화된 형태입니다. 작용소 $\mathbb{T}$의 레졸번트 $\mathbb{J}_{\mathbb{T}}$는 다음과 같이 정의됩니다:
+## 1.3 핵심 예시: 볼록 함수의 부분미분
 
-$$\mathbb{J}_{\mathbb{T}}=(I+\mathbb{T})^{-1}$$ 
+::: {.callout-important title="예시 20.1"}
+함수 $f$가 **볼록(convex)이고 진정(proper)**이면, 부분미분(subdifferential) $\partial f$는
+단조 작용소입니다.
 
-* 여기서 $I$는 항등 작용소(identity operator)입니다.
+* **진정(proper):** $f(x) > -\infty$ for all $x$이며, 어떤 점에서 $f$가 유한한 경우
+* **닫힌(closed) + 볼록 + 진정:** 이 세 조건이 모두 성립하면 $\partial f$는 **최대 단조**입니다.
+:::
 
-> **Example 20.2** > $f$가 closed, convex, proper 함수일 때, 서브디퍼렌셜 $\partial f$의 레졸번트는 $f$의 근접 작용소(proximal operator)와 동일합니다. 즉, $\mathbb{J}_{\partial f}=prox_{f}$ 입니다.  
-> *이유:* 임의의 $x\in\mathbb{R}^{d}$와 $u\in\mathbb{J}_{\partial f}(x)$에 대해, 정의에 의해 $x\in u+\partial f(u)$가 성립하며, 이는 볼록 최적화에서 $u=prox_{f}(x)$의 필요충분조건이기 때문입니다.
+### 왜 $\partial f$는 단조인가?
 
-* 레졸번트와 함께 자주 등장하는 작용소가 **Caley Operator** $\mathbb{C}_{\mathbb{T}}$ 입니다. 이는 다음과 같이 정의됩니다:
+$u \in \partial f(x)$, $v \in \partial f(y)$라 하면, 부분미분의 정의에 의해
 
-$$\mathbb{C}_{\mathbb{T}}=2\mathbb{J}_{\mathbb{T}}-I$$ 
+$$
+f(y) \;\geq\; f(x) + \langle u,\; y - x \rangle,
+\qquad
+f(x) \;\geq\; f(y) + \langle v,\; x - y \rangle.
+$$
 
-## 2.1. Lemma 20.3: 레졸번트의 성질
-* $\mathbb{T}$가 단조 작용소일 때, 임의의 $\alpha\ge 0$에 대하여 다음이 성립합니다:
-  * 1. $\mathbb{J}_{\alpha\mathbb{T}}$는 단일값(single-valued)을 가집니다.
-  * 2. $\mathbb{C}_{\alpha\mathbb{T}}$는 비팽창적(non-expansive)입니다.
-  * 3. $\mathbb{J}_{\alpha\mathbb{T}}$는 $1/2$-평균적(1/2-averaged)입니다.
+두 부등식을 더하면
 
-### **[Proof: 단일값 증명]**
-* $u\in\mathbb{J}_{\alpha\mathbb{T}}(x)$ 이고 $v\in\mathbb{J}_{\alpha\mathbb{T}}(y)$ 라 합시다. 레졸번트의 역함수 정의에 의해 $x\in u+\alpha\mathbb{T}(u)$ 와 $y\in v+\alpha\mathbb{T}(v)$ 가 성립합니다. 두 식을 빼면:
-$$x-y\in (u-v)+\alpha\mathbb{T}(u)-\alpha\mathbb{T}(v)$$ 
-* 양변에 $u-v$를 내적하면:
-$$\langle u-v, x-y \rangle \in \langle u-v, u-v \rangle + \alpha\langle u-v, \mathbb{T}(u)-\mathbb{T}(v) \rangle$$ 
-* $\mathbb{T}$가 단조 작용소이므로 $\alpha\langle u-v, \mathbb{T}(u)-\mathbb{T}(v) \rangle \ge 0$ 이며, 따라서 $\langle u-v, x-y \rangle \ge ||u-v||^{2}$ 가 성립합니다. 만약 $x=y$ 라면 $||u-v||^{2} \le 0$ 이 되어 $u=v$가 도출되므로, 단일값임이 증명됩니다.
+$$
+0 \;\geq\; \langle u - v,\; -(y-x) \rangle + \langle v - u,\; -(x-y) \rangle
+\;\Longrightarrow\;
+\langle u - v,\; x - y \rangle \;\geq\; 0.
+$$
 
-### **[Proof: 비팽창성 증명]**
-* Caley 작용소의 정의를 활용해 거리를 전개해 봅니다:
-$$||\mathbb{C}_{\alpha\mathbb{T}}(x)-\mathbb{C}_{\alpha\mathbb{T}}(y)||^{2} = ||2\mathbb{J}_{\alpha\mathbb{T}}(x)-x-(2\mathbb{J}_{\alpha\mathbb{T}}(y)-y)||^{2}$$ 
-$$= ||2\mathbb{J}_{\alpha\mathbb{T}}(x)-2\mathbb{J}_{\alpha\mathbb{T}}(y)-(x-y)||^{2}$$ 
-$$= 4||\mathbb{J}_{\alpha\mathbb{T}}(x)-\mathbb{J}_{\alpha\mathbb{T}}(y)||^{2} - 4\langle\mathbb{J}_{\alpha\mathbb{T}}(x)-\mathbb{J}_{\alpha\mathbb{T}}(y), x-y\rangle + ||x-y||^{2}$$ 
-* 앞서 증명한 $\langle u-v, x-y \rangle \ge ||u-v||^{2}$ 성질을 대입하면:
-$$||\mathbb{C}_{\alpha\mathbb{T}}(x)-\mathbb{C}_{\alpha\mathbb{T}}(y)||^{2} \le 4||\mathbb{J}_{\alpha\mathbb{T}}(x)-\mathbb{J}_{\alpha\mathbb{T}}(y)||^{2} - 4||\mathbb{J}_{\alpha\mathbb{T}}(x)-\mathbb{J}_{\alpha\mathbb{T}}(y)||^{2} + ||x-y||^{2} = ||x-y||^{2}$$ 
-* 따라서 $\mathbb{C}_{\alpha\mathbb{T}}$는 비팽창적입니다. $\mathbb{J}_{\alpha\mathbb{T}}=\frac{1}{2}(\mathbb{C}_{\alpha\mathbb{T}}+I)$ 의 관계를 가지므로 $\mathbb{J}_{\alpha\mathbb{T}}$는 $1/2$-averaged 성질을 만족합니다.
-
----
-
-# 3. Operator Splitting (작용소 분할)
-
-* 두 개의 최대 단조 작용소 $\mathbb{A}$와 $\mathbb{B}$가 주어졌을 때, 다음을 만족하는 $x\in\mathbb{R}^{d}$를 찾는 문제를 고려해봅시다:
-
-$$0\in\mathbb{A}(x)+\mathbb{B}(x)$$ 
-
-* 이 문제를 풀기 위해 **Lemma 20.4**와 **Lemma 20.5**가 도입됩니다.
-  * **Lemma 20.4:** 최대 단조 작용소 $\mathbb{A}$에 대해 $\mathbb{C}_{\alpha\mathbb{A}}=(I-\alpha\mathbb{A})(I+\alpha\mathbb{A})^{-1}$ 입니다.
-  * **Lemma 20.5:** $0\in\mathbb{A}(x)+\mathbb{B}(x)$ 임은, 임의의 $\alpha>0$에 대해 $z=\mathbb{C}_{\alpha\mathbb{A}}\circ\mathbb{C}_{\alpha\mathbb{B}}(z)$ 이고 $x=\mathbb{J}_{\alpha\mathbb{B}}(z)$ 를 만족하는 것과 동치입니다.
-
-* 즉, 해 $x$를 찾는 문제는 $\mathbb{C}_{\alpha\mathbb{A}}\circ\mathbb{C}_{\alpha\mathbb{B}}$의 **고정점(fixed point)** $z$를 찾는 문제로 귀결됩니다. 
-
-## 3.1. Peaceman-Rachford vs. Douglas-Rachford Splitting
-
-* 이 고정점을 찾기 위한 직관적인 방법은 단순히 반복 연산을 수행하는 **Peaceman-Rachford splitting (PRS)**입니다:
-$$z_{t+1}=\mathbb{C}_{\alpha\mathbb{A}}\circ\mathbb{C}_{\alpha\mathbb{B}}(z_{t})$$ 
-* 하지만, $\mathbb{C}_{\alpha\mathbb{A}}$와 $\mathbb{C}_{\alpha\mathbb{B}}$는 단순히 비팽창적일 뿐(수축적이지 않음), 둘의 합성 작용소 또한 수렴을 보장하지 못할 수 있습니다.
-
-* 이를 해결하기 위해 고안된 것이 **Douglas-Rachford splitting (DRS)**입니다. 이는 식에 항등 작용소를 더해 평균을 취하여 수렴성을 확보합니다:
-$$z_{t+1}=\frac{1}{2}(I+\mathbb{C}_{\alpha\mathbb{A}}\circ\mathbb{C}_{\alpha\mathbb{B}})(z_{t})$$ 
-* 합성된 Caley 작용소가 비팽창적이므로 이 결합은 $1/2$-averaged가 되며, Fixed-point iteration이 안정적으로 수렴하게 됩니다. $z$가 고정점에 수렴하면 해는 $x=\mathbb{J}_{\alpha\mathbb{B}}(z)$를 통해 얻습니다.
-
-* 실제 알고리즘의 형태로 DRS를 다시 쓰면 다음과 같습니다:
-$$x_{t} = \mathbb{J}_{\alpha\mathbb{B}}(z_{t}), \quad z_{t+1} = z_{t} + \mathbb{J}_{\alpha\mathbb{A}}(2x_{t}-z_{t}) - x_{t}$$ 
+이것이 단조성 조건 그 자체입니다.
 
 ---
 
-# 4. Douglas-Rachford Splitting for Convex Optimization
+# 2. 리졸벤트 (Resolvents)
 
-* 두 closed, convex, proper 함수 $f, g$에 대해 다음 문제를 풀어야 한다고 가정합시다:
-$$\min_{x\in\mathbb{R}^{d}} f(x)+g(x)$$ 
-* 이는 최적성 조건에 의해 $0\in\partial f(x)+\partial g(x)$ 를 찾는 문제와 완벽히 동치입니다. 앞서 다룬 DRS를 여기에 바로 적용할 수 있습니다.
+## 2.1 리졸벤트의 정의
 
-* 서브디퍼렌셜의 레졸번트가 근접 작용소($prox$)임을 상기하면:
-$$x_{t}=prox_{\alpha g}(z_{t}), \quad z_{t+1}=z_{t}+prox_{\alpha f}(2x_{t}-z_{t})-x_{t}$$ 
-* 이처럼 복잡한 함수의 합을 최적화할 때, 각각의 근접 작용소만 연산하면 되므로($f$와 $g$의 근접 작용소를 계산하기 쉬울 때) DRS는 매우 강력한 도구가 됩니다.
+::: {.callout-note title="정의: 리졸벤트"}
+작용소 $T$의 **리졸벤트(resolvent)**는
 
-* 이를 변수 치환을 통해 더 이해하기 쉬운 형태로 바꾸면:
-$$u_{t+1}=prox_{\alpha f}(x_{t}+w_{t})$$ 
-$$x_{t+1}=prox_{\alpha g}(u_{t+1}-w_{t})$$ 
-$$w_{t+1}=w_{t}+x_{t+1}-u_{t+1}$$ 
-와 같이 표현할 수도 있습니다.
+$$
+J_T \;=\; (I + T)^{-1}
+$$
 
+으로 정의됩니다. 여기서 $I$는 항등 작용소(identity operator)입니다.
+:::
+
+**스케일된 리졸벤트(scaled resolvent)**는 $\alpha > 0$에 대해
+
+$$
+J_{\alpha T} \;=\; (I + \alpha T)^{-1}
+$$
+
+으로 씁니다.
+
+## 2.2 핵심 예시: 근위 연산자와의 연결
+
+::: {.callout-important title="예시 20.2"}
+$f$가 닫힌(closed), 볼록, 진정 함수이면, $\partial f$의 리졸벤트는 $f$의
+**근위 연산자(proximal operator)**와 일치합니다:
+
+$$
+J_{\partial f} \;=\; \operatorname{prox}_f.
+$$
+:::
+
+### 유도
+
+$u \in J_{\partial f}(x)$라 하면, 리졸벤트 정의에 의해
+
+$$
+x \;\in\; u + \partial f(u).
+$$
+
+이는 $u - x \in -\partial f(u)$, 즉
+
+$$
+u \;=\; \operatorname*{argmin}_{z} \left\{ f(z) + \tfrac{1}{2}\|z - x\|^2 \right\}
+\;=\; \operatorname{prox}_f(x).
+$$
+
+따라서 $J_{\partial f}(x) = \operatorname{prox}_f(x)$가 성립합니다.
+스케일된 경우도 동일하게 $J_{\alpha \partial f}(x) = \operatorname{prox}_{\alpha f}(x)$입니다.
+
+## 2.3 케일리 작용소 (Cayley Operator)
+
+::: {.callout-note title="정의: 케일리 작용소"}
+작용소 $T$의 **케일리 작용소(Cayley operator)**는
+
+$$
+C_T \;=\; 2 J_T - I
+$$
+
+으로 정의됩니다.
+:::
+
+케일리 작용소는 **리플렉션(reflection)** 역할을 합니다.
+$J_T$가 $x$를 $T$의 고정점 방향으로 "당기는" 연산이라면,
+$C_T = 2J_T - I$는 그 고정점을 기준으로 $x$를 "반사"시키는 연산입니다.
+
+## 2.4 리졸벤트의 비팽창성 (Lemma 20.3)
+
+::: {.callout-tip title="보조정리 20.3"}
+$T$가 단조 작용소이면, 모든 $\alpha \geq 0$에 대해
+
+1. $J_{\alpha T}$는 **단일값(single-valued)**이다.
+2. $C_{\alpha T}$는 **비팽창적(non-expansive)**이다. 즉, $\|C_{\alpha T}(x) - C_{\alpha T}(y)\| \leq \|x - y\|$.
+3. $J_{\alpha T}$는 **$\tfrac{1}{2}$-평균화(averaged)**이다.
+:::
+
+### 증명
+
+**1단계: $J_{\alpha T}$의 단일값성**
+
+$u \in J_{\alpha T}(x)$, $v \in J_{\alpha T}(y)$라 하면
+
+$$
+x \in u + \alpha T(u), \quad y \in v + \alpha T(v).
+$$
+
+두 식을 빼면 $x - y \in (u - v) + \alpha\bigl(T(u) - T(v)\bigr)$이므로
+
+$$
+\langle u - v,\; x - y \rangle
+\;\in\; \langle u - v,\; u - v \rangle + \alpha \langle u - v,\; T(u) - T(v) \rangle.
+$$
+
+$T$의 단조성에 의해 $\langle u-v,\, T(u)-T(v)\rangle \geq 0$이므로
+
+$$
+\langle u - v,\; x - y \rangle \;\geq\; \|u - v\|^2.
+$$
+
+$x = y$이면 $\|u-v\|^2 \leq 0$, 즉 $u = v$. 따라서 $J_{\alpha T}$는 단일값입니다. $\square$
+
+**2단계: $C_{\alpha T}$의 비팽창성**
+
+$u = J_{\alpha T}(x)$, $v = J_{\alpha T}(y)$로 놓으면
+
+$$
+\begin{aligned}
+\|C_{\alpha T}(x) - C_{\alpha T}(y)\|^2
+&= \|2J_{\alpha T}(x) - x - (2J_{\alpha T}(y) - y)\|^2 \\
+&= \|2(u-v) - (x-y)\|^2 \\
+&= 4\|u-v\|^2 - 4\langle u-v,\; x-y \rangle + \|x-y\|^2.
+\end{aligned}
+$$
+
+1단계에서 $\langle u - v,\, x - y \rangle \geq \|u - v\|^2$를 대입하면
+
+$$
+\|C_{\alpha T}(x) - C_{\alpha T}(y)\|^2
+\;\leq\; 4\|u-v\|^2 - 4\|u-v\|^2 + \|x-y\|^2
+= \|x-y\|^2.
+$$
+
+따라서 $C_{\alpha T}$는 비팽창적입니다. $\square$
+
+**3단계: $J_{\alpha T}$의 $\tfrac{1}{2}$-평균화**
+
+$J_{\alpha T} = \tfrac{1}{2}(C_{\alpha T} + I)$이므로,
+비팽창 작용소 $C_{\alpha T}$와 항등 작용소의 평균이 됩니다.
+이는 정확히 **$\tfrac{1}{2}$-평균화(averaged)** 작용소의 정의입니다. $\square$
 
 ---
 
-# 5. ADMM as Douglas-Rachford Splitting
+# 3. 작용소 분리법 (Operator Splitting)
 
-* **Alternating Direction Method of Multipliers (ADMM)**은 등식 제약 조건이 있는 분리 가능한(separable) 볼록 최적화 문제에 널리 쓰입니다. 
-$$\text{minimize } f(x)+g(y) \quad \text{subject to } y=Ax$$ 
+## 3.1 문제 설정
 
-* ADMM의 업데이트 규칙은 다음과 같습니다:
-$$x_{t+1} = \arg\min_{x}\{f(x)+\mu_{t}^{\top}(Ax-y_{t})+\frac{\alpha}{2}||Ax-y_{t}||^{2}\}$$ 
-$$y_{t+1} = \arg\min_{y}\{g(y)+\mu_{t}^{\top}(Ax_{t+1}-y)+\frac{\alpha}{2}||Ax_{t+1}-y||^{2}\}$$ 
-$$\mu_{t+1} = \mu_{t}+\alpha(Ax_{t+1}-y_{t+1})$$ 
+두 개의 **최대 단조 작용소** $A$와 $B$가 주어졌을 때,
 
-* 매우 흥미롭게도, **이 ADMM은 원문제의 쌍대 문제(Dual Problem)에 Douglas-Rachford Splitting을 적용한 것과 완전히 동치**입니다.
+$$
+\boxed{0 \;\in\; A(x) + B(x)}
+$$
 
-## 5.1. ADMM과 DRS의 수학적 연결고리 유도
+를 만족하는 $x \in \mathbb{R}^d$를 찾는 것이 목표입니다.
 
-* 원문제의 쌍대 문제는 켤레 함수(conjugate function)를 사용하여 다음과 같이 표현됩니다:
-$$\text{minimize } f^{*}(-A^{\top}\mu)+g^{*}(\mu)$$ 
+볼록 최적화의 최적 조건 $0 \in \partial f(x) + \partial g(x)$가 이 형태에 해당하므로,
+이 프레임워크는 매우 일반적인 적용 범위를 가집니다.
 
-* 여기에 DRS를 적용해 쌍대 변수 $\mu$에 대한 식을 전개하면 아래와 같습니다:
-  * 1. $u_{t+1} = prox_{\alpha f^{*}(-A^{\top}\cdot)}(\mu_{t}+w_{t})$ 
-  * 2. $\mu_{t+1} = prox_{\alpha g^{*}}(u_{t+1}-w_{t})$ 
-  * 3. $w_{t+1} = w_{t}+\mu_{t+1}-u_{t+1}$ 
+## 3.2 보조 정리 (Lemma 20.4)
 
-* 이제 이 쌍대 문제에 대한 DRS 단계들이 ADMM의 업데이트 단계들과 정확히 매칭됨을 증명해 보겠습니다.
+::: {.callout-tip title="보조정리 20.4"}
+$A$가 최대 단조 작용소이면, 모든 $\alpha > 0$에 대해
 
-* **[Step 1: $x_{t+1}$ 업데이트 유도]**
-  * 첫 번째 식의 근접 작용소 정의를 풀어서 쓰면:
-  $$\mu_{t}+w_{t}-u_{t+1} \in \alpha(-A)\partial f^{*}(-A^{\top}u_{t+1})$$ 
-  * 이를 정리하면:
-  $$\frac{1}{\alpha}(\mu_{t}+w_{t}-u_{t+1}) = -Ax_{t+1}, \quad x_{t+1}\in\partial f^{*}(-A^{\top}u_{t+1})$$ 
-  * 여기서 보조 변수 $w_{t} = -\alpha y_{t}$ 로 설정하면:
-  $$u_{t+1} = \mu_{t}+\alpha(Ax_{t+1}-y_{t})$$ 
-  * 켤레 함수의 성질 $x \in \partial f^*(y) \iff y \in \partial f(x)$를 이용하면, $-A^{\top}u_{t+1}\in\partial f(x_{t+1})$ 이 되며, 이를 대입해 정리하면:
-  $$0 \in \partial f(x_{t+1})+A^{\top}(\mu_{t}+\alpha(Ax_{t+1}-y_{t}))$$ 
-  * 이는 정확히 ADMM의 $x$-update 단계에서 Lagrangian을 $x$로 미분하여 0이 되는 최적성 조건과 일치합니다:
-  $$x_{t+1}\in \arg\min_{x}\{f(x)+\mu_{t}^{\top}(Ax-y_{t})+\frac{\alpha}{2}||Ax-y_{t}||^{2}\}$$ 
+$$
+C_{\alpha A} \;=\; (I - \alpha A)(I + \alpha A)^{-1}.
+$$
+:::
 
-* **[Step 2: $y_{t+1}$ 업데이트 유도]**
-  * 두 번째 식 $\mu_{t+1}=prox_{\alpha g^{*}}(u_{t+1}-w_{t})$도 마찬가지로 근접 작용소 정의를 통해 전개합니다:
-  $$u_{t+1}-w_{t}-\mu_{t+1} \in \alpha\partial g^{*}(\mu_{t+1})$$ 
-  * 여기서 $y_{t+1}$을 다음과 같이 정의해봅시다:
-  $$y_{t+1} = \frac{1}{\alpha}(u_{t+1}-w_{t}-\mu_{t+1}) = -\frac{1}{\alpha}w_{t+1}$$ 
-  * 그러면 $y_{t+1}\in\partial g^{*}(\mu_{t+1})$ 가 되며, 이는 $\mu_{t+1}\in\partial g(y_{t+1})$ 와 동치입니다.
-  * 앞서 구한 $u_{t+1}$을 대입하여 $\mu_{t+1}$에 대해 정리하면:
-  $$\mu_{t+1} = u_{t+1}-w_{t}-\alpha y_{t+1} = \mu_{t}+\alpha(Ax_{t+1}-y_{t+1})$$ 
-  * 이 식은 ADMM의 $\mu_{t+1}$ (multiplier) 업데이트 식과 완벽하게 동일합니다.
-  * 마지막으로 $\mu_{t+1}\in\partial g(y_{t+1})$ 에 이 결과를 대입하면:
-  $$0 \in \partial g(y_{t+1})-\mu_{t}-\alpha(Ax_{t+1}-y_{t+1})$$ 
-  * 이는 ADMM의 $y$-update 단계에 대한 최적성 조건이 됩니다:
-  $$y_{t+1}\in \arg\min_{y}\{g(y)+\mu_{t}^{\top}(Ax_{t+1}-y)+\frac{\alpha}{2}||Ax_{t+1}-y||^{2}\}$$ 
+이 식은 케일리 작용소 $C_{\alpha A} = 2 J_{\alpha A} - I$를 전개하면 바로 확인할 수 있습니다:
 
-* 결론적으로, **쌍대 문제에 대한 Douglas-Rachford Splitting 알고리즘은 원문제에 대한 ADMM과 수학적으로 완전히 동일한 연산 흐름을 가짐**을 알 수 있습니다.
+$$
+2(I + \alpha A)^{-1} - I
+= \bigl[2I - (I + \alpha A)\bigr](I + \alpha A)^{-1}
+= (I - \alpha A)(I + \alpha A)^{-1}.
+$$
+
+## 3.3 고정점 특성 (Lemma 20.5)
+
+::: {.callout-tip title="보조정리 20.5"}
+$0 \in A(x) + B(x)$이 성립하는 것은, 어떤 $\alpha > 0$에 대해
+
+$$
+x = J_{\alpha B}(z), \qquad z = C_{\alpha A} \circ C_{\alpha B}(z)
+$$
+
+이 동치입니다.
+:::
+
+### 증명
+
+$$
+0 \in A(x) + B(x)
+$$
+
+$$
+\Updownarrow
+$$
+
+$$
+0 \in (I + \alpha A)(x) - (I - \alpha B)(x)
+$$
+
+$$
+\Updownarrow
+$$
+
+$(I - \alpha B)(x) = C_{\alpha B}(I + \alpha B)(x)$임을 이용하면
+
+$$
+0 \in (I + \alpha A)(x) - C_{\alpha B}(z), \quad z \in (I + \alpha B)(x)
+$$
+
+$$
+\Updownarrow
+$$
+
+$$
+C_{\alpha B}(z) \in (I + \alpha A)\underbrace{J_{\alpha B}(z)}_{=x}, \quad x = J_{\alpha B}(z)
+$$
+
+$$
+\Updownarrow
+$$
+
+$$
+J_{\alpha A} \circ C_{\alpha B}(z) = J_{\alpha B}(z) = x
+$$
+
+$$
+\Updownarrow
+$$
+
+$$
+C_{\alpha A} \circ C_{\alpha B}(z) = z, \quad x = J_{\alpha B}(z). \quad \square
+$$
+
+---
+
+# 4. Douglas-Rachford Splitting (DRS)
+
+## 4.1 Peaceman-Rachford Splitting (PRS)과 그 한계
+
+보조정리 20.5로부터, $z$가 $C_{\alpha A} \circ C_{\alpha B}$의 **고정점(fixed point)**이고
+$x = J_{\alpha B}(z)$이면, $x$는 $0 \in A(x) + B(x)$의 해입니다.
+
+이를 바탕으로 **고정점 반복(fixed-point iteration)**을 구성하면
+
+$$
+z^{t+1} \;=\; C_{\alpha A} \circ C_{\alpha B}(z^t).
+$$
+
+이것이 **Peaceman-Rachford Splitting(PRS)**입니다.
+
+그러나 $C_{\alpha A}$와 $C_{\alpha B}$는 각각 비팽창적(non-expansive)이지만,
+합성 $C_{\alpha A} \circ C_{\alpha B}$도 비팽창적일 뿐이므로
+**고정점 반복이 수렴을 보장하지 않습니다.**
+
+> **핵심 문제:** 비팽창 작용소의 고정점 반복은 진동(oscillation)할 수 있어 수렴이 보장되지 않습니다.
+
+## 4.2 Douglas-Rachford Splitting (DRS)
+
+수렴 문제를 해결하기 위해, 다음과 같이 **평균화(averaging)** 기법을 적용합니다:
+
+$$
+\boxed{
+z^{t+1} \;=\; \frac{1}{2}\bigl(I + C_{\alpha A} \circ C_{\alpha B}\bigr)(z^t)
+}
+$$
+
+이것이 **Douglas-Rachford Splitting(DRS)**입니다.
+
+### 수렴성 분석
+
+- $C_{\alpha A} \circ C_{\alpha B}$는 비팽창적 → $\tfrac{1}{2}(I + C_{\alpha A} \circ C_{\alpha B})$는 **$\tfrac{1}{2}$-평균화**.
+- $\tfrac{1}{2}$-평균화 작용소의 고정점 반복은 **항상 고정점으로 수렴**합니다 (Krasnosel'skiĭ-Mann 정리).
+- $z^t \to z^*$이면, $x^* = J_{\alpha B}(z^*)$는 $0 \in A(x^*) + B(x^*)$의 해.
+
+## 4.3 DRS의 구체적 반복식
+
+DRS 반복을 전개하면 더 실용적인 형태를 얻습니다.
+
+$$
+\begin{aligned}
+x^t &= J_{\alpha B}(z^t) \\
+z^{t+1} &= z^t + J_{\alpha A}(2x^t - z^t) - x^t
+\end{aligned}
+$$
+
+이 반복은 **리졸벤트** $J_{\alpha A}$와 $J_{\alpha B}$만을 사용하며,
+볼록 최적화에서는 이것이 각각 근위 연산자 $\operatorname{prox}_{\alpha A}$, $\operatorname{prox}_{\alpha B}$에 대응됩니다.
+
+![Figure: PRS와 DRS의 고정점 반복 비교. PRS는 $C_{\alpha A} \circ C_{\alpha B}$의 직접 반복으로 수렴이 보장되지 않아 궤적이 진동할 수 있는 반면, DRS는 항등 작용소와의 평균 $\frac{1}{2}(I + C_{\alpha A} \circ C_{\alpha B})$를 사용함으로써 수렴성이 보장된다.](./images/prs_vs_drs_convergence.png)
+
+[이미지 생성 필요: PRS 반복이 고정점 주변을 진동하는 궤적과 DRS 반복이 고정점으로 단조 수렴하는 궤적을 나란히 비교하는 2D 위상도(phase diagram)]
+
+---
+
+# 5. 볼록 최적화를 위한 Douglas-Rachford Splitting
+
+## 5.1 문제 설정
+
+두 개의 **닫힌(closed), 볼록(convex), 진정(proper)** 함수 $f$와 $g$에 대해
+
+$$
+\min_{x \in \mathbb{R}^d} \; f(x) + g(x)
+$$
+
+를 풀고자 합니다.
+
+이 문제의 최적 조건은 $0 \in \partial f(x) + \partial g(x)$이므로,
+$A = \partial f$, $B = \partial g$로 놓으면 앞선 DRS 프레임워크를 그대로 적용할 수 있습니다.
+
+## 5.2 Proximal DRS 반복식
+
+$J_{\alpha \partial f}(x) = \operatorname{prox}_{\alpha f}(x)$이고
+$J_{\alpha \partial g}(x) = \operatorname{prox}_{\alpha g}(x)$이므로, DRS 반복은
+
+$$
+\begin{aligned}
+x^t &= \operatorname{prox}_{\alpha g}(z^t) \\
+z^{t+1} &= z^t + \operatorname{prox}_{\alpha f}(2x^t - z^t) - x^t
+\end{aligned}
+$$
+
+이 됩니다.
+
+::: {.callout-important title="핵심 포인트"}
+이 반복은 오직 $f$와 $g$의 **근위 연산자(proximal operator)**만을 사용합니다.
+따라서 $f$나 $g$가 미분 불가능하더라도, 근위 연산자를 계산할 수 있다면 DRS를 적용할 수 있습니다.
+:::
+
+## 5.3 동치적 형식 (Equivalent Form)
+
+위 반복을 다음과 같이 보조 변수 $u^t$, $w^t$를 도입하여 재작성할 수 있습니다.
+
+**형식 1 (직접 전개):**
+
+$$
+\begin{aligned}
+u^{t+1} &= \operatorname{prox}_{\alpha f}(2x^t - z^t) \\
+x^{t+1} &= \operatorname{prox}_{\alpha g}(z^t + u^{t+1} - x^t)
+\end{aligned}
+$$
+
+**형식 2 (쌍대 변수 $w^t$ 도입):**
+
+$$
+\begin{aligned}
+u^{t+1} &= \operatorname{prox}_{\alpha f}(x^t + w^t) \\
+x^{t+1} &= \operatorname{prox}_{\alpha g}(u^{t+1} - w^t) \\
+w^{t+1} &= w^t + x^{t+1} - u^{t+1}
+\end{aligned}
+$$
+
+세 번째 형식에서 $w^t$는 **쌍대 변수(dual variable)**처럼 작동하며,
+두 근위 단계의 "불일치(discrepancy)"를 누적하여 수정합니다.
+이 형식은 아래에서 설명할 ADMM과의 연결 고리가 됩니다.
+
+---
+
+# 6. ADMM as Douglas-Rachford Splitting
+
+## 6.1 ADMM 문제 설정
+
+이제 선형 제약이 있는 구조화된 볼록 최적화 문제를 고려합니다:
+
+$$
+\begin{aligned}
+\text{minimize} \quad & f(x) + g(y) \\
+\text{subject to} \quad & y = Ax
+\end{aligned}
+$$
+
+여기서 $f$, $g$는 닫힌·볼록·진정 함수이고, $A$는 적절한 행렬입니다.
+
+## 6.2 ADMM 반복식
+
+이 문제에 대한 **ADMM(Alternating Direction Method of Multipliers)** 반복은 다음과 같습니다:
+
+$$
+\begin{aligned}
+x^{t+1} &= \operatorname*{argmin}_{x} \left\{ f(x) + (\mu^t)^\top (Ax - y^t) + \frac{\alpha}{2}\|Ax - y^t\|^2 \right\}, \\
+y^{t+1} &= \operatorname*{argmin}_{y} \left\{ g(y) + (\mu^t)^\top (Ax^{t+1} - y) + \frac{\alpha}{2}\|Ax^{t+1} - y\|^2 \right\}, \\
+\mu^{t+1} &= \mu^t + \alpha(Ax^{t+1} - y^{t+1}).
+\end{aligned}
+$$
+
+여기서 $\mu^t$는 라그랑주 승수(Lagrange multiplier)이고 $\alpha > 0$은 스텝 크기(augmented penalty parameter)입니다.
+
+각 스텝의 의미를 살펴보면:
+
+* **$x$-스텝:** $f$와 증강 라그랑지안(augmented Lagrangian)을 함께 최소화.
+* **$y$-스텝:** $g$와 증강 라그랑지안을 함께 최소화.
+* **$\mu$-스텝(쌍대 업데이트):** 제약 위반량 $Ax^{t+1} - y^{t+1}$에 비례하여 승수 업데이트.
+
+## 6.3 쌍대 문제와 DRS
+
+**핵심 주장:** ADMM은 위 문제의 **쌍대 문제(dual problem)**에 DRS를 적용한 것과 동치입니다.
+
+### 쌍대 문제 도출
+
+원래 문제의 쌍대 문제는
+
+$$
+\min_\mu \; f^*(-A^\top \mu) + g^*(\mu)
+$$
+
+입니다. 여기서 $f^*$와 $g^*$는 각각 $f$, $g$의 **켤레 함수(conjugate function)**입니다.
+
+### 쌍대 문제에 DRS 적용
+
+$A = \partial_{f^*(-A^\top \cdot)}$, $B = \partial_{g^*}$로 놓고 DRS를 적용하면
+
+$$
+\begin{aligned}
+u^{t+1} &= \operatorname{prox}_{\alpha f^*(-A^\top \cdot)}(\mu^t + w^t), \\
+\mu^{t+1} &= \operatorname{prox}_{\alpha g^*}(u^{t+1} - w^t), \\
+w^{t+1} &= w^t + \mu^{t+1} - u^{t+1}.
+\end{aligned}
+$$
+
+## 6.4 ADMM ↔ DRS 동치 증명
+
+### Step 1: $u^{t+1}$ 업데이트와 $x^{t+1}$-스텝의 동치
+
+$u^{t+1} = \operatorname{prox}_{\alpha f^*(-A^\top \cdot)}(\mu^t + w^t)$는 다음과 동치입니다:
+
+$$
+\mu^t + w^t - u^{t+1} \;\in\; \alpha(-A) \partial f^*(-A^\top u^{t+1}).
+$$
+
+즉
+
+$$
+\frac{1}{\alpha}(\mu^t + w^t - u^{t+1}) = -Ax^{t+1}, \quad x^{t+1} \in \partial f^*(-A^\top u^{t+1}).
+$$
+
+**$w^t = -\alpha y^t$** 로 설정하면
+
+$$
+u^{t+1} = \mu^t + \alpha(Ax^{t+1} - y^t).
+$$
+
+한편 $x^{t+1} \in \partial f^*(-A^\top u^{t+1})$은 **펜첼 이중성(Fenchel duality)**에 의해
+$-A^\top u^{t+1} \in \partial f(x^{t+1})$과 동치이며, 이는
+
+$$
+0 \;\in\; \partial f(x^{t+1}) + A^\top u^{t+1}
+= \partial f(x^{t+1}) + A^\top \bigl(\mu^t + \alpha(Ax^{t+1} - y^t)\bigr)
+$$
+
+을 의미합니다. 따라서
+
+$$
+x^{t+1} \;\in\; \operatorname*{argmin}_x \left\{ f(x) + (\mu^t)^\top (Ax - y^t) + \frac{\alpha}{2}\|Ax - y^t\|^2 \right\}.
+$$
+
+이것이 정확히 ADMM의 $x$-스텝입니다. ✓
+
+### Step 2: $\mu^{t+1}$ 업데이트와 $y^{t+1}$-스텝의 동치
+
+$\mu^{t+1} = \operatorname{prox}_{\alpha g^*}(u^{t+1} - w^t)$는
+
+$$
+u^{t+1} - w^t - \mu^{t+1} \;\in\; \alpha \partial g^*(\mu^{t+1})
+$$
+
+와 동치입니다. 다음을 정의합니다:
+
+$$
+y^{t+1} \;:=\; \frac{1}{\alpha}(u^{t+1} - w^t - \mu^{t+1}) \;=\; -\frac{1}{\alpha} w^{t+1}.
+$$
+
+그러면 $y^{t+1} \in \partial g^*(\mu^{t+1})$이고, 이는 **펜첼 이중성**에 의해
+$\mu^{t+1} \in \partial g(y^{t+1})$과 동치입니다. 또한
+
+$$
+\mu^{t+1}
+= u^{t+1} - w^t - \alpha y^{t+1}
+= \mu^t + \alpha(Ax^{t+1} - y^{t+1}).
+$$
+
+이것은 ADMM의 $\mu$-스텝과 정확히 일치합니다. ✓
+
+$0 \in \partial g(y^{t+1}) - \mu^t - \alpha(Ax^{t+1} - y^{t+1})$로부터
+
+$$
+y^{t+1} \;\in\; \operatorname*{argmin}_y \left\{ g(y) + (\mu^t)^\top (Ax^{t+1} - y) + \frac{\alpha}{2}\|Ax^{t+1} - y\|^2 \right\}.
+$$
+
+이것이 정확히 ADMM의 $y$-스텝입니다. ✓
+
+---
+
+::: {.callout-tip title="최종 결론"}
+**ADMM = 쌍대 문제에 적용한 DRS.**
+
+$$
+\underbrace{\text{ADMM on } \min_{y=Ax} f(x)+g(y)}_{\text{원래 ADMM}}
+\;\equiv\;
+\underbrace{\text{DRS on } \min_\mu f^*(-A^\top \mu) + g^*(\mu)}_{\text{쌍대 문제의 DRS}}
+$$
+
+이 동치 관계는 ADMM의 수렴성을 DRS의 수렴 이론으로부터 직접 도출할 수 있게 해 줍니다.
+:::
+
+---
+
+# 마치며
+
+이번 강의에서 다룬 핵심 흐름을 정리하면 다음과 같습니다.
+
+| 개념 | 핵심 내용 |
+|------|-----------|
+| 단조 작용소 | $\langle T(x)-T(y),\, x-y\rangle \geq 0$; 볼록 함수의 $\partial f$가 대표 예시 |
+| 리졸벤트 $J_T = (I+T)^{-1}$ | $J_{\partial f} = \operatorname{prox}_f$; $J_{\alpha T}$는 $\tfrac{1}{2}$-averaged |
+| 케일리 작용소 $C_T = 2J_T - I$ | 비팽창적; 고정점 = 원래 문제의 해 |
+| Peaceman-Rachford | $z^{t+1} = C_{\alpha A} \circ C_{\alpha B}(z^t)$; 수렴 미보장 |
+| **Douglas-Rachford** | $z^{t+1} = \tfrac{1}{2}(I + C_{\alpha A} \circ C_{\alpha B})(z^t)$; $\tfrac{1}{2}$-averaged → 수렴 보장 |
+| ADMM | 쌍대 문제에 DRS를 적용한 것과 동치 |
+
+단조 작용소 이론을 통해 얼핏 달라 보이는 ADMM이 DRS의 특수한 경우임을 확인했습니다.
+이 관점은 더 일반적인 분산 최적화(distributed optimization) 및 확률적 알고리즘 설계로 확장될 수 있습니다.

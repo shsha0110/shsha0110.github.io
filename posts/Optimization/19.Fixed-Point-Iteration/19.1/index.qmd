@@ -13,145 +13,432 @@ format:
     theme: cosmo
 ---
 
-# 1. Introduction: 왜 부동점 반복(Fixed-Point Iteration)인가?
+# 들어가며 (Motivation)
 
-* 최적화 문제를 풀 때 우리는 종종 근접점 알고리즘(Proximal Point Algorithm)과 같은 반복법을 사용합니다. 이전 강의에서 다루었던 근접점 알고리즘의 업데이트 규칙은 다음과 같습니다.
+지금까지 우리는 볼록 최적화 문제를 풀기 위한 여러 알고리즘을 배웠습니다. 그 중 하나인 **근접점 알고리즘(proximal point algorithm)**은 다음과 같이 정의됩니다.
 
-$$x_{t+1}=prox_{\eta f}(x_{t})=argmin_{x}\{f(x)+\frac{1}{2\eta}||x-x_{t}||^{2}\}$$
+$$
+x^{t+1} = \text{prox}_{\eta f}(x^t) = \underset{x}{\arg\min} \left\{ f(x) + \frac{1}{2\eta} \|x - x^t\|^2 \right\}
+$$
 
-* 이 알고리즘에서 매우 흥미로운 성질 중 하나는, 어떤 점 $\hat{x}$에 대하여 다음 두 명제가 완전히 동치라는 사실입니다.
-  * $\hat{x}=prox_{\eta f}(\hat{x})$
-  * $\hat{x}\in argmin_{x\in\mathbb{R}^{d}}f(x)$
+이 알고리즘이 수렴하는 근거로 우리는 다음 동치 관계를 활용했습니다.
 
-* 이러한 동치 관계가 성립하는 이유는 $\hat{x}=prox_{\eta f}(\hat{x})$라는 식이 곧 $0\in\partial f(\hat{x})$를 의미하며, 이는 $\hat{x}$가 함수 $f$의 최소점(minimizer)이 되기 위한 최적성 조건(optimality condition)과 정확히 일치하기 때문입니다. 
+- $\hat{x} = \text{prox}_{\eta f}(\hat{x})$ (고정점 조건)
+- $\hat{x} \in \arg\min_{x \in \mathbb{R}^d} f(x)$ (최적성 조건)
 
-* 근접점 알고리즘은 최적해로 $O(1/T)$의 수렴 속도를 가지며 다가갑니다. 이번 포스트에서는 이 근접점 알고리즘을 **부동점 반복(Fixed-Point Iteration)**이라는 더 넓고 우아한 수학적 관점에서 재해석하고, 그 수렴성을 체계적으로 분석해 보겠습니다.
+즉, $\hat{x} = \text{prox}_{\eta f}(\hat{x})$이 성립하는 것은 $0 \in \partial f(\hat{x})$, 다시 말해 $\hat{x}$가 $f$의 최솟값임과 동치입니다.
 
----
+이 관찰은 다음과 같은 질문을 자연스럽게 이끌어냅니다:
 
-# 2. 집합값 연산자 (Set-Valued Operators)
+> **근접점 알고리즘을 "어떤 연산자의 고정점을 찾는 반복 과정"으로 해석할 수 있을까요?**
 
-* 최적화에서 미분 불가능한 함수를 다룰 때 서브그라디언트(Subgradient)가 집합으로 정의되듯, 연산자 또한 하나의 값이 아닌 집합을 반환할 수 있습니다. 집합값 연산자(또는 관계) $\mathbb{T}:\mathbb{R}^{d}\Rightarrow\mathbb{R}^{d}$는 $\mathbb{R}^{d}$ 공간의 각 점 $x$를 어떤 집합 $\mathbb{T}(x)\subseteq\mathbb{R}^{d}$로 매핑하는 함수입니다. 만약 모든 $x\in\mathbb{R}^{d}$에 대해 $\mathbb{T}(x)$가 단일 원소 집합(singleton)이거나 공집합이라면, 해당 연산자는 단일값(single-valued) 연산자라고 부릅니다.
-
-* 집합값 연산자와 관련된 핵심 개념들은 다음과 같이 정의됩니다.
-  * **정의역 (Domain):** $domain(\mathbb{T})=\{x\in\mathbb{R}^{d}:\mathbb{T}(x)\ne\emptyset\}$ 
-  * **치역 (Range):** $range(\mathbb{T})=\{y\in\mathbb{R}^{d}:y\in\mathbb{T}(x),x\in\mathbb{R}^{d}\}$ 
-  * **그래프 (Graph):** $gra(\mathbb{T})=\{(x,y)\in\mathbb{R}^{d}\times\mathbb{R}^{d}:y\in\mathbb{T}(x)\}$ 
-
-* 두 연산자 $\mathbb{T}$와 $\mathbb{S}$가 주어졌을 때, 덧셈과 합성 연산도 자연스럽게 정의할 수 있습니다.
-  * **합 (Sum):** $(\mathbb{T}+\mathbb{S})(x)=\{y+z:y\in\mathbb{T}(x),z\in\mathbb{S}(x)\}$ 
-  * **합성 (Composition):** $(\mathbb{T}\circ\mathbb{S})(x)=\{y:z\in\mathbb{S}(x),y\in\mathbb{T}(z)\}$ 
-
-* 기본적인 연산자로는 항상 자기 자신을 반환하는 항등 연산자 $\mathbb{I}(x)=\{x\}$와 항상 0을 반환하는 영 연산자 $\mathbb{O}(x)=\{0\}$가 있습니다. 이를 통해 $\mathbb{T}+\mathbb{O}=\mathbb{T}$, $\mathbb{T}\circ\mathbb{I}=\mathbb{T}$, $\mathbb{I}\circ\mathbb{T}=\mathbb{T}$가 성립함을 알 수 있습니다.
-
-* 연산자의 역(inverse)은 $\mathbb{T}^{-1}(y)=\{x:y\in\mathbb{T}(x)\}$로 정의됩니다. $y\in\mathbb{T}(x)$일 때만 $x\in\mathbb{T}^{-1}(y)$가 성립하므로, 역연산자의 그래프는 $gra(\mathbb{T}^{-1})=\{(y,x):(x,y)\in gra(\mathbb{T})\}$와 같이 $x, y$의 순서만 바뀐 형태가 됩니다. 또한 $(\mathbb{T}^{-1})^{-1}=\mathbb{T}$ 이며 $domain(\mathbb{T}^{-1})=range(\mathbb{T})$ 가 성립합니다.
+이번 강의에서는 이 질문에 답하면서, **집합값 연산자(set-valued operators)**의 이론적 기반을 구축하고, 이를 통해 근접점 알고리즘 및 경사 하강법의 수렴성을 통합적으로 분석합니다.
 
 ---
 
-# 3. 부동점과 Banach의 부동점 정리
+# 2. 고정점 반복법 (Fixed-Point Iteration)
 
-* 부동점 반복법을 이해하기 위해서는 연산자의 립시츠(Lipschitz) 성질을 이해해야 합니다. 어떤 $L>0$에 대하여, 연산자 $\mathbb{T}$가 $(x,u),(y,v)\in gra(\mathbb{T})$를 만족하는 임의의 점들에 대해 다음 부등식을 만족하면 **$L$-Lipschitz**라고 합니다.
+## 2.1 집합값 연산자 (Set-Valued Operators)
 
-$$||u-v||\le L||x-y||$$ 
+### 기본 정의
 
-* 단일값 연산자의 경우 이는 $||\mathbb{T}(x)-\mathbb{T}(y)||\le L||x-y||$로 표기할 수 있습니다. $\mathbb{T}$가 $L$-Lipschitz라면 단일값 연산자일 수밖에 없는데, $x$가 같을 때 $(x=y)$ $||u-v||\le L||x-x||=0$이 되어 $u=v$가 되기 때문입니다.
+**집합값 연산자(set-valued operator)**, 또는 **관계(relation)**란, 각 점 $x \in \mathbb{R}^d$를 집합 $T(x) \subseteq \mathbb{R}^d$로 대응시키는 사상입니다.
 
-* **비확장 연산자 (Non-expansive):** $L=1$인 경우 
-* **수축 연산자 (Contractive):** $L\in(0,1)$인 경우 
+$$
+T : \mathbb{R}^d \rightrightarrows \mathbb{R}^d
+$$
 
-* 단일값 연산자 $\mathbb{T}$에 대하여 $\mathbb{T}(x)=x$를 만족하는 점 $x$를 $\mathbb{T}$의 **부동점(fixed point)**이라 부르며, 그 집합을 다음과 같이 표기합니다.
+- **단일값 연산자(single-valued operator):** 모든 $x$에 대해 $T(x)$가 단원소 집합이거나 공집합인 경우.
 
-$$fix(\mathbb{T})=\{x\in\mathbb{R}^{d}:x\in\mathbb{T}(x)\}=(\mathbb{I}-\mathbb{T})^{-1}(0)$$ 
+집합값 연산자에 관련된 핵심 개념들은 다음과 같습니다.
 
-> **Proposition 19.1.** 만약 $\mathbb{T}$가 비확장 연산자(nonexpansive)이고 $dom(\mathbb{T})=\mathbb{R}^{d}$라면, $fix(\mathbb{T})$는 닫힌 볼록 집합(closed and convex)입니다.
+| 개념 | 정의 |
+|------|------|
+| **정의역 (Domain)** | $\text{domain}(T) = \{x \in \mathbb{R}^d : T(x) \neq \emptyset\}$ |
+| **치역 (Range)** | $\text{range}(T) = \{y \in \mathbb{R}^d : y \in T(x),\ x \in \mathbb{R}^d\}$ |
+| **그래프 (Graph)** | $\text{gra}(T) = \{(x, y) \in \mathbb{R}^d \times \mathbb{R}^d : y \in T(x)\}$ |
 
-> **Proof.**
-> 
-> $\mathbb{T}$가 비확장적이면 연속이므로, $\mathbb{I}-\mathbb{T}$ 또한 연속입니다. 따라서 $fix(\mathbb{T})=(\mathbb{I}-\mathbb{T})^{-1}(0)$는 닫힌 집합입니다.
-> 
-> 볼록성을 증명하기 위해 $x,y\in fix(\mathbb{T})$와 $\lambda\in[0,1]$를 잡고 $z=\lambda x+(1-\lambda)y$를 고려합시다.
-> 
-> 비확장 성질에 의해 $||\mathbb{T}(z)-x||\le||z-x||=(1-\lambda)||y-x||$ 이고,
-> 
-> $||\mathbb{T}(z)-y||\le||z-y||=\lambda||x-y||$ 입니다.
-> 
-> 이 둘을 더하면 $||\mathbb{T}(z)-x||+||\mathbb{T}(z)-y||\le||x-y||$가 됩니다.
-> 
-> 반면, 삼각 부등식에 의해 $||\mathbb{T}(z)-x||+||\mathbb{T}(z)-y||\ge||x-y||$가 항상 성립합니다.
-> 
-> 두 부등식을 결합하면 등식 $||\mathbb{T}(z)-x||+||\mathbb{T}(z)-y||=||x-y||$가 성립하며, 이는 $\mathbb{T}(z)$가 $x$와 $y$를 잇는 선분 위에 존재함을 의미합니다. 따라서 $\mathbb{T}(z)=\lambda x+(1-\lambda)y=z$ 이며, $z\in fix(\mathbb{T})$입니다.
+### 연산자 간의 연산
 
-* 본격적으로 알고리즘을 정의해봅시다. $x_{t+1}=\mathbb{T}(x_{t})$ 형태로 업데이트하는 알고리즘을 **부동점 반복(fixed-point iteration)** 또는 Picard iteration이라고 합니다. 연산자가 단지 비확장적이기만 하다면 (예: $\mathbb{T}(x)=-x$ 또는 회전 변환), 이 반복법은 수렴하지 않을 수 있습니다. 하지만 연산자가 **수축(Contractive)** 연산자라면 상황이 달라집니다.
+두 연산자 $T$와 $S$가 주어졌을 때, 다음 연산들을 정의할 수 있습니다.
 
-> **Theorem 19.2 (Banach's fixed-point theorem)**
-> 
-> $\mathbb{T}$가 수축 연산자라면, $fix(\mathbb{T})$는 단일 원소(singleton)이며, 부동점 반복은 그 유일한 부동점으로 선형 속도(linear rate)로 수렴합니다.
+- **합 (Sum):** $(T + S)(x) = \{y + z : y \in T(x),\ z \in S(x)\}$
+- **합성 (Composition):** $(T \circ S)(x) = \{y : z \in S(x),\ y \in T(z)\}$
 
-> **Proof.**
-> 
-> $\mathbb{T}$가 수축 연산자이므로 $||\mathbb{T}(x)-\mathbb{T}(y)||\le L||x-y||$ 를 만족하는 $L\in(0,1)$이 존재합니다.
-> 
-> 수렴성을 확인하기 위해 다음을 전개해봅시다. $||x_{t+1}-x_{t}||\le L^{t}||x_{1}-x_{0}||$ 이 성립합니다. 따라서 임의의 $s>t$에 대해 거리 합을 구하면:
-> 
-> $$||x_{s}-x_{t}||\le\sum_{i=t}^{s-1}||x_{i+1}-x_{i}||\le\sum_{i=t}^{s-1}L^{i}||x_{1}-x_{0}||\le\frac{L^{t}}{1-L}||x_{1}-x_{0}||$$ 
-> 
-> $t \rightarrow \infty$ 일 때 거리가 0으로 가므로 $\{x_{t}\}$는 코시 수열(Cauchy sequence)이며, $\mathbb{R}^{d}$ 공간에서 어떤 점 $x^{*}$로 수렴합니다. $\mathbb{T}$가 연속이므로 $\mathbb{T}(x^{*})=lim_{t\rightarrow\infty}\mathbb{T}(x_{t})=lim_{t\rightarrow\infty}x_{t+1}=x^{*}$가 성립하여 $x^{*}$는 부동점이 됩니다.
-> 
-> 유일성을 보이기 위해 다른 부동점 $y\in fix(\mathbb{T})$가 있다고 가정하면, $||x-y||=||\mathbb{T}(x)-\mathbb{T}(y)||\le L||x-y||$ 입니다. $L<1$ 이므로 반드시 $||x-y||=0$, 즉 $x=y$이어야 합니다.
+이를 바탕으로 두 가지 특수 연산자를 정의합니다.
 
-* **최적화 관점에서의 응용 (경사하강법)**
-  * 목적 함수 $f$가 $\alpha$-강볼록(strongly convex)이고 $\beta$-평활(smooth)할 때, 연산자 $\mathbb{T}=I-\eta\nabla f$는 $\eta\in(0,2/(\alpha+\beta))$ 범위에서 수축 연산자가 됩니다. 이 연산자의 부동점 반복은 다름 아닌 **경사하강법(Gradient Descent)**입니다. 따라서 바나흐 부동점 정리에 의해 이 조건 하에서 경사하강법은 유일한 최적해로 선형 수렴하게 됩니다. 하지만 $f$가 강볼록하지 않고 평활하기만 하다면 $\mathbb{T}$는 더 이상 수축 연산자가 아니므로, 바나흐의 정리를 직접 적용할 수 없습니다. 이 경우를 해결하기 위해 '평균 연산자' 개념이 등장합니다.
+- **항등 연산자 (Identity operator):** $I(x) = \{x\}$
+- **영 연산자 (Zero operator):** $O(x) = \{0\}$
+
+이 정의로부터 임의의 연산자 $T$에 대해 $T + O = T$, $T \circ I = T$, $I \circ T = T$가 성립합니다.
+
+### 역 연산자 (Inverse Operator)
+
+연산자 $T$의 **역 연산자**는 다음과 같이 정의됩니다.
+
+$$
+T^{-1}(y) = \{x : y \in T(x)\}
+$$
+
+$x \in T^{-1}(y)$인 것과 $y \in T(x)$인 것이 동치이므로, 역 연산자의 그래프는 원래 그래프의 좌우를 뒤집은 것입니다.
+
+$$
+\text{gra}(T^{-1}) = \{(y, x) : (x, y) \in \text{gra}(T)\}
+$$
+
+이로부터 $(T^{-1})^{-1} = T$ 및 $\text{domain}(T^{-1}) = \text{range}(T)$가 성립합니다.
 
 ---
 
-# 4. 평균 연산자 (Averaged Operators)와 Krasnosel'skii-Mann 반복
+## 2.2 고정점과 Banach의 고정점 정리
 
-* 연산자 $\mathbb{T}$가 어떤 $\theta\in(0,1)$와 비확장 연산자(non-expansive) $\mathbb{S}$에 대하여 $\mathbb{T}=(1-\theta)\mathbb{I}+\theta\mathbb{S}$ 형태로 표현될 때, 이를 **$\theta$-평균 연산자($\theta$-averaged operator)**라고 정의합니다.
+### Lipschitz 연속성과 비팽창·수축 연산자
 
-* 강볼록성 없이 $f$가 단순 볼록(convex)이고 $\beta$-평활(smooth)하기만 한 경우, 경사하강법 연산자 $\mathbb{T}=I-\eta\nabla f$는 $\theta=\eta\beta/2$를 갖는 평균 연산자가 됩니다 (단, $\eta\in(0,2/\beta)$). 이를 증명하기 위해 $\mathbb{S}=I-\frac{2}{\beta}\nabla f$ 로 두면, $\nabla f$의 co-coercivity 성질을 이용하여 $\mathbb{S}$가 비확장적임을 다음과 같이 보일 수 있습니다.
+연산자 $T$가 **$L$-Lipschitz**라 함은, $L > 0$이 존재하여 $\text{gra}(T)$에 속하는 임의의 $(x, u), (y, v)$에 대해 다음이 성립하는 것입니다.
 
-$$||\mathbb{S}(x)-\mathbb{S}(y)||^{2}=||x-y||^{2}-\frac{4}{\beta}\langle\nabla f(x)-\nabla f(y),x-y\rangle+\frac{4}{\beta^{2}}||\nabla f(x)-\nabla f(y)||^{2}$$ 
-$$\le||x-y||^{2}-\frac{4}{\beta}\langle\nabla f(x)-\nabla f(y),x-y\rangle+\frac{4}{\beta}\langle\nabla f(x)-\nabla f(y),x-y\rangle =||x-y||^{2}$$ 
+$$
+\|u - v\| \leq L\|x - y\|
+$$
 
-* $\mathbb{T}$는 이 비확장 연산자 $\mathbb{S}$와 항등 연산자의 조합 $\mathbb{T}=(1-\theta)\mathbb{I}+\theta\mathbb{S}$ (여기서 $\theta=\eta\beta/2$)로 표현되므로 평균 연산자입니다. 평균 연산자는 비확장적이지만, 수축 연산자보다 조건이 유연하면서도 강력한 수렴 정리를 제공합니다.
+단일값 연산자의 경우 이는 다음과 같이 쓸 수 있습니다.
 
-> **Theorem 19.5 (Krasnosel'skii-Mann Iteration)**
-> 
-> $fix(\mathbb{T})\ne\emptyset$ 이고 $\mathbb{T}$가 어떤 $\theta\in(0,1)$에 대해 $\theta$-평균 연산자라고 합시다. 임의의 초기점 $x_{0}$에서 시작하는 부동점 반복 $x_{t+1}=\mathbb{T}(x_{t})$는 $\mathbb{T}$의 부동점 중 하나로 반드시 수렴합니다. 또한 다음이 성립합니다:
-> 
-> $$dist(x_{t},fix(\mathbb{T}))\rightarrow0$$ 
-> 
-> $$||x_{t+1}-x_{t}||^{2}\le\frac{\theta}{(t+1)(1-\theta)}dist^{2}(x_{0},fix(\mathbb{T}))$$ 
+$$
+\|T(x) - T(y)\| \leq L\|x - y\|, \quad \forall x, y \in \text{domain}(T)
+$$
 
-> **Proof Derivation:**
-> 
-> 부동점 $z\in fix(\mathbb{T})$를 잡으면, $z=\mathbb{T}(z)=(1-\theta)z+\theta\mathbb{S}(z)$ 이므로 $\mathbb{S}(z)=z$ 가 성립합니다 (즉, $z$는 $\mathbb{S}$의 부동점이기도 합니다).
-> 
-> 다음 스텝과 부동점 사이의 거리를 계산해보면:
-> 
-> $$||x_{t+1}-z||^{2}=||(1-\theta)(x_{t}-z)+\theta(\mathbb{S}(x_{t})-\mathbb{S}(z))||^{2}$$ 
-> 
-> 벡터 연산을 전개하면,
-> 
-> $$=(1-\theta)||x_{t}-z||^{2}+\theta||\mathbb{S}(x_{t})-\mathbb{S}(z)||^{2}-\theta(1-\theta)||x_{t}-\mathbb{S}(x_{t})+z-\mathbb{S}(z)||^{2}$$ 
-> 
-> $\mathbb{S}$가 비확장 연산자이므로 $||\mathbb{S}(x_{t})-\mathbb{S}(z)||^{2} \le ||x_{t}-z||^{2}$ 이고 $z=\mathbb{S}(z)$ 임을 적용하면,
-> 
-> $$\le(1-\theta)||x_{t}-z||^{2}+\theta||x_{t}-z||^{2}-\theta(1-\theta)||x_{t}-\mathbb{S}(x_{t})||^{2}$$ 
-> 
-> $$=||x_{t}-z||^{2}-\theta(1-\theta)||x_{t}-\mathbb{S}(x_{t})||^{2}$$ 
-> 
-> 즉, 매 반복마다 부동점과의 거리는 줄어들며 ($dist(x_{t+1},fix(\mathbb{T}))\le dist(x_{t},fix(\mathbb{T}))$), 변화량을 누적 합산하면 $\sum_{i=0}^{t}||x_{i}-\mathbb{T}(x_{i})||^{2}\le\frac{\theta}{1-\theta}||x_{0}-z||^{2}$ 라는 bound를 얻게 됩니다. $\{x_{t}\}$는 유계(bounded)이므로 수렴하는 부분수열을 가지며, 결국 전체 수열이 어떤 부동점 $x^{*}$로 수렴함을 증명할 수 있습니다.
+> **참고:** $T$가 $L$-Lipschitz이면 $T$는 반드시 단일값 연산자입니다. $(x, u), (x, v) \in \text{gra}(T)$이면 $\|u - v\| \leq L\|x - x\| = 0$이므로 $u = v$이기 때문입니다.
+
+이로부터 두 가지 중요한 특수 케이스가 등장합니다.
+
+- **비팽창(Non-expansive) 연산자:** $T$가 $1$-Lipschitz인 경우.
+- **수축(Contractive) 연산자:** $T$가 어떤 $L \in (0, 1)$에 대해 $L$-Lipschitz인 경우.
+
+### 고정점 (Fixed Points)
+
+단일값 연산자 $T$에 대해, $x \in \mathbb{R}^d$가 $T$의 **고정점**이라 함은 $T(x) = x$인 것입니다. $T$의 고정점 집합을 다음과 같이 표기합니다.
+
+$$
+\text{fix}(T) = \{x \in \mathbb{R}^d : x \in T(x)\} = (I - T)^{-1}(0)
+$$
+
+우측의 표기 $(I - T)^{-1}(0)$는 "$(I - T)$의 역 연산자를 $0$에 적용한 것"으로, $T(x) = x$, 즉 $(I - T)(x) = 0$인 점들의 집합임을 직관적으로 나타냅니다.
 
 ---
 
-# 5. Proximal Method에의 적용
+### 명제 19.1: 비팽창 연산자의 고정점 집합의 성질
 
-* **Example 19.6: 근접 연산자(Proximal Operator)**
-  * 근접 연산자 $\mathbb{T}=prox_{\eta f}$는 1/2-평균 연산자입니다. 이를 보이기 위해 $\mathbb{S}=2prox_{\eta f}-\mathbb{I}$로 정의하고 전개해보면, $prox_{\eta f}$의 co-coercivity 성질에 의해 $\mathbb{S}$가 비확장적임을 보일 수 있습니다. 여기서 co-coercivity는 $u=prox_{\eta f}(x)$ 및 $v=prox_{\eta f}(y)$가 $u-x\in\eta\partial f(u)$와 $v-y\in\eta\partial f(v)$를 만족한다는 최적성 조건으로부터 도출됩니다. 결과적으로 $\mathbb{T}=(1/2)\mathbb{I}+(1/2)\mathbb{S}$ 형태가 됩니다.
-  * 여러 비확장 연산자들의 합성 $\mathbb{T}_{1}\circ\cdot\cdot\cdot\circ\mathbb{T}_{k}$은 비확장적이며, 수축 연산자들의 합성은 수축적입니다. 흥미롭게도, 각 $\mathbb{T}_{i}$가 $\theta_{i}$-평균 연산자라면 그 합성 또한 새로운 평균 연산자가 됩니다. 
+> **Proposition 19.1.** $T$가 비팽창 연산자이고 $\text{dom}(T) = \mathbb{R}^d$이면, $\text{fix}(T)$는 **닫힌 볼록 집합(closed and convex set)**이다.
 
-* **Example 19.7: 근접 경사 알고리즘(Proximal Gradient Algorithm)**
-  * 이 원리를 결합하면 매우 강력한 결과를 얻습니다. $I-\eta\nabla g$는 $\theta$-평균 연산자이고 ($g$가 평활하고 볼록할 때) , $prox_{\eta h}$는 1/2-평균 연산자입니다. 따라서 이 둘을 합성한 다음의 연산자 역시 평균 연산자가 됩니다.
-  $$prox_{\eta h}\circ(I-\eta\nabla g)$$ 
-  * 이 합성 연산자의 부동점 반복이 바로 **근접 경사 알고리즘(Proximal Gradient Algorithm)**입니다. 즉, 우리는 Krasnosel'skii-Mann 정리를 통해 근접 경사 알고리즘이 강볼록성 가정 없이도 최적해(부동점)로 안정적으로 수렴함을 증명할 수 있습니다.
+**증명 개요:**
+
+**[닫힘(Closedness)]**
+
+$T$가 비팽창이므로 연속이고, 따라서 $I - T$도 연속입니다. $\{0\}$은 닫힌 집합이고 연속 함수의 역상(preimage)은 닫힌 집합이므로,
+
+$$
+\text{fix}(T) = (I - T)^{-1}(0)
+$$
+
+은 닫힌 집합입니다.
+
+**[볼록성(Convexity)]**
+
+$x, y \in \text{fix}(T)$와 $\lambda \in [0, 1]$을 임의로 취하고, $z = \lambda x + (1 - \lambda)y$로 정의합니다. $T$의 비팽창성에 의해
+
+$$
+\|T(z) - x\| \leq \|z - x\| = (1 - \lambda)\|y - x\|
+$$
+
+$$
+\|T(z) - y\| \leq \|z - y\| = \lambda\|x - y\|
+$$
+
+두 부등식을 더하면
+
+$$
+\|T(z) - x\| + \|T(z) - y\| \leq \|x - y\|
+$$
+
+한편, 삼각 부등식에 의해
+
+$$
+\|T(z) - x\| + \|T(z) - y\| \geq \|x - y\|
+$$
+
+두 부등식을 결합하면 등호가 성립하고, 이는 $T(z)$가 $x$와 $y$를 잇는 선분 위에 있음을 의미합니다. 따라서
+
+$$
+T(z) = \lambda x + (1 - \lambda)y = z
+$$
+
+즉, $z \in \text{fix}(T)$이므로 $\text{fix}(T)$는 볼록 집합입니다. $\blacksquare$
+
+---
+
+### 고정점 반복법 (Picard Iteration)
+
+고정점 반복법, 또는 **Picard 반복법**은 다음과 같이 주어진 반복 알고리즘입니다.
+
+$$
+x^{t+1} = T(x^t)
+$$
+
+그러나 $T$가 비팽창 연산자라도 이 반복법이 항상 수렴하는 것은 아닙니다.
+
+> **반례:** $T(x) = -x$ ($x \in \mathbb{R}$)는 1-Lipschitz이지만, $x^0 \neq 0$이면 수열 $\{x^t\}$는 $x^0$과 $-x^0$ 사이를 진동합니다. 마찬가지로 회전 연산자(rotation operator)도 수렴을 보장하지 않습니다.
+
+그렇다면 어떤 조건에서 수렴이 보장될까요? 연산자가 **수축적(contractive)**이면 충분합니다.
+
+---
+
+### 정리 19.2: Banach의 고정점 정리 (Banach's Fixed-Point Theorem)
+
+> **Theorem 19.2 (Banach).** $T$가 수축 연산자이면, $\text{fix}(T)$는 단원소 집합이며, 고정점 반복법은 $T$의 유일한 고정점으로 **선형 속도(linear rate)**로 수렴한다.
+
+**증명:**
+
+$T$가 수축 연산자이므로 $L \in (0, 1)$이 존재하여 $\|T(x) - T(y)\| \leq L\|x - y\|$가 성립합니다.
+
+**[수렴성]**
+
+귀납적으로 $\|x^{t+1} - x^t\| \leq L^t \|x^1 - x^0\|$를 보일 수 있습니다. 임의의 $s > t$에 대해,
+
+$$
+\|x^s - x^t\| \leq \sum_{i=t}^{s-1} \|x^{i+1} - x^i\| \leq \sum_{i=t}^{s-1} L^i \|x^1 - x^0\| \leq \frac{L^t}{1 - L} \|x^1 - x^0\|
+$$
+
+$L \in (0, 1)$이므로 $t \to \infty$이면 우변이 $0$에 수렴합니다. 따라서 $\{x^t\}$는 Cauchy 수열이며, $\mathbb{R}^d$의 완비성에 의해 어떤 $x^*$에 수렴합니다.
+
+$T$의 연속성(Lipschitz 연속이므로 자동으로 연속)으로부터
+
+$$
+T(x^*) = \lim_{t \to \infty} T(x^t) = \lim_{t \to \infty} x^{t+1} = x^*
+$$
+
+따라서 $x^*$는 $T$의 고정점입니다.
+
+**[유일성]**
+
+$x, y \in \text{fix}(T)$이면,
+
+$$
+\|x - y\| = \|T(x) - T(y)\| \leq L\|x - y\|
+$$
+
+$L < 1$이므로 $\|x - y\| = 0$, 즉 $x = y$입니다. 따라서 고정점은 유일합니다. $\blacksquare$
+
+---
+
+### 예시 19.3: 경사 하강법과 Banach 정리
+
+$f$가 $\alpha$-강볼록($\alpha$-strongly convex)이고 $\beta$-매끄럽($\beta$-smooth)다고 가정합니다. 이때
+
+$$
+T = I - \eta \nabla f
+$$
+
+는 임의의 $\eta \in (0, 2/(\alpha + \beta))$에 대해 수축 연산자입니다.
+
+- $T$의 고정점 반복은 정확히 스텝 크기 $\eta$의 **경사 하강법(gradient descent)**입니다.
+- Banach 정리에 의해, $\eta \in (0, 2/(\alpha + \beta))$인 임의의 스텝 크기에 대해 경사 하강법이 $f$의 유일한 최솟값으로 **선형 속도로 수렴**함이 보장됩니다.
+
+> **한계:** $f$가 매끄럽지만 강볼록이 아닌 경우, $T = I - \eta \nabla f$는 임의의 $\eta > 0$에 대해 수축 연산자가 아닙니다. 따라서 이 경우에는 Banach 정리가 적용되지 않습니다. — 그러나 다음 절에서 다루는 더 일반적인 이론으로 수렴성을 보일 수 있습니다.
+
+---
+
+## 2.3 평균 연산자와 Krasnosel'skii-Mann 반복법
+
+### 평균 연산자 (Averaged Operators)
+
+> **정의.** 연산자 $T$가 어떤 비팽창 연산자 $S$에 대해 $T = (1 - \theta)I + \theta S$로 쓰일 수 있으면, $T$를 **$\theta$-평균($\theta$-averaged) 연산자**라고 합니다. (단, $\theta \in (0, 1)$)
+
+직관적으로, $T$는 항등 연산자 $I$와 비팽창 연산자 $S$의 볼록 결합(convex combination)입니다.
+
+---
+
+### 예시 19.4: 경사 하강 연산자의 평균성
+
+$f$가 볼록이고 $\beta$-매끄럽다고 가정합니다. 이때 $T = I - \eta \nabla f$는 임의의 $\eta \in (0, 2/\beta)$에 대해 $\theta = \eta\beta/2$인 **$\theta$-평균 연산자**입니다.
+
+**유도:**
+
+$S = I - \frac{2}{\beta}\nabla f$로 정의하면, 임의의 $x, y \in \mathbb{R}^d$에 대해
+
+$$
+\|S(x) - S(y)\|^2 = \|x - y\|^2 - \frac{4}{\beta}\langle \nabla f(x) - \nabla f(y), x - y \rangle + \frac{4}{\beta^2}\|\nabla f(x) - \nabla f(y)\|^2
+$$
+
+$\nabla f$의 **공동 강압성(co-coercivity)**, 즉 $\frac{1}{\beta}$-공동강압성
+
+$$
+\langle \nabla f(x) - \nabla f(y), x - y \rangle \geq \frac{1}{\beta}\|\nabla f(x) - \nabla f(y)\|^2
+$$
+
+을 적용하면
+
+$$
+\|S(x) - S(y)\|^2 \leq \|x - y\|^2 - \frac{4}{\beta}\langle \nabla f(x) - \nabla f(y), x - y \rangle + \frac{4}{\beta} \langle \nabla f(x) - \nabla f(y), x - y \rangle = \|x - y\|^2
+$$
+
+따라서 $S$는 비팽창 연산자입니다. 또한
+
+$$
+T = I - \eta \nabla f = \left(1 - \frac{\eta\beta}{2}\right)I + \frac{\eta\beta}{2} \cdot \underbrace{\left(I - \frac{2}{\beta}\nabla f\right)}_{= S}
+$$
+
+이므로 $T$는 $\theta = \eta\beta/2$인 평균 연산자입니다. $\blacksquare$
+
+---
+
+### 정리 19.5: Krasnosel'skii-Mann 반복법
+
+> **Theorem 19.5 (Krasnosel'skii-Mann).** $T$가 어떤 $\theta \in (0, 1)$에 대해 $\theta$-평균 연산자이고 $\text{fix}(T) \neq \emptyset$이면, 임의의 초기점 $x^0 \in \mathbb{R}^d$에서 시작하는 고정점 반복법 $x^{t+1} = T(x^t)$는 $T$의 고정점에 수렴합니다. 구체적으로:
+>
+> $$
+> \text{dist}(x^t, \text{fix}(T)) \to 0
+> $$
+>
+> $$
+> \|x^{t+1} - x^t\|^2 \leq \frac{\theta}{(t+1)(1-\theta)} \cdot \text{dist}^2(x^0, \text{fix}(T))
+> $$
+
+**증명:**
+
+$z \in \text{fix}(T)$를 고정점이라 하면, $z = T(z) = (1 - \theta)z + \theta S(z)$로부터 $S(z) = z$, 즉 $z$는 $S$의 고정점이기도 합니다.
+
+**[핵심 단계 — 한 반복의 거리 감소]**
+
+$$
+\|x^{t+1} - z\|^2 = \|(1 - \theta)(x^t - z) + \theta(S(x^t) - S(z))\|^2
+$$
+
+볼록 결합에 대한 항등식을 전개하면
+
+$$
+= (1 - \theta)\|x^t - z\|^2 + \theta\|S(x^t) - S(z)\|^2 - \theta(1 - \theta)\|x^t - S(x^t) + z - S(z)\|^2
+$$
+
+> (중간 단계: 임의의 $a, b$와 $\lambda \in [0,1]$에 대해 $\|(1-\lambda)a + \lambda b\|^2 = (1-\lambda)\|a\|^2 + \lambda\|b\|^2 - \lambda(1-\lambda)\|a - b\|^2$라는 항등식을 사용합니다.)
+
+$S$가 비팽창이므로 $\|S(x^t) - S(z)\|^2 \leq \|x^t - z\|^2$이고, $S(z) = z$이므로
+
+$$
+\|x^{t+1} - z\|^2 \leq \|x^t - z\|^2 - \theta(1 - \theta)\|x^t - S(x^t)\|^2
+$$
+
+이 부등식은 두 가지를 알려줍니다.
+
+1. **단조 감소:** $\|x^{t+1} - z\| \leq \|x^t - z\|$ — 고정점까지의 거리는 반복마다 감소합니다.
+2. **텔레스코핑 합:** $t = 0$부터 $t$까지 합산하면
+
+$$
+\sum_{i=0}^{t} \|x^i - S(x^i)\|^2 \leq \frac{\theta}{1 - \theta}\|x^0 - z\|^2
+$$
+
+**[$\|x^t - T(x^t)\|$의 수렴 속도]**
+
+$T$가 비팽창이므로 $\|x^{t+1} - x^t\| = \|T(x^t) - T(x^{t-1})\| \leq \|x^t - x^{t-1}\|$ (수열이 단조 감소)이고, 위의 합 부등식으로부터
+
+$$
+\|x^t - T(x^t)\|^2 \leq \frac{\theta}{(t+1)(1-\theta)}\|x^0 - z\|^2
+$$
+
+이 성립합니다. $z \in \text{fix}(T)$ 중 $\|x^0 - z\|$를 최소화하면 $z = \Pi_{\text{fix}(T)}(x^0)$를 취할 수 있어, 우변의 $\|x^0 - z\|^2 = \text{dist}^2(x^0, \text{fix}(T))$로 쓸 수 있습니다.
+
+**[고정점으로의 수렴]**
+
+- $\|x^t - z\| \leq \|x^0 - z\|$이므로 수열 $\{x^t\}$는 유계(bounded)입니다.
+- Bolzano-Weierstrass 정리에 의해 수렴하는 부분 수열 $\{x^{t_i}\} \to x^*$가 존재합니다.
+- $\|x^{t_i} - T(x^{t_i})\| \to 0$이고 $T$가 연속이므로, $\|x^* - T(x^*)\| = 0$, 즉 $x^* \in \text{fix}(T)$입니다.
+- 전체 수열은 $x^*$에 수렴합니다. $\blacksquare$
+
+> **해석:** 이 정리는 수축 연산자가 아닌 **평균 연산자**에도 수렴을 보장합니다. 다만 선형 수렴이 아닌 $O(1/\sqrt{t})$ 속도로 $\|x^{t+1} - x^t\| \to 0$이 보장됩니다. 즉, **이웃하는 반복점의 차이**가 $O(1/\sqrt{t})$로 줄어들며, 이는 $\text{dist}(x^t, \text{fix}(T)) \to 0$을 함의합니다.
+
+---
+
+### 예시 19.6: 근접 연산자의 평균성
+
+> $T = \text{prox}_{\eta f}$는 **$1/2$-평균 연산자**입니다.
+
+**유도:**
+
+$S = 2\text{prox}_{\eta f} - I$로 정의합니다. 임의의 $x, y \in \mathbb{R}^d$에 대해
+
+$$
+\|S(x) - S(y)\|^2 = 4\|\text{prox}_{\eta f}(x) - \text{prox}_{\eta f}(y)\|^2 - 4\langle \text{prox}_{\eta f}(x) - \text{prox}_{\eta f}(y), x - y \rangle + \|x - y\|^2
+$$
+
+근접 연산자의 **공동 강압성(co-coercivity)**을 적용합니다. $u = \text{prox}_{\eta f}(x)$, $v = \text{prox}_{\eta f}(y)$라 하면, 최적성 조건에 의해 $u - x \in \eta \partial f(u)$, $v - y \in \eta \partial f(v)$이므로 어떤 $g_u \in \partial f(u)$, $g_v \in \partial f(v)$에 대해
+
+$$
+\langle u - v, (u - x) - (v - y) \rangle = \eta \langle u - v, g_u - g_v \rangle \geq \|u - v\|^2
+$$
+
+> (마지막 부등식은 $\partial f$의 단조성(monotonicity)에 의해 $\langle u - v, g_u - g_v \rangle \geq 0$, 그리고 근접 연산자의 firm non-expansiveness로부터 유도됩니다.)
+
+이를 대입하면
+
+$$
+\|S(x) - S(y)\|^2 \leq 4\|u - v\|^2 - 4\|u - v\|^2 + \|x - y\|^2 = \|x - y\|^2
+$$
+
+따라서 $S$는 비팽창이고, $T = \frac{1}{2}I + \frac{1}{2}S$이므로 $T = \text{prox}_{\eta f}$는 $1/2$-평균 연산자입니다. $\blacksquare$
+
+이 결과와 정리 19.5를 결합하면, **근접점 알고리즘이 $f$의 최솟값으로 수렴함**이 Krasnosel'skii-Mann 반복법의 틀 안에서 보장됩니다.
+
+---
+
+### 합성 연산자의 평균성
+
+비팽창 연산자들의 합성도 비팽창이며, 수축 연산자들의 합성도 수축입니다. 더 나아가, **평균 연산자들의 합성**에 대해 다음이 성립합니다.
+
+> $T_i$가 $\theta_i$-평균 연산자($\theta_i \in (0, 1)$, $i \in [k]$)이면, $T_1 \circ \cdots \circ T_k$는 $\theta$-평균 연산자이다. 이때
+>
+> $$
+> \theta = \frac{k}{k - 1 + \dfrac{1}{\max_{i \in [k]} \theta_i}}
+> $$
+
+---
+
+### 예시 19.7: 근접 경사법 (Proximal Gradient Algorithm)
+
+$g$가 볼록이고 $\beta$-매끄럽다고 가정합니다. 앞에서 확인한 결과들을 종합하면:
+
+- $I - \eta \nabla g$는 임의의 $\eta \in (0, 2/\beta)$에 대해 $\theta = \eta\beta/2$인 평균 연산자.
+- $\text{prox}_{\eta h}$는 $1/2$-평균 연산자.
+
+따라서 합성
+
+$$
+T = \text{prox}_{\eta h} \circ (I - \eta \nabla g)
+$$
+
+는 **평균 연산자**이며, $T$의 고정점 반복은 정확히 스텝 크기 $\eta$의 **근접 경사법(proximal gradient algorithm)**입니다.
+
+$$
+x^{t+1} = \text{prox}_{\eta h}(x^t - \eta \nabla g(x^t))
+$$
+
+Krasnosel'skii-Mann 정리에 의해, $\text{fix}(T) \neq \emptyset$이면 근접 경사법이 최솟값으로 수렴합니다.
+
+---
+
+# 정리 및 요약
+
+이번 강의의 핵심 흐름을 정리하면 다음과 같습니다.
+
+| 연산자 유형 | 조건 | 고정점 반복의 수렴 | 수렴 속도 |
+|---|---|---|---|
+| 수축 (Contractive) | $L \in (0,1)$ | 유일 고정점으로 수렴 (Banach) | 선형 수렴 |
+| $\theta$-평균 (Averaged) | $T = (1-\theta)I + \theta S$, $S$ 비팽창 | 고정점 존재시 수렴 (KM) | $O(1/\sqrt{t})$ |
+
+**핵심 예시 정리:**
+
+- $f$가 $\alpha$-강볼록 + $\beta$-매끄럽 $\Rightarrow$ $I - \eta\nabla f$는 수축 $\Rightarrow$ **경사 하강법이 선형 수렴** (Banach)
+- $f$가 볼록 + $\beta$-매끄럽 $\Rightarrow$ $I - \eta\nabla f$는 평균 $\Rightarrow$ **경사 하강법이 수렴** (KM)
+- $\text{prox}_{\eta f}$는 $1/2$-평균 $\Rightarrow$ **근접점 알고리즘이 수렴** (KM)
+- $\text{prox}_{\eta h} \circ (I - \eta\nabla g)$는 평균 $\Rightarrow$ **근접 경사법이 수렴** (KM)
+
+![Figure: 수축·비팽창·평균 연산자 간의 포함 관계와 각 상황에서의 수렴 보장 구조. 수축 연산자는 Banach 정리에 의해 유일 고정점으로 선형 수렴하며, 이보다 넓은 평균 연산자 클래스는 KM 정리에 의해 서브선형 수렴이 보장된다.](./images/operator_hierarchy.png)
+
+[이미지 생성 필요: 세 클래스(Contractive ⊂ Averaged ⊂ Non-expansive)의 벤 다이어그램, 각 클래스에 해당하는 알고리즘 예시(gradient descent with strong convexity, proximal gradient, rotation) 및 수렴/비수렴 여부를 화살표로 표기한 도식]

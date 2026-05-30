@@ -1,6 +1,6 @@
 ---
-title: '[Data Mining] 18. ML On Graphs (Part 1)'
-description: 'Graph Representation Learning'
+title: '[Data Mining] 18. ML On Graphs'
+description: 'ML On Graphs'
 author: '유성현'
 date: '2026-05-12'
 categories: [Data Mining]
@@ -12,91 +12,443 @@ format:
     math: true
 ---
 
-# 1. Introduction: 그래프 데이터에서의 기계학습 태스크
+## 들어가며 (Recap)
 
-* 그래프(Graph)는 웹(Web)의 하이퍼링크 구조뿐만 아니라 소셜 네트워크, 분자 구조, 교통망 등 객체 간의 복잡한 관계를 나타내는 다양한 형태의 데이터를 일반화하는 강력한 자료구조입니다. 전통적인 데이터 마이닝에서는 다음과 같은 알고리즘들을 통해 그래프의 특성을 분석해 왔습니다.
-  * **PageRank**: 네트워크 내에서 각 노드(Node)의 상대적 중요도(Importance)를 계산.
-  * **Proximity**: 노드 간의 물리적 혹은 위상수학적 거리(Distance)를 측정.
-  * **Community Detection**: 밀도 높게 연결된 노드들의 군집(Dense node communities)을 탐지.
+지난 강의에서는 **임베딩 학습(Learning Embeddings)**의 두 핵심 모델을 살펴보았습니다.
 
-* 하지만 현대의 기계학습(Machine Learning)은 단순히 구조를 분석하는 것을 넘어, 예측 모델링을 수행하는 데 초점을 맞춥니다. 그래프 기계학습의 대표적인 두 가지 태스크는 다음과 같습니다.
+- **Word2Vec**: 단어 시퀀스에서 문맥적 유사성을 학습합니다. 원-핫 벡터를 입력으로 받아 은닉층(hidden layer)에서 저차원 임베딩을 추출하고, 소프트맥스 출력을 통해 문맥 단어를 예측합니다.
+- **Autoencoder**: 인코더–병목(bottleneck)–디코더 구조로 데이터를 압축·재구성합니다. 병목 계층의 표현이 데이터의 핵심 특징을 담습니다.
 
-## 1.1. 노드 분류 (Node Classification)
-* 네트워크 내에서 레이블이 주어지지 않은 노드의 속성이나 범주를 예측하는 태스크입니다. 예를 들어, 소셜 네트워크 상에서 특정 사용자의 정치적 성향을 식별하거나, 추천 시스템에서 사용자와 아이템을 특정 카테고리로 분류하는 작업이 이에 해당합니다.
+이번 강의에서는 이러한 임베딩 학습 아이디어를 **그래프(graph)** 도메인으로 확장합니다. 소셜 네트워크, 추천 시스템, 지식 그래프 등 현실 세계의 많은 데이터가 그래프 형태로 자연스럽게 표현되므로, 그래프 위의 머신러닝은 매우 중요한 연구 영역입니다.
 
-![Figure: 노드 분류(Node Classification)를 설명하는 도식. 왼쪽의 원본 네트워크 상에는 이미 초록색과 빨간색으로 클래스가 알려진 노드들과, 레이블을 알 수 없는 미지의 노드들('?')이 혼재해 있습니다. 기계학습(Machine Learning) 알고리즘을 거치면 오른쪽 그림과 같이 미지의 노드들이 주변 이웃들의 연결 패턴과 위상적 정보를 바탕으로 초록색 또는 빨간색 클래스로 정확히 분류됩니다. 본문에서 노드 간의 연결망이 분류 모델의 핵심 피처로 작용함을 시각적으로 보여줍니다.](./images/node_classification.png)
+---
 
-## 1.2. 링크 예측 (Link Prediction)
-* 현재는 존재하지 않지만 미래에 생성될 가능성이 높거나, 혹은 관측 과정에서 누락된 간선(Edge)을 예측하는 태스크입니다. 소셜 네트워크에서 '알 수도 있는 사람(새로운 친구)'을 추천하거나, 넷플릭스와 같은 시스템에서 사용자가 좋아할 만한 새로운 영화를 추천하는 것이 전형적인 링크 예측 문제입니다.
+## 1. 그래프 표현 학습 (Graph Representation Learning)
 
-![Figure: 링크 예측(Link Prediction)을 설명하는 도식. 왼쪽 그림의 점선('?')은 현재는 존재하지 않지만 생성 가능성이 있는 후보 간선들을 나타냅니다. 기계학습 모델은 그래프의 구조적 특징을 학습하여 오른쪽 그림과 같이 두 노드 사이에 실제 연결이 발생할 확률이 높은 곳에는 '체크(✓)'를, 확률이 낮은 곳에는 '엑스(X)'를 표시합니다. 이는 추천 시스템의 근간이 되는 예측 과정을 잘 나타냅니다.](./images/link_prediction.png)
+### 그래프에서의 태스크 (Tasks in Graphs)
 
-# 2. 전통적 그래프 표현 방식과 그 한계
+그래프는 다양한 데이터 유형을 일반화할 수 있는 강력한 구조입니다. 이전에 공부한 PageRank(노드 중요도 계산), 근접도(Proximity), 커뮤니티 탐지(Community Detection)를 넘어, 이번에는 머신러닝을 활용한 보다 다양한 태스크를 다룹니다.
 
-* 그래프 구조에 기계학습 모델을 적용하기 위해서는 그래프를 컴퓨터가 연산할 수 있는 수학적 형태로 표현해야 합니다.
+#### 노드 분류 (Node Classification)
 
-## 2.1. 인접 행렬 (Adjacency Matrix)을 통한 표현
-* 가장 직관적인 방법은 그래프 $G = (V, E)$를 크기 $N \times N$의 인접 행렬(Adjacency Matrix) $A \in \{0, 1\}^{N \times N}$로 나타내는 것입니다. (단, $N$은 총 노드의 수 $|V|$를 의미합니다).
+**노드 분류**는 그래프의 각 노드에 레이블(label)을 부여하는 태스크입니다.
 
-![Figure: 그래프의 인접 행렬(Adjacency Matrix) 표현 방식. 왼쪽의 6개 노드(0~5번)로 구성된 그래프가 오른쪽의 $6 \times 6$ 2차원 배열(행렬)로 변환된 모습입니다. 노드 간에 간선이 존재하면 초록색 셀에 '1'로, 연결되지 않았으면 '0'으로 표기됩니다. 각 행(또는 열)은 특정 노드의 이웃 연결 상태를 나타내는 다중 원-핫 벡터(Multi-hot vector) 역할을 합니다.](./images/adjacency_matrix.png)
+- 소셜 네트워크에서 사용자의 **정치적 성향 식별**
+- 추천 시스템에서 **사용자·아이템의 카테고리 분류**
 
-* 행렬의 각 원소 $a_{ij}$는 위 도식과 같이 노드 $i$와 노드 $j$의 연결 여부에 따라 다음과 같이 정의됩니다:
-$$a_{ij} = \begin{cases} 1, & \text{if nodes } i \text{ and } j \text{ are connected} \\ 0, & \text{otherwise} \end{cases}$$
+연결된 노드끼리는 비슷한 레이블을 가질 가능성이 높다는 직관이 핵심입니다.
 
-* 이 방식에 따르면, 네트워크 상의 특정 노드 $i$는 자신과 연결된 다른 노드들의 정보를 담고 있는 크기 $N$의 다중 원-핫 벡터(Multi-hot vector) $a_i$로 표현됩니다.
+![Figure: 노드 분류(Node Classification) 개요. 왼쪽 그래프에서 회색 노드(?)는 레이블이 미지정된 상태이고, 초록·빨간 노드는 레이블이 알려진 상태입니다. 머신러닝을 거쳐 오른쪽과 같이 모든 노드에 레이블이 예측됩니다.](./images/figure_node_classification.png)
 
-## 2.2. 단순 접근법의 한계점 (Limitations of the Naïve Approach)
-* 하지만 노드 $i$를 다중 원-핫 벡터 $a_i$로 표상하여 기계학습 모델의 입력으로 사용하는 단순(Naïve) 접근법에는 치명적인 한계가 존재합니다.
-* 1.  **차원의 저주와 희소성 (High-dimensional and Sparse)**
-    * 노드 벡터 $a_i$의 차원은 전체 노드의 수 $N$과 같습니다. 수억 개의 노드를 가진 네트워크에서는 벡터의 차원이 지나치게 크고, 대부분이 0으로 채워진 극단적인 희소 행렬(Sparse matrix)이 되어 연산 효율성이 극도로 떨어집니다.
-* 2.  **치환 불변성 (Permutation Invariance)의 부재**
-   *  인접 행렬 $A$는 유일(Unique)하지 않습니다. 그래프의 기하학적 구조가 완전히 동일하더라도, 노드에 번호를 매기는 순서가 달라지면 행렬 $A$의 모습이 변합니다. 
-    $$A^{(1)} = \begin{bmatrix} 0 & 1 & 1 \\ 1 & 0 & 0 \\ 1 & 0 & 0 \end{bmatrix}, \quad A^{(2)} = \begin{bmatrix} 0 & 0 & 1 \\ 0 & 0 & 1 \\ 1 & 1 & 0 \end{bmatrix}$$
-    * 이러한 입력 변동성은 모델을 불안정하게 만듭니다.
+#### 링크 예측 (Link Prediction)
 
+**링크 예측**은 그래프에 새로운 엣지(edge)가 나타날 가능성을 예측하는 태스크입니다.
 
-# 3. 그래프 표현 학습 (Graph Representation Learning)
+- 소셜 네트워크에서의 **친구 추천**
+- Netflix 등 플랫폼에서의 **새 영화 추천**
 
-* 위의 한계를 극복하기 위해 등장한 패러다임이 **그래프 표현 학습(Graph Representation Learning)**입니다. 핵심 목표는 이산적이고 고차원적인 그래프 구조를 컴퓨터가 처리하기 쉬운 저차원의 연속적인 벡터 공간(Continuous vector space)으로 매핑하는 것입니다. 
+![Figure: 링크 예측(Link Prediction) 개요. 왼쪽에서 점선(?)으로 표시된 잠재적 엣지들이 실제 생성될 것인지를 머신러닝 모델이 판단하여, 오른쪽과 같이 체크(✓) 또는 X로 분류합니다.](./images/figure_link_prediction.png)
 
-![Figure: 그래프 표현 학습의 기본 개념도. 왼쪽의 복잡한 원본 네트워크(original network) 상에 있는 노드 $u$와 $v$가 매핑 함수를 통해 오른쪽의 저차원 임베딩 공간(embedding space) 내의 연속형 벡터 점 $z_u$, $z_v$로 각각 변환되는 과정을 보여줍니다. 점선 화살표는 원래 그래프에서의 위상적(Topological) 연결 정보가 기하학적 벡터 공간으로 손실 없이 투영됨을 의미합니다.](./images/representation_learning.png)
+---
 
-* 가장 중요한 대전제는 **"원본 그래프에서의 기하학적, 구조적 관계가 저차원 임베딩 공간에서도 그대로 보존되어야 한다"**는 것입니다.
+### 그래프의 표현 (Representation of Graphs)
 
-## 3.1. 노드 임베딩과 활용
-* 특히 각 노드를 개별적인 벡터로 변환하는 '노드 임베딩(Node Embedding)'은 딥러닝 그래프 모델의 가장 뼈대가 됩니다. 이렇게 학습된 노드 임베딩 벡터는 앞서 살펴본 Node Classification, Link Prediction은 물론 Community Detection에도 매우 유용하게 쓰입니다.
+그래프 $G = (V, E)$를 머신러닝 모델에 입력하려면 수치적 표현이 필요합니다. 가장 기본적인 방법은 **인접 행렬(Adjacency Matrix)** $A \in \{0,1\}^{N \times N}$을 사용하는 것입니다.
 
-![Figure: Zachary's Karate Club 네트워크 임베딩 적용 예시. 왼쪽(Input)은 실제 가라데 클럽 회원(노드)들 간의 친소 관계를 나타낸 34차원 희소 그래프 네트워크입니다. 회원들의 파벌에 따라 보라색, 붉은색, 청록색, 연두색 등 4개의 커뮤니티로 나뉘어 있습니다. 오른쪽(Output)은 이를 2차원 연속 공간으로 차원 축소 임베딩(Embedding)한 산점도입니다. 원본 그래프에서의 복잡한 간선 구조를 명시적으로 주지 않았음에도, 같은 커뮤니티에 속한 노드들이 2D 임베딩 공간에서 스스로 밀집(Cluster)하여 기하학적으로 명확히 분리되는 놀라운 결과를 보여줍니다.](./images/karate_club.png)
+$$A_{ij} = \begin{cases} 1 & \text{노드 } i \text{와 } j \text{가 연결된 경우} \\ 0 & \text{그 외} \end{cases}$$
 
-# 4. 노드 임베딩의 수학적 정식화 (Mathematical Formulation)
+이때 각 노드 $i$는 $N$차원 행 벡터 $\mathbf{a}_i$ (즉, $A$의 $i$번째 행)로 표현됩니다. 연결된 이웃의 위치에만 1이 위치한 **멀티-핫 벡터(multi-hot vector)**입니다.
 
-* 구조를 보존하는 임베딩은 수식으로 어떻게 정의될까요? 주어진 그래프 $G = (V, E)$에서 우리의 목표는 각 노드 $u \in V$를 연속적인 $d$-차원 벡터 $z_u \in \mathbb{R}^d$로 매핑하는 인코더(Encoder) 함수 $\text{ENC}(\cdot)$을 찾는 것입니다.
+![Figure: 6개 노드(0~5)를 갖는 그래프와 이에 대응하는 $6 \times 6$ 인접 행렬. 행렬 원소 $A_{ij} = 1$이면 노드 $i$와 $j$ 사이에 엣지가 존재하며, 무방향 그래프이므로 $A = A^\top$로 대칭 행렬입니다.](./images/figure_adjacency_matrix.png)
 
-![Figure: 인코더(Encoder) 함수의 역할 도식. 원본 네트워크의 이산적 노드 $u$와 $v$가 $\text{ENC}(u)$와 $\text{ENC}(v)$라는 인코더 함수를 통과하여, 임베딩 공간 상의 벡터 $z_u$와 $z_v$로 표현됨을 수식과 함께 명시적으로 보여줍니다. 여기서 $\text{ENC}(\cdot)$가 기계학습 모델이 최적화해야 할 핵심 대상이 됩니다.](./images/encoder_formulation.png)
+#### 나이브한 표현의 한계 (Limitations of the Naïve Approach)
 
-* 위 그림에서처럼 $\text{ENC}(v) = z_v$ 가 정의되었다면, 임베딩의 품질을 결정하는 핵심 원칙은 **유사도 보존(Similarity Preservation)**입니다.
+각 노드 $i$를 $\mathbf{a}_i$로 표현하면 두 가지 근본적인 문제가 발생합니다.
 
-![Figure: 임베딩 학습의 핵심 목표(Goal) 도식. "$\text{similarity}(u, v) \approx z_v^\top z_u$" 라는 공식이 본 프레임워크의 심장입니다. 좌변의 원본 네트워크에서의 유사도 척도와 우변의 임베딩 공간에서의 내적(Dot Product) 값이 최대한 같아지도록 인코더 $\text{ENC}$를 학습시켜야 함을 나타냅니다. 'Need to define!'이라는 붉은 상자는 좌변(원본 네트워크의 유사도)을 어떻게 수학적으로 정의할 것인지가 앞으로 해결해야 할 핵심 과제임을 시사합니다.](./images/similarity_goal.png)
+- **한계 1 — 고차원성과 희소성**: 노드 수 $N$이 수백만에 달하는 실제 그래프에서 $N$-차원 벡터는 너무 고차원이며, 각 노드가 극히 일부 노드와만 연결되어 있어 벡터 대부분이 0인 극단적인 **희소 벡터(sparse vector)**가 됩니다.
 
-* 수식으로 다시 쓰면 다음과 같습니다.
-$$\text{similarity}_{G}(u, v) \approx \text{similarity}_{\mathbb{R}^d}(z_u, z_v)$$
+- **한계 2 — 인접 행렬의 비유일성**: 동일한 그래프도 노드 순서를 바꾸면 서로 다른 인접 행렬이 됩니다.
 
-* 즉, 원본 네트워크에서 이웃을 많이 공유하거나 거리가 가까워 구조적으로 유사한 두 노드는, 임베딩 공간에서도 서로 가까운 위치(높은 유사도)를 가져야 합니다.
+$$A_1 = \begin{pmatrix} 0 & 1 & 1 \\ 1 & 0 & 0 \\ 1 & 0 & 0 \end{pmatrix}, \quad A_2 = \begin{pmatrix} 0 & 0 & 1 \\ 0 & 0 & 1 \\ 1 & 1 & 0 \end{pmatrix}$$
 
-## 4.1. 임베딩 유사도 척도: 내적 (Dot Product)
-* 임베딩 공간 $\mathbb{R}^d$에서의 두 벡터 간 유사도 함수로는 **내적(Dot Product)**을 주로 사용합니다.
-$$\text{similarity}_{\mathbb{R}^d}(z_u, z_v) = z_u^\top z_v$$
+두 행렬은 원소 구성은 다르지만 **동일한 그래프 구조**(예: 스타 그래프)를 나타냅니다. 이는 그래프가 **노드 순열에 대해 불변(invariant to permutation of nodes)**이기 때문입니다. 따라서 $\mathbf{a}_i$는 노드의 일관된 특성을 표현하는 데 부적합합니다.
 
-* 내적은 정규화되지 않은 코사인 유사도와 같습니다. 두 벡터의 사이각이 좁을수록(비슷한 방향을 향할수록) 내적 값이 커집니다.
-  * **장점 (Pros)**: 행렬 곱셈만으로 병렬 연산이 가능하여 계산이 매우 빠릅니다.
-  * **단점 (Cons)**: 벡터의 스케일(Scale)에 민감합니다. 하지만 학습 과정에서 정규화를 거치면 큰 문제가 되지 않습니다.
+---
 
-## 4.2. 인코더의 구조: 임베딩 룩업 (Embedding Lookup)
-* 인코더 $\text{ENC}(\cdot)$를 구현하는 가장 얕고 단순한 방법은, 자연어 처리의 Word2Vec처럼 고유 벡터를 직접 매핑하는 **임베딩 룩업(Embedding Lookup)**입니다.
+### 그래프에서의 표현 학습 (Representation Learning in Graphs)
 
-$$\text{ENC}(v) = Z \, 1_v$$
+위의 한계를 극복하기 위해 **그래프 표현 학습(Graph Representation Learning)**은 다음 매핑을 학습하는 것을 목표로 합니다.
 
-* $Z \in \mathbb{R}^{d \times |V|}$: 최적화해야 할 전체 임베딩 파라미터 행렬 (각 열이 각 노드의 임베딩 벡터).
-* $1_v \in \{0, 1\}^{|V|}$: 노드 $v$의 위치만 1인 원-핫 지시 벡터.
+- **입력(From)**: 개별 노드, 부분 그래프(subgraph), 또는 전체 그래프
+- **출력(To)**: 저차원 연속 벡터 공간(embedding space)의 점
+- **조건(Such that)**: 임베딩 공간에서의 기하학적 관계가 원본 그래프의 구조적 유사성을 반영
 
-* 결론적으로, 이 행렬 연산은 커다란 $Z$ 행렬 창고에서 $v$번째 노드 전용 벡터를 쏙 빼오는(Lookup) 역할을 합니다. 
+![Figure: 그래프 표현 학습의 개념도. 왼쪽 원본 네트워크(original network)에서 인접한 노드 $u$와 $v$가, 오른쪽 임베딩 공간(embedding space)에서도 $\mathbf{z}_u$와 $\mathbf{z}_v$로 가깝게 위치합니다. ENC($u$)·ENC($v$)는 각 노드를 임베딩으로 변환하는 인코더 함수입니다.](./images/figure_representation_learning.png)
+
+#### 노드 임베딩 (Node Embeddings)
+
+그래프 표현 학습에서 가장 중요한 것은 **노드 임베딩(Node Embedding)**입니다. 서브그래프·전체 그래프의 임베딩 역시 노드 임베딩으로부터 구성될 수 있기 때문입니다.
+
+노드 임베딩이 학습되면 다음 태스크에 활용됩니다.
+
+- **커뮤니티 탐지**: 임베딩 기반 클러스터링
+- **노드 분류**: 노드 $v$의 레이블을 $\phi(\mathbf{z}_v)$로 예측
+- **링크 예측**: 엣지 $(u, v)$의 존재 여부를 $f(\mathbf{z}_u, \mathbf{z}_v)$로 예측 (임베딩 연결(concatenate) 또는 거리 계산)
+
+#### 예시: 자카리 가라테 클럽 네트워크
+
+노드 임베딩의 강력함을 보여주는 고전적 예시가 **자카리 가라테 클럽(Zachary's Karate Club)** 네트워크입니다. 34개의 노드로 구성된 이 네트워크에서 각 노드는 원래 34차원 희소 벡터로 표현됩니다. DeepWalk를 적용하면, 단 2차원으로 압축하더라도 실제 커뮤니티(색상으로 표시)가 임베딩 공간에서 뚜렷하게 분리됩니다.
+
+![Figure: 자카리 가라테 클럽 네트워크의 2D 노드 임베딩(Perozzi et al., 2014). 왼쪽 원본 그래프에서 각 색상은 서로 다른 커뮤니티를 나타냅니다. 오른쪽 임베딩 결과에서 같은 커뮤니티 노드들이 2D 공간에서 자연스럽게 군집화되어, 표현 학습이 그래프 구조를 효과적으로 보존함을 확인할 수 있습니다.](./images/figure_karate_club_embeddings.png)
+
+---
+
+### 문제 공식화 (Problem Formulation)
+
+그래프 $G = (V, E)$가 주어졌을 때 ($V$: 노드 집합, $E$: 엣지 집합, 인접 행렬 $A$와 동치), 각 노드 $i \in V$에 대해 **임베딩 벡터** $\mathbf{z}_i \in \mathbb{R}^d$를 학습하는 것이 목표입니다.
+
+단, 아래 조건을 만족해야 합니다.
+
+$$\text{similarity}(u, v) \approx \mathbf{z}_v^\top \mathbf{z}_u$$
+
+즉, **임베딩 공간에서의 유사도**가 **원본 네트워크에서의 유사도**를 잘 근사해야 합니다.
+
+![Figure: 문제 공식화 다이어그램. 원본 네트워크에서 노드 $u$는 ENC($u$)를 통해 $\mathbf{z}_u$로, 노드 $v$는 ENC($v$)를 통해 $\mathbf{z}_v$로 매핑됩니다. 학습 목표는 원본의 similarity($u$, $v$)와 임베딩 내적 $\mathbf{z}_v^\top \mathbf{z}_u$가 일치하도록 하는 것입니다.](./images/figure_problem_formulation.png)
+
+#### 핵심 구성요소 (Key Components)
+
+문제를 완성하기 위해 두 요소를 정의해야 합니다.
+
+1. **인코더(Encoder)**: $\text{ENC}(i)$ — 각 노드를 임베딩으로 변환하는 함수
+2. **유사도 함수(Similarity Function)**: 원본 네트워크에서 두 노드의 유사성을 측정하는 기준
+
+특히 **유사도 함수를 어떻게 정의하는지**가 각 알고리즘(DeepWalk, Node2vec 등)의 핵심 차별점입니다.
+
+$$\text{Goal:} \quad \underbrace{\text{similarity}(u, v)}_{\text{원본 네트워크에서의 유사도 (정의 필요!)}} \approx \underbrace{\mathbf{z}_v^\top \mathbf{z}_u}_{\text{임베딩 유사도}}$$
+
+![Figure: 핵심 구성요소 다이어그램. 학습 목표는 원본 네트워크의 similarity($u$, $v$)(초록 박스)가 임베딩 공간의 내적 $\mathbf{z}_v^\top \mathbf{z}_u$(파란 박스)에 근사하도록 하는 것입니다. 유사도 함수는 사전 정의(Need to define!)가 필요하며, 알고리즘마다 다르게 설정됩니다.](./images/figure_key_components.png)
+
+#### 왜 내적(Dot Product)인가?
+
+임베딩 유사도 측도로 **내적(dot product)**을 선택하는 이유를 살펴보겠습니다.
+
+- 내적 $\mathbf{z}_u^\top \mathbf{z}_v$는 두 벡터 사이의 **비정규화(unnormalized) 유사도**입니다.
+- 코사인 유사도는 $\frac{\mathbf{z}_u^\top \mathbf{z}_v}{\|\mathbf{z}_u\| \|\mathbf{z}_v\|}$이므로, $\mathbf{z}_u^\top \mathbf{z}_v$가 크다는 것은 두 벡터가 **같은 방향을 가리킨다**는 의미입니다.
+- **장점**: 행렬 곱셈으로 효율적으로 구현 가능합니다.
+- **단점**: 벡터의 크기(scale)에 민감합니다. 단, 임베딩들의 스케일이 유사하다면 실용적으로 큰 문제가 없습니다.
+
+#### 임베딩 룩업 (Embedding Lookup)
+
+가장 단순한 인코더는 **임베딩 룩업(Embedding Lookup)** 방식입니다. 각 노드에 고유한 임베딩 벡터를 직접 할당합니다.
+
+$$\text{ENC}(i) = \mathbf{Z} \cdot \mathbf{1}_i$$
+
+- $\mathbf{Z} \in \mathbb{R}^{d \times N}$: 전체 노드의 임베딩 행렬. $j$번째 열이 노드 $j$의 임베딩 $\mathbf{z}_j$
+- $\mathbf{1}_i \in \{0,1\}^N$: 노드 $i$에 대응하는 원-핫 벡터
+
+행렬-벡터 곱 $\mathbf{Z} \cdot \mathbf{1}_i$는 $\mathbf{Z}$의 $i$번째 열을 추출하므로, 결과적으로 $\mathbf{z}_i$를 반환합니다. Word2Vec과 마찬가지로 각 노드에 고유한 벡터를 할당하는 방식이며, 학습 과정에서 $\mathbf{Z}$의 원소들이 업데이트됩니다.
+
+---
+
+## 2. DeepWalk
+
+### 동기 (Motivation)
+
+핵심 질문으로 돌아오겠습니다: **그래프에서 두 노드 간의 유사도를 어떻게 정의할까요?**
+
+Word2Vec은 두 단어 $u$와 $v$가 유사하다는 조건으로, **문장 내에서 $k$-윈도우(window) 안에 함께 등장하는지** 여부를 사용했습니다.
+
+DeepWalk의 핵심 착안점은 다음과 같습니다.
+
+> **랜덤 워크(random walk)로 생성한 노드 시퀀스를 문장처럼 취급하면 어떨까?**
+
+랜덤 워커가 방문하는 노드 시퀀스 $v_1, v_2, \ldots, v_l$을 하나의 "문장"으로 보고, 노드 $v_i$와 $v_j$가 **랜덤 워크 내 $k$-스텝 이내에 함께 등장하면 유사하다**고 정의하는 것입니다.
+
+---
+
+### 왜 랜덤 워크인가? (Why Random Walks?)
+
+DeepWalk는 Word2Vec을 그래프로 일반화한 방법입니다.
+
+**핵심 아이디어**:
+
+$$\mathbf{z}_u^\top \mathbf{z}_v \propto \text{랜덤 워크에서 } u \text{와 } v \text{가 함께 등장하는 빈도}$$
+
+두 노드 $u$와 $v$가 랜덤 워크에서 함께 자주 나타난다는 것은 두 가지 의미를 동시에 포함합니다.
+
+1. $u$와 $v$가 그래프 상에서 **가깝다** ($k$-hop 이내)
+2. $u$와 $v$가 **강하게 연결**되어 있다 (공통 이웃이 많다)
+
+또한, 모든 노드 쌍에 대해 근접도를 직접 계산하는 것보다 훨씬 **효율적**입니다.
+
+---
+
+### 특징 학습을 최적화 문제로 보기 (Feature Learning as Optimization)
+
+그래프 $G = (V, E)$가 주어졌을 때, 임베더(embedder) $f: V \to \mathbb{R}^d$를 학습하는 목표는 다음과 같이 정형화됩니다.
+
+> 노드 $u$의 임베딩 $\mathbf{z}_u$가 자신의 랜덤 워크 이웃 $\mathcal{N}_R(u)$를 잘 예측하도록
+
+이를 **최대 우도 추정(Maximum Likelihood Estimation)**으로 표현하면:
+
+$$\max_{f} \sum_{u \in V} \log P\!\bigl(\mathcal{N}_R(u) \mid \mathbf{z}_u\bigr)$$
+
+여기서 $\mathcal{N}_R(u)$는 랜덤 워커 $R$이 노드 $u$에서 시작하여 방문한 **이웃 집합**입니다.
+
+#### 랜덤 워크 최적화 (Random Walk Optimization)
+
+목적함수를 구체화하기 위해 두 가지 가정을 도입합니다.
+
+**① 조건부 독립(Conditional Independence)**
+
+이웃 노드를 하나 관찰하는 사건이 다른 이웃 노드를 관찰하는 사건과 독립이라고 가정합니다.
+
+$$\log P\!\bigl(\mathcal{N}_R(u) \mid \mathbf{z}_u\bigr) = \sum_{v \in \mathcal{N}_R(u)} \log P(v \mid \mathbf{z}_u)$$
+
+**② 소프트맥스 파라미터화(Softmax Parameterization)**
+
+노드 $u$가 주어졌을 때 이웃 노드로 $v$가 등장할 조건부 확률을 $N$-클래스 소프트맥스로 표현합니다.
+
+$$P(v \mid \mathbf{z}_u) = \frac{\exp(\mathbf{z}_u^\top \mathbf{z}_v)}{\sum_{n \in V} \exp(\mathbf{z}_u^\top \mathbf{z}_n)}$$
+
+전체 노드 집합 $V$ 중에서 $v$가 $u$의 이웃으로 등장할 상대적 확률을 내적 기반으로 계산하는 방식입니다.
+
+#### 특징 공간의 대칭성 (Symmetry in Feature Space)
+
+Word2Vec에서는 입력 임베딩 행렬 $\mathbf{W}$와 출력 임베딩 행렬 $\mathbf{W}'$ 두 개를 별도로 학습합니다.
+
+$$p_{ij} = \text{softmax}_j\!\bigl({\mathbf{W}'}^\top \mathbf{W} \mathbf{1}_i\bigr)$$
+
+반면, DeepWalk에서는 **단일 임베딩 행렬** $\mathbf{Z} \in \mathbb{R}^{d \times N}$만을 사용합니다.
+
+$$p_{ij} = \text{softmax}_j\!\bigl(\mathbf{Z}^\top \mathbf{Z} \mathbf{1}_i\bigr)$$
+
+이는 **입력 임베딩과 출력 임베딩이 동일**하다고 가정하는 것으로, 두 가지 장점이 있습니다.
+
+- **장점 1**: $p_{ij} \propto \mathbf{z}_i^\top \mathbf{z}_j$로 직접 해석 가능합니다. 임베딩의 내적이 유사도를 직접 나타냅니다.
+- **장점 2**: 파라미터 수가 절반으로 줄어 불필요한 중복이 제거됩니다 ($2dN \to dN$).
+
+#### 목적 함수 (Objective Function)
+
+모든 요소를 결합하면 최종 **손실 함수(loss function)**가 완성됩니다.
+
+$$\mathcal{L} = \sum_{u \in V} \sum_{v \in \mathcal{N}_R(u)} -\log \left( \frac{\exp(\mathbf{z}_u^\top \mathbf{z}_v)}{\sum_{n \in V} \exp(\mathbf{z}_u^\top \mathbf{z}_n)} \right)$$
+
+각 항의 의미를 분해하면:
+
+- $\displaystyle\sum_{u \in V}$: **전체 노드 $u$에 대한 합산**
+- $\displaystyle\sum_{v \in \mathcal{N}_R(u)}$: **$u$에서 시작하는 랜덤 워크에서 방문한 노드 $v$에 대한 합산**
+- $\dfrac{\exp(\mathbf{z}_u^\top \mathbf{z}_v)}{\sum_{n \in V} \exp(\mathbf{z}_u^\top \mathbf{z}_n)}$: **$u$에서 시작하는 랜덤 워크에서 $v$가 등장할 예측 확률**
+
+이 손실함수를 최소화하는 것은 랜덤 워크 이웃 노드들의 임베딩 내적을 최대화하는 것과 동치입니다.
+
+---
+
+### 계산 비용과 해결책 (Computational Cost)
+
+위 목적 함수의 계산 비용은 **$O(|V|^2)$** 입니다. 소프트맥스 분모인 $\sum_{n \in V} \exp(\mathbf{z}_u^\top \mathbf{z}_n)$ 계산 시 모든 노드를 참조하기 때문입니다. Facebook과 같이 수십억 개의 노드를 갖는 그래프에서는 이 비용이 **감당 불가능(intractable)**합니다.
+
+이를 해결하는 세 가지 방법을 살펴보겠습니다.
+
+#### 해결책 1: 정규화 항 제거 (No Normalization)
+
+분모(정규화 항)를 완전히 제거하면 손실이 단순화됩니다.
+
+$$\mathcal{L} = \sum_{u \in V} \sum_{v \in \mathcal{N}_R(u)} -\log \exp(\mathbf{z}_u^\top \mathbf{z}_v) = -\sum_{u \in V} \sum_{v \in \mathcal{N}_R(u)} \mathbf{z}_u^\top \mathbf{z}_v$$
+
+- 목표 달성 여부: 손실을 최소화하면 $\mathbf{z}_u^\top \mathbf{z}_v$가 최대화되므로, 표면적으로는 목표에 부합합니다.
+- **문제점**: **자명해(trivial solution)**가 존재합니다. 모든 임베딩을 동일한 상수 벡터로 설정하면 손실이 최소화되므로, 의미 있는 구조를 학습하지 못합니다.
+
+#### 해결책 2: 계층적 소프트맥스 (Hierarchical Softmax)
+
+**아이디어**: $N$-클래스 분류 $\approx$ $\log N$번의 이진 분류
+
+모든 노드를 이진 트리의 잎(leaf)으로 배치하면, 특정 잎 노드 $v$에 이르는 경로 $\pi(v)$의 길이가 $O(\log N)$이 됩니다. 각 내부 노드에서 이진 분류를 수행하여 소프트맥스를 근사합니다.
+
+**알고리즘**:
+
+1. 모든 노드를 잎으로 하는 **이진 트리를 구성**합니다 (무작위 또는 빈도 기반).
+2. 각 목표 노드 $v$에 대해 루트에서 $v$까지의 **경로 $\pi(v)$를 탐색**합니다.
+3. 경로상의 각 분기점 $l$에서 이진 분류를 수행하여 다음 손실을 최소화합니다.
+
+$$\mathcal{L} = \sum_{u \in V} \sum_{v \in \mathcal{N}_R(u)} \sum_{l \in \pi(v)} -\log \frac{\exp(\mathbf{z}_u^\top \mathbf{z}_l)}{\exp(\mathbf{z}_u^\top \mathbf{z}_l) + \exp(\mathbf{z}_u^\top \mathbf{z}_{l'})}$$
+
+여기서 $l'$는 현재 분기점 $l$에서 반대 방향의 노드입니다. 이 방식은 계산 비용을 $O(|V|^2) \to O(|V| \log |V|)$로 줄여줍니다.
+
+![Figure: 계층적 소프트맥스(Hierarchical Softmax)의 이진 트리 구조. 루트 노드(Context C)에서 각 단어 노드(잎)까지의 경로를 따라 이진 분류가 반복됩니다. 각 분기의 숫자(0.57, 0.43 등)는 해당 방향으로 이동할 확률을 나타냅니다. 빨간 경로가 "I'm"에 해당하는 단어에 이르는 최적 경로 예시입니다. $N$-클래스 소프트맥스를 $O(\log N)$번의 이진 분류로 근사함으로써 계산 효율을 크게 높입니다.](./images/figure_hierarchical_softmax.png)
+
+#### 해결책 3: 네거티브 샘플링 (Negative Sampling)
+
+소프트맥스 정규화의 목적은 **이웃이 아닌 노드들에 대한 내적 $\mathbf{z}_u^\top \mathbf{z}_n$을 줄이는 것**입니다. 전체 노드를 참조하는 대신, **$k$개의 네거티브 샘플만으로 정규화를 근사**할 수 있습니다.
+
+$$\log \frac{\exp(\mathbf{z}_u^\top \mathbf{z}_v)}{\sum_{n \in V} \exp(\mathbf{z}_u^\top \mathbf{z}_n)} \approx \log \sigma(\mathbf{z}_u^\top \mathbf{z}_v) - \sum_{i=1}^{k} \log \sigma(\mathbf{z}_u^\top \mathbf{z}_{n_i})$$
+
+각 기호의 의미:
+
+- $\sigma(\cdot)$: 시그모이드 함수 $\sigma(x) = \frac{1}{1 + e^{-x}}$
+- $n_i$: 그래프에서 무작위로 샘플링된 **네거티브 노드** (이웃이 아닌 노드)
+- $k$: 네거티브 샘플의 수 (각 쌍당 기여도의 상한)
+
+**네거티브 샘플 선택 방법**:
+
+- 노드의 **차수(degree)에 비례**하여 샘플링합니다.
+- 이유: 고차도 노드는 랜덤 워크에 더 자주 등장하여 실제 비이웃 관계를 더 잘 대표하기 때문입니다.
+
+**$k$ 값 결정 시 고려 사항**:
+
+- $k$가 클수록 추정은 더 정확하지만, 계산 비용도 증가합니다.
+- 실제로는 **$k \in [5, 20]$** 범위가 자주 사용됩니다.
+
+---
+
+## 3. Node2vec
+
+### 동기 (Motivation)
+
+DeepWalk의 단순한 랜덤 워크는 **동질성(homophily)** — 연결된 노드들이 비슷하다 — 만을 포착합니다. 그런데 그래프에는 또 다른 유형의 유사성이 있습니다.
+
+> **관찰**: 물리적으로 멀리 떨어진 노드도 **역할(structural role)** 의 관점에서는 매우 유사할 수 있습니다.
+
+예를 들어, 항공 네트워크에서 서로 다른 대륙의 **대형 허브 공항**들은 위치는 멀지만 "허브"라는 구조적 역할은 동일합니다. 반면 작은 지역 공항들끼리도 "소형 공항"이라는 역할을 공유합니다. 단순한 랜덤 워크(DeepWalk)는 국소적 이웃 구조만을 탐색하므로, 이러한 **구조적 동등성(structural equivalence)**을 포착하지 못합니다.
+
+![Figure: 역할 기반 유사성의 예시. 왼쪽·오른쪽 그래프 모두 대형 허브 노드(큰 빨간 원), 중간 연결 노드(파란 원), 소형 주변 노드(작은 노란/주황 원)로 구성됩니다. 같은 색깔 노드들은 서로 다른 그래프에 있더라도 구조적으로 동일한 역할을 수행합니다. Node2vec는 이러한 구조적 동등성을 포착합니다.](./images/figure_node2vec_motivation.png)
+
+---
+
+### Node2vec 개요 (Overview)
+
+Node2vec의 핵심 아이디어는 **랜덤 워크를 유연하고 편향되게(flexible and biased)** 만드는 것입니다.
+
+그래프 탐색 방법으로 잘 알려진 두 전략을 활용합니다.
+
+- **BFS(너비 우선 탐색, Breadth-First Search)**: 현재 위치에서 가까운 노드부터 방문
+- **DFS(깊이 우선 탐색, Depth-First Search)**: 한 방향으로 깊게 파고들며 방문
+
+Node2vec에서는 랜덤 워커가 BFS 또는 DFS 방향으로 **편향되도록** 제어하며, 이 편향의 정도를 하이퍼파라미터로 조정합니다.
+
+![Figure: Node2vec에서 BFS와 DFS의 탐색 방향 비교. 중심 노드 $u$에서 출발할 때, 빨간 화살표(BFS)는 $u$의 직접 이웃($s_1$, $s_2$, $s_3$)으로 향하고, 파란 화살표(DFS)는 이웃을 거쳐 더 먼 노드($s_4$, $s_5$, $s_6$, $s_7$ 등)로 뻗어 나갑니다.](./images/figure_node2vec_bfs_dfs_overview.png)
+
+#### Node2vec와 DFS
+
+**DFS(깊이 우선 탐색)**는 그래프를 트리처럼 따라가며 멀리 이동합니다.
+
+DFS 방식으로 샘플링된 이웃 $\mathcal{N}_{\text{DFS}}(u) = [s_4, s_5, s_6]$을 사용하면:
+
+- 진행 방향(outgoing direction)으로 이동하는 랜덤 워크와 유사
+- **인접한 노드들이 비슷한 임베딩**을 갖게 됩니다 (DeepWalk와 유사)
+- 즉, **지역적 이웃 구조(homophily)**를 포착
+
+#### Node2vec와 BFS
+
+**BFS(너비 우선 탐색)**는 현재 노드 주변의 가까운 노드를 우선 방문합니다.
+
+BFS 방식으로 샘플링된 이웃 $\mathcal{N}_{\text{BFS}}(u) = [s_1, s_2, s_3]$을 사용하면:
+
+- 단순 랜덤 워크와 달리 **먼 노드도 이웃으로 포함** 가능
+- **비슷한 구조적 역할을 가진 노드들**이 유사한 임베딩을 갖게 됩니다
+- 즉, **구조적 동등성(structural equivalence)**을 포착
+
+---
+
+### 편향된 랜덤 워크 (Biased Random Walks)
+
+워커가 노드 $s_1$에서 노드 $w$로 이동한 상황을 가정합니다. 다음 방문지의 후보는 $s_1$(되돌아가기), $s_2$(같은 거리), $s_3$(더 먼 노드) 세 가지입니다.
+
+- $s_2$: $s_1$과 **같은 거리(distance 1)**에 위치 — BFS 방향
+- $s_3$: $s_1$보다 **더 먼 거리(distance 2)**에 위치 — DFS 방향
+- $s_1$: 이전 노드로 **복귀(distance 0)**
+
+**편향 제어 = 이들 각각으로 이동할 확률을 결정하는 것**입니다.
+
+![Figure: 편향된 랜덤 워크의 전이 시나리오. 워커가 $s_1$에서 $w$로 이동한 상태에서, 다음 후보 노드 중 $s_2$는 $s_1$과 같은 거리에 있어 빨간색으로 표시되고, $s_3$는 더 먼 거리에 있어 갈색으로 표시됩니다. $s_1$으로의 복귀는 파란색으로 표시됩니다. 각 방향으로의 비정규화 전이 확률이 $p$·$q$에 의해 결정됩니다.](./images/figure_biased_random_walks.png)
+
+---
+
+### BFS와 DFS 사이의 보간 (Interpolating BFS and DFS)
+
+Node2vec는 두 하이퍼파라미터 $p$와 $q$로 BFS-DFS 편향을 조절합니다.
+
+**① 복귀 파라미터 $p$ (Return Parameter)**:
+
+- 이전 노드로 되돌아갈 비정규화 확률: $\propto 1/p$
+- $p$가 작을수록 워커가 이전 노드 근처에 머물러 **국소 탐색 강화**
+
+**② 진출-진입 파라미터 $q$ (In-Out Parameter)**:
+
+- 이전 노드와 **같은 거리** 노드로 이동할 확률: $\propto 1$ (BFS 경향)
+- 이전 노드보다 **더 먼** 노드로 이동할 확률: $\propto 1/q$ (DFS 경향)
+- **직관**: $q$는 BFS 대 DFS의 "비율(ratio)"을 제어합니다.
+
+전이 확률을 형식적으로 정리하면, 워커가 $t$에서 $w$로 이동한 뒤 $x$로 이동하는 비정규화 전이 확률 $\alpha_{pq}(t, x)$는:
+
+$$\alpha_{pq}(t, x) = \begin{cases} 1/p & \text{if } d(t, x) = 0 \quad (\text{이전 노드로 복귀}) \\ 1 & \text{if } d(t, x) = 1 \quad (\text{같은 거리, BFS 방향}) \\ 1/q & \text{if } d(t, x) = 2 \quad (\text{더 먼 노드, DFS 방향}) \end{cases}$$
+
+여기서 $d(t, x)$는 이전 노드 $t$와 후보 노드 $x$ 사이의 최단 거리입니다.
+
+확률 표로 정리하면:
+
+| 타겟 $t$ | 비정규화 확률 | $d(s_1, t)$ |
+|:--------:|:------------:|:----------:|
+| $s_1$     | $1/p$        | 0          |
+| $s_2$     | $1$           | 1          |
+| $s_3$     | $1/q$        | 2          |
+| $s_4$     | $1/q$        | 2          |
+
+세 가지 극단적 시나리오로 직관을 얻을 수 있습니다.
+
+| 조건 | 탐색 패턴 | 경향 |
+|:-----|:---------|:-----|
+| $p \gg 1$, $q \gg 1$ | 삼각형 순환: $(s_2, s_1, w, s_2, \ldots)$ | 강한 BFS (지역 탐색) |
+| $p \gg 1$, $q \ll 1$ | 바깥으로 진행: $(s_3, s_5, s_6, s_7, \ldots)$ | 강한 DFS (전역 탐색) |
+| $p \ll 1$, $q \ll 1$ | 트리처럼 이동: $(s_3, w, s_4, w, s_1, w, \ldots)$ | 광범위한 BFS |
+
+![Figure: $p$·$q$ 파라미터와 전이 확률 테이블. 워커가 $s_1$에서 $w$로 이동한 상태에서, 각 후보 노드($s_1$: $1/p$, $s_2$: $1$, $s_3$: $1/q$, $s_4$: $1/q$)에 대한 비정규화 전이 확률이 할당됩니다. $s_1$과의 거리 0, 1, 2에 따라 다른 확률이 부여되며, $p$와 $q$의 상대적 크기가 BFS 대 DFS 탐색 경향을 결정합니다.](./images/figure_biased_random_walks_prob.png)
+
+---
+
+### Node2vec 알고리즘
+
+Node2vec의 전체 학습 알고리즘은 다음과 같습니다.
+
+```python
+# Node2vec Algorithm
+Z ← 노드 임베딩 초기화
+
+for each node u in V:          # 루트 노드 u
+    N_R(u) ← p, q 로 편향된 랜덤 워크로 u의 이웃 집합 샘플링
+    
+    for each node v in N_R(u):     # 타겟 노드 v
+        for each node s around v in N_R(u):  # 소스 노드 s
+            Z ← Z - η · ∇_Z L(u, v)    # u와 v 간 손실로 임베딩 업데이트
+```
+
+- 먼저 임베딩 행렬 $\mathbf{Z}$를 무작위로 초기화합니다.
+- 각 노드 $u$에 대해 파라미터 $p$, $q$로 편향된 랜덤 워크를 수행하여 이웃 집합 $\mathcal{N}_R(u)$를 생성합니다.
+- 이웃 집합 내 각 노드 쌍 $(u, v)$에 대해 손실 $\mathcal{L}(u, v)$를 계산하고, 학습률 $\eta$로 경사 하강법 업데이트를 수행합니다.
+
+---
+
+## 요약 (Summary)
+
+이번 강의의 핵심 내용을 정리합니다.
+
+**1. 그래프 표현 학습 (Graph Representation Learning)**
+
+- 나이브한 인접 행렬 표현의 한계: 고차원 희소성, 노드 순열에 대한 비유일성
+- 목표: 임베딩 공간의 내적 $\mathbf{z}_v^\top \mathbf{z}_u$가 원본 그래프의 similarity$(u, v)$를 근사하도록 임베딩 행렬 $\mathbf{Z}$를 학습
+- 노드 임베딩은 커뮤니티 탐지·노드 분류·링크 예측 등 다양한 태스크에 활용 가능
+
+**2. DeepWalk**
+
+- Word2Vec의 그래프 일반화: 랜덤 워크 시퀀스를 "문장"으로 취급
+- MLE 기반 목적함수: 랜덤 워크 이웃 노드들의 조건부 로그 우도 최대화
+- 계산 비용 감소 기법 세 가지:
+    - 정규화 제거 → 자명해 문제로 사용 불가
+    - 계층적 소프트맥스 → $O(|V|^2)$ 에서 $O(|V| \log |V|)$로 개선
+    - 네거티브 샘플링 → $k \in [5, 20]$ 범위의 샘플로 근사
+
+**3. Node2vec**
+
+- DeepWalk 한계 극복: 지역 인접성(homophily)에 더하여 **구조적 동등성(structural equivalence)** 포착
+- 파라미터 $p$(복귀 경향)·$q$(BFS/DFS 비율)로 탐색 전략을 유연하게 제어
+- 비정규화 전이 확률 $\alpha_{pq}(t, x)$: 이전 노드와의 거리 0·1·2에 따라 $1/p$·$1$·$1/q$ 할당

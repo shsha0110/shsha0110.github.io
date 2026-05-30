@@ -1,6 +1,6 @@
 ---
-title: '[Data Mining] 19. ML On Graphs (Part 1)'
-description: 'Deep Learning on Graphs'
+title: '[Data Mining] 19. ML On Graphs'
+description: 'ML On Graphs'
 author: '유성현'
 date: '2026-05-14'
 categories: [Data Mining]
@@ -12,129 +12,468 @@ format:
     math: true
 ---
 
-# 들어가며: 그래프 딥러닝의 필요성
+## 들어가며
 
-* 그래프(Graph)는 노드(Node)와 간선(Edge)을 통해 엔티티 간의 복잡한 상호작용과 관계를 모델링하는 데 특화된 데이터 구조입니다. 과거의 기계학습 기법들은 네트워크의 위상(Topology)이나 노드의 통계적 특성을 사람이 직접 수동으로 추출(Hand-crafted features)하여 사용했습니다. 
+이번 강의는 지난 시간에 다룬 **그래프 표현 학습(Graph Representation Learning)** 의 핵심 방법론인 DeepWalk와 Node2vec를 복습하는 것에서 출발합니다. 그리고 이들 방법이 공유하는 **Shallow Encoder** 구조의 세 가지 근본적 한계를 명확히 짚은 뒤, 그 한계를 극복하기 위한 **그래프 신경망(Graph Neural Network, GNN)** 의 설계 원리를 단계적으로 전개합니다.
 
-* 하지만 **표현 학습(Representation Learning)**의 패러다임이 그래프 데이터에 적용되면서, 그래프의 구조적 정보를 보존하는 임베딩(Embedding)을 신경망이 스스로 학습할 수 있게 되었습니다. 이번 포스트에서는 초기 그래프 임베딩 기법인 '얕은 임베딩(Shallow Embeddings)'의 수학적 구조와 치명적인 한계점들을 짚어보고, 이를 극복하기 위해 등장한 **그래프 신경망(Graph Neural Networks, GNN)** 기반의 깊은 인코더(Deep Graph Encoders) 개념을 논리적 흐름에 따라 상세히 다룹니다.
+강의의 전체 구성은 다음 세 파트로 이루어져 있습니다.
 
----
-
-# 1. 그래프 표현 학습 복습 (Recap: Graph Representation Learning)
-
-## 1.1 노드 임베딩의 핵심 목표
-
-* 그래프 표현 학습의 가장 근본적인 목표는 원본 네트워크 상에서 노드들이 가지고 있는 **구조적 특성과 위상적 유사성(Structural properties)**을 보존하면서, 이를 저차원 벡터 공간(Embedding Space)으로 매핑(Mapping)하는 것입니다. 
-
-* 함수 $f$를 통해 원본 그래프를 입력받아 각 노드의 2D 혹은 고차원의 임베딩 벡터를 출력하게 되며, 이 공간 안에서는 비슷한 구조적 역할을 하거나 서로 밀접하게 연결된 노드들이 기하학적으로 가깝게 위치하게 됩니다.
-
-![Figure 1: 함수 f를 통한 그래프 임베딩 매핑 과정. 좌측의 원본 그래프(Input graph)가 함수 $f$를 통과하면, 우측과 같이 각 노드가 2차원 임베딩 공간(2D node embeddings)의 점으로 변환됩니다. 같은 색상으로 표시된 군집(예: 파란색, 초록색, 빨간색 등 질병 연관 노드들)이 원본 위상 구조를 유지한 채 임베딩 공간에서도 서로 가깝게 위치하고 있음을 확인할 수 있습니다.](./images/01_input_to_embedding.png)
-
-## 1.2 인코더와 유사도 함수 (Encoder & Similarity Function)
-
-* 노드 임베딩을 수학적으로 정립하기 위해, 노드 $u$와 $v$ 간의 관계를 수식화할 필요가 있습니다. 그래프 표현 학습은 다음의 핵심 수식을 만족하는 인코더 함수 $\text{ENC}(\cdot)$를 찾는 최적화 과정입니다.
-
-$$
-\text{similarity}(u, v) \approx \mathbf{z}_v^\top \mathbf{z}_u
-$$
-
-* **$\text{similarity}(u, v)$**: 원본 네트워크 상에서 두 노드 간의 구조적 유사도를 의미합니다. (예: 두 노드가 직접 연결되어 있는지, 공유하는 이웃 노드가 얼마나 많은지, 무작위 보행(Random Walk) 시 얼마나 자주 함께 방문되는지 등을 측정)
-* **$\text{ENC}(u), \text{ENC}(v)$**: 원본 그래프의 노드를 임베딩 공간으로 보내는 인코더 함수입니다.
-* **$\mathbf{z}_u, \mathbf{z}_v$**: 인코더를 통과하여 생성된 노드 $u$와 $v$의 $d$차원 잠재 벡터(Latent vector)입니다. 즉, $\mathbf{z}_u = \text{ENC}(u)$ 입니다.
-* **$\mathbf{z}_v^\top \mathbf{z}_u$**: 임베딩 공간 상에서 두 벡터의 내적(Dot product)입니다. 벡터 간의 코사인 유사도 혹은 거리에 비례하는 값으로, 임베딩 공간에서의 유사도를 나타냅니다.
-
-![Figure 2: 인코더와 유사도 함수의 개념도. 원본 네트워크 상의 노드 $u$와 $v$는 각각 인코더 함수 $\text{ENC}(u)$와 $\text{ENC}(v)$를 통해 임베딩 공간의 점 $\mathbf{z}_u$와 $\mathbf{z}_v$로 인코딩됩니다. 표현 학습의 최종 목표(Goal)는 원본 네트워크에서의 유사도가 임베딩 벡터의 내적 $\mathbf{z}_v^\top \mathbf{z}_u$와 근사해지도록 인코더를 학습시키는 것입니다.](./images/02_encoder_similarity.png)
+1. **Deep Learning on Graphs**: 문제를 재정의하고 Naive approach의 한계를 확인합니다.
+2. **Graph Neural Networks**: 계산 그래프(Computation Graph) 아이디어를 기반으로 기본 GNN을 구성하고 행렬 형식으로 정리합니다.
+3. **GNN Layers**: Message–Aggregation–Update 일반 프레임워크와 GCN·GraphSAGE 아키텍처를 다룹니다.
 
 ---
 
-# 2. 얕은 임베딩의 구조와 한계 (Shallow Embeddings and Limitations)
+# Recap: 그래프 표현 학습 (Graph Representation Learning)
 
-* DeepWalk, Node2vec, LINE과 같은 1세대 그래프 임베딩 기법들은 매우 직관적이고 단순한 **얕은 임베딩(Shallow Embeddings)** 구조를 채택했습니다. 
+## 핵심 목표
 
-## 2.1 얕은 인코더의 수학적 정의
+그래프 표현 학습의 목표는 원본 그래프의 **구조적 속성을 보존하는 노드 임베딩(node embedding)** 을 생성하는 것입니다. 구체적으로, 원본 네트워크에서 유사한 두 노드 $u$와 $v$는 임베딩 공간에서도 가까이 위치해야 합니다.
 
-* 얕은 인코더에서 함수 $\text{ENC}(v)$는 단순히 **임베딩 행렬(Embedding Matrix)에서 해당 노드에 대응하는 열(Column)을 조회(Look-up)**하는 방식으로 작동합니다. 전체 노드 집합을 $V$라 하고, 우리가 원하는 임베딩의 차원을 $d$라고 할 때, 임베딩 행렬 $\mathbf{Z}$는 다음과 같이 정의됩니다.
+$$\text{similarity}(u, v) \approx \mathbf{z}_v^\top \mathbf{z}_u$$
 
-$$
-\mathbf{Z} \in \mathbb{R}^{d \times |V|}
-$$
+- 좌변 $\text{similarity}(u,v)$: **원본 네트워크에서의 유사도** (직접 정의해야 할 설계 선택)
+- 우변 $\mathbf{z}_v^\top \mathbf{z}_u$: **임베딩 공간에서의 내적(dot product) 유사도**
 
-* 특정 노드 $v$의 임베딩 벡터 $\mathbf{z}_v$는 임베딩 행렬 $\mathbf{Z}$와 지시 벡터(Indicator vector) $\mathbf{v} \in \{0, 1\}^{|V|}$ 의 행렬 곱으로 산출됩니다. (여기서 지시 벡터 $\mathbf{v}$는 노드 $v$의 인덱스 위치만 1이고 나머지는 0인 원-핫 인코딩 벡터입니다.)
+![Figure: 그래프 표현 학습 개요. 함수 $f(\cdot)$가 왼쪽 입력 그래프의 각 노드를 오른쪽의 저차원 임베딩 공간으로 매핑한다. 같은 색 노드(같은 군집)는 임베딩 공간에서도 근접하게 위치하며, 이를 통해 질병 간 관계와 같은 구조적 유사성이 2D 공간에 시각화된다.](./images/graph_repr_learning_overview.png)
 
-$$
-\text{ENC}(v) = \mathbf{z}_v = \mathbf{Z} \mathbf{v}
-$$
+이를 위한 핵심 구성 요소는 두 가지입니다.
 
-![Figure 3: 얕은 임베딩 행렬 $\mathbf{Z}$의 시각적 구조. 행렬의 전체 크기는 (임베딩 차원수) $\times$ (전체 노드 수)로 구성됩니다. 점선으로 강조된 하나의 열(column)이 곧 특정 노드의 고유한 임베딩 벡터가 되며, 노드 하나당 하나의 열이 1:1로 매핑되는 단순 룩업(Look-up) 구조임을 보여줍니다.](./images/03_embedding_matrix.png)
+- **인코더(Encoder)**: 각 노드 $v$를 임베딩 벡터 $\mathbf{z}_v$로 변환하는 함수 $\text{ENC}(v)$
+- **유사도 정의**: 원본 그래프에서의 노드 유사도를 어떻게 측정할 것인지 — 이것이 모델 설계의 핵심 선택입니다.
 
-## 2.2 얕은 인코더의 3가지 치명적 한계
+$$\text{goal: } \text{similarity}(u, v) \approx \mathbf{z}_v^\top \mathbf{z}_u$$
 
-* 이러한 단순 행렬 룩업 방식은 직관적이지만, 실제 대규모/동적 그래프에 적용할 때 다음과 같은 명확한 한계를 지닙니다.
+![Figure: 그래프 표현 학습의 핵심 구성 요소. 목표는 원본 네트워크에서의 similarity(u,v)가 임베딩 내적 $\mathbf{z}_v^\top \mathbf{z}_u$와 근사되도록 인코더 ENC(u)와 ENC(v)를 학습하는 것이다. 유사도 함수는 "Need to define!"이라는 표시처럼 반드시 직접 설계해야 하는 요소이다.](./images/key_components.png)
 
-* 1.  **매개변수 효율성 부족 (Limitation 1: $O(|V|d)$ parameters are needed)**
-    * **파라미터 비공유(No sharing of parameters)**: 노드들 사이에 가중치를 공유하는 메커니즘이 전혀 없습니다.
-    * 모든 노드가 자신만의 고유한 임베딩 벡터(열)를 독립적으로 학습해야 하므로, 그래프의 노드 수 $|V|$가 수백만~수십억 개로 증가하면 학습해야 할 행렬 $\mathbf{Z}$의 크기도 선형적으로 폭발하여 메모리 초과 현상이 발생합니다.
+## Shallow Embeddings의 구조
 
-* 2.  **본질적인 변환적 학습의 한계 (Limitation 2: Inherently "transductive")**
-    * 행렬 $\mathbf{Z}$의 크기와 구조는 모델이 **훈련되는 시점의 노드 집합**에 완전히 고정됩니다.
-    * 학습 시점에 존재하지 않았던 완전히 새로운 노드(Unseen nodes)가 네트워크에 추가될 경우, 이 노드에 대한 임베딩을 즉각적으로 생성해내는 추론(Inductive inference)이 불가능합니다. 새로운 노드를 반영하려면 $\mathbf{Z}$에 새로운 열을 추가하고 전체 모델을 다시 학습해야만 합니다.
+DeepWalk와 Node2vec에서 인코더는 단순한 **임베딩 룩업(embedding look-up)** 입니다. 노드 인덱스를 입력받아 해당 열(column)을 임베딩 행렬에서 직접 조회합니다.
 
-* 3.  **노드 특성(Features) 활용 불가 (Limitation 3: Do not incorporate node features)**
-    * 현실의 네트워크(예: 소셜 네트워크의 사용자 프로필 텍스트, 분자 구조 내 원자의 화학적 성질 등)에서 각 노드는 매우 풍부한 고유 특성(Features) 데이터를 가집니다.
-    * 하지만 얕은 임베딩은 오직 연결 구조(Topology) 정보만을 사용하여 $\mathbf{Z}$ 행렬을 업데이트할 뿐, 노드가 원래 가지고 있는 특성 행렬(Feature Matrix)를 임베딩 생성 과정에 결합할 수 있는 구조적 방법론이 부재합니다.
+$$\text{ENC}(v) = \mathbf{Z} \cdot \mathbf{v}$$
 
----
+- $\mathbf{Z} \in \mathbb{R}^{d \times |V|}$: **임베딩 행렬** — 각 열이 하나의 노드에 대응
+- $\mathbf{v}$: 노드 $v$를 가리키는 인디케이터 벡터(one-hot)
+- $d$: 임베딩 차원(dimension/size)
 
-# 3. 깊은 그래프 인코더의 도입 (Deep Graph Encoders)
+![Figure: Shallow Encoder(임베딩 룩업)의 구조. 임베딩 행렬 Z는 '노드 수 × 임베딩 차원' 크기이며, 특정 노드의 임베딩 벡터는 해당 열을 그대로 조회하여 얻는다. 점선으로 강조된 열이 특정 노드에 해당하는 임베딩 벡터이다.](./images/shallow_embedding_matrix.png)
 
-* 앞서 언급한 얕은 임베딩의 3가지 한계를 근본적으로 해결하기 위해, 입력 그래프의 위상 구조와 노드의 특성을 모두 입력받아 복잡한 함수 근사를 수행하는 **깊은 그래프 인코더(Deep Graph Encoders)**가 제안되었습니다. 이것이 바로 그래프 신경망(GNN)의 뼈대가 됩니다.
+## Shallow Encoder의 세 가지 한계
 
-## 3.1 새로운 인코더의 수학적 정의
+Shallow Encoder 방식은 세 가지 근본적인 한계를 가집니다.
 
-* 이제 그래프 $G=(A, X)$가 주어졌다고 가정해 봅시다.
+- **한계 1 — 파라미터 비효율성**
+  - 총 $O(|V| \times d)$개의 파라미터가 필요합니다.
+  - **노드 간 파라미터 공유가 없습니다.** 모든 노드가 각자 독립적인 임베딩 벡터를 보유합니다.
+  - 그래프 크기 $|V|$가 커질수록 메모리·계산 비용이 선형적으로 증가합니다.
 
-* **인접 행렬 (Adjacency Matrix) $A$**: $A \in \mathbb{R}^{|V| \times |V|}$ (노드 간의 연결 여부나 가중치를 나타내는 행렬)
-* **노드 특성 행렬 (Feature Matrix) $X$**: $X \in \mathbb{R}^{|V| \times d_{in}}$ (노드 자체의 속성값, 예를 들어 유저 프로필이나 이미지 피처 등을 나타냄)
+- **한계 2 — Transductive 방식: 귀납적(Inductive) 적용 불가**
+  - **훈련 중에 보지 못한 노드에 대한 임베딩을 생성할 수 없습니다.**
+  - 새로운 노드가 추가되면 임베딩 행렬 전체를 다시 학습해야 합니다.
+  - 테스트 시에 그래프 구조가 변할 수 있는 동적 환경에 부적합합니다.
 
-* 우리가 설계할 새로운 깊은 인코더 $f_\theta$는 학습 가능한 파라미터 $\theta$의 집합으로 구성된 신경망이며, 구조 정보 $A$와 특성 정보 $X$를 동시에 고려하여 최종 잠재 표현 행렬 $H$를 만들어냅니다.
-
-$$
-H = f_\theta(A, X) \quad \text{where } H \in \mathbb{R}^{|V| \times d}
-$$
-
-* 즉, 특정 노드 $v$에 대한 인코딩은 더 이상 단순한 행렬 조회가 아니라, 노드 $v$의 속성값과 주변 이웃들의 구조적 정보를 조합한 다층적인 연산의 결과물이 됩니다.
-
-## 3.2 GNN 파이프라인과 딥러닝 아키텍처
-
-* 깊은 인코더는 여러 층의 **그래프 합성곱 계층(Graph Convolutions Layer)**을 쌓아 올린 형태를 취합니다. 
-
-![Figure 4: 그래프 신경망(GNN) 기반 깊은 그래프 인코더의 아키텍처. 입력 그래프 구조와 노드 특성이 첫 번째 'Graph convolutions' 층을 통과하여 이웃의 정보를 집계합니다. 이후 비선형 활성화 함수(Activation function)와 정규화(Regularization, e.g., dropout)를 거치고, 여러 층의 합성곱을 반복 통과합니다. 최종적으로 각 노드에 대한 정교한 임베딩이 산출되며, 이를 확장하여 부분 그래프(Subgraph)나 전체 그래프 단위의 임베딩도 추출할 수 있습니다.](./images/04_gnn_architecture.png)
-
-* **깊은 인코더가 기존 한계를 해결하는 메커니즘**:
-  * 1.  **파라미터 공유 및 효율성**: 모든 노드가 고유한 벡터를 가지는 대신, 이웃의 정보를 집계(Aggregation)하고 변환하는 '가중치 행렬 $\theta$'를 공유합니다. 따라서 파라미터 수가 노드 수 $|V|$에 의존하지 않고 특성 차원에만 의존하므로 메모리 효율이 극대화됩니다.
-  * 2.  **귀납적 추론(Inductive Capability)**: 학습된 모델 $f_\theta$는 정보를 모으는 '규칙'을 학습한 것입니다. 따라서 새로운 노드가 추가되더라도, 그 노드의 주변 이웃 구조($A$의 일부)와 고유 특성($X$)만 입력하면 즉각적으로 새로운 임베딩을 연산해낼 수 있습니다.
-  * 3.  **다양한 정보의 융합**: 식 $f_\theta(A, X)$에서 명시되어 있듯, 노드가 원래 가지는 텍스트/이미지 특성 정보가 그래프 구조 정보와 함께 다층 신경망(Multi-layer Neural Network)을 통해 유기적으로 결합됩니다.
+- **한계 3 — 노드 특징(feature) 미활용**
+  - 소셜 네트워크의 사용자 프로필, 분자 그래프의 원자 속성 등 많은 실세계 그래프는 풍부한 노드 특징을 갖습니다.
+  - Shallow Encoder는 이러한 특징 정보를 전혀 활용하지 않습니다.
 
 ---
 
-# 4. 그래프 데이터 머신러닝의 본질적 어려움
+# Part 1. Deep Learning on Graphs
 
-* 딥러닝 기술, 특히 CNN(합성곱 신경망)과 RNN(순환 신경망)은 이미지 처리나 자연어 처리에서 눈부신 성과를 이루었습니다. 이들은 **데이터의 구조가 일정하다는 강력한 귀납적 편향(Inductive Bias)**을 활용합니다.
+## 인코더 재정의 (Encoder Definition)
 
-![Figure 5: 현대 머신러닝의 표준 도구 상자(Modern ML Toolbox)가 다루는 데이터의 형태. 상단의 이미지는 명확한 2차원 격자(Grid) 구조로 되어 있어 CNN 필터가 지역적 패턴(Local Contrast, Face Features 등)을 추출하기 용이합니다. 하단의 텍스트나 음성 데이터는 1차원의 순차적인 배열(Sequence)을 가지므로 RNN 구조를 통해 시간적 흐름을 모델링하기 쉽습니다.](./images/05_modern_ml_toolbox.png)
+앞서 언급한 한계들을 넘어서기 위해, 보다 일반적인 인코더를 정의합니다.
 
-* 하지만 위 그림과 같은 정형화된 데이터와 달리, 그래프 네트워크(Networks)에 기존의 딥러닝 도구를 그대로 가져다 쓰는 것은 불가능에 가깝습니다.
+**입력:**
 
-![Figure 6: 그래프 네트워크(Networks)와 표준 데이터(Images, Text)의 복잡성 비교. 2차원 격자 구조의 이미지나 1차원 선형 구조의 텍스트와 달리, 왼쪽의 그래프 데이터는 크기가 제각각이며 위상적 연결이 불규칙적으로 얽혀 있습니다.](./images/06_networks_vs_images.png)
+- 그래프 $G = (V, E)$
+- **인접 행렬(Adjacency matrix)**: $A \in \{0,1\}^{N \times N}$ — 노드 간 연결 관계를 나타내는 이진 행렬
+- **노드 특징 행렬(Node feature matrix)**: $X \in \mathbb{R}^{N \times f_{\text{in}}}$ — 각 노드의 초기 특징 벡터
+  - 예: 소셜 네트워크의 사용자 프로필, 이미지 노드의 픽셀값, 분자 그래프의 원자 타입
 
-* **그래프 데이터 모델링이 어려운 근본적 이유 (Why is it Hard?)**:
-  * 1.  **임의의 크기와 복잡한 위상 구조 (Arbitrary size and complex topological structure)**:
-      * 이미지는 모든 내부 픽셀이 8개의 인접 픽셀을 가지며, 텍스트는 앞뒤로 1개씩의 인접 단어를 가집니다.
-      * 반면 그래프의 각 노드는 차수(Degree)가 1개일 수도, 10,000개일 수도 있습니다. 매우 이질적인 연결망 구조를 가지므로 고정된 크기의 필터를 씌울 수 없습니다.
-  * 2.  **노드 순서 및 고정된 기준점의 부재 (No fixed node ordering or reference point)**:
-      * 이미지는 보통 '좌측 상단 픽셀'이라는 기준점이 있고 텍스트는 '첫 단어'가 있습니다. 그래프 공간에서는 기준점(Reference point)이 존재하지 않으며 위, 아래, 왼쪽, 오른쪽이라는 방향성도 없습니다.
-  * 3.  **동형 그래프(Isomorphic Graphs)의 순열 불변성(Permutation Invariance)**:
-      * 노드 {1, 2, 3}으로 이루어진 그래프 $G$와, 같은 위상 구조를 가지지만 노드 이름을 {1, 3, 2}로 바꾼 그래프 $G'$는 사실상 완전히 동일한 정보입니다. 
-      * 따라서 인접 행렬 $A$의 행과 열 순서가 뒤섞이더라도, 그래프 신경망은 "동일한 그래프"임을 인식하고 출력값을 일관되게 유지해야 하는(Permutation Invariant / Equivariant) 까다로운 수학적 조건을 만족하도록 설계되어야 합니다.
+**출력:**
 
-* 결론적으로, 이러한 그래프만의 복잡하고 불규칙적인 위상 특성을 다루기 위해 일반적인 합성곱(Convolution)을 일반화한 **Graph Convolutions** 연산이 필요하게 된 것입니다.
+- $Z \in \mathbb{R}^{N \times d}$ — 각 노드의 $d$차원 임베딩 행렬
+
+**핵심**: 인코더 $E_\theta$는 $A$와 $X$ 모두를 입력으로 받아 $Z$를 출력하며, $Z$의 내부 구조에 대한 별도 제약은 없습니다.
+
+## Deep Graph Encoder
+
+**목표**: 그래프를 위한 신경망을 인코더로 설계합니다.
+
+$$\text{ENC}(v) = \underbrace{\text{그래프 구조에 기반한 비선형 변환의 다층 구조}}_{\text{Graph Neural Network (GNN)}}$$
+
+이 접근법의 잠재적 장점은 다음 세 가지입니다.
+
+- **파라미터 공유**: 레이어별 가중치 행렬을 모든 노드가 공유하여 파라미터 수를 대폭 줄입니다.
+- **귀납적(Inductive) 적용 가능**: 훈련 중 보지 못한 새로운 노드에도 동일한 레이어를 적용하여 임베딩을 생성할 수 있습니다.
+- **노드 특징 활용**: $X$를 자연스럽게 입력으로 포함합니다.
+
+이 아키텍처를 **그래프 신경망(Graph Neural Network, GNN)** 이라 부릅니다.
+
+![Figure: GNN 아키텍처의 구조. 입력 그래프가 그래프 합성곱(Graph convolution) 레이어를 거치고, 각 레이어 사이에 Dropout 등 정규화 기법과 활성화 함수가 삽입된다. 출력은 각 노드의 임베딩 벡터이며, 이를 기반으로 노드 분류·링크 예측·그래프 분류 등 다양한 태스크를 수행할 수 있다.](./images/gnn_architecture_overview.png)
+
+## 현대 딥러닝 도구 상자와 그래프의 차이
+
+현대 딥러닝은 두 가지 규칙적인 데이터 구조에 최적화되어 있습니다.
+
+- **시퀀스(Sequences)**: 텍스트, 음성 → RNN / Transformer
+- **격자(Grids)**: 이미지 → CNN
+
+![Figure: 현대 ML 도구 상자. 이미지(grid 구조)는 CNN으로, 텍스트·음성(sequence 구조)은 RNN으로 자연스럽게 처리된다. 이 두 구조는 모두 규칙적이고 고정된 크기를 가진다는 공통점이 있다.](./images/modern_ml_toolbox.png)
+
+반면, **그래프 구조 데이터**는 훨씬 복잡합니다.
+
+- **임의의 크기와 복잡한 위상(topology)**: 노드 수가 가변적이고, 이웃 관계가 불규칙합니다.
+- **고정된 노드 순서 없음(No fixed node ordering)**: 노드 $(1,2,3)$으로 구성된 그래프 $G$와 노드 $(1,3,2)$로 구성된 $G'$는 **동일한 그래프**입니다.
+  - 따라서 모델은 **순열 불변성(permutation invariance)** 을 만족해야 합니다.
+
+![Figure: 그래프 vs. 이미지 vs. 텍스트. 왼쪽 네트워크는 노드 수와 연결 패턴이 불규칙하여 고정 크기 입력을 가정하는 CNN/RNN을 직접 적용할 수 없다. 중앙의 이미지(격자)와 오른쪽 텍스트(선형)는 규칙적 구조를 갖는다.](./images/graphs_vs_sequences_grids.png)
+
+---
+
+# Part 2. Graph Neural Networks
+
+## Naïve Approach와 그 문제점
+
+가장 단순한 접근법은 인접 행렬 $A$와 특징 행렬 $X$를 이어 붙여(concatenate) MLP에 입력하는 것입니다.
+
+$$\text{output} = \text{MLP}(A \| X)$$
+
+그러나 이 방식은 두 가지 결정적인 문제를 갖습니다.
+
+- **크기 비일관성**: 노드 수 $N$이 다른 그래프에는 동일한 모델을 적용할 수 없습니다. 입력 차원이 $N^2 + N \cdot f_\text{in}$으로 $N$에 종속되기 때문입니다.
+- **순열 비불변성**: 동일한 그래프라도 노드 순서가 달라지면 $A$의 행·열 배치가 바뀌어 완전히 다른 입력이 됩니다.
+
+![Figure: Naïve Approach의 한계. 그래프의 인접 행렬 A(5×5 이진 행렬)와 특징 행렬 X(2열 특징)를 연결하여 MLP에 입력한다. 입력 차원이 그래프 크기에 종속되고 노드 순서에 따라 결과가 달라지므로 범용 적용이 불가능하다.](./images/naive_approach.png)
+
+## 핵심 아이디어: 계산 그래프 (Computation Graph)
+
+GNN의 핵심 아이디어는 다음과 같습니다.
+
+> **각 노드의 이웃이 그 노드의 계산 그래프를 정의한다.**
+
+GNN은 이 계산 그래프를 따라 정보를 **전파(propagate)** 하고 **변환(transform)** 하는 방법을 학습합니다.
+
+- **왼쪽(Determine node computation graph)**: 각 노드를 루트로 하는 이웃 집합(k=1, k=2 hop)을 정의합니다.
+- **오른쪽(Propagate and transform information)**: 이 구조를 따라 각 레이어에서 집계자(aggregator)가 이웃 정보를 집계·변환합니다.
+
+![Figure: GNN의 핵심 아이디어. 왼쪽은 노드 i를 중심으로 k=1, k=2 hop 이웃을 점선 원으로 표시한 계산 그래프 구조이다. 오른쪽은 집계자(aggregator₁, aggregator₂)가 계층별로 이웃 정보를 전파하고 변환하는 과정을 나타낸다.](./images/gnn_core_idea.png)
+
+## 계산 그래프의 트리 구조
+
+$h_v^{(l)}$을 레이어 $l$에서 노드 $v$의 **은닉 표현(hidden representation)** 이라 합니다.
+
+- 레이어 $l$에서의 표현은, 레이어 $l-1$에서의 **자신 및 이웃들의 표현**으로부터 계산됩니다.
+
+$$h_A^{(l)} \leftarrow \text{집계}\!\left(h_A^{(l-1)},\; h_B^{(l-1)},\; h_C^{(l-1)},\; h_D^{(l-1)}\right)$$
+
+이 재귀적 집계 구조는 **트리 구조**를 형성합니다. 목표 노드 $A$를 루트로 하는 계산 트리를 전개하면, 각 레이어에서 이웃들의 이웃이 새로운 리프(leaf) 노드로 추가됩니다.
+
+![Figure: 계산 그래프의 트리 구조. 왼쪽 입력 그래프에서 목표 노드 A를 루트로 하여 계산 트리를 전개하면, Layer-1은 직접 이웃 B·C·D를, Layer-2는 그 이웃들의 이웃까지 포함한다. 박스(□)는 집계 연산을, 점선은 집계 방향을 나타낸다.](./images/computation_graph_tree.png)
+
+그래프 내 **모든 노드는 동시에(병렬로)** 각자의 이웃에 기반한 계산 그래프를 정의합니다.
+
+![Figure: 모든 노드의 병렬 계산 그래프. 6개의 노드 각각이 자신을 루트로 하는 독립적인 계산 트리를 가진다. 트리의 리프 노드에는 초기 노드 특징이, 루트에는 최종 임베딩이 위치한다. 이들은 동일한 레이어 가중치를 공유하며 병렬로 처리된다.](./images/parallel_computation_graphs.png)
+
+## 심층 GNN: 계층별 수용 범위
+
+GNN은 임의의 깊이를 가질 수 있으며, **$k$번째 레이어는 $k$-hop 이웃의 정보를 포착**합니다.
+
+- **레이어-0 임베딩**: 노드 $u$의 초기 표현은 그 노드의 입력 특징
+
+  $$h_u^{(0)} = x_u$$
+
+- **레이어-$k$ 임베딩**: $k$-hop 이웃으로부터의 정보를 포함
+
+  $$h_u^{(k)} \leftarrow \text{집계}\!\left(\left\{h_w^{(k-1)} \mid w \in N(u)\right\}\right)$$
+
+![Figure: 심층 GNN의 계층별 수용 범위(receptive field). Layer-0은 리프 노드의 원본 특징 $x_A, x_B, \ldots$만을 포함한다. Layer-1은 1-hop 이웃의 정보를 집계하고, Layer-2는 2-hop 이웃의 정보까지 통합한다. 레이어가 깊어질수록 각 노드 표현에 반영되는 이웃 범위가 넓어진다.](./images/deep_gnn_receptive_field.png)
+
+## 집계 함수 (Aggregation Function)
+
+**이웃 집계(Neighborhood Aggregation)** 는 GNN의 핵심 구성 요소입니다. 이웃 노드들의 표현 **집합(set)** 을 하나의 새로운 표현으로 변환하는 함수입니다.
+
+$$\hat{h}_v^{(l)} = \text{AGG}^{(l)}\!\left(\left\{h_u^{(l-1)} \mid u \in N(v)\right\}\right)$$
+
+"계산 그래프의 박스 안에 무엇이 들어있는가(What is in the box?)"라는 물음이 바로 **어떤 집계 함수를 사용할 것인지**의 설계 문제입니다.
+
+![Figure: 집계 함수의 역할. 각 박스(?)가 집계 연산을 나타낸다. 목표 노드 A의 최종 표현은 이웃들의 표현을 재귀적으로 집계하여 얻는다. 어떤 집계 함수를 선택하느냐에 따라 서로 다른 GNN 아키텍처(GCN, GraphSAGE 등)가 정의된다.](./images/aggregation_what_is_in_box.png)
+
+## 기본 GNN 레이어 업데이트
+
+기본 GNN 레이어는 이웃의 메시지를 **변환(transform)하고 평균(average)** 합니다.
+
+**초기화:**
+
+$$h_v^{(0)} = x_v$$
+
+**레이어 업데이트 규칙 ($l = 0, 1, \ldots, L-1$):**
+
+$$h_v^{(l+1)} = \sigma\!\left(\frac{1}{|N(v)|}\sum_{u \in N(v)} W^{(l)}\, h_u^{(l)} + B^{(l)}\, h_v^{(l)}\right)$$
+
+각 항목의 역할:
+
+| 기호 | 역할 |
+|------|------|
+| $W^{(l)}$ | **이웃 집계** 가중치 행렬 |
+| $B^{(l)}$ | **자기 자신** 변환 가중치 행렬 |
+| $\frac{1}{\|N(v)\|}$ | 이웃 수로 정규화 (평균) |
+| $\sigma$ | 비선형 활성화 함수 (예: ReLU, Sigmoid) |
+
+**최종 임베딩:**
+
+$$z_v = h_v^{(L)}$$
+
+여기서 $L$은 GNN의 총 레이어 수입니다. $h_v^{(l+1)}$은 $h_v^{(l)}$과 차원이 달라도 무방합니다.
+
+## 기본 GNN의 세 단계 해석
+
+위 업데이트 규칙은 다음 세 단계로 해석할 수 있습니다.
+
+- **Step 1 (Transform)**: 이전 레이어의 이웃 표현을 선형 변환합니다.
+  $$W^{(l)}\, h_u^{(l)}$$
+- **Step 2 (Aggregate)**: 변환된 이웃 메시지들의 평균을 냅니다.
+  $$\frac{1}{|N(v)|}\sum_{u \in N(v)} W^{(l)}\, h_u^{(l)}$$
+- **Step 3 (Activate)**: 자기 변환과 합산 후 비선형 활성화 함수 $\sigma$를 적용합니다.
+
+## 학습 방법 (Training)
+
+GNN 파라미터 $\theta = \{W^{(l)}, B^{(l)}\}_{l=0}^{L-1}$은 SGD 계열 알고리즘으로 다음 목적 함수를 최소화하도록 학습됩니다.
+
+**비지도 학습 (Unsupervised Learning):**
+
+레이블 없이 그래프 구조만을 감독 신호로 활용합니다. Random walk 기반 목적 함수:
+
+$$\theta^* = \arg\min_\theta \sum_{v} -\log \sigma\!\left(\mathbf{z}_v^\top \mathbf{z}_u\right)$$
+
+여기서 $(v, u)$는 random walk 상에서 함께 등장한 노드 쌍입니다.
+
+**지도 학습 (Supervised Learning):**
+
+노드 분류(node classification) 등 레이블이 있는 태스크에 활용합니다.
+
+$$\theta^* = \arg\min_\theta \sum_{v} \mathcal{L}\!\left(y_v,\; f(z_v)\right)$$
+
+여기서 $y_v$는 노드 $v$의 레이블이고, $f$는 임베딩을 레이블 공간으로 매핑하는 분류기입니다.
+
+## 행렬 형식 (Matrix Formulation)
+
+실제 구현에서는 모든 노드를 **동시에 업데이트**하기 위해 행렬 형태로 표현합니다. 딥러닝 라이브러리의 최적화된 행렬 연산을 활용할 수 있습니다.
+
+기본 GNN 레이어의 행렬 표현:
+
+$$H^{(l+1)} = \sigma\!\left(D^{-1} A\, H^{(l)} W^{(l)} + H^{(l)} B^{(l)}\right)$$
+
+각 항목의 설명:
+
+| 기호 | 차원 | 역할 |
+|------|------|------|
+| $H^{(l)}$ | $\mathbb{R}^{N \times d^{(l)}}$ | 레이어 $l$의 모든 노드 표현 (행: 노드, 열: 특징) |
+| $W^{(l)}$ | $\mathbb{R}^{d^{(l)} \times d^{(l+1)}}$ | 이웃 집계 가중치 행렬 |
+| $B^{(l)}$ | $\mathbb{R}^{d^{(l)} \times d^{(l+1)}}$ | 자기 변환 가중치 행렬 |
+| $A$ | $\mathbb{R}^{N \times N}$ | 인접 행렬 |
+| $D$ | $\mathbb{R}^{N \times N}$ | 대각 차수 행렬, $D_{ii} = \sum_j A_{ij}$ |
+| $D^{-1}A$ | $\mathbb{R}^{N \times N}$ | 정규화된 인접 행렬 $\tilde{A}$ |
+
+행렬 형식에서도 세 단계가 동일하게 대응됩니다.
+
+- **Step 1**: $H^{(l)} W^{(l)}$ — 모든 노드의 특징을 선형 변환
+- **Step 2**: $D^{-1}A \cdot \left(H^{(l)} W^{(l)}\right)$ — 정규화된 인접 행렬로 이웃 평균 계산
+- **Step 3**: $\sigma(\cdots)$ — 비선형성 적용
+
+## MLP와의 비교 (Comparison with MLP)
+
+기본 GNN을 MLP와 나란히 비교해 보겠습니다.
+
+**MLP (Multi-Layer Perceptron):**
+
+$$H^{(l+1)} = \sigma\!\left(W^{(l)} H^{(l)}\right)$$
+
+**GNN:**
+
+$$H^{(l+1)} = \sigma\!\left(\underbrace{D^{-1}A}_{\tilde{A}}\, H^{(l)} W^{(l)} + H^{(l)} B^{(l)}\right)$$
+
+두 수식의 차이는 **정규화된 인접 행렬 $\tilde{A} = D^{-1}A$** 의 존재 여부입니다.
+
+- $\tilde{A}$는 이웃 표현들을 집계하여 새로운 표현을 계산하는 역할을 합니다.
+- $\tilde{A}$가 없으면 (즉, $A = I$이면) 각 노드는 자기 자신의 정보만 변환하는 단순 MLP가 됩니다.
+- 결론적으로, **GNN은 MLP의 그래프로의 자연스러운 확장**입니다.
+
+## 파라미터 수 비교 (Number of Parameters)
+
+| 방법 | 파라미터 수 | 비고 |
+|------|------------|------|
+| **Shallow Encoder** (DeepWalk) | $O(\|V\| \cdot d)$ | 노드마다 별도 임베딩 |
+| **GNN** | $O(L \cdot d^2 + d \cdot f_{\text{in}})$ | 레이어별 가중치 공유 |
+
+- $L$: GNN 레이어 수
+- $d$: 각 레이어의 차원 (모든 레이어 동일 가정)
+- $f_\text{in}$: 입력 노드 특징의 차원
+- **핵심**: GNN의 파라미터 수는 노드 수 $|V|$에 **독립적**입니다.
+- 단, 노드 특징을 원-핫 인코딩으로 표현하면 $f_\text{in} = |V|$가 되어 두 방식의 파라미터 수가 유사해집니다.
+
+---
+
+# Part 3. GNN Layers
+
+## GNN 레이어의 역할
+
+**GNN 레이어**는 GNN의 핵심 빌딩 블록입니다.
+
+- **레이어 수가 GNN의 표현력을 결정**합니다.
+- $L$-레이어 GNN은 각 노드에 대해 **$L$-hop 이웃**을 고려합니다.
+  - 2-레이어 GNN의 노드 $v$ 임베딩에는 최대 2홉 거리 이웃의 정보가 담깁니다.
+
+![Figure: GNN 레이어 구조. GNN Layer 1이 1-hop 이웃으로부터 정보를 집계하고, GNN Layer 2가 2-hop 이웃까지 추가로 집계한다. 층을 쌓을수록 각 노드 표현에 더 넓은 범위의 그래프 구조 정보가 반영된다.](./images/gnn_layers_depth.png)
+
+## 각 레이어의 구성 요소
+
+GNN 레이어는 벡터 집합을 하나의 벡터로 변환하는 함수입니다. 세 단계로 구성됩니다.
+
+1. **Message (메시지)**: 각 벡터를 변환합니다.
+2. **Aggregation (집계)**: 메시지들을 집계합니다.
+3. **Update (업데이트)**: 표현을 업데이트합니다.
+
+레이어의 입출력 구조는 다음과 같습니다.
+
+- **입력**: 이전 레이어의 노드 자신 표현 $h_v^{(l-1)}$과 이웃 표현 집합 $\{h_u^{(l-1)}\}_{u \in N(v)}$
+- **출력**: 현재 레이어의 노드 표현 $h_v^{(l)}$
+
+![Figure: GNN 레이어의 세 구성 요소 도식. 노드 v의 $l$번째 레이어 출력 $h_v^{(l)}$은 오른쪽 도식처럼 이웃 메시지 집합이 Message(1) 단계에서 변환되고 Aggregation(2) 단계에서 합산된 뒤 l-th GNN Layer를 통해 업데이트된다. 입력은 자기 자신과 이웃 노드의 (l-1)-th 표현이다.](./images/gnn_layer_components.png)
+
+## Step 1: 메시지 (Message)
+
+**메시지 함수**는 각 이웃 노드가 전달할 메시지를 생성합니다.
+
+$$m_u^{(l)} = \text{MSG}^{(l)}\!\left(h_u^{(l-1)}\right)$$
+
+- **직관**: 각 노드가 이웃에 전달할 **메시지 벡터**를 만듭니다.
+- **대표 예시 — 선형 레이어**:
+
+  $$m_u^{(l)} = W^{(l)}\, h_u^{(l-1)}$$
+
+![Figure: 메시지 계산 단계. 이웃 노드들(파란색, 초록색, 빨간색)의 이전 레이어 표현에 선형 변환 $W^{(l)}$이 적용되어 메시지 벡터가 생성된다(회색 사각형). 생성된 메시지들은 이후 집계 단계의 입력으로 사용된다.](./images/message_computation.png)
+
+## Step 2: 집계 (Aggregation)
+
+**집계 함수**는 이웃으로부터 온 메시지들을 하나로 합칩니다.
+
+$$\hat{h}_v^{(l)} = \text{AGG}^{(l)}\!\left(\left\{m_u^{(l)} \mid u \in N(v)\right\}\right)$$
+
+- **직관**: 노드 $v$의 이웃들로부터 온 메시지를 집계합니다.
+- **예시**: 원소별 합산($\sum$), 평균($\text{mean}$), 최댓값($\max$) 연산자
+- **핵심 조건**: **순열 불변 함수(permutation-invariant function)** 이어야 합니다. 이웃들의 순서가 바뀌어도 결과가 동일해야 합니다.
+
+![Figure: 집계 단계. 메시지 계산이 완료된 이웃들의 메시지를 순열 불변 함수(합산·평균·최댓값 등)로 집계하여 노드 v의 중간 표현 $\hat{h}_v^{(l)}$을 생성한다. 빨간 점선 박스가 집계 연산을 나타낸다.](./images/aggregation_step.png)
+
+## Step 3: 업데이트 / Self-Connection
+
+**업데이트 함수**는 집계된 이웃 정보와 자기 자신의 이전 표현을 결합합니다.
+
+$$h_v^{(l)} = \text{UPDATE}^{(l)}\!\left(\hat{h}_v^{(l)},\; h_v^{(l-1)}\right)$$
+
+- **직관**: **Self-connection** — 집계된 이웃 정보만으로는 노드 자신의 정보가 덮어씌워질 수 있으므로, $h_v^{(l-1)}$을 함께 고려하여 정보 손실을 방지합니다.
+- ReLU 등의 **활성화 함수**가 이 단계에 포함됩니다.
+
+![Figure: Self-Connection의 역할. 노드 a를 가리키는 자기 자신으로의 화살표가 표현 보존의 역할을 상징한다. 오른쪽 도식에서 노드 v의 새로운 표현 $h_v^{(l)}$은 집계된 이웃 정보 $\hat{h}_v^{(l)}$뿐 아니라 자신의 이전 표현 $h_v^{(l-1)}$도 반영한다.](./images/self_connection.png)
+
+## 일반 프레임워크 (General Framework)
+
+세 단계를 통합하면, GNN 레이어의 일반 프레임워크는 다음과 같습니다.
+
+$$\boxed{
+\begin{aligned}
+&\textbf{Message:} \quad m_u^{(l)} = \text{MSG}^{(l)}\!\left(h_u^{(l-1)}\right), \quad u \in N(v) \\[6pt]
+&\textbf{Aggregation:} \quad \hat{h}_v^{(l)} = \text{AGG}^{(l)}\!\left(\left\{m_u^{(l)} \mid u \in N(v)\right\}\right) \\[6pt]
+&\textbf{Update:} \quad h_v^{(l)} = \text{UPDATE}^{(l)}\!\left(\hat{h}_v^{(l)},\; h_v^{(l-1)}\right)
+\end{aligned}
+}$$
+
+이 세 구성 요소의 **구체적인 설계 방식**에 따라 다양한 GNN 아키텍처가 정의됩니다.
+
+- **GCN** (Graph Convolutional Network)
+- **GraphSAGE** (Graph Sample and Aggregate)
+- **GAT** (Graph Attention Network)
+- **GIN** (Graph Isomorphism Network)
+
+---
+
+# GNN 아키텍처: GraphSAGE와 GCN
+
+## GraphSAGE
+
+**GraphSAGE(Graph SAmple and aggreGatE)** 는 가장 널리 쓰이는 GNN 아키텍처 중 하나입니다.
+
+$$h_v^{(l)} = \sigma\!\left(W^{(l)} \cdot \text{CONCAT}\!\left(h_v^{(l-1)},\; \text{AGG}\!\left(\left\{h_u^{(l-1)} \mid u \in N(v)\right\}\right)\right)\right)$$
+
+### 설계 특징
+
+- **CONCAT 기반 업데이트**: 자신의 이전 표현 $h_v^{(l-1)}$과 이웃 집계 결과를 **이어 붙인(concatenate)** 뒤 가중치 행렬 $W^{(l)}$을 적용합니다.
+
+  - CONCAT 후 단일 $W^{(l)}$을 적용하는 방식은, 자기 자신용 가중치(self-transformation)와 이웃용 가중치(neighbor-aggregation)를 **별도로 모델링**하는 것과 등가입니다.
+  
+  $$W^{(l)} \cdot \begin{bmatrix} h_v^{(l-1)} \\ \text{AGG}(\cdots) \end{bmatrix} = \underbrace{W_{\text{self}}^{(l)} h_v^{(l-1)}}_{\text{자기 변환}} + \underbrace{W_{\text{neigh}}^{(l)} \,\text{AGG}(\cdots)}_{\text{이웃 집계}}$$
+
+  즉, $W^{(l)}$의 절반은 $B^{(l)}$의 역할을, 나머지 절반은 $W^{(l)}$의 역할을 수행합니다.
+
+- **다양한 AGG 선택지**: 집계 함수를 유연하게 교체할 수 있습니다.
+  - $\text{sum}(\cdot)$: 원소별 합산
+  - $\text{mean}(\cdot)$: 원소별 평균
+  - $\text{max}(\cdot)$: 원소별 최댓값
+
+## Graph Convolutional Network (GCN)
+
+**GCN(Graph Convolutional Network)** 은 스펙트럴 그래프 이론으로부터 유도된 아키텍처입니다.
+
+$$h_v^{(l)} = \sigma\!\left(\sum_{u \in N(v) \cup \{v\}} \frac{W^{(l)}\, h_u^{(l-1)}}{\sqrt{d_v + 1} \cdot \sqrt{d_u + 1}}\right)$$
+
+여기서 $d_v = |N(v)|$는 노드 $v$의 차수(degree)입니다.
+
+### 설계 특징
+
+- **Self-loop 통합**: $N(v) \cup \{v\}$로 자기 자신을 집계에 포함하여, 별도의 Update 단계 없이 self-connection을 집계 단계에 통합합니다.
+- **비자명한(non-trivial) 집계 함수**: 집계 함수 설계가 단순하지 않습니다. GCN은 두 가지 정규화 방식을 고려합니다.
+
+### 단순 평균 (Simple Average)
+
+$$\text{AGG}(\cdot) = \sum_{u \in N(v) \cup \{v\}} \frac{1}{d_v + 1}\, W^{(l)}\, h_u^{(l-1)}$$
+
+- 이웃 수 $d_v + 1$ (자기 자신 포함)로 나누어 평균을 취합니다.
+- **한계**: 메시지를 보내는 소스 노드 $u$의 차수는 고려하지 않습니다.
+
+### 대칭 정규화 (Symmetric Normalization)
+
+$$\text{AGG}(\cdot) = \sum_{u \in N(v) \cup \{v\}} \frac{1}{\sqrt{d_v + 1} \cdot \sqrt{d_u + 1}}\, W^{(l)}\, h_u^{(l-1)}$$
+
+이 정규화의 직관:
+
+- **고차수 노드의 영향력 조정**: 연결이 많은 노드($d_u$가 큰 허브 노드)의 메시지를 더 작게 스케일링합니다. 그래프에서 차수가 높은 노드는 큰 영향력을 가지므로, 이를 양방향으로 조정합니다.
+- **소스 노드의 차수도 반영**: 타깃 노드 $v$의 차수 $d_v$뿐 아니라, 메시지를 보내는 소스 노드 $u$의 차수 $d_u$도 정규화에 포함합니다.
+- 이는 인접 행렬의 **대칭 정규화** $\hat{A} = D^{-1/2} A D^{-1/2}$ (self-loop 추가 후)에 대응합니다.
+
+---
+
+# 정리 (Summary)
+
+이번 강의의 내용을 세 파트로 요약합니다.
+
+## 1. Deep Learning on Graphs
+
+- 많은 실제 그래프는 **노드 특징(node feature)** 을 보유하며, 인코더가 이를 활용해야 합니다.
+- Shallow Encoder의 세 한계: **파라미터 비효율**, **귀납적 적용 불가(transductive)**, **노드 특징 미활용**.
+- Naïve Approach(MLP에 $A \| X$ 직접 입력)는 **크기 불일관성**과 **순열 비불변성** 문제로 사용할 수 없습니다.
+
+## 2. Graph Neural Networks
+
+- 각 노드의 **이웃이 계산 그래프를 정의**하며, 레이어가 깊어질수록 더 넓은 이웃의 정보를 포착합니다.
+- 기본 GNN의 행렬 형식: $H^{(l+1)} = \sigma(D^{-1}A\, H^{(l)} W^{(l)} + H^{(l)} B^{(l)})$
+- **GNN은 MLP의 그래프로의 자연스러운 확장**입니다. 정규화된 인접 행렬 $\tilde{A} = D^{-1}A$가 이웃 집계의 역할을 담당합니다.
+
+## 3. GNN Layers
+
+- 각 GNN 레이어는 **Message → Aggregation → Update** 세 단계로 구성됩니다.
+- **GraphSAGE**: CONCAT 기반으로 self-transformation과 neighbor-aggregation을 분리 모델링, 다양한 AGG 선택지를 제공합니다.
+- **GCN**: 대칭 정규화 $\frac{1}{\sqrt{d_v+1}\sqrt{d_u+1}}$ 기반 집계, self-loop를 집계 단계에 통합합니다.
+
+---

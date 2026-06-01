@@ -1,0 +1,635 @@
+---
+title: "[Deep Learning] 24. Reinforcement Learning 3"
+description: "Policy Gradient and Actor-Critic Methods"
+author: "유성현"
+date: "2026-06-01"
+categories: [Deep Learning]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+# 지난 강의 복습 (Last Time)
+
+지난 강의에서는 **모델 없는(model-free) 가치 학습(value learning)**을 다루었습니다. 핵심 아이디어는 환경과의 상호작용으로 얻은 샘플 전이 $(s_t, a_t, r_t, s_{t+1})$을 이용해 가치 함수를 추정하는 것이었습니다.
+
+주요 알고리즘을 간략히 복습하면 다음과 같습니다.
+
+- **TD 학습 (Temporal Difference Learning)**: 상태 가치 함수를 부트스트래핑 방식으로 업데이트합니다.
+
+$$V(s_t) \leftarrow V(s_t) + \alpha\bigl(r_t + \gamma V(s_{t+1}) - V(s_t)\bigr)$$
+
+- **Q-학습 (Q-Learning)**: 행동-가치 함수를 추정하며, 타깃에 greedy 최대화를 사용합니다.
+
+$$Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha\!\left[r_t + \gamma \max_{a'} Q(s_{t+1}, a') - Q(s_t, a_t)\right]$$
+
+- **DQN**: 심층 신경망으로 최적 Q 함수를 근사합니다.
+
+$$Q_\phi(s, a) \approx Q^*(s, a)$$
+
+이번 강의에서는 시점을 바꾸어, **가치 함수를 학습하는 대신 정책(policy) 자체를 직접 파라미터화**하는 방법론을 다룹니다.
+
+---
+
+# 1. Policy Gradient (정책 경사법)
+
+## 왜 정책을 직접 최적화하는가?
+
+가치 기반(value-based) 방법은 최적 행동을 다음과 같이 선택합니다.
+
+$$a^*(s) \in \arg\max_a Q(s, a)$$
+
+- **이산 행동 공간**에서는 이 argmax를 모든 행동에 대해 열거하면 되므로 간단합니다.
+- 그러나 **연속 행동 공간** $a \in \mathbb{R}^d$에서는 $\arg\max_a Q(s,a)$가 일반적인 비선형 최적화 문제가 되어 풀기 어렵습니다.
+
+**Policy gradient의 핵심 아이디어**: 정책을 파라미터 $\theta$로 직접 표현하고,
+
+$$a \sim \pi_\theta(\cdot \mid s)$$
+
+기대 누적 보상(expected return)을 최대화하도록 $\theta$를 경사 상승(gradient ascent)으로 업데이트합니다.
+
+## 파라미터화된 정책 (Parameterized Policy)
+
+확률적 정책(stochastic policy)은 $\pi_\theta(a \mid s)$로 표기합니다. 행동 공간에 따라 두 가지 전형적인 형태가 있습니다.
+
+- **이산 행동**: 신경망 출력에 소프트맥스를 적용합니다.
+
+$$\pi_\theta(\cdot \mid s) = \text{softmax}(f_\theta(s))$$
+
+- **연속 행동**: 가우시안 분포로 표현합니다.
+
+$$\pi_\theta(a \mid s) = \mathcal{N}(\mu_\theta(s),\; \Sigma_\theta(s))$$
+
+**목적 함수(objective)**: 정책 $\pi_\theta$ 하에서 생성되는 궤적(trajectory)의 기대 누적 보상을 최대화합니다.
+
+$$J(\theta) = \mathbb{E}_{\tau \sim p_\theta(\tau)}\bigl[R(\tau)\bigr], \quad R(\tau) = \sum_{t=0}^{H} \gamma^t r_t$$
+
+여기서 $\tau = (s_0, a_0, \ldots, s_H, a_H, s_{H+1})$은 하나의 에피소드 궤적이며, $H$는 지평선(horizon)입니다.
+
+## 궤적 분포 (Trajectory Distribution)
+
+정책 $\pi_\theta$ 하의 궤적 확률은 다음과 같이 분해됩니다.
+
+$$p_\theta(\tau) = d_0(s_0) \prod_{t=0}^{H} T(s_{t+1} \mid s_t, a_t)\, \pi_\theta(a_t \mid s_t)$$
+
+- $d_0(s_0)$: 초기 상태 분포
+- $T(s_{t+1} \mid s_t, a_t)$: 환경의 전이 역학(transition dynamics)
+
+**핵심 관찰**: $\theta$에 의존하는 항은 오직 정책 $\pi_\theta(a_t \mid s_t)$뿐입니다. 초기 상태 분포와 환경 전이 역학은 $\theta$와 무관합니다. 이 사실이 정책 경사 계산을 단순하게 만드는 열쇠입니다.
+
+## Policy Gradient 직관 (Intuition)
+
+높은 누적 보상을 얻은 궤적이 있다면, 그 궤적에서 선택된 행동들이 앞으로 더 자주 선택되도록 해야 합니다. 이를 형식화하면,
+
+- $\nabla_\theta \log \pi_\theta(a_t \mid s_t)$: 행동 $a_t$의 로그 확률을 증가시키는 방향
+- 이 벡터에 궤적 보상(return)을 곱하면, **높은 보상을 얻은 행동의 확률은 증가**하고 **낮은 보상을 얻은 행동의 확률은 감소**합니다.
+
+$$\sum_t \nabla_\theta \log \pi_\theta(a_t \mid s_t) \cdot R(\tau)$$
+
+이것이 REINFORCE 알고리즘의 핵심 직관입니다.
+
+## Log-Derivative 트릭
+
+정책 경사 유도에 핵심적으로 사용되는 수학적 도구를 소개합니다.
+
+> **보조 정리 (Log-Derivative Trick)**
+>
+> 미분 가능한 확률 분포 $p_\theta(x)$에 대해,
+> $$\nabla_\theta p_\theta(x) = p_\theta(x)\, \nabla_\theta \log p_\theta(x)$$
+
+**증명**: 로그 미분 법칙에 의해
+
+$$\nabla_\theta \log p_\theta(x) = \frac{\nabla_\theta p_\theta(x)}{p_\theta(x)}$$
+
+양변에 $p_\theta(x)$를 곱하면 성립합니다. $\blacksquare$
+
+이 트릭은 **확률의 기울기를 로그 확률의 기울기로 변환**합니다. 로그 확률은 실제 계산에서 훨씬 다루기 쉽습니다(예: 정규화 상수 소거).
+
+## 궤적 로그 확률의 기울기
+
+> **보조 정리**
+>
+> $$\nabla_\theta \log p_\theta(\tau) = \sum_{t=0}^{H} \nabla_\theta \log \pi_\theta(a_t \mid s_t)$$
+
+**증명**: 궤적 분포의 로그를 취하면
+
+$$\log p_\theta(\tau) = \log d_0(s_0) + \sum_{t=0}^{H} \log T(s_{t+1} \mid s_t, a_t) + \sum_{t=0}^{H} \log \pi_\theta(a_t \mid s_t)$$
+
+$\theta$에 의존하는 항은 마지막 합산 항뿐이므로,
+
+$$\nabla_\theta \log p_\theta(\tau) = \sum_{t=0}^{H} \nabla_\theta \log \pi_\theta(a_t \mid s_t) \qquad \blacksquare$$
+
+환경의 전이 역학을 몰라도 정책 경사를 계산할 수 있는 이유가 여기에 있습니다.
+
+## REINFORCE 유도
+
+목적 함수의 기울기를 다음 단계로 유도합니다.
+
+**Step 1**: 목적 함수를 합산 형태로 전개합니다.
+
+$$J(\theta) = \mathbb{E}_{\tau \sim p_\theta(\tau)}[R(\tau)] = \sum_\tau p_\theta(\tau) R(\tau)$$
+
+**Step 2**: $\theta$에 대해 미분합니다.
+
+$$\nabla_\theta J(\theta) = \sum_\tau \nabla_\theta p_\theta(\tau)\, R(\tau)$$
+
+**Step 3**: Log-derivative 트릭을 적용합니다.
+
+$$= \sum_\tau p_\theta(\tau)\, \nabla_\theta \log p_\theta(\tau)\, R(\tau)$$
+
+**Step 4**: 기댓값 형태로 정리합니다.
+
+$$\nabla_\theta J(\theta) = \mathbb{E}_{\tau \sim p_\theta}\bigl[\nabla_\theta \log p_\theta(\tau)\, R(\tau)\bigr]$$
+
+**Step 5**: 궤적 로그 확률의 기울기 보조 정리를 대입합니다.
+
+$$\boxed{\nabla_\theta J(\theta) = \mathbb{E}_{\tau \sim p_\theta}\!\left[\sum_{t=0}^{H} \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, R(\tau)\right]}$$
+
+이것이 **REINFORCE 정책 경사 추정량(estimator)**입니다. 이 추정량은 **비편향(unbiased)**이지만, **분산이 매우 큰** 문제가 있습니다. 시각 $t$에서의 행동 $a_t$는 $t$ 이전의 보상을 바꿀 수 없는데, 과거 보상이 기울기 추정에 노이즈로 섞이기 때문입니다.
+
+---
+
+# 2. Reward-to-Go와 Baseline (분산 감소)
+
+## 기댓값이 0인 Score Function
+
+분산 감소의 핵심 도구가 되는 중요한 보조 정리를 먼저 소개합니다.
+
+> **보조 정리**
+>
+> 임의의 상태 $s$에 대해,
+> $$\mathbb{E}_{a \sim \pi_\theta(\cdot|s)}\bigl[\nabla_\theta \log \pi_\theta(a \mid s)\bigr] = 0$$
+
+**증명**: Log-derivative 트릭을 역방향으로 적용합니다.
+
+$$\mathbb{E}_{a \sim \pi_\theta}\bigl[\nabla_\theta \log \pi_\theta(a \mid s)\bigr] = \sum_a \pi_\theta(a \mid s)\, \nabla_\theta \log \pi_\theta(a \mid s)$$
+$$= \sum_a \nabla_\theta \pi_\theta(a \mid s) = \nabla_\theta \sum_a \pi_\theta(a \mid s) = \nabla_\theta 1 = 0 \qquad \blacksquare$$
+
+이 결과는 뒤에서 baseline을 빼도 기대 기울기가 변하지 않음을 보장하는 근거가 됩니다.
+
+## 왜 과거 보상을 제거할 수 있는가?
+
+시각 $t$에서의 행동 $a_t$가 선택되기 전까지의 역사를 다음과 같이 정의합니다.
+
+$$h_t = (s_0, a_0, r_0, \ldots, s_{t-1}, a_{t-1}, r_{t-1}, s_t)$$
+
+과거 보상 $r_k$ ($k < t$)는 이미 $h_t$에 의해 결정되어 있습니다. 따라서 조건부 기댓값의 탑 성질(tower property)을 이용하면,
+
+$$\mathbb{E}\bigl[\nabla_\theta \log \pi_\theta(a_t \mid s_t)\, r_k\bigr] = \mathbb{E}\!\left[r_k\, \mathbb{E}\bigl[\nabla_\theta \log \pi_\theta(a_t \mid s_t) \mid h_t\bigr]\right]$$
+
+$h_t$가 주어지면 남은 무작위성은 오직 $a_t \sim \pi_\theta(\cdot \mid s_t)$뿐이므로,
+
+$$\mathbb{E}\bigl[\nabla_\theta \log \pi_\theta(a_t \mid s_t) \mid h_t\bigr] = \sum_a \pi_\theta(a \mid s_t)\, \nabla_\theta \log \pi_\theta(a \mid s_t) = 0$$
+
+따라서,
+
+$$\mathbb{E}\bigl[\nabla_\theta \log \pi_\theta(a_t \mid s_t)\, r_k\bigr] = 0 \quad (k < t)$$
+
+**무엇을 조건부 기댓값 밖으로 꺼낼 수 있는가?**
+
+$h_t$가 주어졌을 때 이미 결정된 값들, 즉 $r_0, \ldots, r_{t-1}$, $s_t$, $b(s_t)$ 등 과거 상태의 함수는 밖으로 꺼낼 수 있습니다. 반면, $a_t$에 의존하는 $\nabla_\theta \log \pi_\theta(a_t \mid s_t)$, $r_t = r(s_t, a_t)$, 미래 보상 $r_{t+1}, r_{t+2}, \ldots$는 밖으로 꺼낼 수 없습니다.
+
+> **핵심**: 과거 보상은 기울기 항 $\nabla_\theta \log \pi_\theta(a_t \mid s_t)$에 대해 기댓값이 0인 노이즈일 뿐입니다. 따라서 제거해도 비편향성이 유지됩니다.
+
+## Reward-to-Go 정책 경사
+
+**Reward-to-go**를 다음과 같이 정의합니다.
+
+$$G_t = \sum_{k=t}^{H} \gamma^{k-t} r_k$$
+
+그러면 정책 경사를 다음과 같이 쓸 수 있습니다.
+
+$$\nabla_\theta J(\theta) = \mathbb{E}_{\tau \sim p_\theta}\!\left[\sum_{t=0}^{H} \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, G_t\right]$$
+
+전체 궤적 보상 $R(\tau)$ 대신 $G_t$를 사용함으로써, **행동 $a_t$는 오직 시각 $t$ 이후의 보상에 의해서만 강화**됩니다. 과거 보상이 제거되어 분산이 감소합니다.
+
+## Baseline
+
+Reward-to-go 추정량은 여전히 분산이 클 수 있습니다. **상태에만 의존하는 임의의 함수 $b(s_t)$를 빼도** 기대 기울기는 변하지 않습니다.
+
+$$\nabla_\theta J(\theta) = \mathbb{E}\!\left[\sum_{t=0}^{H} \nabla_\theta \log \pi_\theta(a_t \mid s_t)\bigl(G_t - b(s_t)\bigr)\right]$$
+
+**이유**: 앞서 증명한 보조 정리에 의해,
+
+$$\mathbb{E}_{a \sim \pi_\theta(\cdot|s)}\bigl[\nabla_\theta \log \pi_\theta(a \mid s)\, b(s)\bigr] = b(s)\, \mathbb{E}_{a \sim \pi_\theta}\bigl[\nabla_\theta \log \pi_\theta(a \mid s)\bigr] = 0$$
+
+따라서 $b(s_t)$를 빼도 기대값에는 영향이 없고, 분산만 줄일 수 있습니다. 최적의 baseline은 분산을 최소화하도록 선택됩니다.
+
+## 가치 함수 Baseline과 Advantage 추정량
+
+가장 널리 쓰이는 baseline은 **가치 함수(value function)**입니다.
+
+$$b(s_t) = V^\pi(s_t)$$
+
+이때 $G_t - V^\pi(s_t)$는 관측된 리턴이 기대 리턴보다 얼마나 좋은지를 측정합니다. 실제로는 $V^\pi$를 신경망 $V_\phi$로 근사하여 **어드밴티지 추정량(advantage estimate)**을 정의합니다.
+
+$$\hat{A}_t = G_t - V_\phi(s_t)$$
+
+정책 경사는 다음과 같이 됩니다.
+
+$$\nabla_\theta J(\theta) \approx \mathbb{E}\!\left[\sum_t \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, \hat{A}_t\right]$$
+
+- $\hat{A}_t > 0$: 행동 $a_t$가 평균보다 좋음 → 확률 **증가**
+- $\hat{A}_t < 0$: 행동 $a_t$가 평균보다 나쁨 → 확률 **감소**
+
+## Advantage 함수
+
+**진짜 Advantage 함수(true advantage function)**는 다음과 같이 정의됩니다.
+
+$$A^\pi(s, a) = Q^\pi(s, a) - V^\pi(s)$$
+
+이는 정책 $\pi$ 하에서 행동 $a$가 평균 행동보다 얼마나 더 좋은지를 측정합니다.
+
+- $A^\pi(s, a) > 0$: $a$는 평균보다 좋은 행동
+- $A^\pi(s, a) < 0$: $a$는 평균보다 나쁜 행동
+
+Advantage를 사용한 정책 경사:
+
+$$\nabla_\theta J(\theta) = \mathbb{E}\!\left[\sum_t \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, A^\pi(s_t, a_t)\right]$$
+
+---
+
+# 3. PPO와 RL 파인튜닝 (PPO and RL Fine-tuning)
+
+## 왜 PPO인가?
+
+Advantage 기반 정책 경사 업데이트는 다음과 같습니다.
+
+$$\nabla_\theta J(\theta) = \mathbb{E}\!\left[\nabla_\theta \log \pi_\theta(a_t \mid s_t)\, \hat{A}_t\right]$$
+
+**문제점**: 단순한 경사 업데이트는 파라미터 공간에서 작은 변화도 정책 공간에서 매우 큰 변화를 일으킬 수 있습니다. 새 정책이 이전 정책에서 너무 멀리 벗어나면, 이전 정책에서 수집한 Advantage 추정량이 새 정책에는 신뢰할 수 없게 됩니다.
+
+**PPO**는 새 정책이 이전 정책에서 너무 멀리 벗어나지 않도록 업데이트 크기를 제어합니다.
+
+## 정책 경사에서 로컬 목적 함수로
+
+Advantage 가중 정책 경사의 원래 지역 목적 함수(local objective)는 다음과 같습니다.
+
+$$L^{PG}(\theta) = \mathbb{E}\!\left[\sum_t \log \pi_\theta(a_t \mid s_t)\, \hat{A}_t\right]$$
+
+여기서 $\hat{A}_t$는 샘플링된 궤적에서 계산된 고정 스칼라로 취급합니다.
+
+- $\hat{A}_t > 0$이면 이 목적 함수를 최대화할 때 $\pi_\theta(a_t \mid s_t)$가 증가합니다.
+- $\hat{A}_t < 0$이면 $\pi_\theta(a_t \mid s_t)$가 감소합니다.
+
+**문제**: 샘플링된 궤적은 이전 정책 $\pi_{\theta_\text{old}}$에서 수집되었는데, 업데이트하려는 것은 새 정책 $\pi_\theta$입니다.
+
+## 중요도 샘플링 (Importance Sampling)
+
+분포 $p$에서의 기댓값을 추정하고 싶지만, 샘플은 다른 분포 $q$에서 온 경우:
+
+$$\mathbb{E}_{x \sim p}[f(x)] = \sum_x p(x) f(x) = \sum_x q(x) \frac{p(x)}{q(x)} f(x) = \mathbb{E}_{x \sim q}\!\left[\frac{p(x)}{q(x)} f(x)\right]$$
+
+샘플이 $q$에서 왔지만 $p$ 하의 기댓값을 원한다면, 각 샘플에 **중요도 가중치(importance weight)** $p(x)/q(x)$를 곱하면 됩니다.
+
+## 정책 업데이트에서의 중요도 샘플링
+
+데이터는 이전 정책에서 수집됩니다: $a_t \sim \pi_{\theta_\text{old}}(\cdot \mid s_t)$. 중요도 비율을 정의하면
+
+$$\rho_t(\theta) = \frac{\pi_\theta(a_t \mid s_t)}{\pi_{\theta_\text{old}}(a_t \mid s_t)}$$
+
+- $\rho_t(\theta) > 1$: 새 정책이 $a_t$에 더 높은 확률을 부여
+- $\rho_t(\theta) < 1$: 새 정책이 $a_t$에 더 낮은 확률을 부여
+
+이에 기반한 자연스러운 서러게이트 목적 함수(surrogate objective)는 다음과 같습니다.
+
+$$L^{\text{sur}}(\theta) = \mathbb{E}_t\bigl[\rho_t(\theta)\, \hat{A}_t\bigr]$$
+
+### 비율 목적 함수가 정책 경사 방향과 일치함을 보임
+
+$\theta = \theta_\text{old}$에서의 기울기를 계산합니다. 비율을 미분하면,
+
+$$\nabla_\theta \rho_t(\theta) = \frac{\nabla_\theta \pi_\theta(a_t \mid s_t)}{\pi_{\theta_\text{old}}(a_t \mid s_t)}$$
+
+Log-derivative 트릭 $\nabla_\theta \pi_\theta = \pi_\theta \nabla_\theta \log \pi_\theta$를 적용하면,
+
+$$\nabla_\theta \rho_t(\theta) = \rho_t(\theta)\, \nabla_\theta \log \pi_\theta(a_t \mid s_t)$$
+
+$\theta = \theta_\text{old}$에서 $\rho_t(\theta_\text{old}) = 1$이므로,
+
+$$\nabla_\theta L^{\text{sur}}(\theta)\Big|_{\theta=\theta_\text{old}} = \mathbb{E}_t\bigl[\nabla_\theta \log \pi_\theta(a_t \mid s_t)\, \hat{A}_t\bigr]$$
+
+이는 기존 정책 경사와 정확히 일치합니다. 즉, **비율 목적 함수는 이전 정책 근방에서 정책 경사 방향을 정확히 따릅니다.**
+
+## PPO 클리핑 목적 함수 (Clipped Objective)
+
+서러게이트 목적 함수 $L^{\text{sur}}$은 정책 경사 방향을 올바르게 따르지만, 업데이트가 지나치게 커지는 것을 막지 못합니다. PPO는 중요도 비율을 클리핑합니다.
+
+$$\rho_t(\theta) \in [1 - \epsilon,\; 1 + \epsilon]$$
+
+**PPO 클리핑 목적 함수**:
+
+$$L^{PPO}(\theta) = \mathbb{E}_t\!\left[\min\!\bigl(\rho_t(\theta)\,\hat{A}_t,\; \text{clip}(\rho_t(\theta), 1-\epsilon, 1+\epsilon)\,\hat{A}_t\bigr)\right]$$
+
+**클리핑 직관**:
+
+- $\hat{A}_t > 0$: $\pi_\theta(a_t \mid s_t)$를 늘리고 싶지만, 비율이 $1 + \epsilon$을 초과하면 이득이 더 이상 증가하지 않음 → 과도한 업데이트 방지
+- $\hat{A}_t < 0$: $\pi_\theta(a_t \mid s_t)$를 줄이고 싶지만, 비율이 $1 - \epsilon$ 미만으로 내려가면 이득이 더 이상 감소하지 않음 → 과도한 업데이트 방지
+
+이 설계 덕분에 PPO는 바닐라 REINFORCE보다 **실제로 훨씬 안정적**입니다.
+
+## LLM 생성을 강화학습으로 보기
+
+언어 모델에서도 강화학습의 언어를 그대로 적용할 수 있습니다.
+
+| RL 개념 | LLM에서의 대응 |
+|---|---|
+| 상태 $s$ | 프롬프트 $x$ |
+| 행동 $a$ | 다음 토큰 $y_t$ |
+| 정책 $\pi_\theta$ | 언어 모델 $\pi_\theta(y_t \mid x, y_{<t})$ |
+| 궤적 $\tau$ | 프롬프트 + 생성된 완성문 $(x, y)$ |
+
+완성문 전체의 확률:
+
+$$\pi_\theta(y \mid x) = \prod_{t=1}^{T} \pi_\theta(y_t \mid x, y_{<t})$$
+
+보상은 다양한 신호로부터 올 수 있습니다: 인간 선호 보상 모델, 검증 가능한 정답 정확도, 규칙 기반 보상, 안전성 또는 포맷팅 보상 등.
+
+## PPO for RLHF
+
+**RLHF(Reinforcement Learning from Human Feedback)**에서는 다음 과정을 따릅니다.
+
+1. 정책을 지도 학습으로 파인튜닝된 모델(SFT)로 초기화: $\pi_{\theta_\text{SFT}}$
+2. 보상 모델(reward model)이 스칼라 보상 $R(x, y)$를 제공
+3. **KL 패널티**를 포함한 RL 목적 함수를 최대화:
+
+$$\max_\theta\; \mathbb{E}_{y \sim \pi_\theta(\cdot|x)}\!\left[R(x, y) - \beta D_{KL}\bigl(\pi_\theta(\cdot \mid x) \;\|\; \pi_{\text{ref}}(\cdot \mid x)\bigr)\right]$$
+
+**KL 패널티의 역할**: KL 패널티가 없으면 정책이 보상 모델의 허점을 이용하여 참조 언어 모델에서 너무 멀리 벗어날 수 있습니다. KL 항은 정책이 원래 언어 모델의 특성을 유지하도록 강제합니다.
+
+언어 모델에서 PPO 비율은 토큰 단위로 계산됩니다.
+
+$$\rho_t(\theta) = \frac{\pi_\theta(y_t \mid x, y_{<t})}{\pi_{\theta_\text{old}}(y_t \mid x, y_{<t})}$$
+
+**PPO의 실용적 한계**: 어드밴티지를 추정하려면 별도의 가치 모델(value model)이 필요하여, 메모리와 구현 복잡도가 증가합니다.
+
+## PPO에서 GRPO로
+
+PPO는 어드밴티지를 추정하기 위해 학습된 가치 함수 $V_\phi(s_t)$를 사용합니다.
+
+$$\hat{A}_t = G_t - V_\phi(s_t)$$
+
+매우 큰 언어 모델에서는 별도의 가치 모델을 유지하고 학습하는 것이 비용이 많이 듭니다.
+
+> **GRPO 아이디어**: 같은 프롬프트에 대해 여러 개의 완성문을 샘플링하고, **그룹 내에서의 상대적 비교**로 어드밴티지를 추정합니다. 별도의 가치 네트워크(value critic)가 불필요합니다.
+
+## GRPO: 그룹 상대적 어드밴티지 (Group Relative Policy Optimization)
+
+**GRPO 절차**:
+
+1. 프롬프트 $x$에 대해 $G$개의 완성문을 샘플링합니다.
+
+$$y_1, \ldots, y_G \sim \pi_{\theta_\text{old}}(\cdot \mid x)$$
+
+2. 각 완성문의 보상을 계산합니다: $R_i = R(x, y_i)$
+
+3. 그룹 내에서 보상을 정규화하여 어드밴티지를 계산합니다.
+
+$$\hat{A}_i = \frac{R_i - \text{mean}(R_1, \ldots, R_G)}{\text{std}(R_1, \ldots, R_G)}$$
+
+**해석**: 어떤 완성문이 같은 프롬프트에 대한 다른 완성문보다 좋으면 양의 어드밴티지를 얻습니다.
+
+## GRPO 목적 함수
+
+완성문 $y_i = (y_{i,1}, \ldots, y_{i,T_i})$에 대해 토큰 단위 비율을 정의합니다.
+
+$$\rho_{i,t}(\theta) = \frac{\pi_\theta(y_{i,t} \mid x, y_{i,<t})}{\pi_{\theta_\text{old}}(y_{i,t} \mid x, y_{i,<t})}$$
+
+GRPO 클리핑 목적 함수:
+
+$$L^{GRPO}(\theta) = \mathbb{E}\!\left[\frac{1}{G}\sum_{i=1}^{G}\frac{1}{T_i}\sum_{t=1}^{T_i}\min\!\left(\rho_{i,t}(\theta)\,\hat{A}_i,\; \text{clip}(\rho_{i,t}(\theta), 1-\epsilon, 1+\epsilon)\,\hat{A}_i\right)\right]$$
+
+여기에 참조 정책에 대한 KL 패널티 $-\beta D_{KL}(\pi_\theta \| \pi_{\text{ref}})$를 더합니다.
+
+## PPO vs. GRPO 비교
+
+| | **PPO** | **GRPO** |
+|---|---|---|
+| **어드밴티지 추정** | 가치 모델 $V_\phi$ 사용 | 그룹 상대적 보상 정규화 |
+| **크리틱 / 가치 모델** | 일반적으로 필요 | 불필요 |
+| **주요 활용처** | 일반 RLHF, 제어 | LLM 추론 RL |
+| **안정화 메커니즘** | 클리핑 + KL | 클리핑 + KL |
+| **메모리 비용** | 높음 | 낮음 |
+
+> **LLM에서의 중요성**: 가치 모델을 제거하면 매우 큰 언어 모델의 RL 파인튜닝이 크게 단순화됩니다.
+
+---
+
+# 4. Actor-Critic 방법론 (Actor-Critic Methods)
+
+## Actor-Critic 구조
+
+Actor-critic 방법론은 두 가지 요소를 동시에 학습합니다.
+
+$$\underbrace{\text{상태 } s}_{\text{입력}} \xrightarrow{\text{Actor}} \underbrace{\pi_\theta(a \mid s)}_{\text{행동}} \quad\text{및}\quad \underbrace{\text{Critic}}_{\text{}} \rightarrow V_\phi(s) \text{ 또는 } Q_\phi(s, a)$$
+
+![Figure: Actor-Critic 구조 다이어그램. 상태 s가 Actor 네트워크 π_θ(a|s)와 Critic 네트워크 V_φ(s) 또는 Q_φ(s,a)에 동시에 입력된다. Actor는 행동을 선택하고, Critic은 가치 혹은 어드밴티지를 추정하여 Actor 학습의 학습 신호(분산 감소)를 제공한다.](./images/actor_critic_diagram.png)
+
+각 요소의 역할:
+
+- **Actor** $\pi_\theta(a \mid s)$: 행동을 선택합니다.
+- **Critic** $V_\phi(s)$ 또는 $Q_\phi(s, a)$: 가치 또는 어드밴티지를 추정합니다.
+- Critic은 분산을 감소시키고 Actor에 학습 신호를 제공합니다.
+
+## Critic 학습
+
+가치 크리틱은 다음 두 가지 방법으로 학습할 수 있습니다.
+
+**리턴 회귀(Monte Carlo)**:
+
+$$\min_\phi\; \mathbb{E}\!\left[\bigl(V_\phi(s_t) - G_t\bigr)^2\right]$$
+
+**TD 학습 (Temporal Difference)**:
+
+$$\min_\phi\; \mathbb{E}\!\left[\bigl(V_\phi(s_t) - [r_t + \gamma V_\phi(s_{t+1})]\bigr)^2\right]$$
+
+행동-가치 크리틱도 유사하게 학습합니다.
+
+$$\min_\phi\; \mathbb{E}\!\left[\bigl(Q_\phi(s_t, a_t) - [r_t + \gamma Q_\phi(s_{t+1}, a_{t+1})]\bigr)^2\right]$$
+
+학습된 Critic으로 Actor 업데이트를 위한 어드밴티지를 추정합니다.
+
+## Actor 업데이트
+
+어드밴티지 추정량 $\hat{A}_t$를 이용한 Actor 업데이트:
+
+$$\nabla_\theta J(\theta) \approx \mathbb{E}\!\left[\sum_t \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, \hat{A}_t\right]$$
+
+이는 다음 목적 함수에 대한 경사 상승으로 구현됩니다.
+
+$$J_{\text{actor}}(\theta) = \mathbb{E}\!\left[\log \pi_\theta(a_t \mid s_t)\, \hat{A}_t\right]$$
+
+- $\hat{A}_t > 0$: $a_t$의 확률을 **증가**시킵니다.
+- $\hat{A}_t < 0$: $a_t$의 확률을 **감소**시킵니다.
+
+## A2C / A3C (Advantage Actor-Critic)
+
+**Advantage Actor-Critic(A2C)**과 그 비동기 버전인 **A3C**는 어드밴티지를 두 가지 방식으로 추정합니다.
+
+**MC 어드밴티지 추정량**:
+
+$$\hat{A}_t = G_t - V_\phi(s_t)$$
+
+**TD 어드밴티지 추정량**:
+
+$$\hat{A}_t = r_t + \gamma V_\phi(s_{t+1}) - V_\phi(s_t)$$
+
+**Actor 업데이트**:
+
+$$\nabla_\theta \log \pi_\theta(a_t \mid s_t)\, \hat{A}_t$$
+
+**Critic 업데이트**:
+
+$$\min_\phi\; \bigl(V_\phi(s_t) - G_t\bigr)^2 \quad\text{또는}\quad \min_\phi\; \bigl(V_\phi(s_t) - [r_t + \gamma V_\phi(s_{t+1})]\bigr)^2$$
+
+---
+
+# 5. 연속 제어 Actor-Critic (Continuous Control Actor-Critic)
+
+## 왜 연속 제어에서 Actor-Critic이 필요한가?
+
+Q-러닝에서 타깃 계산에는 다음이 필요합니다.
+
+$$\max_{a'} Q(s', a')$$
+
+- **이산 행동**: $\max_{a' \in \mathcal{A}}$를 모든 행동에 대해 열거하면 됩니다.
+- **연속 행동** $a' \in \mathbb{R}^d$: 이 최대화는 고차원 비선형 연속 최적화 문제가 되어 매 업데이트마다 푸는 것이 불가능합니다.
+
+**해결책**: 최대화 행동을 근사적으로 반환하는 **Actor 네트워크**를 학습합니다.
+
+$$a = \pi_\theta(s)$$
+
+## DDPG (Deep Deterministic Policy Gradient)
+
+**DDPG**는 **결정론적(deterministic) Actor**를 사용합니다.
+
+$$a = \pi_\theta(s)$$
+
+**Critic**: $Q_\phi(s, a)$를 추정합니다.
+
+**Actor 목적 함수**: Critic을 최대화하도록 Actor를 학습합니다.
+
+$$\max_\theta J(\theta) = \mathbb{E}_{s \sim \mathcal{D}}\bigl[Q_\phi(s, \pi_\theta(s))\bigr]$$
+
+**체인 룰(chain rule)**을 이용한 기울기:
+
+$$\nabla_\theta J(\theta) = \mathbb{E}_{s \sim \mathcal{D}}\!\left[\nabla_a Q_\phi(s, a)\Big|_{a=\pi_\theta(s)}\, \nabla_\theta \pi_\theta(s)\right]$$
+
+**Critic 업데이트**: Q-러닝 스타일의 타깃을 사용합니다.
+
+$$y = r + \gamma Q_{\phi^-}(s', \pi_{\theta^-}(s'))$$
+
+$$\min_\phi\; \mathbb{E}_{(s,a,r,s') \sim \mathcal{D}}\!\left[\bigl(Q_\phi(s,a) - y\bigr)^2\right]$$
+
+DDPG의 주요 구성 요소:
+- **리플레이 버퍼(replay buffer)**: 과거 전이를 저장하여 재사용
+- **타깃 Critic** $Q_{\phi^-}$: 학습 안정화를 위한 느리게 업데이트되는 Critic 복사본
+- **타깃 Actor** $\pi_{\theta^-}$: 학습 안정화를 위한 느리게 업데이트되는 Actor 복사본
+
+## TD3 (Twin Delayed DDPG)
+
+TD3는 DDPG의 불안정성을 해결하기 위해 **세 가지 개선**을 도입합니다.
+
+**개선 1 — 클리핑된 이중 Q-러닝(Clipped Double Q-Learning)**:
+
+두 개의 Critic을 학습하고, 타깃에는 더 작은 값을 사용합니다.
+
+$$y = r + \gamma \min_{j=1,2} Q_{\phi^-_j}(s', \pi_{\theta^-}(s'))$$
+
+이는 Q 값의 과대 추정(overestimation)을 줄입니다.
+
+**개선 2 — 지연된 정책 업데이트(Delayed Policy Updates)**:
+
+Critic을 더 자주 업데이트하고 Actor는 덜 자주 업데이트합니다. Critic이 충분히 안정된 후 Actor를 업데이트함으로써 학습을 안정화합니다.
+
+**개선 3 — 타깃 정책 스무딩(Target Policy Smoothing)**:
+
+타깃 행동에 작은 클리핑 노이즈를 추가합니다.
+
+$$a' = \pi_{\theta^-}(s') + \epsilon, \quad \epsilon \sim \text{clip}(\mathcal{N}(0, \sigma), -c, c)$$
+
+이는 Q 함수가 특정 행동에 과도하게 집중하는 것을 방지합니다.
+
+## SAC (Soft Actor-Critic)
+
+SAC는 **확률적 정책** $a \sim \pi_\theta(\cdot \mid s)$를 사용하며, 기대 보상과 **엔트로피(entropy)** 를 동시에 최대화합니다.
+
+$$\max_\pi\; \mathbb{E}\!\left[\sum_t \gamma^t\bigl(r_t + \beta H(\pi(\cdot \mid s_t))\bigr)\right]$$
+
+엔트로피 $H(\pi(\cdot \mid s)) = -\mathbb{E}_{a \sim \pi}[\log \pi(a \mid s)]$를 이용하면, Actor 목적 함수는 다음과 같습니다.
+
+$$\max_\theta\; \mathbb{E}_{s \sim \mathcal{D},\, a \sim \pi_\theta(\cdot|s)}\!\left[\min_{j=1,2} Q_{\phi_j}(s, a) - \beta \log \pi_\theta(a \mid s)\right]$$
+
+**해석**: 높은 Q값의 행동을 선호하되, 엔트로피를 높게 유지하여 탐색(exploration)을 장려합니다.
+
+**SAC Critic 타깃**: 엔트로피 정규화와 클리핑된 이중 Q-러닝을 결합합니다.
+
+$$y = r + \gamma\, \mathbb{E}_{a' \sim \pi_\theta(\cdot|s')}\!\left[\min_{j=1,2} Q_{\phi^-_j}(s', a') - \beta \log \pi_\theta(a' \mid s')\right]$$
+
+각 Critic은 다음을 최소화합니다.
+
+$$\min_{\phi_j}\; \mathbb{E}_{(s,a,r,s') \sim \mathcal{D}}\!\left[\bigl(Q_{\phi_j}(s,a) - y\bigr)^2\right]$$
+
+## MuJoCo 연속 제어 벤치마크
+
+연속 제어 알고리즘의 성능은 주로 MuJoCo 물리 시뮬레이터의 로코모션(locomotion) 태스크로 평가합니다.
+
+![Figure: MuJoCo 연속 제어 벤치마크 환경들. 왼쪽 위부터 시계 방향으로: Hopper-v1(한 발 달리기), Walker2d-v1(두 발 걷기), HalfCheetah-v1(치타 달리기), Humanoid-v1(인간형 로봇), Ant-v1(네 발 로봇). 각 환경은 체크무늬 바닥 위에 관절 기반 로봇 모델이 주어지며, 에이전트는 관절 토크를 연속 행동으로 출력하여 빠르게, 효율적으로 이동하도록 학습해야 한다.](./images/mujoco_envs.png)
+
+대표적인 환경들:
+- **Hopper-v1**: 외발 로봇이 쓰러지지 않고 앞으로 이동
+- **Walker2d-v1**: 두 다리 로봇이 안정적으로 걷기
+- **HalfCheetah-v1**: 치타형 로봇이 최대 속도로 달리기
+- **Ant-v1**: 네 다리 로봇이 균형 있게 이동
+- **Humanoid-v1**: 인간형 로봇의 이족 보행
+
+## SAC 성능 비교 (SAC Example)
+
+![Figure: MuJoCo 6개 환경에서 SAC(주황), DDPG(초록), PPO(갈색), SQL(분홍), TD3(보라) 알고리즘의 학습 곡선 비교. 가로축은 환경 상호작용 횟수(step 수, 단위: 백만), 세로축은 평균 누적 보상(average return). 음영 부분은 여러 시드 간의 분산을 나타낸다. 전반적으로 SAC(주황선)가 대부분의 환경에서 가장 높은 최종 성능과 빠른 수렴 속도를 보이며, DDPG(초록선)는 상대적으로 낮은 성능을 보인다. Humanoid와 같은 복잡한 환경에서 SAC의 우위가 특히 두드러진다.](./images/sac_results.png)
+
+이 결과에서 확인할 수 있는 주요 사실:
+
+- **SAC**가 거의 모든 환경에서 가장 높은 최종 성능(최대 엔트로피 목적 함수 덕분에 탐색과 활용이 균형 잡힘)을 달성합니다.
+- **DDPG**는 결정론적 정책으로 인해 탐색이 부족하여 성능이 낮은 경향이 있습니다.
+- **PPO**는 이산 행동 공간에 더 적합하여 연속 제어에서는 상대적으로 낮은 성능을 보입니다.
+- **TD3**는 DDPG 대비 개선되었으나 SAC보다는 대체로 낮습니다.
+
+---
+
+# 6. 요약 (Summary)
+
+## 정책 기반 방법론 비교
+
+| 방법론 | 정책 유형 | Critic? | 핵심 아이디어 |
+|---|---|---|---|
+| **REINFORCE** | 확률적 | 없음 | 점수 함수 기반 정책 경사 |
+| **A2C/A3C** | 확률적 | $V_\phi(s)$ | 가치 크리틱을 이용한 어드밴티지 baseline |
+| **DDPG** | 결정론적 | $Q_\phi(s,a)$ | 결정론적 Actor로 연속 행동 처리 |
+| **TD3** | 결정론적 | 이중 Q 크리틱 | 과대 추정 감소 및 DDPG 안정화 |
+| **SAC** | 확률적 | 이중 Q 크리틱 | 최대 엔트로피 Actor-Critic |
+
+## 강의 전체 요약
+
+이번 강의에서 다룬 핵심 내용을 정리하면 다음과 같습니다.
+
+- **Policy gradient**: 정책 $\pi_\theta(a \mid s)$를 직접 최적화합니다. 가치 기반 방법과 달리 연속 행동 공간을 자연스럽게 처리할 수 있습니다.
+
+- **REINFORCE 기울기**:
+
+$$\nabla_\theta J(\theta) = \mathbb{E}\!\left[\sum_t \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, G_t\right]$$
+
+- **Reward-to-go와 Baseline**: 과거 보상 제거(reward-to-go)와 baseline 빼기를 통해 비편향성을 유지하면서 분산을 감소시킵니다.
+
+- **Advantage 함수**: $A^\pi(s, a) = Q^\pi(s, a) - V^\pi(s)$는 평균 행동 대비 특정 행동의 상대적 가치를 측정합니다.
+
+- **PPO**: 중요도 샘플링과 클리핑을 통해 정책 업데이트의 크기를 제어합니다. RLHF의 표준 알고리즘입니다.
+
+- **GRPO**: 가치 모델 없이 그룹 상대적 어드밴티지로 LLM을 효율적으로 RL 파인튜닝합니다.
+
+- **Actor-Critic**: Actor $\pi_\theta$와 Critic $V_\phi$ 또는 $Q_\phi$를 동시에 학습합니다.
+
+- **DDPG, TD3, SAC**: 연속 제어를 위한 주요 Actor-Critic 알고리즘으로, MuJoCo 벤치마크에서 SAC가 가장 좋은 성능을 보입니다.

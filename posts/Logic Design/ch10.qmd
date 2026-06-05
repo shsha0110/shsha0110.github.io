@@ -1,0 +1,512 @@
+---
+title: "[Digital Design] 10. CPLD와 FPGA 아키텍처"
+description: "프로그래머블 논리 소자의 핵심 패밀리인 CPLD와 FPGA의 내부 구조, LUT 기반 함수 구현 원리, 그리고 Place & Route 기반 CAD 설계 흐름을 체계적으로 정리합니다."
+author: "유성현"
+date: "2026-06-01"
+categories: [Digital Design, FPGA, CPLD, Computer Architecture, Hardware]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+# 들어가며: 현대적 설계 방법론 (Modern Design Method)
+
+디지털 회로를 설계할 때, 과거에는 기본 논리 게이트를 직접 배선하는 방식이 주를 이루었습니다. 하지만 회로의 복잡도가 급격히 증가하면서 **CAD(Computer-Aided Design) 툴**과 **프로그래머블 논리 소자(PLD: Programmable Logic Device)**를 결합한 현대적 설계 방법론이 업계 표준으로 자리잡았습니다.
+
+현대 설계 흐름에서 주로 활용하는 소자 유형은 다음과 같습니다:
+
+- **RAM / ROM**: 데이터 저장 및 조합 논리 구현
+- **CPLD (Complex Programmable Logic Device)**: 중규모 복잡도의 논리 구현에 적합한 비휘발성 프로그래머블 소자
+- **FPGA (Field Programmable Gate Array)**: 대규모 설계 및 병렬 처리에 적합한 고밀도 프로그래머블 소자
+
+대표적인 제품군으로는 **Xilinx XC9500 CPLD 패밀리**와 **XC4000 FPGA 패밀리**가 있으며, 이를 통해 다음이 가능합니다:
+
+- 광범위한 **조합 논리 회로(Combinational Circuit)** 구현
+- 광범위한 **순차 논리 회로(Sequential Circuit)** 구현
+- CAD 툴이 VHDL, 스케매틱 등 고수준 명세로부터 **fitting/place-and-route** 과정을 자동으로 수행
+
+---
+
+# 1. PLD (Programmable Logic Device)
+
+PLD는 가장 기본적인 형태의 프로그래머블 소자입니다. 핵심 구조는 **프로그래머블 AND 배열**과 **고정 OR 배열**로 구성되며, 각 출력에는 **출력 로직 매크로셀(Output Logic Macrocell, OLMC)**이 연결됩니다.
+
+## 출력 로직 매크로셀의 두 가지 모드
+
+![Figure: PLD의 전체 회로도. 왼쪽의 대형 프로그래머블 AND 배열(교차점의 × 기호는 프로그래밍된 AND 연결을 의미)이 8개의 출력 매크로셀(O1~O8)에 연결됩니다. 오른쪽 상단 (a)는 Registered Output Logic Macrocell의 회로도로, OR 게이트 출력이 D 플립플롭을 거쳐 나오는 순차 출력 구조이며, (b)는 Combinational Output Logic Macrocell로 D 플립플롭이 우회됩니다. 하단의 수식은 예시 회로의 불 대수 표현입니다.](./images/fig01_pld_structure.png)
+
+매크로셀은 두 가지 모드로 구성할 수 있습니다:
+
+- **(a) Registered 출력 모드**: OR 게이트 출력이 D 플립플롭을 거쳐 나옵니다. 순차 회로 구현에 사용합니다.
+- **(b) Combinational 출력 모드**: D 플립플롭을 우회하여 OR 게이트 출력이 직접 핀으로 나옵니다. 조합 회로 구현에 사용합니다.
+
+## 예시 회로의 불 대수 표현
+
+슬라이드의 예시 PLD 회로에서 $Q_1, Q_2$는 현재 상태, $X, Y$는 외부 입력입니다. 다음 상태(D 입력)와 출력 방정식은 아래와 같습니다:
+
+$$D_1 = Q_1 X + Q_2 \bar{Q}_1 Y$$
+
+$$D_2 = Q_1 \bar{X} + \bar{Q}_2 Q_1$$
+
+$$Z = Q_1 Q_2$$
+
+각 곱항(Product Term)이 AND 배열에서 생성되고, 이 곱항들의 합이 OR 게이트를 통해 각 매크로셀로 전달됩니다. 프로그래밍은 AND 배열의 각 교차점(퓨즈 또는 EEPROM 셀)을 연결하거나 끊어서 이루어집니다.
+
+---
+
+# 2. 일반 CPLD 아키텍처 (General CPLD Architecture)
+
+CPLD는 여러 개의 PLD 블록을 하나의 칩에 집적하고, 이들을 프로그래머블 인터커넥트로 연결한 소자입니다. 일반적인 CPLD는 세 가지 주요 구성 요소로 이루어집니다:
+
+- **PLD 블록 (Function Block)**: 실제 논리 기능을 수행하는 핵심 연산 단위
+- **프로그래머블 인터커넥트 (Programmable Interconnect)**: PLD 블록 간의 신호 연결을 프로그래밍할 수 있는 중앙 스위치 네트워크
+- **I/O 블록 (I/O Block)**: 칩 외부 핀과 내부 로직을 연결하는 인터페이스 단위
+
+![Figure: CPLD의 일반 아키텍처. 칩 내부 중앙의 Programmable Interconnect를 중심으로 4개의 PLD 블록이 배치되며, 칩 경계부를 따라 입출력 블록(작은 사각형)이 배치됩니다. I/O 블록은 외부 핀과 내부 PLD 블록 사이의 신호를 중개합니다.](./images/fig02_cpld_general_arch.png)
+
+---
+
+# 3. Xilinx 9500 패밀리 아키텍처
+
+Xilinx XC9500은 산업 표준 CPLD 제품군입니다. 전체 아키텍처는 다음과 같습니다.
+
+![Figure: Xilinx XC9500 CPLD의 전체 아키텍처. 왼쪽의 I/O Blocks가 중앙의 Switch Matrix와 연결되고, Switch Matrix는 오른쪽의 4개 Function Block(각 18 매크로셀)에 36비트 버스로 신호를 공급합니다. 각 Function Block은 18비트 피드백 경로를 통해 Switch Matrix로 출력을 되돌려 보냅니다. 하단에는 전용 글로벌 신호인 I/O/GCK(클럭 3개), I/O/GSR(글로벌 셋/리셋 1개), I/O/GTS(글로벌 3-상태 2 또는 4개)가 표시됩니다.](./images/fig03_xc9500_arch.png)
+
+주요 구조적 특징:
+
+- **Switch Matrix**: 외부 입력 69개 + 매크로셀 출력 72개를 수신하여, 각 Function Block의 AND 배열로 36개 신호씩 라우팅합니다.
+- **Function Block 4개**: 각각 18개의 매크로셀을 포함합니다.
+- **전용 글로벌 신호**:
+  - `I/O/GCK`: 글로벌 클럭 3개 — 모든 플립플롭에 낮은 지연으로 동시 공급
+  - `I/O/GSR`: 글로벌 셋/리셋 1개 — 파워온 초기화 등에 사용
+  - `I/O/GTS`: 글로벌 3-상태 출력 인에이블 2~4개
+
+## 3-1. Function Block (기능 블록)
+
+Function Block은 CPLD에서 실제 논리 연산이 수행되는 핵심 단위입니다.
+
+![Figure: Xilinx 9500 Function Block의 내부 구조. Switch Matrix로부터 36비트가 프로그래머블 AND 배열로 입력되고, 생성된 곱항들이 Product-Term Allocator를 통해 18개의 매크로셀(Macrocell 1~18)로 배분됩니다. 각 매크로셀 내부에는 D/T 플립플롭, 셋/리셋 제어, 출력 인에이블 로직이 포함되며, 매크로셀 간 곱항 공유(상단 및 하단 인접 매크로셀 연결)를 통해 많은 곱항이 필요한 복잡한 함수도 구현할 수 있습니다.](./images/fig04_function_block.png)
+
+Function Block의 내부 구성 상세:
+
+- **프로그래머블 AND 배열**: Switch Matrix로부터 36개의 신호(참/보수 모두)를 받아 곱항을 생성합니다. XC9500의 Function Block은 매크로셀당 최대 5개의 곱항을 직접 할당받고, Product-Term Allocator를 통해 인접 매크로셀로부터 추가 곱항을 빌릴 수 있습니다.
+- **Product-Term Allocator**: 생성된 곱항을 각 매크로셀에 유연하게 배분합니다. 필요시 인접 매크로셀의 잔여 곱항을 빌려 사용합니다.
+- **매크로셀 내부 구조**:
+  - D/T 플립플롭 (레지스터 또는 조합 출력 선택 가능)
+  - Product-term 기반의 셋(S), 리셋(R), 클럭 인에이블, 출력 인에이블(OE)
+  - 글로벌 셋/리셋(GSR) 신호 수용
+  - Switch Matrix로의 피드백 경로
+
+## 3-2. I/O Block (CPLD용)
+
+I/O Block은 내부 매크로셀 출력과 외부 핀 사이의 인터페이스를 담당합니다.
+
+![Figure: Xilinx 9500 I/O Block의 상세 회로도. 내부에서 외부 방향(출력 경로)에는 macrocell의 OUT 신호와 PTOE(Product-Term Output Enable) 신호가 있고, 출력 드라이버 앞에 멀티플렉서 M0가 PTOE와 Global OE(I/O/GTS) 중 하나를 선택합니다. 외부에서 내부 방향(입력 경로)은 ESD 보호 다이오드 D1, D2를 거쳐 입력 버퍼가 Switch Matrix로 신호를 전달합니다. 슬루율 제어(Slew-rate control), 사용자 프로그래머블 Pull-up 저항, 사용자 프로그래머블 Ground가 포함됩니다.](./images/fig05_cpld_io_block.png)
+
+주요 기능:
+
+- **입력 버퍼**: ESD 보호 다이오드(D1, D2)와 입력 버퍼를 통해 외부 신호를 Switch Matrix로 전달합니다.
+- **출력 드라이버**: 3-상태 출력(OE로 제어). PTOE(곱항 기반 출력 인에이블) 또는 Global OE 중 선택 가능합니다.
+- **슬루율 제어(Slew-rate control)**: 출력 신호의 전이 속도를 조절하여 EMI를 줄일 수 있습니다.
+- **Pull-up 저항 및 User-programmable Ground**: 미사용 핀 처리 등에 활용합니다.
+
+## 3-3. Switch Matrix (스위치 매트릭스)
+
+Switch Matrix는 CPLD 전체의 글로벌 인터커넥트입니다.
+
+| 항목 | 수치 |
+|------|------|
+| 입력 (매크로셀 출력) | 72개 |
+| 입력 (외부 핀) | 69개 |
+| 출력 (각 FB의 AND 배열로) | 36개 × 4 FB |
+
+Function Block이 4개이므로, Switch Matrix는 총 141개의 입력 신호 중에서 각 FB에 36개를 선택하여 공급하는 **크로스바(cross-bar) 스위치** 구조입니다. 이 구조가 CPLD의 **예측 가능하고 일정한 전파 지연**이라는 특성을 만들어 냅니다.
+
+## 3-4. 프로그래머블 요소 총정리
+
+올바른 동작을 위해 반드시 프로그래밍되어야 하는 요소를 정리하면 다음과 같습니다:
+
+| 구성 요소 | 프로그래머블 항목 |
+|-----------|-----------------|
+| **Function Block** | ① AND 배열의 교차점 연결, ② Product-Term Allocator 배분 경로, ③ 매크로셀 내 멀티플렉서 선택 |
+| **I/O Block** | ④ 3-상태 드라이버 출력 인에이블 소스 선택 (PTOE vs. Global OE) |
+| **Switch Matrix** | ⑤ 141개 입력 → 각 FB AND 배열 36개 연결 |
+
+> 다행히 **CAD 툴의 Fitting 소프트웨어**가 VHDL/Verilog/스케매틱 등 고수준 설계 명세로부터 이 모든 프로그래밍 정보를 자동으로 결정해 줍니다.
+
+## 3-5. 설계 결과 확인 (View of Fitted Design)
+
+엘리베이터 시스템 컨트롤러를 **XC9536-5-PC44** (44핀 패키지, 2개의 Function Block, 총 36 매크로셀)에 구현한 결과를 CAD 툴로 확인할 수 있습니다.
+
+![Figure: XC9536-5-PC44에 피팅(Fitting)된 엘리베이터 컨트롤러의 설계 뷰. FB1(왼쪽)과 FB2(오른쪽) 각각의 18개 매크로셀(MC1~MC18) 중 색이 칠해진 셀이 사용된 자원입니다. clk(5번 핀), clrdn(3번 핀), dn(8번 핀), clrup(9번 핀), econp(11번) 등이 입력으로, clrgo(44번), gom(37번), eclose(36번), poc(35번), up(34번), eopen(28번) 등이 출력으로 할당되어 있습니다.](./images/fig06_cpld_fitted_design.png)
+
+---
+
+# 4. 일반 FPGA 아키텍처 (General FPGA Architecture)
+
+FPGA는 CPLD에 비해 **훨씬 많은 수의 작은 블록**들로 구성됩니다. 이것이 FPGA와 CPLD의 근본적인 아키텍처 차이입니다. FPGA는 LUT 기반의 작은 CLB를 수천~수백만 개 집적하여 대규모 설계를 지원합니다.
+
+## FPGA의 3가지 기본 구성 요소
+
+![Figure: FPGA의 일반 아키텍처 평면도. 칩 중앙부는 격자(grid) 형태로 배열된 프로그래머블 로직 블록(CLB, 내부의 작은 사각형)으로 가득 채워집니다. CLB와 CLB 사이의 가로·세로 채널에는 프로그래머블 인터커넥트 배선(음영 직선)이 배치됩니다. 칩 경계부의 가장 바깥쪽을 따라 I/O 패드(경계 사각형)가 배치됩니다.](./images/fig07_fpga_general_arch.png)
+
+**FPGA의 3가지 핵심 구성 요소**:
+
+1. **CLB (Configurable Logic Block)**: 실제 논리 기능을 수행하는 프로그래머블 블록입니다. Look-Up Table(LUT)과 D 플립플롭으로 구성됩니다.
+
+2. **IOB (Input/Output Block)**: 칩 경계부에 위치하며, 패키지의 I/O 핀과 연결됩니다. 입출력 레지스터, 슬루율 제어, 풀업/풀다운 저항 등을 포함합니다.
+
+3. **프로그래머블 인터커넥트 (Programmable Interconnect)**: CLB와 IOB를 연결하는 배선 자원으로, 다양한 길이의 세그먼트와 프로그래머블 스위치 매트릭스(PSM)로 구성됩니다.
+
+---
+
+# 5. Configurable Logic Block (CLB)
+
+CLB는 FPGA의 핵심 연산 단위입니다. 여기서는 Xilinx XC4000 패밀리의 CLB 구조를 기준으로 설명합니다.
+
+![Figure: Xilinx XC4000 CLB의 상세 내부 회로도. 왼쪽에는 4입력 LUT인 F(F1-F4)와 G(G1-G4), 그리고 3입력 LUT인 H(F출력, G출력, H1)가 배치됩니다. 오른쪽에는 2개의 D 플립플롭(FF1, FF2)이 있으며, 각 플립플롭의 D 입력·CLK·EN은 멀티플렉서(M7/M9/M10, M12/M14/M15)로 개별 선택됩니다. 출력은 Y(G 또는 H), YQ(FF1 출력 QA), X(F 또는 H), XQ(FF2 출력 QB)의 4가지입니다. K는 외부 CLK 입력, C1-C4는 글로벌 제어 입력입니다.](./images/fig08_clb_structure.png)
+
+CLB의 주요 구성 요소 정리:
+
+- **F(F1~F4)**: 4입력 LUT (내부적으로 16×1 SRAM). F1, F2, F3, F4 네 입력에 대한 임의의 불 함수를 구현합니다.
+- **G(G1~G4)**: 4입력 LUT (16×1 SRAM). G1, G2, G3, G4 입력에 대한 임의 함수를 구현합니다.
+- **H(F_out, G_out, H1)**: 3입력 LUT (8×1 SRAM). F의 출력, G의 출력, 그리고 외부 입력 H1에 대한 임의 함수를 구현합니다.
+- **FF1, FF2**: 2개의 D 플립플롭. 클럭, 인에이블, 셋/리셋을 개별적으로 설정합니다.
+
+## 5-1. LUT(Look-Up Table)의 동작 원리
+
+LUT의 핵심 아이디어는 다음과 같습니다.
+
+> **임의의 $n$입력 불 함수는 $2^n$행짜리 진리표로 완전히 표현되며, 이 진리표를 SRAM에 저장하면 임의의 함수를 구현할 수 있습니다.**
+
+4입력 LUT(F 또는 G)의 동작 원리:
+
+- 내부에 $2^4 = 16$행의 진리표를 저장하는 **16×1 SRAM**이 있습니다.
+- 입력(F1~F4)이 SRAM의 **주소(address)**가 됩니다.
+- SRAM이 출력하는 **데이터 1비트**가 해당 입력 조합에서의 함수 값입니다.
+- SRAM은 **설정(configuration) 시간**에 원하는 함수의 진리표 내용으로 로드됩니다.
+
+예를 들어, 4입력 AND 함수를 LUT에 구현하려면 SRAM의 16개 셀 중 주소 `1111`(모두 1)에만 1을, 나머지 15개에 0을 저장하면 됩니다. H LUT는 $2^3 = 8$행의 SRAM(8×1)을 사용합니다.
+
+## 5-2. 예시: 9입력 홀수 패리티 함수
+
+단일 CLB로 9입력 패리티 함수를 구현하는 예입니다. 목표 함수는 다음과 같습니다:
+
+$$H = 1 \quad \text{(입력 9개 중 1의 개수가 홀수인 경우)}$$
+$$H = 0 \quad \text{(입력 9개 중 1의 개수가 짝수인 경우)}$$
+
+**구현 전략**: F, G, H LUT를 계층적으로 조합합니다.
+
+$$F(F_1, F_2, F_3, F_4) = F_1 \oplus F_2 \oplus F_3 \oplus F_4 \quad \text{(4입력 XOR)}$$
+
+$$G(G_1, G_2, G_3, G_4) = G_1 \oplus G_2 \oplus G_3 \oplus G_4 \quad \text{(4입력 XOR)}$$
+
+$$H(F_{\text{out}}, G_{\text{out}}, H_1) = F_{\text{out}} \oplus G_{\text{out}} \oplus H_1 \quad \text{(3입력 XOR)}$$
+
+이를 통해 $F_1, F_2, F_3, F_4, G_1, G_2, G_3, G_4, H_1$ 총 **9개 입력의 패리티**를 하나의 CLB에서 계산합니다.
+
+아래 진리표는 각 LUT가 저장하는 내용의 일부를 나타냅니다:
+
+| 주소 (입력 조합) | F/G LUT 저장값 (XOR) |
+|-----------------|----------------------|
+| 0000 | 0 |
+| 0001 | 1 |
+| 0010 | 1 |
+| 0011 | 0 |
+| 0100 | 1 |
+| ... | ... |
+| 1111 | 0 |
+
+## 5-3. F, G, H의 조합 가능성 (Power of F, G, H)
+
+단일 CLB에서 구현 가능한 함수의 범위를 정리하면 다음과 같습니다.
+
+**① 4입력 임의 함수 + 4입력 임의 함수 (독립적 사용)**
+
+- F와 G를 독립적으로 사용하여 각각 4입력 임의 함수를 출력(X, Y)으로 제공합니다.
+
+**② 임의의 5입력 함수**
+
+셰넌(Shannon) 전개를 이용한 분해:
+
+$$H_1 = v_5 \quad \text{(5번째 변수를 H1에 연결)}$$
+
+$$F(v_1, v_2, v_3, v_4) = f(v_1, v_2, v_3, v_4,\; v_5=1) \quad \text{($v_5 = 1$일 때의 코팩터)}$$
+
+$$G(v_1, v_2, v_3, v_4) = f(v_1, v_2, v_3, v_4,\; v_5=0) \quad \text{($v_5 = 0$일 때의 코팩터)}$$
+
+$$H = H_1 \cdot F + \overline{H_1} \cdot G = v_5 \cdot f|_{v_5=1} + \overline{v_5} \cdot f|_{v_5=0} = f(v_1, \ldots, v_5) \quad \checkmark$$
+
+F와 G가 동일한 4개 입력을 받고, H1이 5번째 입력으로 작용하는 MUX 구조입니다.
+
+**③ 4입력 임의 함수 F + 일부 6입력 함수**
+
+F와 G가 서로 다른 4입력 집합을 받되 일부 입력을 공유하는 경우, 6개의 고유한 변수를 처리할 수 있습니다.
+
+**④ 일부 9입력 함수**
+
+F, G, H를 모두 계층적으로 조합하는 경우입니다 (위의 패리티 예시가 해당).
+
+$$H\bigl(F(F_1, F_2, F_3, F_4),\; G(G_1, G_2, G_3, G_4),\; H_1\bigr)$$
+
+즉, 최대 **9개의 서로 다른 입력 변수**를 처리할 수 있는 유연한 구조입니다.
+
+## 5-4. 2개의 D 플립플롭 설정
+
+CLB 내 FF1(YQ 출력)과 FF2(XQ 출력) 각각은 다음과 같이 프로그래밍 가능합니다:
+
+- **D 입력 선택 (멀티플렉서 M7, M12)**: F 출력, G 출력, H 출력, 또는 외부 DIN/H2 중 선택
+- **CLK 선택 (멀티플렉서 M9, M14)**: 외부 클럭 K 또는 반전 클럭 $\bar{K}$ 중 선택
+- **Enable 선택 (멀티플렉서 M10, M15)**: 항상 1(인에이블 고정) 또는 외부 EC 신호 중 선택
+- **S/R 제어**: 설정 시 Set 또는 Reset 동작 선택, 글로벌 셋/리셋(S/R 핀) 또는 곱항 기반 S/R 사용 가능
+
+## 5-5. CLB 출력 구성
+
+CLB는 4가지 출력을 제공합니다:
+
+| 출력 핀 | 소스 |
+|---------|------|
+| **Y** | G 출력 또는 H 출력 |
+| **YQ** | 글로벌 제어 M6 또는 FF1의 $Q_y$ |
+| **X** | F 출력 또는 H 출력 |
+| **XQ** | 글로벌 제어 M4 또는 FF2의 $Q_x$ |
+
+여기서 XQ와 YQ는 D 입력 선택(F, G, H, DIN 중 어느 것)에 따라 달라집니다.
+
+---
+
+# 6. CLB 구성 예시: 74x166 (8비트 PISO 시프트 레지스터)
+
+**74x166**은 8비트 직렬/병렬 입력, 직렬 출력(SIPO) 시프트 레지스터입니다.
+
+**핀 구성**:
+- 입력: `SER`(직렬 입력), `A~H`(병렬 8비트 입력), `EN`(클럭 인에이블), `LD`(병렬 로드 선택), `CLK`
+- 출력: `QA~QH` (통상 QH만 외부 핀)
+
+## 6-1. 다음 상태 방정식
+
+대표 3개 비트(A, B, H)에 대한 다음 상태(Next-State) 방정식:
+
+$$D_A = \overline{EN} \cdot Q_A + EN \cdot \overline{LD} \cdot SER + EN \cdot LD \cdot A_{in}$$
+
+$$D_B = \overline{EN} \cdot Q_B + EN \cdot \overline{LD} \cdot Q_A + EN \cdot LD \cdot B_{in}$$
+
+$$D_H = \overline{EN} \cdot Q_H + EN \cdot \overline{LD} \cdot Q_G + EN \cdot LD \cdot H_{in}$$
+
+각 항의 의미:
+
+- $\overline{EN} \cdot Q_i$: 클럭 인에이블 비활성 → **현재 상태 유지(Hold)**
+- $EN \cdot \overline{LD} \cdot Q_{i-1}$: 인에이블 + 시프트 모드(LD=0) → **이전 비트 값으로 우측 시프트**
+- $EN \cdot LD \cdot \text{(병렬 입력)}$: 인에이블 + 로드 모드(LD=1) → **병렬 데이터 로드**
+
+## 6-2. 5변수 함수의 CLB 구현
+
+$D_A$는 $\{EN, LD, Q_A, SER, A_{in}\}$ **5개의 변수**를 가집니다. 4입력 LUT 한 개로는 부족하므로, 셰넌 전개를 활용합니다:
+
+- **H1 = EN** (5번째 변수로 지정)
+
+$$F = D_A|_{EN=1} = \overline{LD} \cdot SER + LD \cdot A_{in} \quad \text{(4입력 LUT, 실제 사용 변수: LD, SER, } A_{in})$$
+
+$$G = D_A|_{EN=0} = Q_A \quad \text{(4입력 LUT, 실제 사용 변수: } Q_A)$$
+
+$$H = H_1 \cdot F + \overline{H_1} \cdot G = EN \cdot \bigl(\overline{LD} \cdot SER + LD \cdot A_{in}\bigr) + \overline{EN} \cdot Q_A = D_A \quad \checkmark$$
+
+$EN = 1$이면 H = F(시프트/로드 연산), $EN = 0$이면 H = G($Q_A$ 유지)가 됩니다.
+
+![Figure: 74x166의 A 비트 구현을 위한 CLB 내부 배선도. G LUT 입력: G4=S1(=EN), G3=S0(=LD), G2=QA, G1=RIN(=SER)이며, G는 EN=0일 때의 유지 함수를 구현합니다. F LUT 입력: F4=S1, F3=S0, F2=QB(인접 비트), F1=A(병렬 입력)이며, F는 EN=1일 때의 시프트·로드 함수를 구현합니다. H LUT는 H1=EN으로 F와 G를 MUX하여 최종 DA를 계산합니다. CLK는 K, FF1의 YQ 출력이 QA가 됩니다.](./images/fig09_clb_74x166_qa.png)
+
+## 6-3. 필요한 CLB 수 분석
+
+- 플립플롭만 기준으로는: 8 FF ÷ 2 FF/CLB = **4개 CLB**로 보입니다.
+- 그러나, **각 비트의 D 방정식이 5변수 함수이므로, 해당 CLB의 F, G, H 세 LUT를 모두 소비합니다**.
+- 따라서 한 CLB에서 두 비트의 D 방정식을 동시에 구현하는 것은 불가능합니다.
+- 결론: **비트당 1개 CLB, 총 8개 CLB** 필요.
+
+이 예시는 **논리 자원(LUT)이 레지스터(FF) 자원보다 실제 병목이 될 수 있음**을 잘 보여줍니다.
+
+---
+
+# 7. I/O Block (IOB) — FPGA
+
+FPGA의 IOB는 **I/O 핀 1개당 1개**씩 할당됩니다.
+
+![Figure: Xilinx XC4000 FPGA IOB의 내부 회로도. 출력 경로: 내부 신호 OUT이 멀티플렉서 M2를 거쳐 FF1(출력 레지스터, OCLK 사용)의 D 입력으로 들어가거나 직접 출력 드라이버(M7)로 연결됩니다. T 입력(M1)이 3-상태 출력을 제어합니다. 입력 경로: 외부 I/O에서 들어온 신호가 입력 버퍼를 거쳐 I1으로 직접, 또는 Delay를 거쳐 FF2(입력 레지스터, ICLK/CLKEN 사용)를 통해 I2로 전달됩니다. 슬루율 제어와 Passive 풀업/풀다운 저항이 포함됩니다.](./images/fig10_fpga_iob.png)
+
+FPGA IOB의 주요 특징:
+
+- **2개의 플립플롭**:
+  - **FF1**: 출력 레지스터 (클럭: OCLK)
+  - **FF2**: 입력 레지스터 (클럭: ICLK, 인에이블: CLKEN)
+- **출력 모드 선택**:
+  - **오픈 콜렉터(Open Collector)**: T 핀으로 출력 드라이버 선택
+  - **3-상태(Tri-State)** 출력: T=1이면 하이 임피던스
+  - **레지스터 출력** 또는 **직접 조합 출력** 선택 가능 (M2 멀티플렉서)
+- **입력 모드 선택**:
+  - **직접 입력 (I1)**: 외부 신호가 FF 없이 바로 내부 로직으로 연결됩니다.
+  - **레지스터 입력 (I2)**: FF2를 통해 동기화(Synchronizer)합니다. 비동기 외부 신호를 시스템 클럭에 동기화할 때 활용합니다.
+
+---
+
+# 8. 프로그래머블 인터커넥트 (Programmable Interconnect)
+
+## 8-1. 배선 세그먼트의 4가지 종류
+
+CLB들 사이의 배선 자원은 길이와 용도에 따라 4가지로 분류됩니다:
+
+| 종류 | 설명 | 특징 |
+|------|------|------|
+| **Direct (직접 배선)** | 인접한 CLB에 PSM 없이 직접 연결 | 최소 지연 |
+| **Single (단일 세그먼트)** | PSM 한 번 경유 후 인접 CLB에 연결 (1 hop) | 저지연 |
+| **Double (이중 세그먼트)** | PSM 경유 전 CLB 2개를 지나침 | 중거리 |
+| **Long (장거리 배선)** | 칩 전체 길이를 가로지르는 배선 | 글로벌 신호 분배 |
+
+그 외에:
+
+- **Programmable connections**: 개별 배선 교차점의 프로그래머블 연결
+- **Programmable Switch Matrix (PSM)**: CLB 격자의 교차점마다 배치되는 스위치 매트릭스
+
+![Figure: FPGA 배선 구조의 상세도. 중앙에 CLB가 있고, 그 주변으로 LONG, DBL(Double), SINGLE, DBL, LONG, GLOBAL, DIRECT, FEEDBACK 배선이 가로·세로로 배치됩니다. CLB의 출력 Y0는 DIRECT로, Y는 DOUBLE·SINGLE로 연결되며, G3·F3·C3는 FEEDBACK 경로로 같은 CLB로 되돌아옵니다. 파란 사각형 영역은 PSM의 프로그래머블 연결 공간을 나타냅니다.](./images/fig11_interconnect_detail.png)
+
+## 8-2. 프로그래머블 스위치 매트릭스 (PSM)
+
+PSM은 배선 세그먼트 사이의 연결을 프로그래밍할 수 있는 핵심 스위치 구조입니다.
+
+![Figure: PSM의 구조. (a) 격자 형태의 배선 교차점 전체 뷰 — 비어있는 교차점(빈 원)은 프로그래밍 가능한 연결점을 나타냅니다. (b) PSM의 기본 단위 — 4방향 교차점. (c) PSM이 구현할 수 있는 6가지 연결 패턴 — 직선 통과(수평), 직선 통과(수직), 방향 전환(두 종류), 양방향 연결(두 종류)이 보입니다.](./images/fig12_psm.png)
+
+PSM의 주요 기능:
+
+- **세그먼트 연장(Lengthen segments)**: 짧은 세그먼트들을 연결하여 더 긴 배선 경로를 만듭니다.
+- **방향 전환(Turn corners)**: 수평 세그먼트를 수직 세그먼트로 연결하거나 그 반대도 가능합니다.
+
+> **핵심 설계 원칙**: PSM을 경유할수록 신호 지연이 증가합니다. 따라서 라우팅(Routing) 단계에서 PSM 사용을 최소화하는 것이 성능 최적화의 핵심입니다.
+
+## 8-3. 복잡한 인터커넥트 구조 요약
+
+FPGA의 완전한 배선 자원:
+
+- **Direct 배선**: 인접 CLB에 직접 연결
+- **Single 배선**: PSM 1회 경유로 인접 CLB 연결
+- **Double 배선**: CLB 2개를 지나쳐 PSM에 도달
+- **Long 배선**: 칩 전체 길이 배선
+- **Programmable connections**: 각 교차점의 프로그래머블 연결
+- **PSM**: 다양한 방향 전환과 세그먼트 연장
+
+이처럼 다양한 배선 자원을 조합하여 FPGA는 임의의 CLB 간 연결 토폴로지를 구현합니다.
+
+---
+
+# 9. Place & Route (배치 및 라우팅)
+
+## 9-1. 개념
+
+FPGA 설계의 물리적 구현 단계는 두 단계로 나뉩니다:
+
+- **Place (배치)**: 각 논리 함수(CLB 단위)를 칩의 어느 위치에 할당할지 결정합니다.
+- **Route (라우팅)**: CLB 간 신호를 어떤 배선 세그먼트와 PSM 경로로 연결할지 결정합니다. PSM 통과 횟수를 최소화하는 경로를 선택하는 것이 지연 감소의 핵심입니다.
+
+Place & Route는 서로 **상호의존적인(inter-dependent)** 복잡한 최적화 문제입니다. Place가 달라지면 Route 선택지가 달라지고, Route 상황에 따라 Place를 재조정해야 할 수도 있습니다. 다행히 **CAD 툴이 이 과정을 자동으로 수행**해 줍니다.
+
+## 9-2. 예시: 74x194 (4비트 범용 양방향 시프트 레지스터)
+
+**74x194**는 4비트 범용 양방향 시프트 레지스터로, $S_1, S_0$ 두 비트로 4가지 동작 모드를 선택합니다.
+
+**핀 구성**:
+- 입력: `RIN`(우측 직렬 입력), `A~D`(4비트 병렬 입력), `LIN`(좌측 직렬 입력), `S1`, `S0`, `CLK`
+- 출력: `QA, QB, QC, QD`
+
+**모드 선택 테이블**:
+
+| $S_1$ | $S_0$ | 동작 |
+|--------|--------|------|
+| 0 | 0 | **Hold** — 현재 상태 유지 |
+| 0 | 1 | **Shift Right** — QA←RIN, QB←QA, QC←QB, QD←QC |
+| 1 | 0 | **Shift Left** — QD←LIN, QC←QD, QB←QC, QA←QB |
+| 1 | 1 | **Parallel Load** — QA←A, QB←B, QC←C, QD←D |
+
+### 다음 상태 방정식
+
+4비트 각각의 방정식 (4입력 MUX 구조):
+
+$$D_A = \overline{S_1}\overline{S_0} \cdot Q_A + \overline{S_1}S_0 \cdot RIN + S_1\overline{S_0} \cdot Q_B + S_1S_0 \cdot A$$
+
+$$D_B = \overline{S_1}\overline{S_0} \cdot Q_B + \overline{S_1}S_0 \cdot Q_A + S_1\overline{S_0} \cdot Q_C + S_1S_0 \cdot B$$
+
+$$D_C = \overline{S_1}\overline{S_0} \cdot Q_C + \overline{S_1}S_0 \cdot Q_B + S_1\overline{S_0} \cdot Q_D + S_1S_0 \cdot C$$
+
+$$D_D = \overline{S_1}\overline{S_0} \cdot Q_D + \overline{S_1}S_0 \cdot Q_C + S_1\overline{S_0} \cdot LIN + S_1S_0 \cdot D$$
+
+각 방정식은 고유한 입력 집합 $\{S_1, S_0, Q_i, Q_{i\pm1}, \text{serial/parallel input}\}$을 가집니다. $S_1$을 기준으로 분해하면:
+
+$$D_A = \underbrace{\overline{S_1}(\overline{S_0} Q_A + S_0 \cdot RIN)}_{G: \; S_1=0 \text{ 케이스}} + \underbrace{S_1(\overline{S_0} Q_B + S_0 \cdot A)}_{F: \; S_1=1 \text{ 케이스}}$$
+
+$S_1 = 0$일 때 F = 0, $S_1 = 1$일 때 G = 0이므로:
+
+$$H = F + G = D_A \quad \text{(H LUT는 단순 OR 구현)}$$
+
+이 구조에서 G LUT는 $\{S_1, S_0, Q_A, RIN\}$ 4입력, F LUT는 $\{S_1, S_0, Q_B, A\}$ 4입력을 받으며, 두 LUT 합쳐 총 **6개의 고유 입력 변수**를 처리합니다. 이는 슬라이드 15의 "Any function of 4 inputs (F) + Some function of 6 inputs" 사례에 해당합니다.
+
+### CLB 배치: QA 비트
+
+![Figure: 74x194의 QA 비트 구현을 위한 CLB 내부 배선. G LUT 입력: G4=S1, G3=S0, G2=QA, G1=RIN — Hold(S=00)와 Shift Right(S=01)를 구현합니다. F LUT 입력: F4=S1, F3=S0, F2=QB, F1=A — Shift Left(S=10)와 Parallel Load(S=11)를 구현합니다. H LUT는 두 출력의 OR로 DA를 완성합니다. CLK=K 연결, FF1의 YQ가 QA가 됩니다.](./images/fig13_clb_74x194_qa.png)
+
+### CLB 배치: QB, QC, QD 비트
+
+나머지 비트들도 동일한 패턴으로 각 1개의 CLB를 사용합니다:
+
+- **QB CLB**: G 입력 = $\{S_1, S_0, Q_B, Q_A\}$, F 입력 = $\{S_1, S_0, Q_C, B\}$ → YQ = QB
+
+![Figure: 74x194의 QB 비트 CLB 배선. QA CLB와 동일한 구조에서 G LUT에 {S1, S0, QB, QA}, F LUT에 {S1, S0, QC, B}가 연결됩니다. YQ = QB 출력.](./images/fig14_clb_74x194_qb.png)
+
+- **QC CLB**: G 입력 = $\{S_1, S_0, Q_C, Q_B\}$, F 입력 = $\{S_1, S_0, Q_D, C\}$ → YQ = QC
+
+![Figure: 74x194의 QC 비트 CLB 배선. G LUT 입력 {S1, S0, QC, QB}, F LUT 입력 {S1, S0, QD, C}. YQ = QC 출력.](./images/fig15_clb_74x194_qc.png)
+
+- **QD CLB**: G 입력 = $\{S_1, S_0, Q_D, Q_C\}$, F 입력 = $\{S_1, S_0, LIN, D\}$ → YQ = QD
+
+![Figure: 74x194의 QD 비트 CLB 배선. G LUT 입력 {S1, S0, QD, QC}, F LUT 입력 {S1, S0, LIN, D}. 좌측 직렬 입력 LIN이 F LUT에 연결되어 Shift Left 동작을 구현합니다. YQ = QD 출력.](./images/fig16_clb_74x194_qd.png)
+
+### 전체 라우팅 구조
+
+4개의 CLB(QA, QB, QC, QD)와 그 사이의 PSM으로 구성된 전체 라우팅 구조:
+
+![Figure: 74x194 구현의 전체 배치·라우팅 구조. QA, QB, QC, QD 4개의 CLB가 PSM을 통해 순서대로 연결됩니다. 입력 신호는 4개의 IOB 그룹에서 공급됩니다: IOB1(S1, S0, CLK용), IOB2(S1, S0, CLK용 — S1·S0는 모든 CLB에 필요하므로 2개 IOB 경로), IOB3(A, C, RIN용), IOB4(B, D, LIN용). 출력 IOB는 QA~QD 각각에 연결됩니다. 입력 라우팅 경로는 간략화하여 생략.](./images/fig17_74x194_routing.png)
+
+### IOB 구성 예시 ①: S1 입력 핀
+
+S1은 순수 입력 핀이므로 출력 드라이버는 비활성화(T=0)되고, 입력 버퍼를 통해 신호가 들어옵니다.
+
+![Figure: S1 입력 핀을 위한 IOB 구성. T=0으로 설정하여 출력 드라이버가 비활성화됩니다. I1과 I2 양 경로에 모두 S1 신호가 연결되어, 직접 입력(멀티플렉서 M5 경로 선택)으로 사용됩니다. 출력 경로(OUT)는 사용되지 않고 0으로 고정됩니다.](./images/fig18_iob_s1.png)
+
+### IOB 구성 예시 ②: QA 출력 핀
+
+QA는 CLB 내부 플립플롭의 출력을 외부로 내보내는 핀입니다.
+
+![Figure: QA 출력 핀을 위한 IOB 구성. T=1로 설정하여 출력 드라이버가 항상 활성화됩니다. OUT에 CLB의 YQ 신호(QA 값)가 연결되며, FF1을 우회하는 직접 출력 경로(멀티플렉서 M2 선택)가 사용됩니다. 입력 경로(I1, I2)는 사용되지 않습니다.](./images/fig19_iob_qa.png)
+
+## 9-3. 배치 결과 확인 (View of Placed Design)
+
+동일한 엘리베이터 컨트롤러를 **XC2VP2-7-FG256** FPGA(256핀 BGA 패키지)에 구현한 결과입니다.
+
+![Figure: XC2VP2-7-FG256 FPGA에 배치된 엘리베이터 컨트롤러의 전체 뷰(좌)와 CLB 영역 확대 뷰(우). 전체 뷰에서 FPGA의 방대한 CLB 격자 중 극히 일부(녹색으로 표시된 셀)만 사용됨을 알 수 있으며, 나머지는 회색(미사용)으로 표시됩니다. 확대 뷰에서 CLB 내부 구성 요소(D, A, F, P, Q 등)가 개별 배치된 것을 확인할 수 있습니다.](./images/fig20_fpga_placed_design.png)
+
+이 결과는 FPGA가 이 규모의 설계에 대해 자원 활용률이 매우 낮음을 보여 주며, 동시에 CAD 툴이 자동으로 최적의 배치를 결정함을 확인할 수 있습니다.
+
+---
+
+# 마치며: CPLD vs FPGA 비교 정리
+
+| 특성 | CPLD | FPGA |
+|------|------|------|
+| **기본 단위** | Function Block (18 매크로셀) | CLB (LUT 2~3개 + FF 2개) |
+| **블록 크기** | 상대적으로 큼 | 상대적으로 작음 |
+| **블록 수** | 적음 (수십 개 FB) | 많음 (수만~수백만 CLB) |
+| **인터커넥트** | 중앙 집중식 Switch Matrix | 분산형 PSM + 다층 세그먼트 |
+| **지연 예측성** | 일정하고 예측 가능 | 경로마다 다름 (라우팅 의존) |
+| **설계 규모** | 중규모 (수백~수천 게이트) | 대규모 (수십만~수억 게이트) |
+| **설정 방식** | EEPROM (비휘발성, 즉시 동작) | SRAM (휘발성, 매 전원 시 재설정) |
+| **주요 용도** | 글루 로직, FSM, 버스 인터페이스 | SoC, 신호처리, AI 가속기, 프로토타이핑 |
+
+두 소자 모두 **CAD 툴**이 고수준 설계 명세(VHDL, Verilog, 스케매틱 등)로부터 fitting, place-and-route, 프로그래밍까지의 전 과정을 자동으로 수행해 주므로, 설계자는 하드웨어의 물리적 구조보다 기능적 동작 명세에 집중할 수 있습니다.

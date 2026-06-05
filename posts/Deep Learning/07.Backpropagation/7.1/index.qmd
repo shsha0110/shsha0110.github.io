@@ -1,0 +1,705 @@
+---
+title: "[Deep Learning] 7. Backpropagation"
+description: "Backpropagation"
+author: "유성현"
+categories: [Deep Learning]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+## 들어가며 (Introduction)
+
+딥러닝 모델을 학습시킨다는 것은 결국 **손실 함수(loss function)를 최소화하는 파라미터를 찾는 일**입니다. 이때 거의 예외 없이 사용하는 도구가 바로 **경사 하강법(gradient descent)**이며, 경사 하강법을 돌리려면 손실 함수의 **그래디언트(gradient)**에 접근할 수 있어야 합니다.
+
+그런데 신경망은 수많은 함수들이 겹겹이 합성된 거대한 합성 함수입니다. 이런 복잡한 함수의 그래디언트를 손으로 일일이 계산하는 것은 사실상 불가능합니다. 이 실습의 목표는 다음과 같습니다.
+
+* 가장 기본적인 경사 하강법이 정말로 함수 값을 줄여 나가는지 직접 눈으로 확인합니다.
+* 복잡한 함수를 미분하는 핵심 도구인 **연쇄 법칙(Chain Rule)**을 단변수 함수에서부터 다변수 함수로 확장합니다.
+* 마지막으로, 우리가 만든 MLP 모듈이 **스스로 그래디언트를 계산하도록(automatic differentiation)** 모듈화하여, 역전파의 본질을 코드로 체득합니다.
+
+전체 흐름을 정리한 세부 목표는 다음과 같습니다.
+
+- **기본 경사 하강법 (Basic gradient descent)**
+- **단변수 함수에서의 연쇄 법칙 (Chain Rule on a single variable function)**
+- **다변수 함수로의 확장 (Expand to multi variable function)**
+- **모듈화 (Modularization)**
+
+이제 한 단계씩 따라가 보겠습니다.
+
+---
+
+# 1. 기본 경사 하강법 (Basic Gradient Descent)
+
+## 1.1 경사 하강법의 직관과 정당성
+
+미분 가능한 함수 $f(x): \mathbb{R}^m \to \mathbb{R}$가 주어졌다고 합시다. 경사 하강법은 다음과 같이 점을 갱신합니다.
+
+$$
+x_{n+1} = x_n - \eta \nabla f(x_n)
+$$
+
+여기서 $\eta$는 충분히 작은 양수로, **학습률(learning rate)**이라고 부릅니다. 이때 충분히 작은 $\eta$에 대해 다음 부등식이 성립합니다.
+
+$$
+f(x_{n+1}) \leq f(x_n).
+$$
+
+**왜 이것이 성립할까요?** 1차 테일러 근사(first-order Taylor expansion)를 사용하면 직관적으로 이해할 수 있습니다. $x_{n+1} = x_n - \eta \nabla f(x_n)$를 대입하면,
+
+$$
+\begin{aligned}
+f(x_{n+1}) &= f\big(x_n - \eta \nabla f(x_n)\big) \\
+&\approx f(x_n) + \nabla f(x_n)^\top \big(- \eta \nabla f(x_n)\big) \\
+&= f(x_n) - \eta \,\lVert \nabla f(x_n) \rVert^2.
+\end{aligned}
+$$
+
+* $\eta > 0$이고 $\lVert \nabla f(x_n) \rVert^2 \geq 0$이므로, 마지막 항 $-\eta \lVert \nabla f(x_n) \rVert^2$은 항상 **0 이하**입니다.
+* 따라서 (스텝이 너무 크지만 않다면) 한 스텝마다 함수 값이 줄어들거나 최소한 유지됩니다.
+
+> **보충(직관):** 그래디언트 $\nabla f$는 함수 값이 **가장 가파르게 증가하는 방향**을 가리킵니다. 그 반대 방향($-\nabla f$)으로 조금씩 움직이면 자연히 값이 작아집니다. 다만 $\eta$가 너무 크면 최솟값을 "지나쳐 버려" 오히려 값이 커질 수 있으므로, 위 부등식은 "$\eta$가 충분히 작을 때"라는 단서가 붙습니다.
+
+이렇게 매 스텝마다 적절한 $\eta_n$을 사용하면, 수열 $f(x_n)$은 단조 감소하게 됩니다.
+
+$$
+f(x_1) \ge f(x_2) \ge \cdots \ge f(x_N).
+$$
+
+## 1.2 예제 함수와 시각화
+
+이 성질을 다음 2변수 함수로 직접 확인해 보겠습니다.
+
+$$
+f(x, y) = 0.25\,(3x^2 + 2y^2 - 2xy + 6x - y)
+$$
+
+먼저 함수의 모양을 히트맵으로 그려, 최솟값을 가지는 "골짜기"가 존재하는지 확인합니다.
+
+```python
+import numpy as np
+from tqdm import tqdm
+
+# 두 개의 입력 변수를 받는 장난감(toy) 함수 f
+def f(x, y):
+    return 0.25 * (3*x*x + 2*y*y - 2*x*y + 6*x - 1*y)
+
+N = 1000
+vmax, vmin = 4, -4
+xs = np.linspace(vmin, vmax, N)
+ys = np.linspace(vmin, vmax, N)
+fs = np.zeros((N, N))
+
+for i in range(N):
+    for j in range(N):
+        fs[i, j] = f(xs[i], ys[j])
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+
+def heatmap():
+    plt.clf()
+    df_fs = pd.DataFrame(fs.T, columns=ys.round(1), index=xs.round(1))
+    sns.heatmap(df_fs, cmap='viridis', xticklabels=N//4, yticklabels=N//4)
+    plt.xlabel('x'); plt.ylabel('y'); plt.title('f(x, y)')
+
+heatmap()
+plt.show()
+```
+
+![Figure 1: 함수 $f(x,y)=0.25(3x^2+2y^2-2xy+6x-y)$의 값을 색으로 표현한 히트맵입니다. 가로축은 $x$, 세로축은 $y$이며, 색이 어두운 보라색일수록 함숫값이 작고(약 $-0.8$ 근처가 최솟값), 밝은 노란색일수록 함숫값이 큽니다(우상단에서 약 $35$까지 상승). 중앙 좌측 $(x,y)\approx(-1.1,-0.3)$ 부근에 가장 어두운 단 하나의 골짜기(전역 최솟값)가 존재함을 볼 수 있으며, 이는 함수가 볼록(convex)하여 유일한 최솟값을 가진다는 사실과 일치합니다.](./images/f_heatmap.png)
+
+## 1.3 그래디언트의 손계산과 구현
+
+경사 하강법을 돌리려면 $\nabla f = (\partial f/\partial x,\ \partial f/\partial y)$를 알아야 합니다. 직접 미분해 보겠습니다.
+
+$$
+\begin{aligned}
+\frac{\partial f}{\partial x} &= 0.25\,(6x - 2y + 6), \\[4pt]
+\frac{\partial f}{\partial y} &= 0.25\,(4y - 2x - 1).
+\end{aligned}
+$$
+
+이 함수가 정말로 유일한 최솟값을 갖는지 확인해 봅시다. **최솟값에서는 그래디언트가 0**이어야 하므로 다음 연립방정식을 풉니다.
+
+$$
+\begin{cases}
+6x - 2y + 6 = 0 \\
+4y - 2x - 1 = 0
+\end{cases}
+\;\Longrightarrow\;
+\begin{cases}
+y = 3x + 3 \\
+-2x + 4y = 1
+\end{cases}
+$$
+
+첫 식을 둘째 식에 대입하면 $-2x + 4(3x+3) = 1 \Rightarrow 10x + 11 = 0 \Rightarrow x = -1.1$, 따라서 $y = -0.3$입니다. 이 점에서의 함숫값은
+
+$$
+f(-1.1,\,-0.3) = -0.7875
+$$
+
+로, 뒤에 나올 코드 실행 결과(약 $-0.787$로 수렴)와 정확히 일치합니다.
+
+> **보충(왜 유일한 최솟값인가):** 이 함수의 헤시안(Hessian) 행렬은
+> $$H = 0.25\begin{bmatrix} 6 & -2 \\ -2 & 4 \end{bmatrix}$$
+> 이며, $\det = 0.25^2(6\cdot4 - (-2)(-2)) = 0.25^2 \cdot 20 > 0$이고 좌상단 원소가 양수이므로 **양의 정부호(positive definite)**입니다. 즉 $f$는 **강볼록(strictly convex)**이고, 그래디언트가 0이 되는 점이 유일한 전역 최솟값입니다. 그래서 어디서 출발하든 경사 하강법은 같은 점으로 수렴합니다.
+
+```python
+def grad_f(x, y):
+    # 손으로 계산한 편미분을 그대로 구현
+    dx = 0.25 * (6*x - 2*y + 6)
+    dy = 0.25 * (4*y - 2*x - 1)
+    return dx, dy
+
+# 시작점은 무작위로 초기화
+x = np.random.uniform(vmin, vmax)
+y = np.random.uniform(vmin, vmax)
+
+eta = 0.1          # 학습률
+trace = []
+n_steps = 50
+for i in range(n_steps):
+    trace.append((x, y))
+    dx, dy = grad_f(x, y)   # 현재 점에서의 그래디언트
+    x = x - eta * dx        # 경사 하강 갱신
+    y = y - eta * dy
+    if i % (n_steps // 10) == 0:
+        print(f'[{i:2d}/{n_steps}] f(x, y) = {f(x, y):.3f}')
+```
+
+실행하면 함숫값이 다음처럼 단조 감소하며 빠르게 최솟값으로 수렴합니다.
+
+```
+[ 0/50] f(x, y) = 10.122
+[ 5/50] f(x, y) = 0.719
+[10/50] f(x, y) = -0.571
+[20/50] f(x, y) = -0.780
+[45/50] f(x, y) = -0.787
+```
+
+![Figure 2: Figure 1과 동일한 히트맵 위에 경사 하강법의 이동 궤적을 겹쳐 그린 그림입니다. 빨간 점(start)은 무작위 초기점, 초록 점(end)은 50스텝 후 도달한 종점이며, 연두색 선과 주황 점들이 매 스텝의 이동 경로를 나타냅니다. 궤적이 함수의 기울기 반대 방향을 따라 어두운 골짜기 $(x,y)\approx(-1.1,-0.3)$로 곧바로 미끄러져 내려가, 1.3절에서 해석적으로 구한 최솟값과 정확히 같은 지점에 수렴함을 시각적으로 확인할 수 있습니다.](./images/gd_trajectory_2d.png)
+
+---
+
+# 2. 연쇄 법칙 (Chain Rule)
+
+## 2.1 단변수 합성 함수의 미분
+
+앞 절의 $f$는 미분이 쉬운 단순한 함수였습니다. 하지만 실제로 우리가 다루는 함수는 **여러 미분 가능한 함수가 합성된 형태**가 대부분입니다. 예를 들어 $f(x) = g(h(x))$처럼 말이죠. 이때 그래디언트를 얻는 핵심 도구가 **연쇄 법칙**입니다.
+
+$$
+\frac{df}{dx} = \frac{dg}{dh}\,\frac{dh}{dx}.
+$$
+
+표기를 풀어 쓰면 다음과 같습니다.
+
+$$
+f'(x) = g'(h(x))\,h'(x).
+$$
+
+여기서 한 가지 중요한 관찰이 있습니다. **중간 계산 값을 저장해 두면 그래디언트 계산이 훨씬 간단해진다**는 점입니다. $y = h(x)$라고 정의하면 $f(x) = g(y)$가 되고,
+
+$$
+f'(x) = g'(y)\,h'(x)
+$$
+
+즉, **순전파(forward)에서 계산해 둔 중간 값 $y$를 그대로 재사용**하면 $g'(y)$를 다시 계산할 필요가 없습니다. 바로 이 아이디어가 역전파의 출발점입니다.
+
+## 2.2 임의 개수의 합성으로 일반화
+
+이 기법은 임의의 개수의 함수 합성으로 자연스럽게 확장됩니다. 다음과 같이 정의합시다.
+
+$$
+\begin{aligned}
+f(x) &= f_n \circ f_{n-1} \circ \cdots \circ f_1(x), \\
+z_1 &= x, \\
+z_{i+1} &= f_i(z_i).
+\end{aligned}
+$$
+
+연쇄 법칙을 반복 적용하면 다음을 얻습니다.
+
+$$
+f'(x) = \prod_{i=1}^n f_i'(z_i).
+$$
+
+* $z_1, z_2, \ldots, z_n$은 모두 **순전파 과정에서 자연스럽게 얻어지는 중간 값**입니다.
+* 따라서 한 번 순전파를 수행하며 $z_i$들을 저장해 두면, 각 층의 **국소 미분 계수(local derivative)** $f_i'(z_i)$를 곱하기만 하면 전체 그래디언트가 완성됩니다.
+* 단변수에서는 곱셈이 교환 가능하므로 곱하는 순서는 중요하지 않습니다(다변수에서는 달라집니다 — 3장 참고).
+
+## 2.3 기본 함수와 그 그래디언트 구현
+
+먼저 1차/2차/다항 함수와 각각의 도함수를 정의합니다. 손으로 미분하면 다음과 같습니다.
+
+* 1차 함수 $\ell(x) = ax + b \;\Rightarrow\; \ell'(x) = a$
+* 2차 함수 $q(x) = ax^2 + bx + c \;\Rightarrow\; q'(x) = 2ax + b$
+* 다항 함수 $p(x) = \sum_i c_i x^i \;\Rightarrow\; p'(x) = \sum_i i\,c_i x^{i-1}$ (상수항 $i=0$은 사라짐)
+
+```python
+from util import test_gradient
+
+def linear_fn(a, b):
+    def linear(x):       return a*x + b
+    def linear_grad(x):  return a            # d/dx (ax+b) = a
+    return linear, linear_grad
+
+def quadratic_fn(a, b, c):
+    def quadratic(x):      return a*x*x + b*x + c
+    def quadratic_grad(x): return 2*a*x + b  # d/dx (ax^2+bx+c) = 2ax+b
+    return quadratic, quadratic_grad
+
+def polynomial_fn(coeffs):
+    def polynomial(x):
+        y = 0
+        for i, c in enumerate(coeffs[::-1]):
+            y += c * (x ** i)
+        return y
+    def polynomial_grad(x):
+        y = 0
+        for i, c in enumerate(coeffs[::-1]):
+            if i == 0:        # 상수항의 미분은 0
+                continue
+            y += i * c * (x ** (i-1))
+        return y
+    return polynomial, polynomial_grad
+
+test_gradient("linear",     linear_fn(0.5, 1),                          np.random.randn(4))
+test_gradient("quadratic",  quadratic_fn(-0.2, -0.1, 2),                np.random.randn(4))
+test_gradient("polynomial", polynomial_fn(np.array([1,-4,-9,16,20])*0.1), np.random.randn(4))
+```
+
+세 테스트 모두 통과합니다 (`✓ linear/quadratic/polynomial test passed`).
+
+## 2.4 합성 함수 만들기
+
+이제 위 함수들을 합성합니다.
+
+$$
+\begin{aligned}
+f_1(x) &= 0.5x + 1, \\
+f_2(x) &= -0.2x^2 - 0.1x + 2, \\
+f_3(x) &= 0.1\,(x^4 - 4x^3 - 9x^2 + 16x + 20), \\[4pt]
+f(x) &= (f_3 \circ f_2 \circ f_1)(x).
+\end{aligned}
+$$
+
+```python
+fns = [
+    linear_fn(0.5, 1),
+    quadratic_fn(-0.2, -0.1, 2),
+    polynomial_fn(np.array([1, -4, -9, 16, 20]) * 0.1),
+]
+
+# 가장 단순한(naive) 합성: 그냥 차례로 함수를 적용
+def f_naive(x):
+    for fn, _ in fns:
+        x = fn(x)
+    return x
+
+def plot_function(f, vmin, vmax, N=1000):
+    xs = np.linspace(vmin, vmax, N)
+    fxs = np.array([f(x) for x in xs])
+    plt.plot(xs, fxs); plt.xlabel('x'); plt.ylabel('y'); plt.title('y = f(x)')
+
+vmin, vmax = -12, 7
+plot_function(f_naive, vmin, vmax)
+plt.show()
+```
+
+![Figure 3: 합성 함수 $f = f_3\circ f_2\circ f_1$를 구간 $[-12, 7]$에서 그린 그래프입니다. 가로축은 입력 $x$, 세로축은 출력 $y=f(x)$입니다. 곡선은 두 개의 깊은 골짜기(약 $x\approx-11$과 $x\approx6$, 둘 다 $y\approx-0.58$)와 그 사이 한 개의 얕은 골짜기(약 $x\approx-2.5$, $y\approx-0.04$), 그리고 두 개의 봉우리(약 $y\approx2.6$)를 가진 비볼록(non-convex) 형태입니다. 이렇게 여러 극솟값(local minima)이 존재한다는 점이, 다음 절에서 경사 하강법이 시작점에 따라 서로 다른 골짜기에 갇히는 현상을 이해하는 핵심 단서가 됩니다.](./images/composed_function.png)
+
+## 2.5 중간 값을 보존하는 순전파/역전파 구현
+
+**핵심:** 위의 `f_naive`는 최종 출력만 반환하므로 그래디언트 계산에 부적합합니다. 연쇄 법칙을 적용하려면 각 층의 중간 값 $z_i$가 필요하기 때문입니다. 따라서 순전파 함수가 **모든 중간 값의 리스트** $(z_1, z_2, \ldots, z_{n+1})$을 반환하도록 재설계합니다.
+
+```python
+def f(x):
+    """중간 값들의 리스트 (x, f1(x), f2(f1(x)), ...) 를 반환"""
+    zs = [x]
+    for fn, _ in fns:
+        x = fn(x)
+        zs.append(x)        # 각 층의 출력을 차곡차곡 저장
+    return zs
+
+def grad_f(zs):
+    """연쇄 법칙으로 df/dx 계산 (저장해 둔 중간 값 zs 재사용)"""
+    dfdx = 1
+    # 마지막 층부터 거꾸로 국소 미분 계수를 곱해 나감 (= 역전파)
+    for i in range(len(fns)-1, -1, -1):
+        _, grad_fn = fns[i]
+        dfdx = dfdx * grad_fn(zs[i])
+    return dfdx
+```
+
+`grad_f`의 루프는 정확히 $f'(x) = \prod_{i} f_i'(z_i)$를 구현한 것입니다. 인덱스를 $n$에서 $1$로 거꾸로 돌면서 곱하는 모습이, 바로 **그래디언트가 출력에서 입력 방향으로 거슬러 흐르는** 역전파의 골격입니다.
+
+## 2.6 합성 함수에서의 경사 하강법
+
+```python
+def gradient_descent(x, f, grad_f, eta, N_step):
+    trace = [x]
+    for i in range(N_step):
+        zs = f(x)            # 순전파: 중간 값 모두 수집
+        dx = grad_f(zs)      # 역전파: 그래디언트 계산
+        x = x - eta * dx     # 갱신
+        trace.append(x)
+        if i % (N_step // 10) == 0:
+            print(f'[{i:4d}/{N_step}] f(x)={zs[-1]:+.5f}')
+    return trace
+
+x = np.random.uniform(vmin, vmax)
+trace = gradient_descent(x, f, grad_f, 0.01, 2000)
+```
+
+```
+[   0/2000] f(x)=-0.48864
+[ 200/2000] f(x)=-0.57553
+[1800/2000] f(x)=-0.57553
+```
+
+![Figure 4: Figure 3의 합성 함수 곡선 위에 경사 하강법 궤적을 겹쳐 그린 그림입니다. 빨간 점(start)이 초기점, 초록 점(end)이 2000스텝 후 종점이며, 주황 점들이 이동 경로입니다. 그림에서는 시작점이 가장 왼쪽 골짜기 근처에서 출발하여 바로 그 골짜기($x\approx-11$, $f\approx-0.576$)에 안착했습니다. 주목할 점은 이 곡선이 비볼록이라 여러 극솟값을 가지므로, 경사 하강법은 "가장 가까운" 골짜기로만 수렴하며 시작점에 따라 다른 극솟값에 갇힐 수 있다는 것입니다. 즉 1장의 볼록 함수와 달리, 여기서는 전역 최솟값 수렴이 보장되지 않습니다.](./images/gd_trajectory_composed.png)
+
+> **해석:** 1장의 함수는 볼록이라 어디서 출발해도 같은 전역 최솟값에 도달했지만, 이 합성 함수는 비볼록이라 **시작점에 따라 서로 다른 극솟값(local minimum)에 갇힙니다.** 셀을 반복 실행해 시작점을 바꿔 보면, 어떤 때는 왼쪽 골짜기, 어떤 때는 오른쪽 골짜기로 수렴하는 것을 확인할 수 있습니다. 이는 실제 딥러닝에서 손실 지형(loss landscape)이 비볼록일 때 마주하는 본질적 어려움을 잘 보여 줍니다.
+
+---
+
+# 3. 다변수 함수로의 확장 (Expand to Multi-variable Function)
+
+## 3.1 야코비안(Jacobian) 행렬
+
+이제 연쇄 법칙을 다변수 벡터 함수로 확장합니다. 그 핵심 개념이 **야코비안 행렬**입니다. 미분 가능한 함수 $\mathbf{f} = (f_1, \ldots, f_m): \mathbb{R}^n \to \mathbb{R}^m$에 대해, 야코비안은 모든 1차 편미분을 모아 놓은 행렬입니다.
+
+$$
+\mathbf{J}_\mathbf{f}
+= \begin{bmatrix}
+\dfrac{\partial \mathbf{f}}{\partial x_1} & \dfrac{\partial \mathbf{f}}{\partial x_2} & \cdots & \dfrac{\partial \mathbf{f}}{\partial x_n}
+\end{bmatrix}
+= \begin{bmatrix}
+\dfrac{\partial f_1}{\partial x_1} & \cdots & \dfrac{\partial f_1}{\partial x_n}\\
+\vdots & \ddots & \vdots\\
+\dfrac{\partial f_m}{\partial x_1} & \cdots & \dfrac{\partial f_m}{\partial x_n}
+\end{bmatrix}
+$$
+
+* 표준 표기에서 야코비안은 **(출력 차원) × (입력 차원) = $m \times n$** 행렬입니다. ($i$번째 행은 $f_i$, $j$번째 열은 $x_j$에 대한 편미분.)
+* 즉 야코비안은 **출력의 미세 변화와 입력의 미세 변화를 잇는 다리** 역할을 합니다.
+
+$$
+\mathbf{f}(\mathbf{x} + \Delta \mathbf{x}) - \mathbf{f}(\mathbf{x}) \approx \mathbf{J}_\mathbf{f}\,\Delta \mathbf{x}.
+$$
+
+이는 1차원에서 $f(x+\Delta x) - f(x) \approx f'(x)\,\Delta x$였던 식의 자연스러운 다변수 일반화입니다. 야코비안은 입력 섭동(perturbation) $\Delta \mathbf{x}$를 출력 섭동으로 **선형 변환**해 주는 행렬인 셈입니다.
+
+## 3.2 다변수 연쇄 법칙
+
+이제 단변수 때처럼 합성을 정의합니다.
+
+$$
+\begin{aligned}
+\mathbf{f}_i &: \mathbb{R}^{d_i} \to \mathbb{R}^{d_{i+1}}, \\
+\mathbf{f}(\mathbf{x}) &= \mathbf{f}_n \circ \mathbf{f}_{n-1} \circ \cdots \circ \mathbf{f}_1(\mathbf{x}), \\
+\mathbf{z}_1 &= \mathbf{x}, \\
+\mathbf{z}_{i+1} &= \mathbf{f}_i(\mathbf{z}_i),
+\end{aligned}
+$$
+
+이때 $\mathbf{z}_i \in \mathbb{R}^{d_i}$입니다. 다변수 연쇄 법칙은 **국소 미분 계수의 곱이 야코비안의 행렬 곱으로 바뀌는** 형태로 일반화됩니다.
+
+$$
+\mathbf{J}_\mathbf{f} = \mathbf{J}_{\mathbf{f}_n}\,\mathbf{J}_{\mathbf{f}_{n-1}} \cdots \mathbf{J}_{\mathbf{f}_1} = \prod_{i=n}^{1} \mathbf{J}_{\mathbf{f}_i},
+$$
+
+따라서
+
+$$
+\mathbf{f}(\mathbf{x} + \Delta \mathbf{x}) - \mathbf{f}(\mathbf{x}) \approx \left(\prod_{i=n}^{1} \mathbf{J}_{\mathbf{f}_i}\right) \Delta \mathbf{x}.
+$$
+
+* 각 $\mathbf{J}_{\mathbf{f}_i}$는 $d_{i+1} \times d_i$ 행렬이므로, 이웃한 행렬끼리 곱이 잘 정의됩니다($\cdots (d_{i+2}\times d_{i+1})(d_{i+1}\times d_i)\cdots$).
+* **순서가 중요합니다.** 단변수에서는 스칼라 곱이라 순서가 무관했지만, 다변수에서는 행렬 곱이므로 **가장 바깥 함수의 야코비안이 가장 왼쪽**에 와야 합니다($\mathbf{J}_{\mathbf{f}_n}$이 맨 왼쪽). 원문의 $\prod_{i=1}^n$ 표기는 이 곱의 순서를 명시하지 않으므로, 구현 시 반드시 "출력 → 입력" 순으로 곱한다는 점에 유의해야 합니다.
+* 직관적으로는, 입력의 섭동 $\Delta \mathbf{x}$가 첫 야코비안 $\mathbf{J}_{\mathbf{f}_1}$부터 차례로 증폭·변형되어 최종 출력의 섭동으로 전달됩니다.
+
+> **역전파와의 연결:** 손실 $\ell$은 스칼라($d_{n+1}=1$)이므로, 위 곱을 오른쪽이 아니라 **왼쪽(출력 쪽)부터** 벡터-행렬 곱으로 풀면, 매 단계에서 다루는 대상이 항상 "벡터"가 됩니다. 즉 거대한 야코비안 행렬을 전부 만들지 않고도, 그래디언트 벡터를 한 층씩 거꾸로 전달할 수 있습니다. 이것이 다음 장에서 구현할 역전파의 효율성의 비밀입니다.
+
+---
+
+# 4. 모듈화 (Modularization)
+
+## 4.1 입력이 아니라 파라미터를 최적화한다
+
+지금까지는 입력 $x$에 대한 그래디언트를 다뤘지만, 머신러닝에서 우리가 최적화하는 대상은 **모델 파라미터 $\theta$**입니다. 이를 다음과 같이 정식화합니다.
+
+$$
+\min_\theta \sum_{x \in D} \ell(x; \theta)
+$$
+
+여기서 $x$는 데이터셋에서 샘플링되고, 신경망은 $\theta$로 매개화되어 있습니다. 따라서 우리에게 필요한 것은 $\nabla_\theta \ell$입니다. 다음과 같이 층별 계산을 정의합시다.
+
+$$
+\begin{aligned}
+z_1 &= x, \\
+z_{i+1} &= f_i(z_i; \theta_i), \\
+\ell(x; \theta) &= z_{n+1}.
+\end{aligned}
+$$
+
+$z_{i+1} = f_i(z_i; \theta_i)$로부터 연쇄 법칙은 곧바로 두 개의 식을 줍니다.
+
+$$
+\begin{aligned}
+\frac{\partial \ell}{\partial z_i} &= \frac{\partial \ell}{\partial z_{i+1}} \frac{\partial z_{i+1}}{\partial z_i}, \\[4pt]
+\frac{\partial \ell}{\partial \theta_i} &= \frac{\partial \ell}{\partial z_{i+1}} \frac{\partial z_{i+1}}{\partial \theta_i}.
+\end{aligned}
+$$
+
+이 식이 주는 해석이 바로 **역전파의 핵심**입니다.
+
+* **상류(downstream)에서 내려온 그래디언트 $\dfrac{\partial \ell}{\partial z_{i+1}}$ 하나만 있으면**, 그 층에서 두 가지를 모두 계산할 수 있습니다.
+  1. $\dfrac{\partial \ell}{\partial z_i}$ — **이전 층으로 넘겨줄** 그래디언트.
+  2. $\dfrac{\partial \ell}{\partial \theta_i}$ — 그 층의 파라미터를 갱신하는 데 쓸, **자기 자신이 보관할** 그래디언트.
+* 이 과정을 마지막 층에서 첫 층으로 반복하면, 전체 그래디언트가 자동으로 계산됩니다.
+
+이 구조 덕분에 우리는 **각 층을 독립적인 모듈로 캡슐화**할 수 있습니다. 각 모듈은 단지 "들어온 그래디언트를 받아, 입력 쪽 그래디언트를 내보내고, 자기 파라미터 그래디언트는 저장한다"는 약속만 지키면 됩니다.
+
+## 4.2 모듈의 추상 클래스
+
+모든 층이 공유할 인터페이스는 두 가지입니다.
+
+* **`forward`**: 입력 $z_i$로부터 출력 $z_{i+1}$을 계산 (순전파).
+* **`backward`**: 상류 그래디언트 $\partial\ell/\partial z_{i+1}$로부터 $\partial\ell/\partial z_i$를 반환하고, $\partial\ell/\partial \theta_i$는 내부에 저장 (역전파).
+
+```python
+import torch, math
+
+class Module():
+    def __init__(self, **kwargs):
+        self.sub_modules = []
+    def __call__(self, *args):
+        return self.forward(*args)
+    def forward(self, *args):
+        raise NotImplementedError
+    def backward(self, grad_output):
+        raise NotImplementedError
+    # state_dict / grad_dict / load_state_dict / to : 테스트용 (수정 불필요)
+```
+
+## 4.3 Linear 모듈: 행렬 곱의 역전파
+
+가장 단순한 모듈은 선형 변환 $Y = XW + b$입니다. 그 역전파 공식은 다음과 같습니다.
+
+$$
+\begin{aligned}
+\frac{\partial \ell}{\partial X} &= \frac{\partial \ell}{\partial Y}\,W^\intercal, \\[4pt]
+\frac{\partial \ell}{\partial W} &= X^\intercal \frac{\partial \ell}{\partial Y}, \\[4pt]
+\frac{\partial \ell}{\partial b} &= \mathbf{1}^\intercal \frac{\partial \ell}{\partial Y}.
+\end{aligned}
+$$
+
+> **유도 (행 우선 convention):** 데이터가 행에 놓인다고 합시다. $X \in \mathbb{R}^{N\times d_\text{in}}$, $W \in \mathbb{R}^{d_\text{in}\times d_\text{out}}$, $b \in \mathbb{R}^{d_\text{out}}$, $Y \in \mathbb{R}^{N\times d_\text{out}}$이고, 상류 그래디언트를 $G = \partial \ell/\partial Y$라 두겠습니다. 성분으로 쓰면 $Y_{nk} = \sum_j X_{nj} W_{jk} + b_k$입니다.
+>
+> **(1) 입력에 대한 그래디언트.** 연쇄 법칙으로
+> $$\frac{\partial \ell}{\partial X_{nj}} = \sum_k \frac{\partial \ell}{\partial Y_{nk}}\frac{\partial Y_{nk}}{\partial X_{nj}} = \sum_k G_{nk} W_{jk} = (G W^\intercal)_{nj}.$$
+> 따라서 $\dfrac{\partial \ell}{\partial X} = G W^\intercal$. (차원: $(N\times d_\text{out})(d_\text{out}\times d_\text{in}) = N\times d_\text{in}$ ✓)
+>
+> **(2) 가중치에 대한 그래디언트.** $W_{jk}$는 모든 배치 샘플에 공유되므로 $n$에 대해 합산합니다.
+> $$\frac{\partial \ell}{\partial W_{jk}} = \sum_n G_{nk} X_{nj} = (X^\intercal G)_{jk} \;\Rightarrow\; \frac{\partial \ell}{\partial W} = X^\intercal G.$$
+> (차원: $(d_\text{in}\times N)(N\times d_\text{out}) = d_\text{in}\times d_\text{out}$ ✓)
+>
+> **(3) 편향에 대한 그래디언트.** $\partial Y_{nk}/\partial b_k = 1$이므로 배치 방향으로 합산합니다.
+> $$\frac{\partial \ell}{\partial b_k} = \sum_n G_{nk} \;\Rightarrow\; \frac{\partial \ell}{\partial b} = \mathbf{1}^\intercal G.$$
+> ($\mathbf{1}$은 모든 성분이 1인 길이 $N$ 벡터이며, 결국 행 방향 합과 같습니다.)
+
+```python
+from util import test_module
+
+class Linear(Module):
+    def __init__(self, input_dim, output_dim):
+        super().__init__()
+        self.input_dim, self.output_dim = input_dim, output_dim
+        # 분산이 입력 차원에 반비례하도록 초기화 (안정적 학습)
+        self.weight = 1 / math.sqrt(input_dim) * torch.randn(input_dim, output_dim)
+        self.bias = torch.zeros(output_dim)
+        self.sub_modules = ['weight', 'bias']
+
+    def forward(self, x):
+        y = torch.matmul(x, self.weight) + self.bias
+        self.x = x                     # backward에서 쓰려고 입력 저장
+        return y
+
+    def backward(self, grad_y):
+        # (..., input_dim) -> (N, input_dim) 로 평탄화
+        x_flat = self.x.reshape(-1, self.input_dim)
+        grad_y_flat = grad_y.reshape(-1, self.output_dim)
+
+        grad_x = torch.matmul(grad_y, self.weight.T)        # dL/dX = dL/dY · W^T
+        self.grad_weight = torch.matmul(x_flat.T, grad_y_flat)  # dL/dW = X^T · dL/dY
+        self.grad_bias = grad_y_flat.sum(dim=0)             # dL/db = 1^T · dL/dY
+        return grad_x
+
+test_module("Linear 2D input", Linear, [6, 10], torch.randn(5, 6))
+test_module("Linear 3D input", Linear, [6, 10], torch.randn(5, 3, 6))
+test_module("Linear 4D input", Linear, [3, 4], torch.randn(5, 2, 4, 3))
+```
+
+> **구현 디테일:** 입력 $x$가 2차원이 아닌 다차원(예: `(5, 3, 6)`)일 수 있으므로, 가중치/편향 그래디언트는 마지막 차원만 남기고 `reshape(-1, dim)`으로 평탄화하여 배치 방향 합산을 일괄 처리합니다. 모든 차원 테스트(2D/3D/4D)가 통과합니다.
+
+## 4.4 Activation 모듈: SiLU의 역전파
+
+비선형성을 위해 활성화 함수가 필요합니다. 여기서는 **SiLU(Sigmoid-weighted Linear Unit, = Swish)**의 역전파만 구현합니다. SiLU는 다음과 같이 정의됩니다.
+
+$$
+y = \text{SiLU}(x) = \frac{x}{1 + e^{-x}} = x\,\sigma(x).
+$$
+
+그 도함수를 직접 유도해 보겠습니다.
+
+> **유도:** $y = x\,(1 + e^{-x})^{-1}$에 곱의 미분과 연쇄 법칙을 적용합니다.
+> $$
+> \begin{aligned}
+> \frac{dy}{dx} &= (1+e^{-x})^{-1} + x \cdot \frac{d}{dx}\big[(1+e^{-x})^{-1}\big] \\
+> &= (1+e^{-x})^{-1} + x \cdot \big[-(1+e^{-x})^{-2}\cdot(-e^{-x})\big] \\
+> &= \frac{1}{1+e^{-x}} + \frac{x\,e^{-x}}{(1+e^{-x})^2} \\
+> &= \frac{(1+e^{-x}) + x\,e^{-x}}{(1+e^{-x})^2} = \frac{1 + e^{-x} + x\,e^{-x}}{(1+e^{-x})^2}.
+> \end{aligned}
+> $$
+
+이는 강의 자료가 제시한 도함수와 정확히 일치합니다.
+
+$$
+\frac{\partial y}{\partial x} = \frac{1 + e^{-x} + x\,e^{-x}}{(1 + e^{-x})^2}.
+$$
+
+```python
+class Activation(Module):
+    def __init__(self, name):
+        super().__init__()
+        self.name = name
+
+    def forward(self, x):
+        self.x = x
+        if self.name == 'sigmoid': self.y = 1 / (1 + torch.exp(-x))
+        elif self.name == 'tanh':  self.y = (torch.exp(x)-torch.exp(-x))/(torch.exp(x)+torch.exp(-x))
+        elif self.name == 'relu':  self.y = torch.clamp(x, min=0.)
+        elif self.name == 'silu':  self.y = x / (1 + torch.exp(-x))
+        else: raise ValueError("Unsupported activation function")
+        return self.y
+
+    def backward(self, grad_y):
+        x = self.x
+        if self.name == 'silu':
+            expx = torch.exp(-x)
+            # 상류 그래디언트 grad_y 에 국소 도함수를 원소별 곱
+            return grad_y * (1 + x * expx + expx) / (1 + expx)**2
+        else:
+            raise NotImplementedError
+```
+
+> 활성화 함수는 **원소별(element-wise)** 연산이므로 야코비안이 대각 행렬이 되고, 역전파는 단순히 상류 그래디언트에 국소 도함수를 **원소별로 곱하는** 형태가 됩니다. ($\text{grad\_y} \odot y'$)
+
+## 4.5 MLP 모듈: 끝에서 끝까지(end-to-end) 역전파
+
+마지막으로 `Linear`와 `Activation`을 쌓아 MLP를 구성합니다. 구조는 `linear_0 → act_0 → linear_1 → act_1 → ... → final`입니다.
+
+* **순전파:** 입력에서 출력 방향으로 각 층을 차례로 통과시킵니다.
+* **역전파:** 출력에서 입력 방향으로 **순전파의 정확히 역순**으로 각 층의 `backward`를 호출합니다. 이는 3장의 "야코비안 곱은 출력 쪽부터" 원칙을 코드로 옮긴 것입니다.
+
+```python
+class MLP(Module):
+    def __init__(self, *dimensions):
+        self.dimensions = dimensions
+        for i in range(len(dimensions) - 2):
+            setattr(self, f'linear_{i}', Linear(dimensions[i], dimensions[i+1]))
+            setattr(self, f'act_fn_{i}', Activation("silu"))
+        self.final = Linear(dimensions[-2], dimensions[-1])
+        self.sub_modules = [f'linear_{i}' for i in range(len(dimensions)-2)] + ['final']
+
+    def forward(self, x):
+        for i in range(len(self.dimensions) - 2):
+            linear = getattr(self, f'linear_{i}')
+            act_fn = getattr(self, f'act_fn_{i}')
+            x = act_fn(linear(x))      # 선형 -> 활성화
+        return self.final(x)
+
+    def backward(self, grad_y):
+        # 순전파의 역순으로 grad 전파
+        grad_x = self.final.backward(grad_y)
+        for i in range(len(self.dimensions) - 3, -1, -1):
+            layer  = getattr(self, f'linear_{i}')
+            act_fn = getattr(self, f'act_fn_{i}')
+            grad_x = layer.backward(act_fn.backward(grad_x))  # 활성화 먼저, 그 다음 선형
+        return grad_x
+
+test_module("MLP", MLP, [3, 4, 5, 2],    torch.randn(5, 3))
+test_module("MLP", MLP, [3, 4, 5, 6, 2], torch.randn(5, 3))
+```
+
+`backward`의 한 줄 `layer.backward(act_fn.backward(grad_x))`가 본질을 압축적으로 보여 줍니다. 상류 그래디언트가 **활성화의 역전파를 먼저 통과한 뒤 선형 층의 역전파로 전달**되며, 이 흐름이 입력에 닿을 때까지 반복됩니다. 모든 파라미터 그래디언트는 각 모듈 내부에 저장되므로, 우리는 그저 `model.backward(grad)`만 호출하면 됩니다. 모든 테스트가 통과합니다.
+
+## 4.6 데모: CIFAR-10 분류 (Linear vs MLP)
+
+이제 우리가 직접 만든 역전파가 실제 데이터셋에서 동작하는지 확인합니다. 데이터 로딩·전처리·학습·평가 유틸리티는 모두 제공되어 있으니, 셀을 실행해 결과만 확인하면 됩니다.
+
+```python
+import torchvision, torchvision.transforms as transforms
+
+transform = transforms.Compose(
+    [transforms.ToTensor(),
+     transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5))])  # [-1,1] 정규화
+
+train_set = torchvision.datasets.CIFAR10('./data', train=True,  download=True, transform=transform)
+test_set  = torchvision.datasets.CIFAR10('./data', train=False, download=True, transform=transform)
+train_loader = torch.utils.data.DataLoader(train_set, batch_size=32, shuffle=True,  num_workers=2)
+test_loader  = torch.utils.data.DataLoader(test_set,  batch_size=32, shuffle=False, num_workers=2)
+```
+
+```python
+from util import simple_update, crossent_loss
+
+input_dim = 3 * 32 * 32   # 32x32 RGB 이미지를 평탄화
+models = [Linear(input_dim, 10), MLP(input_dim, 256, 256, 10)]
+names  = ["Linear", "MLP"]
+
+for name, model in zip(names, models):
+    print(f"Training {name} model...")
+    for i in range(10):
+        correct = 0
+        for (x, y) in train_loader:
+            logit = model(x.reshape(-1, input_dim))   # 순전파
+            loss, grad = crossent_loss(logit, y, 10)  # 손실과 dL/dlogit
+            model.backward(grad)                      # 역전파 (우리가 구현!)
+            simple_update(model, 0.0001)              # 파라미터 갱신
+            pred = torch.argmax(logit, dim=1)
+            correct += (y == pred).sum()
+        train_acc = correct / len(train_set) * 100
+        # (test 정확도 계산 생략 표기)
+        print(f"[{i}/10] Train Acc: {train_acc:.1f}%, Test Acc: ...")
+```
+
+실행 결과(10 에폭)는 다음과 같습니다.
+
+| 모델 | Train Acc (epoch 9) | Test Acc (epoch 9) |
+|------|---------------------|--------------------|
+| Linear | 38.7% | 35.8% |
+| MLP (256-256) | 43.2% | **42.1%** |
+
+> **해석:** 동일한 학습 설정에서 **MLP가 단일 선형 분류기보다 일관되게 높은 정확도**를 보입니다(테스트 기준 약 35.8% → 42.1%). 이는 SiLU 비선형성과 은닉층이 더 풍부한 표현력을 제공하기 때문이며, 무엇보다 **우리가 직접 구현한 `Linear`/`Activation`/`MLP`의 역전파가 올바르게 동작하여 실제로 모델이 학습되고 있음**을 입증합니다. 1장의 단순 경사 하강법에서 시작한 여정이, 이제 진짜 신경망을 학습시키는 자동 미분 엔진으로 완성된 것입니다.
+
+---
+
+## 마치며 (Conclusion)
+
+이번 실습에서 우리는 다음의 논리적 사다리를 한 칸씩 올라왔습니다.
+
+1. **경사 하강법**은 그래디언트만 있으면 함수 값을 줄일 수 있다.
+2. 복잡한 합성 함수의 그래디언트는 **연쇄 법칙**으로 얻을 수 있으며, **순전파에서 중간 값을 저장**해 두는 것이 핵심이다.
+3. 다변수로 확장하면 국소 미분 계수의 곱이 **야코비안 행렬 곱**이 되고, 손실이 스칼라이므로 **출력에서 입력 방향으로** 그래디언트 벡터를 전달하는 것이 효율적이다.
+4. 이 원리를 **모듈별 `forward`/`backward` 인터페이스**로 캡슐화하면, 어떤 신경망이든 그래디언트를 자동으로 계산할 수 있다 — 이것이 바로 **역전파(backpropagation)**다.
+
+오늘날 PyTorch의 `loss.backward()` 한 줄 뒤에 숨어 있는 메커니즘이 바로 우리가 직접 손으로 만든 이 과정입니다.

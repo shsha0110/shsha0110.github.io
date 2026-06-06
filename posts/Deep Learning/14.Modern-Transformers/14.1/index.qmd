@@ -1,0 +1,539 @@
+---
+title: "[Deep Learning] 14. Modern Transformers"
+description: "Modern Transformers"
+author: "유성현"
+categories: [Deep Learning]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+## 들어가며 (Overview)
+
+이번 글은 lec11(Part 1)에서 이어지는 **현대 Transformer 구성요소(Modern Transformer Components)** 강의를 정리한 것입니다. 소재는 OpenAI가 공개한 **gpt-oss** 모델 계열이며, 다음 두 가지 기법을 다룹니다.
+
+1. **Mixture of Experts (MoE)** — 모델의 파라미터 수는 키우되, 토큰당 계산량은 고정시키는 *희소 활성화(sparse activation)* 기법
+2. **Sliding Window Attention** — 어텐션의 **이차(quadratic) 비용**과 디코딩 시 선형적으로 커지는 KV 캐시 문제를 완화하는 기법
+
+두 기법 모두 "**거대한 모델을 합리적인 비용으로 운용**한다"는 공통의 동기에서 출발합니다. 본문에서는 각 기법의 정의·동기·수식·gpt-oss에서의 실제 설정, 그리고 PyTorch 구현까지 차례대로 살펴보겠습니다.
+
+---
+
+# 1. Mixture of Experts (MoE)
+
+![Figure 1: MoE 레이어의 개념도입니다. 입력 토큰 하나가 들어오면 라우터(router)가 전체 $N$개의 전문가(expert) 네트워크 중 일부 $K$개만 선택(top-$K$)하여 활성화합니다. 회색으로 표시된 비활성 전문가는 이 토큰에 대해 전혀 연산되지 않으며, 선택된 $K$개 전문가의 출력만 라우팅 가중치로 가중합되어 다음 레이어로 전달됩니다. 즉 "전체 네트워크 중 입력별로 일부 경로만 켜진다"는 희소 활성화 구조를 시각적으로 보여줍니다.](./images/moe_overview.png)
+
+## 1.1 MoE란 무엇인가 (What is it?)
+
+**Mixture of Experts(MoE)** 모델은 한마디로 **희소 활성화 모델(sparsely-activated model)** 입니다. 여기서 "희소성(sparsity)"이란, 모든 입력에 대해 네트워크 전체 가중치를 사용하는 것이 아니라 **입력마다 신경망 가중치의 일부 부분집합만 활성화**한다는 데서 나옵니다.
+
+* 이 성질 덕분에 모델은 **엄청나게 많은 파라미터**를 보유하면서도, 입력 하나를 처리하는 데 드는 **계산 비용은 (거의) 일정(constant)** 하게 유지할 수 있습니다.
+* 직관적으로는 "방대한 지식을 가진 전문가 집단을 두되, 질문마다 관련 있는 소수의 전문가에게만 일을 맡긴다"는 그림입니다.
+
+## 1.2 왜 필요한가 (Why do we need?)
+
+핵심 동기는 **스케일링(scaling) 비용**입니다.
+
+* **밀집 활성화 Transformer(densely-activated Transformer)** 를 키우는 것은 계산적으로 매우 비쌉니다.
+* 그 이유는 **모든 토큰이 네트워크 전체를 활성화**하기 때문입니다. 즉, 파라미터 수가 늘어나면 토큰 하나를 처리하는 비용도 그만큼 선형적으로 증가합니다.
+
+MoE는 이 결합(파라미터 수 ↔ 토큰당 계산량)을 끊어줍니다. 파라미터(=용량, capacity)는 전문가 수 $N$을 늘려 확장하되, 토큰당 실제로 켜지는 전문가는 $K(\ll N)$개로 고정하여 **계산량은 묶어두는** 것입니다.
+
+## 1.3 MoE 레이어의 수식적 정의 (MoE Layer)
+
+이제 MoE 레이어를 수식으로 정의해 보겠습니다. 기호를 먼저 정리합니다.
+
+* $K, N \in \mathbb{R}$ : 각각 **활성화되는 전문가 수**와 **전체 전문가 수** ($K \le N$)
+* $\mathbf{x} \in \mathbb{R}^{dim}$ : 입력 (여기서는 토큰 하나의 표현 벡터, $dim \gg N$)
+* $\mathbf{E}_i : \mathbb{R}^{dim} \to \mathbb{R}^{dim}$ : $i$-번째 **전문가 네트워크**, $i \in \{1, \dots, N\}$
+
+전체 $N$개의 전문가 중에서, 입력 $\mathbf{x}$에 대해서는 **오직 $K$개의 전문가** $\mathbf{E}_{e_1(\mathbf{x})}, \dots, \mathbf{E}_{e_K(\mathbf{x})}$ 만 활성화됩니다. 현대 Transformer에서 이 MoE 레이어는 **각 토큰에 독립적으로** 적용되며, 기존의 **피드포워드(FFN) 서브블록을 대체**합니다.
+
+### 1.3.1 라우터(Router): 어떤 전문가를 켤지 결정하기
+
+각 토큰이 어떻게 $K$개의 전문가를 고르는지 살펴보겠습니다. 먼저 **라우터 네트워크** $\mathbf{router} : \mathbb{R}^{dim} \to \mathbb{R}^{N}$ 를 다음의 단순한 선형 변환으로 정의합니다.
+
+$$
+\mathbf{router}(\mathbf{x}) = \mathbf{W}_r \mathbf{x},
+$$
+
+* 여기서 $\mathbf{W}_r \in \mathbb{R}^{N \times dim}$ 은 **라우터 가중치 행렬**입니다.
+* 출력 $\mathbf{router}(\mathbf{x}) \in \mathbb{R}^N$ 의 각 성분은 "$i$-번째 전문가에 대한 점수(logit)"로 해석됩니다.
+
+### 1.3.2 전문가 선택(Top-$K$)
+
+$K$를 활성화할 전문가 수라 할 때, **전문가 선택 네트워크** $\mathbf{e} : \mathbb{R}^{dim} \to \{1, \dots, N\}^K$ 를
+
+$$
+\mathbf{e}(\mathbf{x}) = \big(e_1(\mathbf{x}), \dots, e_K(\mathbf{x})\big)
+$$
+
+로 정의합니다. 여기서 $e_j(\mathbf{x}) \in \{1,\dots,N\}$ 는 $\mathbf{router}(\mathbf{x})$ 의 성분 중 **$j$-번째로 큰 값**의 인덱스이며, 동점(tie)은 임의로 처리합니다. 즉 라우터 점수가 가장 높은 $K$개의 전문가를 뽑는 **top-$K$ 연산**입니다.
+
+### 1.3.3 라우팅 확률(Routing Probability)
+
+선택된 전문가들에게 얼마만큼 비중을 줄지를 정하는 것이 라우팅 확률입니다. 전문가 $i$의 라우팅 확률 $p_i(\mathbf{x})$ 는 다음과 같이 정의됩니다.
+
+$$
+p_i(\mathbf{x}) =
+\begin{cases}
+\dfrac{\exp\big(\mathbf{router}(\mathbf{x})_i\big)}{\displaystyle\sum_{j=1}^{K} \exp\big(\mathbf{router}(\mathbf{x})_{e_j(\mathbf{x})}\big)}, & i \in \{e_1(\mathbf{x}), \dots, e_K(\mathbf{x})\}, \\[2.0em]
+0, & \text{그 외}.
+\end{cases}
+$$
+
+여기서 주목할 점들을 보충 설명하겠습니다.
+
+* 이것은 **선택된 $K$개의 logit에 대해서만 취하는 softmax**입니다. 전체 $N$개가 아니라 활성화된 $K$개만으로 분모를 구성하므로, **비활성 전문가는 분모에 기여하지 않으며 확률이 정확히 $0$** 이 됩니다.
+* 일반적인 softmax와 마찬가지로, 지수함수 $\exp(\cdot)$ 는 항상 양수이므로 $p_i(\mathbf{x}) \ge 0$ 이 보장됩니다.
+* 분자들의 합이 곧 분모이므로 정규화(normalization) 성질이 성립합니다.
+
+이를 모아 $\mathbf{p} : \mathbb{R}^{dim} \to \mathbb{R}^N$ 을 $\mathbf{p}(\mathbf{x}) = (p_1(\mathbf{x}), \dots, p_N(\mathbf{x}))$ 로 정의하면, 다음 두 성질을 만족합니다.
+
+$$
+p_i(\mathbf{x}) \ge 0, \qquad \sum_{i=1}^{N} p_i(\mathbf{x}) = 1.
+$$
+
+즉 $\mathbf{p}(\mathbf{x})$ 는 (대부분의 성분이 $0$인) **확률분포**입니다.
+
+### 1.3.4 MoE 출력
+
+최종적으로 MoE 레이어의 출력은 **선택된 전문가들의 출력에 대한 라우팅 가중합(weighted sum)** 입니다.
+
+$$
+\sum_{i=1}^{N} p_i(\mathbf{x})\, \mathbf{E}_i(\mathbf{x}) \;\in\; \mathbb{R}^{dim}.
+$$
+
+* 비활성 전문가는 $p_i(\mathbf{x}) = 0$ 이므로 합산에 전혀 기여하지 않습니다.
+* 따라서 실제 연산상으로는 $N$개가 아닌 **$K$개의 전문가만 forward**하면 충분하며, 이것이 MoE의 계산 절감이 발생하는 지점입니다.
+
+## 1.4 예시 (Example)
+
+지수함수 계산을 피하기 위해, **선택된 두 전문가의 라우터 logit이 같은(tie)** 경우를 골라 직접 계산해 보겠습니다.
+
+$N=3$, $K=2$, $dim=2$ 로 두고, 입력과 라우터 가중치를 다음과 같이 설정합니다.
+
+$$
+\mathbf{x} = \begin{bmatrix}1 \\ 1\end{bmatrix}, \qquad
+\mathbf{W}_r = \begin{bmatrix}
+1 & 0 \\
+0 & 1 \\
+0 & -1
+\end{bmatrix}.
+$$
+
+**(1) 라우터 logit 계산.** 행렬-벡터 곱을 수행하면
+
+$$
+\mathbf{router}(\mathbf{x}) = \mathbf{W}_r \mathbf{x}
+= \begin{bmatrix} 1\cdot1 + 0\cdot1 \\ 0\cdot1 + 1\cdot1 \\ 0\cdot1 + (-1)\cdot1 \end{bmatrix}
+= \begin{bmatrix} 1 \\ 1 \\ -1 \end{bmatrix}.
+$$
+
+**(2) Top-$K$ 선택.** 점수가 가장 큰 두 개는 logit이 $1$인 **전문가 1과 전문가 2**입니다. (전문가 3은 logit이 $-1$로 탈락)
+
+**(3) 라우팅 확률.** 선택된 두 logit이 동일하게 $1$이므로 softmax 결과도 균등하게 나뉩니다.
+
+$$
+p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2}, \qquad p_3(\mathbf{x}) = 0.
+$$
+
+**(4) 출력.** 전문가 네트워크를 추상적으로 둔 채 가중합을 구하면
+
+$$
+\sum_{i=1}^{3} p_i(\mathbf{x})\,\mathbf{E}_i(\mathbf{x})
+= \frac{1}{2}\mathbf{E}_1(\mathbf{x}) + \frac{1}{2}\mathbf{E}_2(\mathbf{x}).
+$$
+
+logit을 일부러 같게 만들어 둔 덕분에 지수 계산 없이도 라우팅 가중치가 $1/2, 1/2$ 로 깔끔하게 떨어지는 것을 확인할 수 있습니다.
+
+## 1.5 gpt-oss에서의 MoE 레이어 (MoE Layer in GPT-OSS)
+
+gpt-oss는 전문가를 **2-layer MLP**로 구성하되, 두 선형 사영(projection) 사이에 **SwiGLU**를 두고, 각 토큰을 **$K=4$개**의 전문가로 라우팅합니다.
+
+* `gpt-oss-120b` 는 $N=128$개, `gpt-oss-20b` 는 $N=32$개의 전문가를 사용합니다.
+* `gpt-oss-120b` 의 경우 **전체 117B** 파라미터를 보유하지만, 토큰당 활성화되는 파라미터는 **5.1B**에 불과합니다. 바로 이 점이 1.1·1.2절에서 말한 "거대한 파라미터, 고정된 계산량"의 구체적 수치입니다.
+
+### 1.5.1 전문가 네트워크의 정의
+
+lec11에서 다룬 SwiGLU를 떠올려 봅니다. 일반적으로
+
+$$
+\mathrm{SwiGLU}: \mathbb{R}^{B \times L \times 2h} \to \mathbb{R}^{B \times L \times h}, \quad h = intermediate\_dim
+$$
+
+이지만, SwiGLU는 **토큰 단위(tokenwise) 연산**이므로 이 절에서는 편의상 토큰 하나에 대한 사상 $\mathrm{SwiGLU}: \mathbb{R}^{2h} \to \mathbb{R}^{h}$ 로 표기하겠습니다.
+
+이제 $i$-번째 전문가 네트워크는 다음과 같이 정의됩니다.
+
+$$
+\mathbf{E}_i(\mathbf{x}) \;:=\; \mathrm{SwiGLU}\big(\mathbf{x}\mathbf{W}_{1,i} + \mathbf{b}_{1,i}\big)\,\mathbf{W}_{2,i} + \mathbf{b}_{2,i},
+$$
+
+여기서 각 파라미터의 형상은 다음과 같습니다.
+
+* $\mathbf{W}_{1,i} \in \mathbb{R}^{dim \times 2h}$ : 첫 번째 사영 (입력 $dim$ → $2h$, SwiGLU의 gate/linear 두 갈래를 동시에 만들기 위해 $2h$)
+* $\mathbf{W}_{2,i} \in \mathbb{R}^{h \times dim}$ : 두 번째 사영 ($h$ → $dim$, 입력 차원으로 복귀)
+* $\mathbf{b}_{1,i} \in \mathbb{R}^{2h}, \ \mathbf{b}_{2,i} \in \mathbb{R}^{dim}$ : 각 사영의 편향(bias)
+
+### 1.5.2 Gate/Linear의 융합(fused) 구현
+
+* 원리적으로 SwiGLU는 두 개의 사영 $\mathbf{x}\mathbf{W}_{gate}$, $\mathbf{x}\mathbf{W}_{linear}$ 을 필요로 합니다.
+* gpt-oss는 이를 **하나의 융합 연산** $\mathbf{x}\mathbf{W}_{1,i}$ 로 계산한 뒤, 결과를 **짝수/홀수 열로 분리(even/odd column split)** 하여 gate와 linear 두 갈래를 얻습니다.
+* SwiGLU의 구체적 구현은 lec11을 참고하시면 됩니다. (아래 1.7절 코드의 `swiglu` 함수에서 `z[..., ::2]`, `z[..., 1::2]` 가 바로 이 분리에 해당합니다.)
+
+## 1.6 배치화된 전문가와 einsum (MoE with batched experts)
+
+여러 전문가의 연산을 효율적으로 처리하기 위해, gpt-oss 구현은 `ModuleList` 대신 **배치화된 가중치 텐서 + `torch.einsum`** 을 사용합니다.
+
+### 1.6.1 왜 einsum을 쓰는가?
+
+* **명료성(Clarity)**: `view`/`transpose`/`squeeze` 가 뒤섞인 난해한 체인 대신, **차원 라벨을 명시적으로 적어** 어떤 축끼리 곱하고 합산하는지 한눈에 드러냅니다.
+* **범용성(Universality)**: 동일한 표기가 NumPy·PyTorch·TensorFlow에서 그대로 통용되어 코드 이식성이 높습니다.
+* **성능(Performance)**: 수동 루프보다 효율적이며, 복잡한 다중 텐서 계약(contraction)에서는 최적화된 BLAS(Basic Linear Algebra Subprograms) 호출에 필적하거나 능가하기도 합니다.
+
+### 1.6.2 첫 번째 사영의 einsum 해석
+
+gpt-oss의 모델 코드(`gpt-oss/torch/model.py`)에서 첫 번째 MLP는 다음과 같습니다.
+
+```python
+# gpt-oss/torch/model.py (MLP 1)
+mlp1_weight = self.mlp1_weight[expert_indices, ...]           # (bsz * seq, top_k, dim, 2 * intermediate_dim)
+mlp1_bias = self.mlp1_bias[expert_indices, ...]               # (bsz * seq, top_k, 2 * intermediate_dim)
+z = torch.einsum("bk,bekc->bec", x, mlp1_weight) + mlp1_bias  # (bsz * seq, top_k, 2 * intermediate_dim)
+```
+
+`einsum("bk,bekc->bec", ...)` 의 라벨을 해석하면 다음과 같습니다. (주의: 여기서 첨자 `k` 는 *top-k* 가 아니라 **입력 차원 $dim$** 을 가리킵니다. 전문가 축은 `e` 로 표기되어 있습니다.)
+
+* `b` = `bsz * seq` (토큰 인덱스), `k` = $dim$ (입력 차원), `e` = `top_k` (선택된 전문가), `c` = $2h$ (출력 채널)
+* 입력 $\mathbf{x}$ 는 `(b, k)`, 가중치는 `(b, e, k, c)`
+* 출력에 `k` 가 없으므로 **`k`(입력 차원)에 대해 합산(계약)** 합니다: $z_{b,e,c} = \sum_{k} x_{b,k}\, W_{b,e,k,c}$
+* 결과 `z` 의 형상은 `(b, e, c) = (bsz*seq, top_k, 2*intermediate_dim)` 입니다.
+
+요약하면, 각 토큰이 선택한 $K$개 전문가의 첫 사영을 **한 번의 einsum으로 동시에** 수행하는 구조입니다.
+
+## 1.7 구현: RMSNorm, SwiGLU, MoEFeedForward
+
+아래는 환경 설정 및 전체 MoE 피드포워드 구현입니다. 빈칸으로 남아 있던 TODO(SwiGLU 적용 → 두 번째 사영 → 전문가 가중합)까지 채워진 정답 코드입니다.
+
+```python
+import matplotlib.pyplot as plt
+import seaborn as sns
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+import time
+import numpy as np
+import copy
+import os
+from dataclasses import dataclass
+
+from google.colab import drive
+drive.mount("/content/drive")
+try:
+    os.chdir("/content/drive/MyDrive/26-1 딥러닝의 기초/lec12")
+except:
+    os.chdir("/content/drive/My Drive/lec12")
+
+DEVICE = "cpu"
+```
+
+### 1.7.1 RMSNorm
+
+전문가에 입력을 넣기 전에 **RMSNorm**으로 정규화합니다. RMSNorm은 평균 차감 없이 **제곱평균제곱근(root-mean-square)** 으로만 스케일을 맞추는 정규화로, 토큰 표현 $\mathbf{x} \in \mathbb{R}^{d}$ 에 대해
+
+$$
+\mathrm{RMSNorm}(\mathbf{x}) = \frac{\mathbf{x}}{\sqrt{\frac{1}{d}\sum_{j=1}^{d} x_j^2 + \epsilon}} \odot \mathbf{g}
+$$
+
+로 정의됩니다. ($\mathbf{g}$ 는 학습 가능한 스케일 파라미터, $\odot$ 는 원소별 곱, $\epsilon$ 은 수치 안정화 상수) 코드의 `torch.rsqrt(mean(t**2) + eps)` 가 바로 위 분모의 역수에 해당합니다.
+
+```python
+class RMSNorm(nn.Module):
+    def __init__(self, num_features, eps=1e-5):
+        super().__init__()
+        self.num_features = num_features
+        self.eps = eps
+        self.scale = nn.Parameter(torch.ones(num_features, dtype=torch.float32))
+
+    def forward(self, x):
+        assert x.shape[-1] == self.num_features
+        t, dtype = x.float(), x.dtype                                  # (..., num_features)
+        t = t * torch.rsqrt(torch.mean(t**2, dim=-1, keepdim=True) + self.eps)
+        return (t * self.scale).to(dtype)                              # (..., num_features)
+```
+
+### 1.7.2 SwiGLU (gpt-oss 변형)
+
+gpt-oss의 SwiGLU는 표준형에 세 가지 실무적 장치를 더합니다.
+
+* **짝/홀 분리**: `z[..., ::2]`(gate), `z[..., 1::2]`(linear) — 1.5.2절에서 설명한 융합 사영의 분리입니다.
+* **클램핑(clamp)**: gate는 위쪽으로, linear는 양쪽으로 `limit=7.0` 까지 잘라 수치적 폭주를 방지합니다.
+* **`+1` 편향**: linear 갈래에 $1$을 더하는데, 이는 게이트가 닫혔을 때도 정보가 일부 통과하도록 하는 잔차(residual)성 장치입니다.
+
+게이트 활성화는 SiLU/Swish 계열로 $\mathrm{gate}\cdot\sigma(\alpha\cdot \mathrm{gate})$ ($\alpha=1.702$) 형태이며, 최종 출력은 $\big(\text{gate}\cdot\sigma(\alpha\,\text{gate})\big)\odot(\text{linear}+1)$ 입니다.
+
+```python
+def swiglu(z, alpha=1.702, limit=7.0):
+    x_gate, x_linear = z[..., ::2], z[..., 1::2]                      # (..., intermediate_dim), (..., intermediate_dim)
+    # Clamp the input values
+    x_gate = x_gate.clamp(min=None, max=limit)                       # (..., intermediate_dim)
+    x_linear = x_linear.clamp(min=-limit, max=limit)                 # (..., intermediate_dim)
+    out_gate = x_gate * torch.sigmoid(alpha * x_gate)                # (..., intermediate_dim)
+    # Note we add an extra bias of 1 to the linear layer
+    return out_gate * (x_linear + 1)                                 # (..., intermediate_dim)
+```
+
+### 1.7.3 MoEFeedForward
+
+전체 흐름은 **RMSNorm → 라우터 → top-$K$ → softmax → 두 번의 사영(사이에 SwiGLU) → 전문가 가중합 → 잔차 연결** 입니다. 세 번의 einsum이 각각 (1) 첫 사영, (2) 두 번째 사영, (3) 전문가 가중합을 담당합니다.
+
+```python
+class MoEFeedForward(nn.Module):
+    """
+    Mixture of Experts Feed-Forward layer (gpt-oss style).
+    Uses batched weight tensors and einsum instead of ModuleList.
+
+    Parameters:
+        dim (int): Input/output dimension
+        intermediate_dim (int): Hidden dimension per expert
+        n_experts (int): Number of experts
+        top_k (int): Number of experts per token
+    """
+    def __init__(self, dim, intermediate_dim, n_experts, top_k=4):
+        super().__init__()
+        self.n_experts = n_experts
+        self.top_k = top_k
+        self.swiglu_limit = 7.0
+        self.norm = RMSNorm(dim)
+        self.router = nn.Linear(dim, n_experts)
+
+        self.mlp1_weight = nn.Parameter(torch.randn(n_experts, dim, intermediate_dim * 2) * 0.02)
+        self.mlp1_bias = nn.Parameter(torch.zeros(n_experts, intermediate_dim * 2))
+        self.mlp2_weight = nn.Parameter(torch.randn(n_experts, intermediate_dim, dim) * 0.02)
+        self.mlp2_bias = nn.Parameter(torch.zeros(n_experts, dim))
+
+    def forward(self, x):
+        """
+        Parameters:
+            x (torch.Tensor): Input of shape (bsz, seq, dim)
+        Returns:
+            output: shape (bsz, seq, dim)
+        """
+        bsz, seqlen, dim = x.shape
+        x_flat = x.reshape(-1, dim)                                              # (bsz * seq, dim)
+
+        x_flat_norm = self.norm(x_flat)                                          # (bsz * seq, dim)
+        router_logit = self.router(x_flat_norm)                                  # (bsz * seq, n_experts)
+
+        experts = torch.topk(router_logit, k=self.top_k, dim=-1, sorted=True)
+        expert_weights = F.softmax(experts.values, dim=1)                        # (bsz * seq, top_k)
+        expert_indices = experts.indices                                         # (bsz * seq, top_k)
+
+        # MLP 1
+        mlp1_weight = self.mlp1_weight[expert_indices, ...]                      # (bsz * seq, top_k, dim, 2 * intermediate_dim)
+        mlp1_bias = self.mlp1_bias[expert_indices, ...]                          # (bsz * seq, top_k, 2 * intermediate_dim)
+        z = torch.einsum("bk,bekc->bec", x_flat_norm, mlp1_weight) + mlp1_bias   # (bsz * seq, top_k, 2 * intermediate_dim)
+
+        ############### TODO: Apply expert MLP and aggregate selected experts ###############
+        # 1. Apply SwiGLU. # (bsz * seq, top_k, intermediate_dim)
+        swiglu_out = swiglu(z, limit=self.swiglu_limit)
+
+        # 2. Apply the second expert projection.
+        mlp2_weight = self.mlp2_weight[expert_indices, ...]                                             # (bsz * seq, top_k, intermediate_dim, dim)
+        mlp2_bias = self.mlp2_bias[expert_indices, ...]                                                 # (bsz * seq, top_k, dim)
+        expert_mlp_residuals = torch.einsum("bek,bekc->bec", swiglu_out, mlp2_weight) + mlp2_bias       # (bsz * seq, top_k, dim)
+
+        # 3. Take the weighted sum over the selected top-k experts.
+        mlp_residual = torch.einsum("bec,be->bc", expert_mlp_residuals, expert_weights)                 # (bsz * seq, dim)
+        ############### TODO END ##########
+
+        output = x_flat + mlp_residual                                                                  # (bsz * seq, dim)
+        return output.reshape(bsz, seqlen, dim)
+```
+
+**구현의 핵심 포인트를 짚어보겠습니다.**
+
+* `expert_weights = F.softmax(experts.values, dim=1)` — 1.3.3절의 "**선택된 $K$개 logit에만 적용하는 softmax**"가 정확히 이 한 줄로 구현됩니다.
+* `self.mlp1_weight[expert_indices, ...]` — 토큰별로 선택된 전문가의 가중치만 **인덱싱으로 모으는(gather)** 단계입니다.
+* **두 번째 einsum** `"bek,bekc->bec"`: `swiglu_out`(b, e, k=$h$)과 `mlp2_weight`(b, e, k=$h$, c=$dim$)에서 중간 차원 `k`($=h$)에 대해 합산하여 `(b, e, c)=(bsz*seq, top_k, dim)` 를 얻습니다.
+* **세 번째 einsum** `"bec,be->bc"`: 전문가별 출력 `(b, e, c)` 에 라우팅 가중치 `(b, e)` 를 곱하고 전문가 축 `e` 에 대해 합산합니다. 이것이 곧 1.3.4절의 $\sum_i p_i(\mathbf{x})\mathbf{E}_i(\mathbf{x})$ 입니다.
+* 마지막 `output = x_flat + mlp_residual` 은 **잔차 연결(residual connection)** 이며, 앞단의 RMSNorm과 함께 **pre-norm** 구조를 이룹니다. (수식 정의는 순수 가중합이지만, 실제 블록은 정규화·잔차가 덧붙는다는 점을 유의하시면 됩니다.)
+
+### 1.7.4 입력/출력 차원 확인
+
+```python
+dim, intermediate_dim, n_experts, top_k = 64, 128, 8, 4
+
+moe = MoEFeedForward(dim, intermediate_dim, n_experts, top_k)
+x = torch.randn(2, 10, dim)                                             # (batch=2, seq=10, dim=64)
+output = moe(x)
+
+print("Input shape        :", x.shape)
+print("Output shape       :", output.shape)
+print(f"Experts: {n_experts}, Top-k: {top_k}")
+```
+
+입력 `(2, 10, 64)` 가 그대로 `(2, 10, 64)` 로 나오는 것을 확인할 수 있습니다. MoE 레이어는 **차원을 보존하면서 FFN을 대체**하므로, 기존 Transformer 블록에 그대로 끼워 넣을 수 있습니다.
+
+---
+
+# 2. Sliding Window Attention
+
+![Figure 2: Sliding Window Attention의 어텐션 패턴을 나타낸 그림입니다. 가로·세로 축은 각각 key·query 위치이며, 색칠된(어텐션 가능한) 영역이 대각선을 따라 폭 $W$의 띠(band) 형태로 제한됩니다. 그림에서는 $W=3$으로, 각 query 토큰은 자기 자신을 포함해 직전 $W-1$개까지, 총 $W$개의 위치에만 어텐션을 수행합니다. 전체 정사각형이 채워지는 vanilla 어텐션과 대비하여, 멀리 떨어진 과거 위치가 마스킹(차단)되어 계산량이 줄어듦을 시각적으로 보여줍니다.](./images/sliding_window_attention.png)
+
+## 2.1 무엇인가 (What is it?)
+
+**Sliding Window Attention**은 각 토큰이 모든 이전 토큰/위치가 아니라, **자기 자신을 포함해 최대 $W$개의 위치에만** 어텐션하도록 하는 메커니즘입니다. ($W \in \mathbb{N}$ 은 **윈도우 크기(window size)**)
+
+* 위 그림에서는 $W=3$ 입니다.
+* 즉 query 위치 $i$ 는 $\{i-W+1, \dots, i\}$ 범위의 key에만 접근합니다.
+
+## 2.2 왜 필요한가 (Why do we need?)
+
+동기는 **비용**과 **수용 영역(receptive field)** 사이의 균형입니다.
+
+* **Vanilla 어텐션**은 시퀀스 길이 $T \in \mathbb{N}$ 에 대해 **이차(quadratic) 비용** $O(T^2)$ 을 갖습니다.
+* 게다가 **자기회귀(autoregressive) 디코딩** 시 **KV 캐시**가 처리한 토큰 수에 비례해 커지므로, **지연(latency)은 증가하고 처리량(throughput)은 감소**합니다.
+
+Sliding Window Attention에서는 각 토큰이 자기 자신을 포함해 최대 $W$개 위치에만 어텐션합니다. 그러면 **한 어텐션 레이어**에서 정보는 앞으로 **최대 $W-1$ 위치**까지만 이동할 수 있습니다.
+
+### 2.2.1 적층(stacking)을 통한 정보 전파
+
+윈도우가 좁으면 "멀리 있는 토큰의 정보를 못 보는 것 아닌가?"라는 의문이 듭니다. 그러나 레이어를 쌓으면 수용 영역이 누적됩니다.
+
+* $h \in \mathbb{N}$ 개의 어텐션 레이어를 쌓으면, 정보는 앞으로 **최대 $h(W-1)$ 위치**까지 이동할 수 있습니다.
+* 직관: 한 레이어가 정보를 $W-1$만큼 밀어주고, 다음 레이어가 그 결과를 다시 $W-1$만큼 밀어주는 식으로 효과가 **선형적으로 누적**됩니다.
+
+**즉, 슬라이딩 윈도우 밖의 토큰도 적층된 레이어를 거쳐 다음 단어 예측에 여전히 영향을 줄 수 있습니다.** 이것이 좁은 윈도우로도 긴 맥락을 다룰 수 있는 이유입니다.
+
+## 2.3 복잡도 (Complexity)
+
+| 항목 (Quantity) | Vanilla Attention | Sliding Window Attention |
+| :--- | :--- | :--- |
+| 어텐션 연산 / 점수 행렬 | $O(T^2)$ | $O(TW)$ |
+| 디코딩 시 KV 캐시 메모리 | $O(T)$ | $O(W)$ |
+
+* 어텐션 점수 행렬은 vanilla의 경우 $T \times T$ 전체를 채워야 하지만, 슬라이딩 윈도우는 각 행마다 폭 $W$의 띠만 계산하므로 $O(TW)$ 입니다.
+* **$W$를 상수로 취급**하면, 슬라이딩 윈도우 항은 각각 **$O(T)$** 와 **$O(1)$** 로 줄어듭니다. 즉 시퀀스 길이에 대해 어텐션이 **선형**, 디코딩 캐시가 **상수**가 됩니다.
+
+## 2.4 gpt-oss에서의 적용 (Alternating Layers)
+
+gpt-oss 두 모델 모두 **짝수 번째 레이어(`layer_idx % 2 == 0`)에만** $W=128$의 슬라이딩 윈도우 어텐션을 적용하고, **홀수 레이어는 full causal attention**(전체 인과적 어텐션)을 사용합니다.
+
+* 이렇게 **번갈아 배치(alternating)** 함으로써, 슬라이딩 윈도우의 **효율**과 full attention의 **전역 정보 흐름(global information flow)** 을 동시에 취합니다.
+* 짝수 레이어가 비용을 아끼는 동안, 홀수 레이어가 전체 맥락을 직접 연결해 주는 셈입니다.
+
+## 2.5 구현: 어텐션 마스크
+
+### 2.5.1 마스크 함수
+
+마스크에서 값이 `-inf` 인 위치는 softmax에서 $0$이 되어 **어텐션이 차단**되고, `0` 인 위치는 **어텐션이 허용**됩니다.
+
+```python
+def generate_causal_mask(seqlen):
+    """Standard causal mask from Lecture 7."""
+    mask = torch.triu(torch.ones(seqlen, seqlen), diagonal=1)           # (seq, seq)
+    return mask.masked_fill(mask == 1, float('-inf'))                   # (seq, seq)
+
+
+def generate_sliding_window_mask(seqlen, window_size):
+    """
+    Causal mask with sliding window (as used in gpt-oss even layers).
+
+    Position i can attend to positions max(0, i - window_size + 1) through i.
+
+    Parameters:
+        seqlen (int): Sequence length
+        window_size (int): Window size
+
+    Returns:
+        torch.Tensor: Mask of shape (seqlen, seqlen)
+    """
+    mask = torch.triu(torch.full((seqlen, seqlen), -float('inf')), diagonal=1)  # (seq, seq)
+
+    ############### TODO: Add the sliding-window cutoff below the diagonal ###############
+    mask += torch.tril(mask.new_full((seqlen, seqlen), -float('inf')), diagonal=-window_size)
+    ############### TODO END ##########
+
+    return mask                                                         # (seq, seq)
+```
+
+### 2.5.2 마스크 구성 논리 단계별 해석
+
+행 인덱스를 query 위치 $i$, 열 인덱스를 key 위치 $j$ 라 하겠습니다.
+
+* **1단계 — 인과 마스크(causal).** `torch.triu(..., diagonal=1)` 은 **대각선보다 위쪽**($j > i$, 즉 미래 위치)을 `-inf` 로 막습니다. 미래 토큰을 보지 못하게 하는 표준 인과 제약입니다.
+* **2단계 — 윈도우 하한 컷오프(TODO).** `torch.tril(..., diagonal=-window_size)` 는 **$j \le i - W$ 인 위치**(너무 먼 과거)를 `-inf` 로 막습니다.
+  - `tril(diagonal=-window_size)` 는 $j \le i - W$ 인 성분만 남기므로, 거기에 `-inf` 를 채워 더하는 것입니다.
+* **두 조건을 합치면**, 허용되는 key는 $i - W < j \le i$, 즉
+
+$$
+j \in \{\, i-W+1,\ \dots,\ i \,\},
+$$
+
+  자기 자신($j=i$)을 포함해 정확히 **$W$개**입니다. (시퀀스 시작 부근에서는 $\max(0, i-W+1)$ 로 자연히 잘립니다.) docstring의 "$\max(0,\, i-W+1)$ 부터 $i$ 까지"와 정확히 일치합니다.
+
+### 2.5.3 마스크 패턴 시각화 및 메모리 비교
+
+```python
+seqlen = 16
+
+fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+masks = [
+    ("Full Causal", generate_causal_mask(seqlen)),
+    ("Sliding (w=4)", generate_sliding_window_mask(seqlen, 4)),
+    ("Sliding (w=8)", generate_sliding_window_mask(seqlen, 8)),
+    ("gpt-oss even layer\n(w=4, causal)", generate_sliding_window_mask(seqlen, 4)),
+]
+
+for ax, (title, mask) in zip(axes, masks):
+    valid = (mask != float('-inf')).float().numpy()                     # (seq, seq)
+    ax.imshow(valid, cmap='Blues', aspect='equal')
+    ax.set_xlabel("Key position")
+    ax.set_ylabel("Query position")
+    ax.set_title(title)
+
+axes[3].set_title("gpt-oss odd layer\n(full causal)")
+valid = (generate_causal_mask(seqlen) != float('-inf')).float().numpy() # (seq, seq)
+axes[3].imshow(valid, cmap='Blues', aspect='equal')
+
+plt.suptitle("Attention Mask Patterns (blue = can attend)\ngpt-oss alternates: even=sliding window, odd=full causal", fontsize=12, y=1.05)
+plt.tight_layout()
+plt.show()
+
+print("Attention memory comparison (float16, per head):")
+for seqlen in [1024, 4096, 16384, 65536]:
+    full_mem = seqlen * seqlen * 2
+    for w in [128, 1024, 4096]:
+        sw_mem = seqlen * min(w, seqlen) * 2
+        if w < seqlen:
+            print(f"  seq={seqlen:>6d}: full={full_mem/1024:.0f}KB, window={w} -> {sw_mem/1024:.0f}KB ({sw_mem/full_mem*100:.1f}%)")
+    print()
+```
+
+![Figure 3: 네 개의 어텐션 마스크 패턴을 나란히 시각화한 결과입니다. 가로축은 key 위치, 세로축은 query 위치이며, 파란색이 어텐션 가능한(마스킹되지 않은) 영역을 나타냅니다. 첫 번째 "Full Causal"은 대각선 아래 전체가 채워진 하삼각(lower-triangular) 형태이고, 두 번째·세 번째 "Sliding (w=4)", "Sliding (w=8)"은 대각선을 따라 폭 $W$의 좁은 띠만 채워진 형태입니다. 네 번째 패널은 gpt-oss가 짝수 레이어에서는 슬라이딩 윈도우(좁은 띠), 홀수 레이어에서는 full causal(하삼각)을 번갈아 사용함을 대조해 보여줍니다. 윈도우가 커질수록($w=4 \to 8$) 띠가 두꺼워지며, 결국 $W \ge T$ 이면 full causal과 같아짐을 직관적으로 확인할 수 있습니다.](./images/attention_mask_patterns.png)
+
+* 마스크에서 `(mask != -inf)` 로 "어텐션 가능 여부"를 boolean으로 추출해 `imshow` 로 그립니다.
+* 메모리 비교 출력은 **점수 행렬을 float16으로 저장할 때의 바이트 수**를 가정합니다. full은 $T \times T$, 슬라이딩은 $T \times \min(W,T)$ 에 비례하므로, 시퀀스가 길어질수록 윈도우 방식의 비율이 극적으로 작아지는 것을 수치로 확인할 수 있습니다. (예컨대 $T$가 수만 단위로 커지면, $W=128$ 윈도우는 full 대비 메모리가 매우 작은 비율로 줄어듭니다.)
+
+---
+
+# 3. 정리 (Summary)
+
+| 기법 (Technique) | 문제 (Problem) | 핵심 이점 (Key Benefit) | 사용처 (Used In) |
+|-----------|---------|-------------|---------|
+| **MoE** | 스케일링에 더 많은 계산이 필요 | 토큰당 활성 파라미터를 고정한 채 용량 확장 | Mixtral, DeepSeek, **gpt-oss** |
+| **Sliding Window** | 어텐션의 이차 비용 + 선형적으로 커지는 디코딩 캐시 | 어텐션 비용 선형 + 고정 크기 디코딩 캐시 | Mistral, Longformer, **gpt-oss** |
+
+**gpt-oss에서는 이 두 요소가 함께 작동합니다.**
+
+* **MoE**: top-4 라우팅 + 배치화된 `einsum`
+* **번갈아 적용되는 어텐션**: 슬라이딩 윈도우($W=128$, 짝수 레이어)와 full causal attention(홀수 레이어)
+
+두 기법 모두 "**용량은 키우되 비용은 묶는다**"는 동일한 철학의 서로 다른 구현이며, 이를 결합함으로써 gpt-oss는 거대한 파라미터 규모를 합리적인 추론 비용으로 운용합니다.

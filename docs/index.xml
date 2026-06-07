@@ -10,7 +10,910 @@
 <atom:link href="https://shsha0110.github.io/index.xml" rel="self" type="application/rss+xml"/>
 <description>스흐의 공부 블로그</description>
 <generator>quarto-1.8.26</generator>
-<lastBuildDate>Sun, 31 May 2026 15:00:00 GMT</lastBuildDate>
+<lastBuildDate>Sun, 07 Jun 2026 15:00:00 GMT</lastBuildDate>
+<item>
+  <title>[Deep Learning] 25. Neural Network Pruning and LLM Compression</title>
+  <dc:creator>유성현 </dc:creator>
+  <link>https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/</link>
+  <description><![CDATA[ 
+
+
+
+
+
+<section id="들어가며-introduction" class="level2">
+<h2 class="anchored" data-anchor-id="들어가며-introduction">들어가며 (Introduction)</h2>
+<p>이번 강의의 목표는 <strong>가지치기(Pruning)를 하나의 최적화 문제로 이해</strong>하는 것입니다. 즉, 핵심 질문은 다음과 같습니다.</p>
+<blockquote class="blockquote">
+<p>성능은 최대한 보존하면서, 배포 비용(deployment cost)을 줄이기 위해 어떤 구성 요소를 제거할 것인가?</p>
+</blockquote>
+<p>강의 전체를 관통하는 핵심 메시지는 다음 한 문장으로 요약됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7B%ED%8C%8C%EB%9D%BC%EB%AF%B8%ED%84%B0%20%EC%88%98%20%EA%B0%90%EC%86%8C%7D%20%5C;%5Cnot%5CRightarrow%5C;%20%5Ctext%7B%EC%B6%94%EB%A1%A0%20%EC%86%8D%EB%8F%84%20%ED%96%A5%EC%83%81%7D%0A"></p>
+<p>즉, <strong>단순히 파라미터를 줄이는 것만으로는 빨라지지 않습니다.</strong> 가지치기로 만들어진 구조(structure)가 <strong>하드웨어와 소프트웨어 스택에 맞아떨어질 때만</strong> 실제 가속이 일어납니다. 이 원칙을 머릿속에 두고 아래 내용을 따라가면 전체 흐름이 일관되게 이해됩니다.</p>
+<p>강의는 다음 순서로 진행됩니다.</p>
+<ul>
+<li><strong>가지치기의 기초 (Pruning fundamentals)</strong></li>
+<li><strong>고전적인 CNN 가지치기 (Classical CNN pruning)</strong></li>
+<li><strong>CNN 깊이 압축 (CNN depth compression)</strong></li>
+<li><strong>LayerMerge</strong></li>
+<li><strong>LLM 가지치기 (LLM pruning)</strong></li>
+<li><strong>비교 및 요약 (Comparison and summary)</strong></li>
+</ul>
+<hr>
+</section>
+<section id="가지치기의-기초-pruning-fundamentals" class="level1">
+<h1>1. 가지치기의 기초 (Pruning fundamentals)</h1>
+<section id="신경망-가지치기란-무엇인가-what-is-neural-network-pruning" class="level2">
+<h2 class="anchored" data-anchor-id="신경망-가지치기란-무엇인가-what-is-neural-network-pruning">1.1 신경망 가지치기란 무엇인가 (What is neural network pruning?)</h2>
+<p><strong>가지치기(Pruning)</strong> 는 학습이 끝난 신경망에서 파라미터나 구성 요소를 제거하는 기법입니다. 수학적으로는 <strong>이진 마스크(binary mask)</strong> <img src="https://latex.codecogs.com/png.latex?M"> 을 곱하는 연산으로 정의됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AW%20%5C;%5Clongrightarrow%5C;%20M%20%5Codot%20W,%0A"></p>
+<p>여기서</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?W"> 는 원래의 가중치 텐서,</li>
+<li><img src="https://latex.codecogs.com/png.latex?M"> 은 원소가 <img src="https://latex.codecogs.com/png.latex?%5C%7B0,%201%5C%7D"> 인 동일한 크기의 이진 마스크,</li>
+<li><img src="https://latex.codecogs.com/png.latex?%5Codot"> 는 원소별 곱(Hadamard product)입니다.</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?M"> 의 원소가 0이면 해당 위치의 가중치가 제거(zero-out)되고, 1이면 유지됩니다.</p>
+<p>제거의 대상(prunable object)은 다양한 수준일 수 있습니다.</p>
+<ul>
+<li>개별 가중치(individual weight)</li>
+<li>채널(channel) 또는 필터(filter)</li>
+<li>어텐션 헤드(attention head)</li>
+<li>MLP 뉴런(neuron)</li>
+<li>은닉 차원(hidden dimension)</li>
+<li>레이어 또는 블록 전체(entire layer or block)</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/pruning_before_after.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 가지치기 전후의 완전연결 신경망 모식도. 왼쪽(Before pruning)은 모든 뉴런이 빽빽하게 연결된 조밀한 네트워크를, 오른쪽(After pruning)은 일부 연결(엣지)과 뉴런이 제거되어 성긴(sparse) 구조가 된 네트워크를 보여줍니다. 이 그림의 핵심 메시지는 가지치기가 곧 마스크 <img src="https://latex.codecogs.com/png.latex?M"> 을 통해 일부 연결을 0으로 만드는 연산(<img src="https://latex.codecogs.com/png.latex?W%20%5Cto%20M%20%5Codot%20W">)이라는 점을 시각적으로 전달하는 데 있습니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="압축-vs.-가속-compression-vs.-acceleration" class="level2">
+<h2 class="anchored" data-anchor-id="압축-vs.-가속-compression-vs.-acceleration">1.2 압축 vs.&nbsp;가속 (Compression vs.&nbsp;acceleration)</h2>
+<p>가지치기는 여러 종류의 배포 비용을 줄이는 것을 목표로 할 수 있습니다. 각 목표가 무엇을 줄이는지 구분하는 것이 중요합니다.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>목표 (Goal)</th>
+<th>무엇이 줄어드는가?</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Model size</strong></td>
+<td>저장되는 파라미터의 수</td>
+</tr>
+<tr class="even">
+<td><strong>Runtime memory</strong></td>
+<td>활성값 메모리 및 KV 캐시 / 중간 텐서</td>
+</tr>
+<tr class="odd">
+<td><strong>FLOPs</strong></td>
+<td>산술 연산의 수</td>
+</tr>
+<tr class="even">
+<td><strong>Latency</strong></td>
+<td>실제 추론 소요 시간(wall-clock)</td>
+</tr>
+<tr class="odd">
+<td><strong>Energy</strong></td>
+<td>쿼리/샘플당 총 에너지</td>
+</tr>
+</tbody>
+</table>
+<p>여기서 반드시 기억해야 할 <strong>결정적 구분</strong>이 있습니다.</p>
+<ul>
+<li>성긴(sparse) 모델은 0이 아닌 파라미터의 수가 더 적을 수는 있지만,</li>
+<li>표준 하드웨어에서 <strong>반드시 더 빠른 것은 아닙니다.</strong></li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7Bcompression%7D%20%5C;%5Cnot%5CRightarrow%5C;%20%5Ctext%7Bacceleration%7D.%0A"></p>
+<p>즉, <strong>압축이 곧 가속을 의미하지는 않습니다.</strong> 이 점이 본 강의가 반복적으로 강조하는 핵심 통찰입니다.</p>
+</section>
+<section id="가지치기의-입도-granularity-of-pruning" class="level2">
+<h2 class="anchored" data-anchor-id="가지치기의-입도-granularity-of-pruning">1.3 가지치기의 입도 (Granularity of pruning)</h2>
+<p>제거하는 단위의 크기, 즉 <strong>입도(granularity)</strong> 에 따라 가지치기는 세 가지로 분류됩니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>종류</th>
+<th>제거 대상</th>
+<th>결과 모델</th>
+<th>표준 하드웨어 가속?</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Unstructured</strong></td>
+<td>개별 가중치</td>
+<td>성긴 행렬(sparse matrices)</td>
+<td>보통 제한적</td>
+</tr>
+<tr class="even">
+<td><strong>Semi-structured</strong></td>
+<td>고정된 성긴 패턴 (예: 2:4)</td>
+<td>하드웨어 친화적 성긴 행렬</td>
+<td>지원 시 가능</td>
+</tr>
+<tr class="odd">
+<td><strong>Structured</strong></td>
+<td>채널, 헤드, 뉴런, 레이어</td>
+<td>더 작은 조밀(dense) 모델</td>
+<td>보통 더 쉬움</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>비정형(Unstructured)</strong> 가지치기는 가장 유연하지만, 불규칙한 희소성 때문에 가속이 어렵습니다.</li>
+<li><strong>정형(Structured)</strong> 가지치기는 제거 단위가 크고 유연성이 떨어지지만, <strong>기존의 조밀(dense) 커널로 가속하기가 훨씬 쉽습니다.</strong></li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>배포 원칙(Deployment principle):</strong> 정형 가지치기는 덜 유연하지만, 기존 dense 커널로 가속하기 훨씬 수월합니다.</p>
+</blockquote>
+</section>
+<section id="비정형-vs.-정형-가지치기-시각화" class="level2">
+<h2 class="anchored" data-anchor-id="비정형-vs.-정형-가지치기-시각화">1.4 비정형 vs.&nbsp;정형 가지치기 시각화</h2>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/unstructured_vs_structured.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 세 가지 가중치 행렬을 나란히 비교한 그림. 가장 왼쪽은 모든 원소가 채워진 조밀한 가중치 행렬(Dense weight matrix), 가운데(Unstructured)는 행렬 곳곳에 불규칙하게(irregular) 0이 흩어진 성긴 패턴, 가장 오른쪽(Structured)은 특정 행/열 그룹(whole groups)이 통째로 제거된 규칙적 패턴을 보여줍니다. 이 그림은 비정형 가지치기가 만드는 불규칙 희소성과, 정형 가지치기가 만드는 규칙적이고 하드웨어 친화적인 구조의 차이를 직관적으로 대비시킵니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="무엇을-제거할지-어떻게-결정하는가-importance-score" class="level2">
+<h2 class="anchored" data-anchor-id="무엇을-제거할지-어떻게-결정하는가-importance-score">1.5 무엇을 제거할지 어떻게 결정하는가 (Importance score)</h2>
+<p>대부분의 가지치기 기법은 <strong>중요도 점수(importance score)</strong> 를 정의하여, 점수가 낮은 구성 요소를 제거합니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>점수 유형</th>
+<th>예시</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Magnitude (크기)</strong></td>
+<td><img src="https://latex.codecogs.com/png.latex?%5Clvert%20w_i%20%5Crvert"></td>
+</tr>
+<tr class="even">
+<td><strong>Activation-aware (활성값 인식)</strong></td>
+<td><img src="https://latex.codecogs.com/png.latex?%5Clvert%20w_%7Bij%7D%20%5Crvert%20%5Ccdot%20%5ClVert%20x_j%20%5CrVert"></td>
+</tr>
+<tr class="odd">
+<td><strong>First-order Taylor (1차 테일러)</strong></td>
+<td><img src="https://latex.codecogs.com/png.latex?%5Clvert%20w_i%20%5Cnabla_%7Bw_i%7D%20L%20%5Crvert"></td>
+</tr>
+<tr class="even">
+<td><strong>Second-order approximation (2차 근사)</strong></td>
+<td>헤시안 가중 재구성 오차</td>
+</tr>
+<tr class="odd">
+<td><strong>Structure influence (구조 영향)</strong></td>
+<td>활성값 또는 블록 출력의 변화량</td>
+</tr>
+<tr class="even">
+<td><strong>Latency-aware score (지연 인식)</strong></td>
+<td>지연 감소 대비 정확도 하락</td>
+</tr>
+</tbody>
+</table>
+<p>일반적인 가지치기 파이프라인은 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7B%ED%95%99%EC%8A%B5/%EB%A1%9C%EB%93%9C%7D%20%5Cto%20%5Ctext%7B%EA%B5%AC%EC%84%B1%EC%9A%94%EC%86%8C%20%EC%A0%90%EC%88%98%ED%99%94%7D%20%5Cto%20%5Ctext%7B%EB%82%AE%EC%9D%80%20%EC%A0%90%EC%88%98%20%EC%A0%9C%EA%B1%B0%7D%20%5Cto%20%5Ctext%7B%EB%AF%B8%EC%84%B8%EC%A1%B0%EC%A0%95(fine-tune)%7D%0A"></p>
+</section>
+<section id="일반화된-가지치기-목적함수-a-generic-pruning-objective" class="level2">
+<h2 class="anchored" data-anchor-id="일반화된-가지치기-목적함수-a-generic-pruning-objective">1.6 일반화된 가지치기 목적함수 (A generic pruning objective)</h2>
+<p>가지치기 가능한 구성 요소를 <img src="https://latex.codecogs.com/png.latex?c"> 로 인덱싱하고, 마스크 변수 <img src="https://latex.codecogs.com/png.latex?m_c%20%5Cin%20%5C%7B0,%201%5C%7D"> 가 구성 요소 <img src="https://latex.codecogs.com/png.latex?c"> 의 유지 여부를 나타낸다고 합시다.</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?m_c%20=%201"> : 구성 요소 <img src="https://latex.codecogs.com/png.latex?c"> 를 <strong>유지</strong></li>
+<li><img src="https://latex.codecogs.com/png.latex?m_c%20=%200"> : 구성 요소 <img src="https://latex.codecogs.com/png.latex?c"> 를 <strong>제거</strong></li>
+</ul>
+<p>이때 가지치기는 다음 최적화 문제로 형식화됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmin_%7Bm,%5C,%20%5Ctheta'%7D%20%5C;%20L%5Cbigl(f_%7B%5Ctheta',%20m%7D%5Cbigr)%0A"></p>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?%5Ctheta'"> 는 (제거 후) 남은 파라미터, <img src="https://latex.codecogs.com/png.latex?f_%7B%5Ctheta',%20m%7D"> 은 마스크 <img src="https://latex.codecogs.com/png.latex?m"> 이 적용된 모델, <img src="https://latex.codecogs.com/png.latex?L"> 은 손실입니다. 그리고 다음과 같은 <strong>자원 제약(resource constraint)</strong> 을 만족해야 합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathrm%7BCost%7D(m)%20%5C;%5Cleqslant%5C;%20B.%0A"></p>
+<p>비용 <img src="https://latex.codecogs.com/png.latex?%5Cmathrm%7BCost%7D(m)"> 의 예시로는 파라미터 수(#params), FLOPs, 지연(latency), 메모리 등이 있으며, <img src="https://latex.codecogs.com/png.latex?B"> 는 허용되는 예산(budget)입니다.</p>
+<blockquote class="blockquote">
+<p><strong>핵심 난점(Main difficulty):</strong> 마스크 <img src="https://latex.codecogs.com/png.latex?m"> 은 이산적(discrete)이고 고차원입니다. 따라서 정확한 최적화는 일반적으로 <strong>조합 최적화(combinatorial optimization)</strong> 문제가 됩니다.</p>
+</blockquote>
+<p>이 조합적 난점을 어떻게 다룰 것인가가 이후 등장하는 모든 기법(특히 동적 계획법 기반의 깊이 압축)의 출발점입니다.</p>
+<hr>
+</section>
+</section>
+<section id="고전적인-cnn-가지치기-classical-cnn-pruning" class="level1">
+<h1>2. 고전적인 CNN 가지치기 (Classical CNN pruning)</h1>
+<section id="비정형-가지치기-학습-가지치기-재학습" class="level2">
+<h2 class="anchored" data-anchor-id="비정형-가지치기-학습-가지치기-재학습">2.1 비정형 가지치기: 학습 → 가지치기 → 재학습</h2>
+<p>Han et al.&nbsp;(NeurIPS 2015)은 <strong>크기(magnitude)</strong> 를 기준으로 개별 연결(connection)을 가지치기하는 방법을 제안했습니다. 절차는 세 단계로 이루어집니다.</p>
+<ol type="1">
+<li><strong>조밀한 네트워크 학습 (Train dense network)</strong></li>
+<li><strong>작은 가중치 가지치기 (Prune small weights)</strong></li>
+<li><strong>성긴 네트워크 재학습 (Retrain sparse network)</strong></li>
+</ol>
+<p>마스크는 임계값 <img src="https://latex.codecogs.com/png.latex?%5Ctau"> 를 기준으로 다음과 같이 정의됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AM_i%20=%0A%5Cbegin%7Bcases%7D%0A1%20&amp;%20%5Clvert%20w_i%20%5Crvert%20%5Cgeqslant%20%5Ctau,%20%5C%5C%5B4pt%5D%0A0%20&amp;%20%5Clvert%20w_i%20%5Crvert%20%3C%20%5Ctau.%0A%5Cend%7Bcases%7D%0A"></p>
+<p>즉, 절댓값이 임계값보다 작은(=덜 중요하다고 판단되는) 가중치를 제거합니다. 가지치기된 모델은</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctilde%7BW%7D%20=%20M%20%5Codot%20W%0A"></p>
+<p>로 표현됩니다.</p>
+<ul>
+<li><strong>강점:</strong> 매우 높은 희소성(sparsity)을 달성할 수 있습니다.</li>
+<li><strong>약점:</strong> 불규칙한 희소성(irregular sparsity)은 전용 커널 없이는 가속이 어렵습니다.</li>
+</ul>
+<p>이는 1.2절에서 본 “compression ≠ acceleration” 원칙의 대표적인 사례입니다.</p>
+</section>
+<section id="정형-cnn-가지치기-필터-채널-가지치기" class="level2">
+<h2 class="anchored" data-anchor-id="정형-cnn-가지치기-필터-채널-가지치기">2.2 정형 CNN 가지치기: 필터 / 채널 가지치기</h2>
+<p>합성곱 레이어의 가중치는 다음 형태를 가집니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AW%5E%7B(l)%7D%20%5Cin%20%5Cmathbb%7BR%7D%5E%7BC_%7B%5Ctext%7Bout%7D%7D%20%5Ctimes%20C_%7B%5Ctext%7Bin%7D%7D%20%5Ctimes%20K%20%5Ctimes%20K%7D,%0A"></p>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?C_%7B%5Ctext%7Bout%7D%7D"> 은 출력 채널 수, <img src="https://latex.codecogs.com/png.latex?C_%7B%5Ctext%7Bin%7D%7D"> 은 입력 채널 수, <img src="https://latex.codecogs.com/png.latex?K"> 는 커널 크기입니다.</p>
+<p><strong>필터 가지치기(filter pruning)</strong> 는 출력 채널 하나를 통째로 제거합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AW%5E%7B(l)%7D_%7Bc,%20:,%20:,%20:%7D%20%5C;%5Ctext%7B%EC%A0%9C%EA%B1%B0%7D.%0A"></p>
+<p>간단한 중요도 점수로는 <strong>필터 노름(filter norm)</strong> 을 사용합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathrm%7Bscore%7D(c)%20=%20%5Cbigl%5ClVert%20W%5E%7B(l)%7D_%7Bc,%20:,%20:,%20:%7D%20%5Cbigr%5CrVert_1.%0A"></p>
+<p>즉, <img src="https://latex.codecogs.com/png.latex?L_1"> 노름이 작은 필터(전체적으로 작은 가중치를 가진 필터)를 제거합니다.</p>
+<blockquote class="blockquote">
+<p><strong>정형 가지치기가 가속될 수 있는 이유:</strong> 채널을 제거하면 다음 레이어가 <strong>더 작은 조밀한 합성곱</strong>이 됩니다. 이는 표준 라이브러리가 효율적으로 실행할 수 있습니다.</p>
+</blockquote>
+<p>이것이 비정형 가지치기와의 결정적 차이입니다. (Li et al., ICLR 2017)</p>
+</section>
+<section id="채널-가지치기는-인접-레이어에-영향을-준다-coupling" class="level2">
+<h2 class="anchored" data-anchor-id="채널-가지치기는-인접-레이어에-영향을-준다-coupling">2.3 채널 가지치기는 인접 레이어에 영향을 준다 (Coupling)</h2>
+<p>채널 가지치기에서 반드시 주의할 점은, 레이어 <img src="https://latex.codecogs.com/png.latex?l"> 의 출력 채널 <img src="https://latex.codecogs.com/png.latex?c"> 를 제거하면 <strong>레이어 <img src="https://latex.codecogs.com/png.latex?l+1"> 의 대응하는 입력 채널도 함께 제거</strong>되어야 한다는 것입니다.</p>
+<ul>
+<li>채널 <img src="https://latex.codecogs.com/png.latex?c"> 를 만들어내는 <strong>생산자(producing) 필터</strong> (<img src="https://latex.codecogs.com/png.latex?W%5E%7B(l)%7D"> 의 일부)</li>
+<li>채널 <img src="https://latex.codecogs.com/png.latex?c"> 를 소비하는 <strong>소비자(consuming) 입력 슬라이스</strong> (<img src="https://latex.codecogs.com/png.latex?W%5E%7B(l+1)%7D"> 의 일부)</li>
+</ul>
+<p>이 둘은 <strong>일관되게(consistently)</strong> 함께 제거되어야 합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/channel_pruning_coupling.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 두 합성곱 레이어 <img src="https://latex.codecogs.com/png.latex?W%5E%7B(l)%7D"> 와 <img src="https://latex.codecogs.com/png.latex?W%5E%7B(l+1)%7D"> 사이에서 중간 활성값 채널 <img src="https://latex.codecogs.com/png.latex?x%5E%7B(l)%7D_c"> 가 연결고리 역할을 하는 모식도. 채널 <img src="https://latex.codecogs.com/png.latex?c"> 가 제거되면, 이를 출력하는 <img src="https://latex.codecogs.com/png.latex?W%5E%7B(l)%7D"> 의 필터와 이를 입력으로 받는 <img src="https://latex.codecogs.com/png.latex?W%5E%7B(l+1)%7D"> 의 입력 채널이 동시에 사라져야 함을 화살표로 표현합니다. 이 그림은 정형 가지치기가 단일 텐서가 아니라 여러 텐서에 걸친 ‘결합된(coupled)’ 행·열·채널·차원을 함께 제거해야 한다는 <strong>커플링(coupling)</strong> 개념을 강조합니다.</figcaption>
+</figure>
+</div>
+<blockquote class="blockquote">
+<p><strong>커플링(Coupling):</strong> 정형 가지치기는 종종 여러 텐서에 걸쳐 결합된 행, 열, 채널, 차원을 함께 제거해야 합니다.</p>
+</blockquote>
+</section>
+<section id="정확도효율성-트레이드오프-accuracyefficiency-trade-off" class="level2">
+<h2 class="anchored" data-anchor-id="정확도효율성-트레이드오프-accuracyefficiency-trade-off">2.4 정확도–효율성 트레이드오프 (Accuracy–efficiency trade-off)</h2>
+<p>가지치기는 본질적으로 <strong>파레토 트레이드오프(Pareto trade-off)</strong> 를 만듭니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7B%EB%8D%94%20%EB%86%92%EC%9D%80%20%EC%95%95%EC%B6%95%7D%20%5C;%5CLongleftrightarrow%5C;%20%5Ctext%7B%EB%8D%94%20%ED%81%B0%20%EC%A0%95%ED%99%95%EB%8F%84%20%ED%95%98%EB%9D%BD%7D%0A"></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/accuracy_efficiency_tradeoff.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 가로축이 지연 가속(latency speedup), 세로축이 정확도(accuracy)인 2차원 평면 위의 곡선. 좋은 가지치기 방법일수록 이 트레이드오프 곡선을 위쪽(정확도 향상)과 오른쪽(가속 향상)으로 밀어 올립니다. 이 그림의 핵심 메시지는, 가지치기 연구의 목표가 단일 지점의 성능이 아니라 <strong>파레토 프론티어(Pareto frontier) 전체를 개선하는 것</strong>임을 시각화하는 데 있습니다.</figcaption>
+</figure>
+</div>
+<p>좋은 가지치기 방법은 이 곡선을 <strong>위쪽이자 오른쪽(upward and right)</strong> 으로 이동시킵니다.</p>
+<hr>
+</section>
+</section>
+<section id="cnn-깊이-압축-cnn-depth-compression" class="level1">
+<h1>3. CNN 깊이 압축 (CNN depth compression)</h1>
+<section id="또-다른-가지치기-대상-깊이-depth" class="level2">
+<h2 class="anchored" data-anchor-id="또-다른-가지치기-대상-깊이-depth">3.1 또 다른 가지치기 대상: 깊이 (Depth)</h2>
+<p>지금까지의 채널 가지치기는 네트워크의 <strong>폭(width)</strong> 을 줄였습니다. 이번에는 <strong>깊이(depth)</strong>, 즉 순차적으로 수행되는 연산의 개수를 줄이는 접근을 봅니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7B%ED%8F%AD%20%EA%B0%80%EC%A7%80%EC%B9%98%EA%B8%B0:%20%7D%20C%20%5Cto%20C',%20%5Cqquad%20%5Ctext%7B%EA%B9%8A%EC%9D%B4%20%EA%B0%80%EC%A7%80%EC%B9%98%EA%B8%B0:%20%7D%20L%20%5Cto%20L'.%0A"></p>
+<blockquote class="blockquote">
+<p><strong>깊이가 중요한 이유:</strong> FLOPs가 비슷하더라도, 순차 연산(sequential operations)의 수가 적으면 <strong>지연(latency)과 활성값 메모리(activation memory)</strong> 를 줄일 수 있습니다.</p>
+</blockquote>
+<p>이는 현대 가속기에서 연산 자체보다 <strong>순차적 의존성과 메모리 이동</strong>이 병목인 경우가 많기 때문입니다.</p>
+</section>
+<section id="언제-합성곱-레이어를-병합할-수-있는가-when-can-layers-be-merged" class="level2">
+<h2 class="anchored" data-anchor-id="언제-합성곱-레이어를-병합할-수-있는가-when-can-layers-be-merged">3.2 언제 합성곱 레이어를 병합할 수 있는가? (When can layers be merged?)</h2>
+<p>핵심 아이디어는 <strong>두 선형 합성곱 사이에 비선형 활성화가 없으면 하나로 병합(merge)할 수 있다</strong> 는 것입니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Af_%7B%5Ctheta_2%7D%20%5Ccirc%20f_%7B%5Ctheta_1%7D%20=%20f_%7B%5Ctheta_2%20*%20%5Ctheta_1%7D,%0A"></p>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?*"> 는 두 커널의 합성을 나타냅니다. 만약 두 커널이 모두 크기 <img src="https://latex.codecogs.com/png.latex?K"> 라면, 병합된 커널의 크기는</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AK_%7B%5Ctext%7Bmerged%7D%7D%20=%202K%20-%201%0A"></p>
+<p>이 됩니다. (예: <img src="https://latex.codecogs.com/png.latex?K=3"> 인 두 합성곱을 병합하면 <img src="https://latex.codecogs.com/png.latex?K_%7B%5Ctext%7Bmerged%7D%7D%20=%205">)</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/conv_merge.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 입력 <img src="https://latex.codecogs.com/png.latex?x"> 가 합성곱 <img src="https://latex.codecogs.com/png.latex?%5Ctheta_1"> → 항등(identity) → 합성곱 <img src="https://latex.codecogs.com/png.latex?%5Ctheta_2"> 를 거쳐 출력 <img src="https://latex.codecogs.com/png.latex?y"> 로 가는 상단 다이어그램과, 이를 병합한 단일 합성곱 <img src="https://latex.codecogs.com/png.latex?%5Ctheta_2%20*%20%5Ctheta_1"> 으로 표현한 하단 다이어그램을 보여줍니다. 두 합성곱 사이의 활성화가 항등 함수(id)이기 때문에 전체가 선형이 되어 하나의 합성곱으로 접힐(collapse) 수 있음을 ‘merge’ 화살표로 나타냅니다. 이 그림은 깊이 압축의 근본 원리인 ’활성화 제거 후 선형 레이어 병합’을 시각화합니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="왜-활성화가-정확한-병합을-막는가-why-activations-block-merging" class="level2">
+<h2 class="anchored" data-anchor-id="왜-활성화가-정확한-병합을-막는가-why-activations-block-merging">3.3 왜 활성화가 정확한 병합을 막는가 (Why activations block merging)</h2>
+<p>합성곱은 <strong>선형(linear)</strong> 연산입니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Af_%5Ctheta(ax%20+%20by)%20=%20a%20f_%5Ctheta(x)%20+%20b%20f_%5Ctheta(y).%0A"></p>
+<p>따라서 두 선형 연산의 합성은 다시 하나의 선형 연산으로 표현 가능합니다. 그러나 ReLU와 같은 <strong>비선형 활성화는 선형이 아닙니다.</strong></p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathrm%7BReLU%7D(ax%20+%20by)%20%5Cneq%20a%5C,%5Cmathrm%7BReLU%7D(x)%20+%20b%5C,%5Cmathrm%7BReLU%7D(y).%0A"></p>
+<p>그러므로 활성화 <img src="https://latex.codecogs.com/png.latex?%5Csigma"> 가 사이에 끼어 있으면,</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Af_%7B%5Ctheta_2%7D%20%5Ccirc%20%5Csigma%20%5Ccirc%20f_%7B%5Ctheta_1%7D%0A"></p>
+<p>은 일반적으로 <strong>하나의 합성곱으로 접을 수 없습니다.</strong></p>
+<blockquote class="blockquote">
+<p><strong>깊이 압축 아이디어:</strong> 선택된 활성화를 <strong>항등 함수(identity)로 대체</strong>한 뒤, 그렇게 만들어진 연속된 합성곱 레이어들을 <strong>추론 시점(inference time)에 병합</strong>합니다.</p>
+</blockquote>
+</section>
+<section id="깊이-압축-목적함수-depth-compression-objective" class="level2">
+<h2 class="anchored" data-anchor-id="깊이-압축-목적함수-depth-compression-objective">3.4 깊이 압축 목적함수 (Depth compression objective)</h2>
+<p><img src="https://latex.codecogs.com/png.latex?A%20%5Csubseteq%20%5BL-1%5D"> 을 <strong>온전히 유지되는 활성화 레이어의 집합</strong>이라 합시다. 각 레이어 <img src="https://latex.codecogs.com/png.latex?l"> 에 대해 활성화는 다음과 같이 정의됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Csigma%5EA_l%20=%0A%5Cbegin%7Bcases%7D%0A%5Csigma_l%20&amp;%20l%20%5Cin%20A%20%5Cquad%20(%5Ctext%7B%ED%99%9C%EC%84%B1%ED%99%94%20%EC%9C%A0%EC%A7%80%7D),%20%5C%5C%5B4pt%5D%0A%5Cmathrm%7Bid%7D%20&amp;%20l%20%5Cnotin%20A%20%5Cquad%20(%5Ctext%7B%ED%95%AD%EB%93%B1%EC%9C%BC%EB%A1%9C%20%EB%8C%80%EC%B2%B4%7D).%0A%5Cend%7Bcases%7D%0A"></p>
+<p>압축된 네트워크는 다음과 같이 표현됩니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Af_A%20=%20%5Cprod_%7Bl=1%7D%5E%7BL%7D%20%5Csigma%5EA_l%20%5Ccirc%20f_%7B%5Ctheta_l%7D.%0A"></p>
+<p>(여기서 <img src="https://latex.codecogs.com/png.latex?%5Cprod"> 은 함수의 순차적 합성을 의미합니다.) 지연 제약을 둔 형식화는 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmax_%7BA%7D%20%5C;%20%5Cmathrm%7BAcc%7D(f_A)%20%5Cquad%20%5Ctext%7Bs.t.%7D%20%5Cquad%20T(f_A)%20%5Cleqslant%20T_0,%0A"></p>
+<p>즉 <strong>지연 예산 <img src="https://latex.codecogs.com/png.latex?T_0"> 이하에서 정확도를 최대화</strong>하는 활성화 집합 <img src="https://latex.codecogs.com/png.latex?A"> 를 찾는 문제입니다.</p>
+</section>
+<section id="대리-함수-블록-중요도와-블록-지연-surrogate" class="level2">
+<h2 class="anchored" data-anchor-id="대리-함수-블록-중요도와-블록-지연-surrogate">3.5 대리 함수: 블록 중요도와 블록 지연 (Surrogate)</h2>
+<p><img src="https://latex.codecogs.com/png.latex?A"> 에 속한 활성화들이 유지되면, 네트워크는 활성화를 경계로 하는 여러 <strong>블록(block)</strong> 으로 분할됩니다. 레이어 <img src="https://latex.codecogs.com/png.latex?i+1"> 부터 <img src="https://latex.codecogs.com/png.latex?j"> 까지의 블록에 대해 다음을 정의합니다.</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?I%5Bi,%20j%5D"> : 내부 활성화를 항등으로 대체했을 때의 <strong>중요도(importance)</strong></li>
+<li><img src="https://latex.codecogs.com/png.latex?T%5Bi,%20j%5D"> : 병합된 블록의 <strong>지연(latency)</strong></li>
+</ul>
+<p>그러면 전체 정확도와 지연을 블록 단위 합으로 근사합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathrm%7BAcc%7D(f_A)%20%5Capprox%20%5Csum_%7B(i,j)%20%5Cin%20%5Cmathrm%7Bblocks%7D(A)%7D%20I%5Bi,%20j%5D,%0A"></p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AT(f_A)%20%5Capprox%20%5Csum_%7B(i,j)%20%5Cin%20%5Cmathrm%7Bblocks%7D(A)%7D%20T%5Bi,%20j%5D.%0A"></p>
+<blockquote class="blockquote">
+<p><strong>문제의 환원(Reduction):</strong> 이 근사를 통해 가지치기 문제는 <strong>지연 제약 하의 분할 문제(latency-constrained segmentation problem)</strong> 로 바뀝니다. 분할 문제는 동적 계획법으로 효율적으로 풀 수 있습니다.</p>
+</blockquote>
+</section>
+<section id="동적-계획법-점화식-dynamic-programming-recurrence" class="level2">
+<h2 class="anchored" data-anchor-id="동적-계획법-점화식-dynamic-programming-recurrence">3.6 동적 계획법 점화식 (Dynamic programming recurrence)</h2>
+<p>다음을 정의합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AD%5Bl,%20t%5D%20=%20%5Ctext%7B%EC%A7%80%EC%97%B0%20%EC%98%88%EC%82%B0%20%7D%20t%20%5Ctext%7B%20%ED%95%98%EC%97%90%EC%84%9C%20%EB%A0%88%EC%9D%B4%EC%96%B4%20%7D%20l%20%5Ctext%7B%EA%B9%8C%EC%A7%80%EC%9D%98%20%EC%B5%9C%EB%8C%80%20%EC%A4%91%EC%9A%94%EB%8F%84%7D.%0A"></p>
+<p>마지막 블록이 레이어 <img src="https://latex.codecogs.com/png.latex?l'"> 이후에 시작하여 <img src="https://latex.codecogs.com/png.latex?l"> 에서 끝난다면, 점화식은 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AD%5Bl,%20t%5D%20=%20%5Cmax_%7B0%20%5Cleqslant%20l'%20%3C%20l%7D%20%5CBigl(%20D%5Bl',%20%5C,%20t%20-%20T%5Bl',%20l%5D%5D%20+%20I%5Bl',%20l%5D%20%5CBigr).%0A"></p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?D%5Bl',%20t%20-%20T%5Bl',%20l%5D%5D"> : 이전 경계 <img src="https://latex.codecogs.com/png.latex?l'"> 까지의 최적 중요도 (블록의 지연을 예산에서 차감)</li>
+<li><img src="https://latex.codecogs.com/png.latex?I%5Bl',%20l%5D"> : 새로 추가되는 블록의 중요도</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/dp_recurrence.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 동적 계획법 점화식의 구조를 나타낸 다이어그램. 이전 상태 <img src="https://latex.codecogs.com/png.latex?D%5Bl',%20t%20-%20T%5Bl',%20l%5D%5D"> 에 현재 블록의 중요도 <img src="https://latex.codecogs.com/png.latex?I%5Bl',%20l%5D"> 을 더한 값을 모든 가능한 이전 경계 <img src="https://latex.codecogs.com/png.latex?l'"> 에 대해 최대화(<img src="https://latex.codecogs.com/png.latex?%5Cmax_%7Bl'%7D">)하여 <img src="https://latex.codecogs.com/png.latex?D%5Bl,%20t%5D"> 를 얻는 과정을 ‘+’와 ’max’ 노드로 표현합니다. 이 그림은 깊이 압축이 전형적인 분할형 DP 구조를 가짐을 보여줍니다.</figcaption>
+</figure>
+</div>
+</section>
+<section id="함정-모든-병합이-지연을-줄이지는-않는다-pitfall" class="level2">
+<h2 class="anchored" data-anchor-id="함정-모든-병합이-지연을-줄이지는-않는다-pitfall">3.7 함정: 모든 병합이 지연을 줄이지는 않는다 (Pitfall)</h2>
+<blockquote class="blockquote">
+<p><strong>표기 주의:</strong> 이 슬라이드에서는 합성곱 가중치를 <img src="https://latex.codecogs.com/png.latex?%5Ctheta%20%5Cin%20%5Cmathbb%7BR%7D%5E%7BC_%7B%5Ctext%7Bin%7D%7D%20%5Ctimes%20C_%7B%5Ctext%7Bout%7D%7D%20%5Ctimes%20K%20%5Ctimes%20K%7D"> 로 씁니다. 이는 앞서의 <img src="https://latex.codecogs.com/png.latex?W%20%5Cin%20%5Cmathbb%7BR%7D%5E%7BC_%7B%5Ctext%7Bout%7D%7D%20%5Ctimes%20C_%7B%5Ctext%7Bin%7D%7D%20%5Ctimes%20K%20%5Ctimes%20K%7D"> 와 첫 두 축을 맞바꾼 것일 뿐, 같은 가중치입니다(<img src="https://latex.codecogs.com/png.latex?W%5Bo,i,:,:%5D%20=%20%5Ctheta%5Bi,o,:,:%5D">).</p>
+</blockquote>
+<p>다음 두 합성곱을 생각해봅시다.</p>
+<ul>
+<li>첫 번째: <img src="https://latex.codecogs.com/png.latex?100%20%5Cto%201">, <img src="https://latex.codecogs.com/png.latex?K%20=%203"></li>
+<li>두 번째: <img src="https://latex.codecogs.com/png.latex?1%20%5Cto%20100">, <img src="https://latex.codecogs.com/png.latex?K%20=%203"></li>
+</ul>
+<p>이 둘을 병합하면 유효 합성곱은</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A100%20%5Cto%20100,%20%5Cqquad%20K_%7B%5Ctext%7Bmerged%7D%7D%20=%203%20+%203%20-%201%20=%205%0A"></p>
+<p>가 되고, 병합된 가중치의 형태는</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AW_%7B%5Ctext%7Bmerged%7D%7D%20%5Cin%20%5Cmathbb%7BR%7D%5E%7B100%20%5Ctimes%20100%20%5Ctimes%205%20%5Ctimes%205%7D%0A"></p>
+<p>가 됩니다. 병합 전에는 중간 채널이 1개에 불과해 매우 가벼웠지만, 병합 후에는 <img src="https://latex.codecogs.com/png.latex?100%20%5Ctimes%20100%20%5Ctimes%205%20%5Ctimes%205"> 라는 훨씬 큰 텐서가 됩니다.</p>
+<blockquote class="blockquote">
+<p><strong>시사점(Takeaway):</strong> 병합은 레이어의 <strong>개수</strong>를 줄이지만, 개별 레이어의 <strong>비용을 오히려 증가</strong>시킬 수 있습니다. 따라서 깊이 압축은 반드시 <strong>지연 인식(latency-aware)</strong> 이어야 합니다.</p>
+</blockquote>
+</section>
+<section id="단계-지연-인식-깊이-압축-two-stage-dp" class="level2">
+<h2 class="anchored" data-anchor-id="단계-지연-인식-깊이-압축-two-stage-dp">3.8 2단계 지연 인식 깊이 압축 (Two-stage DP)</h2>
+<p>Kim et al.&nbsp;(ICML 2023)의 원래 깊이 압축 방법은 두 종류의 집합을 도입합니다.</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?A"> : 유지되는 활성화 레이어</li>
+<li><img src="https://latex.codecogs.com/png.latex?S"> : 유지되는 병합 경계(merge boundaries)</li>
+</ul>
+<p><img src="https://latex.codecogs.com/png.latex?S"> 의 목적은 <strong>해로운 병합(harmful merge)을 피하는 것</strong>입니다. 즉 3.7절에서 본 것처럼, 무작정 합치면 비용이 폭증할 수 있으므로, 중간에 병합 경계를 남겨 비용을 통제합니다.</p>
+<p><strong>1단계 DP:</strong> 내부 활성화가 없는 블록에 대한 <strong>최소 지연</strong>을 계산합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AT_%7B%5Ctext%7Bopt%7D%7D%5Bi,%20j%5D%20=%20%5Cmin_%7BS%7D%20%5Csum_k%20T%5Bs_%7Bk-1%7D,%20s_k%5D.%0A"></p>
+<p><strong>2단계 DP:</strong> 지연 예산 하에서 활성화 집합 <img src="https://latex.codecogs.com/png.latex?A"> 를 선택합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AD%5Bl,%20t%5D%20=%20%5Cmax_%7Bl'%20%3C%20l%7D%20%5C;%20D%5Bl',%20%5C,%20t%20-%20T_%7B%5Ctext%7Bopt%7D%7D%5Bl',%20l%5D%5D%20+%20I%5Bl',%20l%5D.%0A"></p>
+<p>핵심은, 2단계 DP에서 단순한 <img src="https://latex.codecogs.com/png.latex?T%5Bl',%20l%5D"> 대신 1단계에서 미리 최적화한 <img src="https://latex.codecogs.com/png.latex?T_%7B%5Ctext%7Bopt%7D%7D%5Bl',%20l%5D"> 을 사용한다는 점입니다.</p>
+</section>
+<section id="대표적인-깊이-압축-결과-representative-results" class="level2">
+<h2 class="anchored" data-anchor-id="대표적인-깊이-압축-결과-representative-results">3.9 대표적인 깊이 압축 결과 (Representative results)</h2>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/depth_compression_results.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: MobileNetV2-1.4를 기준 모델로 하여, 여러 압축 수준(DS-A부터 DS-E)에서 ‘Ours’(Kim et al.의 2단계 DP 방법)와 기존 방법을 비교한 표. 다양한 GPU(TITAN Xp, RTX 2080 Ti, RTX 3090, Tesla V100)에서의 TensorRT 지연(ms)과 정확도(Acc %)를 함께 보고합니다. 표의 핵심 메시지는, ’Ours’가 같은 압축 수준의 기존 방법(DS-A 등) 대비 <strong>더 높은 정확도와 더 낮은 지연을 동시에 달성</strong>하여 파레토 프론티어를 개선했음을 보여주는 것입니다. 예를 들어 MBV2-1.4-DS-A 대비 Ours는 정확도 74.42→74.68%로 높이면서 RTX 2080 Ti 지연을 19.62→18.63ms로 낮춥니다.</figcaption>
+</figure>
+</div>
+<p>표에서 일관되게 관찰되는 점은, <strong>모든 GPU에서 Ours 행이 비교 대상보다 더 빠르면서 정확도도 동등하거나 높다</strong>는 것입니다. 이는 지연 인식 DP가 단순한 휴리스틱 병합보다 우월함을 실증합니다.</p>
+<hr>
+</section>
+</section>
+<section id="layermerge" class="level1">
+<h1>4. LayerMerge</h1>
+<section id="깊이-압축에서-layermerge로" class="level2">
+<h2 class="anchored" data-anchor-id="깊이-압축에서-layermerge로">4.1 깊이 압축에서 LayerMerge로</h2>
+<p>기존 깊이 압축은 주로 <strong>활성화(activation)만 가지치기</strong>했습니다. <strong>LayerMerge</strong> 는 여기서 한 걸음 더 나아가, <strong>합성곱 레이어 자체를 항등 커널로 대체하여 가지치기</strong>하는 것까지 허용합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/layermerge_idea.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: <img src="https://latex.codecogs.com/png.latex?%5Csigma%20%5Cto%201%5Ctimes1%20%5Cto%20%5Csigma%20%5Cto%203%5Ctimes3%20%5Cto%20%5Csigma%20%5Cto%201%5Ctimes1%20%5Cto%20%5Csigma"> 형태의 합성곱 블록(예: MobileNet의 inverted residual)에서, 선택된 일부 합성곱을 항등(identity)으로 대체하는 과정을 보여줍니다. 이 그림은 LayerMerge가 활성화뿐 아니라 합성곱 레이어까지 함께 제거 대상으로 삼아, 이후 연속된 선형 합성곱들을 병합한다는 핵심 아이디어를 시각화합니다.</figcaption>
+</figure>
+</div>
+<blockquote class="blockquote">
+<p><strong>아이디어(Idea):</strong> 합성곱과 활성화 레이어를 <strong>동시에(jointly)</strong> 가지치기한 뒤, 테스트 시점에 연속된 선형 합성곱 블록을 병합합니다.</p>
+</blockquote>
+</section>
+<section id="layermerge-이산-선택-문제-discrete-selection-problem" class="level2">
+<h2 class="anchored" data-anchor-id="layermerge-이산-선택-문제-discrete-selection-problem">4.2 LayerMerge: 이산 선택 문제 (Discrete selection problem)</h2>
+<p>LayerMerge는 두 개의 집합을 동시에 최적화합니다.</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?A"> : 활성화 레이어를 유지하는 위치</li>
+<li><img src="https://latex.codecogs.com/png.latex?C"> : 합성곱 레이어를 유지하는 위치</li>
+</ul>
+<p>각 가지치기는 항등 대체로 표현됩니다.</p>
+<ul>
+<li>합성곱 레이어 <img src="https://latex.codecogs.com/png.latex?l"> 을 가지치기: <img src="https://latex.codecogs.com/png.latex?%5C;f_%7B%5Ctheta_l%7D%20%5Cto%20%5Cmathrm%7Bid%7D"></li>
+<li>활성화 레이어 <img src="https://latex.codecogs.com/png.latex?l"> 을 가지치기: <img src="https://latex.codecogs.com/png.latex?%5C;%5Csigma_l%20%5Cto%20%5Cmathrm%7Bid%7D"></li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>난점(Challenge):</strong> 활성화와 합성곱의 최적 부분집합을 동시에 선택하는 것은 <strong>조합적(combinatorial)</strong> 입니다.</p>
+</blockquote>
+</section>
+<section id="layermerge-대리-함수-커널-크기-상태-kernel-size-state" class="level2">
+<h2 class="anchored" data-anchor-id="layermerge-대리-함수-커널-크기-상태-kernel-size-state">4.3 LayerMerge 대리 함수: 커널 크기 상태 (Kernel-size state)</h2>
+<p>순진하게(naively) 접근하면, 블록의 중요도와 지연은 어떤 내부 합성곱이 유지되는지(<img src="https://latex.codecogs.com/png.latex?C">)에 따라 달라집니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AI%5Bi,%20j,%20C%5D,%20%5Cqquad%20T%5Bi,%20j,%20C%5D.%0A"></p>
+<p>그러나 <img src="https://latex.codecogs.com/png.latex?C"> 의 선택 가능성은 블록 길이에 대해 <strong>지수적(exponential)</strong> 으로 많습니다.</p>
+<blockquote class="blockquote">
+<p><strong>핵심 관찰(Key observation):</strong> 블록 내부에 활성화가 없을 때, 유지된 합성곱 집합 <img src="https://latex.codecogs.com/png.latex?C"> 는 주로 <strong>병합 결과의 커널 크기 <img src="https://latex.codecogs.com/png.latex?k"></strong> 를 통해서만 최종 레이어에 영향을 줍니다.</p>
+</blockquote>
+<p>따라서 상태를 <img src="https://latex.codecogs.com/png.latex?C"> 전체가 아니라 <strong>커널 크기 <img src="https://latex.codecogs.com/png.latex?k"></strong> 로 요약하여 룩업 테이블(lookup table)을 사용합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AI%5Bi,%20j,%20k%5D,%20%5Cqquad%20T%5Bi,%20j,%20k%5D.%0A"></p>
+<p>이로써 상태 공간이 <strong>지수적에서 다룰 수 있는(feasible) 크기로 축소</strong>됩니다. 이것이 LayerMerge가 조합적 폭발을 회피하는 핵심 트릭입니다.</p>
+</section>
+<section id="layermerge-dp-점화식" class="level2">
+<h2 class="anchored" data-anchor-id="layermerge-dp-점화식">4.4 LayerMerge DP 점화식</h2>
+<p>다음을 정의합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AM%5Bl,%20t%5D%20=%20%5Ctext%7B%EC%A7%80%EC%97%B0%20%EC%98%88%EC%82%B0%20%7D%20t%20%5Ctext%7B%20%ED%95%98%EC%97%90%EC%84%9C%20%EC%B2%98%EC%9D%8C%20%7D%20l%20%5Ctext%7B%EA%B0%9C%20%EB%A0%88%EC%9D%B4%EC%96%B4%EC%97%90%20%EB%8C%80%ED%95%9C%20%EC%B5%9C%EB%8C%80%20%EC%A4%91%EC%9A%94%EB%8F%84%7D.%0A"></p>
+<p>마지막 압축 블록이 <img src="https://latex.codecogs.com/png.latex?l'+1"> 부터 <img src="https://latex.codecogs.com/png.latex?l"> 까지이고 병합된 커널 크기가 <img src="https://latex.codecogs.com/png.latex?k"> 일 때, 점화식은 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AM%5Bl,%20t%5D%20=%20%5Cmax_%7B%5Csubstack%7B0%20%5Cleqslant%20l'%20%3C%20l%20%5C%5C%20k%20%5Cin%20%5Cmathcal%7BK%7D_%7Bl'l%7D%7D%7D%20%5CBigl(%20M%5Bl',%20%5C,%20t%20-%20T%5Bl',%20l,%20k%5D%5D%20+%20I%5Bl',%20l,%20k%5D%20%5CBigr).%0A"></p>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?%5Cmathcal%7BK%7D_%7Bl'l%7D"> 은 블록 <img src="https://latex.codecogs.com/png.latex?(l',%20l%5D"> 에서 가능한 커널 크기들의 집합입니다.</p>
+<blockquote class="blockquote">
+<p><strong>해석:</strong> 이전 경계 <img src="https://latex.codecogs.com/png.latex?l'"> 과 커널 크기 상태 <img src="https://latex.codecogs.com/png.latex?k"> 를 함께 선택하여, 지연 예산 하에서 최선의 중요도를 주는 조합을 찾습니다. 즉 3.6절의 DP에 <strong>커널 크기라는 차원이 하나 추가</strong>된 형태입니다.</p>
+</blockquote>
+</section>
+<section id="layermerge-결과-classification" class="level2">
+<h2 class="anchored" data-anchor-id="layermerge-결과-classification">4.5 LayerMerge 결과 (Classification)</h2>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/layermerge_results_classification.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: (a) ImageNet에서 ResNet-34, (b) ImageNet에서 MobileNetV2-1.0에 대한 정확도(세로축, %) 대 지연 가속(가로축, ×) 파레토 곡선. 비교 대상은 Original(원본), HALP/AMC(기존 가지치기), Depth(Kim et al.&nbsp;ICML 2023), LayerOnly(Ours), LayerMerge(Ours)입니다. 핵심 메시지는 빨간색 LayerMerge 곡선이 다른 모든 방법보다 위쪽이자 오른쪽에 위치하여, 같은 가속에서 더 높은 정확도(또는 같은 정확도에서 더 큰 가속)를 달성한다는 점입니다. 특히 MobileNetV2-1.0에서는 2.5× 이상의 가속에서도 정확도 하락이 완만합니다.</figcaption>
+</figure>
+</div>
+<p>두 네트워크 모두에서 <strong>LayerMerge가 활성화만 가지치기하는 Depth 방법과 합성곱만 가지치기하는 LayerOnly를 모두 능가</strong>한다는 점이 핵심입니다. 이는 두 종류의 가지치기를 결합(joint)하는 것의 이득을 보여줍니다.</p>
+</section>
+<section id="분류를-넘어서-layermerge의-확장-beyond-classification" class="level2">
+<h2 class="anchored" data-anchor-id="분류를-넘어서-layermerge의-확장-beyond-classification">4.6 분류를 넘어서: LayerMerge의 확장 (Beyond classification)</h2>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/layermerge_results_beyond.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: (c) ImageNet에서 MobileNetV2-1.4의 정확도 대 가속 곡선과, (d) CIFAR-10에서 DDPM(확산 모델)의 FID(낮을수록 좋음) 대 가속 곡선. (c)에서는 LayerMerge(빨강)가 MetaPruning, Depth, LayerOnly보다 우수한 파레토 곡선을 그립니다. (d)에서는 가속이 커질수록 FID가 증가하지만, LayerMerge가 동일 가속에서 더 낮은 FID를 유지하는 경향을 보입니다. 이 그림은 LayerMerge가 분류뿐 아니라 <strong>생성 모델(diffusion)에도 적용 가능</strong>한 일반적 깊이 압축 기법임을 입증합니다.</figcaption>
+</figure>
+</div>
+<blockquote class="blockquote">
+<p>LayerMerge의 결과는 이미지 분류와 확산 모델 생성(diffusion-model generation) 예시를 모두 포함하며, 적용 범위가 특정 과제에 국한되지 않음을 보여줍니다.</p>
+</blockquote>
+<hr>
+</section>
+</section>
+<section id="llm-가지치기-llm-pruning" class="level1">
+<h1>5. LLM 가지치기 (LLM pruning)</h1>
+<section id="왜-llm-가지치기는-다른가-why-pruning-llms-is-different" class="level2">
+<h2 class="anchored" data-anchor-id="왜-llm-가지치기는-다른가-why-pruning-llms-is-different">5.1 왜 LLM 가지치기는 다른가 (Why pruning LLMs is different)</h2>
+<p>CNN에서는 가지치기가 주로 합성곱 필터나 채널을 대상으로 합니다. 그러나 LLM에서는 배포 비용이 다음 요소들에 의해 지배됩니다.</p>
+<ul>
+<li>어텐션과 MLP 블록의 <strong>조밀한 행렬 곱(dense matrix multiplications)</strong></li>
+<li>가중치를 위한 <strong>메모리 대역폭(memory bandwidth)</strong></li>
+<li>생성 중의 <strong>KV 캐시 메모리(KV-cache memory)</strong></li>
+<li><strong>자기회귀 디코딩 지연(autoregressive decoding latency)</strong></li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>실용적 제약(Practical constraint):</strong> 가지치기된 LLM은 <strong>하드웨어가 지원하는 희소성을 사용</strong>하거나, <strong>더 작은 조밀(dense) 모델이 되어야</strong> 실질적인 이득을 얻습니다.</p>
+</blockquote>
+</section>
+<section id="트랜스포머-블록-해부-transformer-block-anatomy" class="level2">
+<h2 class="anchored" data-anchor-id="트랜스포머-블록-해부-transformer-block-anatomy">5.2 트랜스포머 블록 해부 (Transformer block anatomy)</h2>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/transformer_block.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 트랜스포머 블록의 데이터 흐름도. 입력 <img src="https://latex.codecogs.com/png.latex?x_l"> 이 멀티헤드 어텐션(Multi-head attention) → Add → Norm을 거치고, 이어서 MLP(<img src="https://latex.codecogs.com/png.latex?W_%7B%5Ctext%7Bup%7D%7D,%20W_%7B%5Ctext%7Bdown%7D%7D">) → Add → Norm을 거쳐 출력 <img src="https://latex.codecogs.com/png.latex?x_%7Bl+1%7D"> 이 됩니다. 두 개의 잔차 연결(Add)과 정규화(Norm)가 포함됩니다. 이 그림은 트랜스포머에서 가지치기 가능한 구성 요소들 — 가중치, 어텐션 헤드, MLP 뉴런, 은닉 차원, 레이어 — 가 각각 어디에 위치하는지를 한눈에 보여줍니다.</figcaption>
+</figure>
+</div>
+<p>가지치기 가능한 트랜스포머 구성 요소: <strong>가중치, 어텐션 헤드, MLP 뉴런, 은닉 차원, 레이어 전체.</strong></p>
+</section>
+<section id="llm-가지치기-분류-체계-taxonomy" class="level2">
+<h2 class="anchored" data-anchor-id="llm-가지치기-분류-체계-taxonomy">5.3 LLM 가지치기 분류 체계 (Taxonomy)</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>계열</th>
+<th>제거 대상</th>
+<th>결과</th>
+<th>대표 기법</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Unstructured</strong></td>
+<td>개별 가중치</td>
+<td>성긴 행렬</td>
+<td>magnitude, SparseGPT, Wanda</td>
+</tr>
+<tr class="even">
+<td><strong>Semi-structured</strong></td>
+<td>고정 패턴 가중치</td>
+<td>하드웨어 친화적 희소성</td>
+<td>2:4 sparsity</td>
+</tr>
+<tr class="odd">
+<td><strong>Structured width</strong></td>
+<td>헤드 / MLP 뉴런 / 은닉 차원</td>
+<td>더 작은 조밀 모델</td>
+<td>LLM-Pruner, SliceGPT, Sheared LLaMA</td>
+</tr>
+<tr class="even">
+<td><strong>Structured depth</strong></td>
+<td>트랜스포머 블록</td>
+<td>더 얕은 조밀 모델</td>
+<td>ShortGPT, layer dropping</td>
+</tr>
+</tbody>
+</table>
+<blockquote class="blockquote">
+<p><strong>핵심 질문(Main question):</strong> 우리는 <strong>성긴 모델(sparse model)</strong> 을 원하는가, 아니면 <strong>더 작은 조밀 모델(smaller dense model)</strong> 을 원하는가? 이 선택이 어떤 기법을 쓸지를 결정합니다.</p>
+</blockquote>
+</section>
+<section id="사후-학습post-training-llm-가지치기" class="level2">
+<h2 class="anchored" data-anchor-id="사후-학습post-training-llm-가지치기">5.4 사후 학습(Post-training) LLM 가지치기</h2>
+<p>거대 언어 모델을 전부 재학습하는 것은 매우 비쌉니다. 그래서 많은 LLM 가지치기 기법은 <strong>사후 학습(post-training)</strong> 방식을 취합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7B%EC%82%AC%EC%A0%84%ED%95%99%EC%8A%B5%20LLM%7D%20%5Cto%20%5Ctext%7B%EC%9E%91%EC%9D%80%20%EB%B3%B4%EC%A0%95(calibration)%20%EC%A7%91%ED%95%A9%7D%20%5Cto%20%5Ctext%7B%EA%B0%80%EC%A7%80%EC%B9%98%EA%B8%B0%EB%90%9C%20LLM%7D.%0A"></p>
+<p><strong>보정 데이터(calibration data)</strong> 는 활성값 통계를 제공합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AX%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bn%20%5Ctimes%20d%7D,%0A"></p>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?n"> 은 보정 샘플 수, <img src="https://latex.codecogs.com/png.latex?d"> 는 입력 차원입니다. 가지치기 결정은 <strong>가중치와 활성값 모두</strong>에 의존할 수 있습니다.</p>
+<blockquote class="blockquote">
+<p><strong>활성값이 중요한 이유:</strong> 드물게 사용되는 입력 방향에 연결된 가중치는, 자주 사용되는 방향에 연결된 같은 크기의 가중치보다 <strong>덜 중요할 수 있습니다.</strong> 즉 가중치 크기만으로는 중요도를 충분히 판단할 수 없습니다.</p>
+</blockquote>
+</section>
+<section id="크기-가지치기-vs.-활성값-인식-가지치기-wanda" class="level2">
+<h2 class="anchored" data-anchor-id="크기-가지치기-vs.-활성값-인식-가지치기-wanda">5.5 크기 가지치기 vs.&nbsp;활성값 인식 가지치기 (Wanda)</h2>
+<p>선형 레이어 <img src="https://latex.codecogs.com/png.latex?y%20=%20XW"> (<img src="https://latex.codecogs.com/png.latex?W%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd_%7B%5Ctext%7Bin%7D%7D%20%5Ctimes%20d_%7B%5Ctext%7Bout%7D%7D%7D">)를 생각합시다.</p>
+<p><strong>단순 크기 가지치기</strong>는 다음 점수를 사용합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathrm%7Bscore%7D(W_%7Bij%7D)%20=%20%5Clvert%20W_%7Bij%7D%20%5Crvert.%0A"></p>
+<p><strong>Wanda</strong> (Sun et al., 2023)는 <strong>활성값 인식 점수</strong>를 사용합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathrm%7Bscore%7D(W_%7Bij%7D)%20=%20%5Clvert%20W_%7Bij%7D%20%5Crvert%20%5Ccdot%20%5ClVert%20X_%7B:,i%7D%20%5CrVert_2,%0A"></p>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?X_%7B:,i%7D"> 는 입력 차원 <img src="https://latex.codecogs.com/png.latex?i"> 에 대한 보정 활성값(열 벡터)이고, <img src="https://latex.codecogs.com/png.latex?%5ClVert%20%5Ccdot%20%5CrVert_2"> 는 <img src="https://latex.codecogs.com/png.latex?L_2"> 노름입니다.</p>
+<blockquote class="blockquote">
+<p><strong>해석:</strong> 큰 가중치는 중요하지만, <strong>큰 활성값 차원에 붙어 있는 가중치는 더욱 중요합니다.</strong> Wanda는 재학습 없이(no-retraining) 이 간단한 점수만으로 효과적인 가지치기를 달성합니다.</p>
+</blockquote>
+</section>
+<section id="sparsegpt-재구성-기반-가지치기-reconstruction-based" class="level2">
+<h2 class="anchored" data-anchor-id="sparsegpt-재구성-기반-가지치기-reconstruction-based">5.6 SparseGPT: 재구성 기반 가지치기 (Reconstruction-based)</h2>
+<p>입력 활성값 <img src="https://latex.codecogs.com/png.latex?X"> 를 가진 레이어에 대해, <strong>SparseGPT</strong> (Frantar &amp; Alistarh, 2023)는 가중치를 가지치기하면서도 <strong>레이어 출력을 보존</strong>하는 것을 목표로 합니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AXW%20%5Capprox%20X%5Ctilde%7BW%7D.%0A"></p>
+<p>지역적 재구성 목적함수는 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmin_%7B%5Ctilde%7BW%7D%7D%20%5C;%20%5Cbigl%5ClVert%20XW%20-%20X%5Ctilde%7BW%7D%20%5Cbigr%5CrVert_F%5E2%20%5Cquad%20%5Ctext%7Bs.t.%7D%20%5Cquad%20%5Ctilde%7BW%7D%20%5Ctext%7B%20%EA%B0%80%20%EC%84%B1%EA%B9%80(sparse)%7D,%0A"></p>
+<p>여기서 <img src="https://latex.codecogs.com/png.latex?%5ClVert%20%5Ccdot%20%5CrVert_F"> 는 프로베니우스 노름(Frobenius norm)입니다. SparseGPT는 <strong>근사적 2차 정보(approximate second-order information)</strong> 를 사용하여, 가지치기 후 남은 가중치를 업데이트합니다.</p>
+<blockquote class="blockquote">
+<p><strong>핵심 아이디어:</strong> 단지 가중치를 삭제하는 데 그치지 않고, <strong>남은 가중치를 조정하여 원래의 레이어 출력을 재구성</strong>합니다. 이것이 단순 크기 가지치기 대비 정확도를 크게 끌어올리는 비결입니다.</p>
+</blockquote>
+<section id="보충-왜-2차-정보인가" class="level4">
+<h4 class="anchored" data-anchor-id="보충-왜-2차-정보인가">보충: 왜 2차 정보인가?</h4>
+<p>재구성 오차 <img src="https://latex.codecogs.com/png.latex?%5ClVert%20XW%20-%20X%5Ctilde%7BW%7D%20%5CrVert_F%5E2"> 를 가중치에 대해 전개하면, 헤시안에 해당하는 항이 입력 공분산 <img src="https://latex.codecogs.com/png.latex?X%5E%5Ctop%20X"> 형태로 등장합니다. SparseGPT는 이 정보를 근사적으로 활용하여, 한 가중치를 0으로 만들었을 때 나머지 가중치를 어떻게 보정해야 출력 변화가 최소가 되는지를 결정합니다. 이는 고전적인 Optimal Brain Surgeon 계열 아이디어의 대규모 확장입니다.</p>
+</section>
+</section>
+<section id="준정형-희소성-24-가지치기-semi-structured-sparsity" class="level2">
+<h2 class="anchored" data-anchor-id="준정형-희소성-24-가지치기-semi-structured-sparsity">5.7 준정형 희소성: 2:4 가지치기 (Semi-structured sparsity)</h2>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/sparsity_2to4.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 가중치 행렬 <img src="https://latex.codecogs.com/png.latex?W%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd_%7B%5Ctext%7Bin%7D%7D%20%5Ctimes%20d_%7B%5Ctext%7Bout%7D%7D%7D"> 내에서 연속된 4개의 스칼라 가중치 <img src="https://latex.codecogs.com/png.latex?(W_%7Bi,j%7D,%20W_%7Bi,j+1%7D,%20W_%7Bi,j+2%7D,%20W_%7Bi,j+3%7D)"> 를 하나의 그룹으로 묶고, 그중 2개는 유지(kept), 2개는 0으로 가지치기(pruned to zero)하는 패턴을 색칠된 박스로 보여줍니다. 캡션의 핵심 주의사항은, 각 작은 박스가 <strong>활성값이나 뉴런·채널이 아니라 가중치 행렬의 개별 스칼라 가중치</strong>라는 점입니다. 이 그림은 임의의 비정형 희소성과 달리 고정 크기 그룹 내에서 희소 패턴이 제약되어 하드웨어 친화적임을 시각화합니다.</figcaption>
+</figure>
+</div>
+<ul>
+<li><strong>그룹 정의:</strong> 4개 그룹이란 보통 한 차원을 따라 연속된 4개의 스칼라 가중치 <img src="https://latex.codecogs.com/png.latex?(W_%7Bi,j%7D,%20W_%7Bi,j+1%7D,%20W_%7Bi,j+2%7D,%20W_%7Bi,j+3%7D)"> 를 의미합니다.</li>
+<li><strong>2:4 규칙:</strong> 모든 4개 가중치 그룹 안에서 <strong>2개는 0이 아닌 값으로 유지, 2개는 0으로 가지치기</strong>합니다.</li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>왜 중요한가:</strong> 2:4 희소성은 임의의 비정형 희소성보다 <strong>하드웨어 친화적</strong>입니다. 희소 패턴이 고정 크기 그룹 내로 제약되기 때문에, (NVIDIA Ampere 이후의) 전용 텐서 코어가 이를 가속할 수 있습니다.</p>
+</blockquote>
+</section>
+<section id="트랜스포머의-정형-가지치기는-커플링을-요구한다" class="level2">
+<h2 class="anchored" data-anchor-id="트랜스포머의-정형-가지치기는-커플링을-요구한다">5.8 트랜스포머의 정형 가지치기는 커플링을 요구한다</h2>
+<p>CNN에서와 마찬가지로(2.3절), 트랜스포머의 정형 가지치기도 <strong>결합된 구조</strong>를 함께 제거해야 합니다. MLP 중간 뉴런 <img src="https://latex.codecogs.com/png.latex?j"> 를 가지치기하려면 다음을 모두 제거해야 합니다.</p>
+<ul>
+<li><img src="https://latex.codecogs.com/png.latex?W_%7B%5Ctext%7Bup%7D%7D"> 의 <strong>열(column) <img src="https://latex.codecogs.com/png.latex?j"></strong></li>
+<li><img src="https://latex.codecogs.com/png.latex?W_%7B%5Ctext%7Bdown%7D%7D"> 의 <strong>행(row) <img src="https://latex.codecogs.com/png.latex?j"></strong></li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/images/transformer_coupling.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: MLP 블록 <img src="https://latex.codecogs.com/png.latex?W_%7B%5Ctext%7Bup%7D%7D%20%5Cto%20%5Ctext%7BGELU%7D%20%5Cto%20W_%7B%5Ctext%7Bdown%7D%7D"> 의 흐름에서, 동일한 중간 뉴런(neuron) <img src="https://latex.codecogs.com/png.latex?j"> 가 <img src="https://latex.codecogs.com/png.latex?W_%7B%5Ctext%7Bup%7D%7D"> 의 한 열과 <img src="https://latex.codecogs.com/png.latex?W_%7B%5Ctext%7Bdown%7D%7D"> 의 한 행에 동시에 대응함을 화살표로 표시합니다. 이 뉴런을 제거하려면 두 위치를 일관되게(consistently) 함께 제거해야 함을 강조합니다. 이 그림은 트랜스포머 가지치기가 고립된 텐서가 아니라 <strong>결합된 파라미터 그룹</strong>을 다루는 작업임을 보여줍니다.</figcaption>
+</figure>
+</div>
+<p>수식으로 보면 MLP 블록은 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ah%20=%20%5Cmathrm%7BGELU%7D(x%20W_%7B%5Ctext%7Bup%7D%7D),%20%5Cqquad%20y%20=%20h%20W_%7B%5Ctext%7Bdown%7D%7D.%0A"></p>
+<p>여기서 GELU는 트랜스포머 MLP 내부의 비선형 활성화입니다. 중간 뉴런 <img src="https://latex.codecogs.com/png.latex?j"> 를 가지치기한다는 것은 <img src="https://latex.codecogs.com/png.latex?h_j">, <img src="https://latex.codecogs.com/png.latex?W_%7B%5Ctext%7Bup%7D%7D"> 의 대응 열, <img src="https://latex.codecogs.com/png.latex?W_%7B%5Ctext%7Bdown%7D%7D"> 의 대응 행을 함께 제거하는 것을 의미합니다.</p>
+<blockquote class="blockquote">
+<p><strong>커플링 구조:</strong> 트랜스포머 가지치기는 종종 고립된 텐서가 아니라 <strong>파라미터 그룹</strong>을 가지치기하는 문제입니다.</p>
+</blockquote>
+</section>
+<section id="llm-pruner-회복-학습이-있는-정형-가지치기" class="level2">
+<h2 class="anchored" data-anchor-id="llm-pruner-회복-학습이-있는-정형-가지치기">5.9 LLM-Pruner: 회복 학습이 있는 정형 가지치기</h2>
+<p><strong>LLM-Pruner</strong> (Ma et al., 2023)는 다음과 같은 정형 그룹을 제거합니다: 어텐션 헤드, MLP 뉴런, 결합된 은닉 차원.</p>
+<p>전형적인 정형 가지치기 파이프라인은 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7B%EA%B2%B0%ED%95%A9%20%EA%B7%B8%EB%A3%B9%20%EB%B0%9C%EA%B2%AC%7D%20%5Cto%20%5Ctext%7B%EA%B7%B8%EB%A3%B9%20%EC%A0%90%EC%88%98%ED%99%94%7D%20%5Cto%20%5Ctext%7B%EB%82%AE%EC%9D%80%20%EC%A0%90%EC%88%98%20%EC%A0%9C%EA%B1%B0%7D%20%5Cto%20%5Ctext%7BLoRA%20%ED%9A%8C%EB%B3%B5%20%ED%8A%9C%EB%8B%9D%7D.%0A"></p>
+<blockquote class="blockquote">
+<p><strong>왜 회복 학습(recovery tuning)인가?</strong> 정형 가지치기는 아키텍처 자체를 바꾸기 때문에 성능 손실이 발생합니다. 그러나 소량의 <strong>파라미터 효율적 미세조정(LoRA 등)</strong> 만으로도 손실된 성능의 상당 부분을 회복할 수 있습니다.</p>
+</blockquote>
+</section>
+<section id="slicegpt-더-작고-조밀한-모델-만들기" class="level2">
+<h2 class="anchored" data-anchor-id="slicegpt-더-작고-조밀한-모델-만들기">5.10 SliceGPT: 더 작고 조밀한 모델 만들기</h2>
+<p><strong>SliceGPT</strong> (Ashkboos et al., 2024)는 가중치 행렬을 성기게 만드는 대신, <strong>은닉 차원(hidden dimension) 자체를 줄입니다.</strong></p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ad_%7B%5Ctext%7Bmodel%7D%7D%20%5Cto%20d'_%7B%5Ctext%7Bmodel%7D%7D.%0A"></p>
+<p>그러면 조밀한 행렬이 더 작아집니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0AW%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd%20%5Ctimes%20d%7D%20%5C;%5Clongrightarrow%5C;%20W'%20%5Cin%20%5Cmathbb%7BR%7D%5E%7Bd'%20%5Ctimes%20d'%7D.%0A"></p>
+<blockquote class="blockquote">
+<p><strong>배포 이점:</strong> 결과 모델이 여전히 <strong>조밀(dense)</strong> 하므로, 표준 dense 행렬 곱 커널을 그대로 사용할 수 있습니다. 이는 표현 차원(representation-dimension) 수준의 정형 가지치기로 볼 수 있습니다.</p>
+</blockquote>
+</section>
+<section id="llm을-위한-레이어-가지치기-layer-pruning" class="level2">
+<h2 class="anchored" data-anchor-id="llm을-위한-레이어-가지치기-layer-pruning">5.11 LLM을 위한 레이어 가지치기 (Layer pruning)</h2>
+<p>LLM에는 <strong>중복된(redundant) 트랜스포머 블록</strong>이 존재할 수 있습니다. 트랜스포머 레이어를</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0Ax_%7Bl+1%7D%20=%20F_l(x_l)%0A"></p>
+<p>로 표현하면, 해당 블록이 입력을 얼마나 바꾸는지를 나타내는 간단한 <strong>영향력 측정(influence measure)</strong> 을 정의할 수 있습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmathrm%7BInfluence%7D(l)%20=%20%5Cfrac%7B%5ClVert%20F_l(x_l)%20-%20x_l%20%5CrVert%7D%7B%5ClVert%20x_l%20%5CrVert%7D.%0A"></p>
+<ul>
+<li>분자 <img src="https://latex.codecogs.com/png.latex?%5ClVert%20F_l(x_l)%20-%20x_l%20%5CrVert"> : 블록이 입력에 가한 변화의 크기</li>
+<li>분모 <img src="https://latex.codecogs.com/png.latex?%5ClVert%20x_l%20%5CrVert"> : 정규화를 위한 입력의 크기</li>
+</ul>
+<p>영향력이 작은 레이어, 즉 <img src="https://latex.codecogs.com/png.latex?F_l(x_l)%20%5Capprox%20x_l"> 인 레이어는 제거 후보가 됩니다. (잔차 연결 덕분에 블록을 건너뛰어도 입력이 거의 그대로 보존되기 때문입니다.) (Men et al., ShortGPT, 2024)</p>
+<blockquote class="blockquote">
+<p><strong>CNN 깊이 압축과의 연결:</strong> CNN 깊이 압축과 LLM 레이어 가지치기는 모두 <strong>깊이 방향의 중복(redundancy along depth)</strong> 을 활용한다는 공통 원리를 공유합니다.</p>
+</blockquote>
+</section>
+<section id="sheared-llama-가지치기로-더-작은-llm-만들기" class="level2">
+<h2 class="anchored" data-anchor-id="sheared-llama-가지치기로-더-작은-llm-만들기">5.12 Sheared LLaMA: 가지치기로 더 작은 LLM 만들기</h2>
+<p>또 다른 영역은, 가지치기를 단순한 배포용 압축이 아니라 <strong>큰 모델로부터 더 작은 파운데이션 모델을 생성</strong>하는 수단으로 사용하는 것입니다.</p>
+<p>가지치기 가능한 구조: 레이어, 어텐션 헤드, MLP 중간 차원, 은닉 차원.</p>
+<p>파이프라인은 다음과 같습니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7B%ED%81%B0%20%EC%82%AC%EC%A0%84%ED%95%99%EC%8A%B5%20LLM%7D%20%5Cto%20%5Ctext%7B%EC%A0%95%ED%98%95%20%EA%B0%80%EC%A7%80%EC%B9%98%EA%B8%B0%7D%20%5Cto%20%5Ctext%7B%EA%B3%84%EC%86%8D%20%EC%82%AC%EC%A0%84%ED%95%99%EC%8A%B5(continued%20pretraining)%7D%20%5Cto%20%5Ctext%7B%EC%9E%91%EC%9D%80%20LLM%7D.%0A"></p>
+<blockquote class="blockquote">
+<p><strong>메시지:</strong> 가지치기는 최종 압축 단계로만 쓰이는 것이 아니라, <strong>효율적인 작은 모델을 초기화(initialize)하는 방법</strong>으로도 활용될 수 있습니다. (Xia et al., Sheared LLaMA, 2023)</p>
+</blockquote>
+</section>
+<section id="llm-가지치기-평가-evaluation" class="level2">
+<h2 class="anchored" data-anchor-id="llm-가지치기-평가-evaluation">5.13 LLM 가지치기 평가 (Evaluation)</h2>
+<p>CNN 가지치기는 주로 정확도와 지연을 보고하지만, LLM 가지치기는 일반적으로 다음을 보고합니다.</p>
+<ul>
+<li>언어 모델링 코퍼스에서의 <strong>퍼플렉서티(perplexity)</strong></li>
+<li><strong>제로샷/퓨샷 벤치마크 정확도</strong></li>
+<li><strong>지시 따르기(instruction-following) 또는 추론 품질</strong></li>
+<li><strong>메모리 풋프린트(memory footprint)</strong></li>
+<li><strong>디코딩 처리량(decoding throughput)</strong></li>
+<li><strong>생성 토큰당 지연(latency per generated token)</strong></li>
+</ul>
+<blockquote class="blockquote">
+<p><strong>주의(Caution):</strong> 파라미터 수를 개선하는 가지치기 방법이라도, 가지치기된 구조가 <strong>하드웨어 효율적이지 않으면 tokens/sec를 개선하지 못할 수 있습니다.</strong> (1.2절의 원칙이 LLM에서도 그대로 적용됩니다.)</p>
+</blockquote>
+<hr>
+</section>
+</section>
+<section id="비교-및-요약-comparison-and-summary" class="level1">
+<h1>6. 비교 및 요약 (Comparison and summary)</h1>
+<section id="cnn-vs.-llm-가지치기" class="level2">
+<h2 class="anchored" data-anchor-id="cnn-vs.-llm-가지치기">6.1 CNN vs.&nbsp;LLM 가지치기</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>항목</th>
+<th>CNN 가지치기</th>
+<th>LLM 가지치기</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>공통 구조</strong></td>
+<td>필터, 채널, 활성화, 레이어</td>
+<td>가중치, 헤드, 뉴런, 은닉 차원, 레이어</td>
+</tr>
+<tr class="even">
+<td><strong>전형적 지표</strong></td>
+<td>정확도 / 지연 / FLOPs</td>
+<td>퍼플렉서티 / 벤치마크 정확도 / tokens/sec</td>
+</tr>
+<tr class="odd">
+<td><strong>주요 하드웨어 이슈</strong></td>
+<td>합성곱 커널 효율</td>
+<td>성긴 GEMM 및 메모리 대역폭</td>
+</tr>
+<tr class="even">
+<td><strong>정형 가지치기</strong></td>
+<td>채널, 블록</td>
+<td>헤드, MLP 차원, 은닉 차원, 레이어</td>
+</tr>
+<tr class="odd">
+<td><strong>깊이 가지치기</strong></td>
+<td>CNN 레이어 병합 또는 제거</td>
+<td>트랜스포머 블록 제거</td>
+</tr>
+<tr class="even">
+<td><strong>회복</strong></td>
+<td>미세조정 / 증류(distillation)</td>
+<td>LoRA, 보정, 계속 사전학습</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="가지치기-vs.-양자화-vs.-증류" class="level2">
+<h2 class="anchored" data-anchor-id="가지치기-vs.-양자화-vs.-증류">6.2 가지치기 vs.&nbsp;양자화 vs.&nbsp;증류</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>방법</th>
+<th>무엇이 바뀌는가?</th>
+<th>예시</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>가지치기(Pruning)</strong></td>
+<td>모델 구조 / 희소성</td>
+<td>가중치, 헤드, 레이어 제거</td>
+</tr>
+<tr class="even">
+<td><strong>양자화(Quantization)</strong></td>
+<td>수치 정밀도</td>
+<td>FP16 → INT8 / INT4</td>
+</tr>
+<tr class="odd">
+<td><strong>증류(Distillation)</strong></td>
+<td>학습 목표</td>
+<td>학생이 교사를 모방</td>
+</tr>
+<tr class="even">
+<td><strong>파라미터 효율적 회복</strong></td>
+<td>파라미터화(parameterization)</td>
+<td>가지치기 후 LoRA</td>
+</tr>
+</tbody>
+</table>
+<blockquote class="blockquote">
+<p>이 방법들은 <strong>상호 보완적(complementary)</strong> 입니다. <strong>가지치기 + 양자화 + 증류</strong>를 함께 결합하는 것이 종종 가능하며, 실제로 효과적입니다.</p>
+</blockquote>
+</section>
+<section id="방법별-비교-method-comparison" class="level2">
+<h2 class="anchored" data-anchor-id="방법별-비교-method-comparison">6.3 방법별 비교 (Method comparison)</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>방법 계열</th>
+<th>제거 대상</th>
+<th>성김/조밀</th>
+<th>주요 장점</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Magnitude pruning</td>
+<td>가중치</td>
+<td>sparse</td>
+<td>단순함</td>
+</tr>
+<tr class="even">
+<td>SparseGPT</td>
+<td>가중치</td>
+<td>sparse</td>
+<td>원샷 재구성 기반</td>
+</tr>
+<tr class="odd">
+<td>Wanda</td>
+<td>가중치</td>
+<td>sparse</td>
+<td>활성값 인식, 재학습 불필요</td>
+</tr>
+<tr class="even">
+<td>Channel pruning</td>
+<td>CNN 채널</td>
+<td>dense</td>
+<td>표준 커널 가속</td>
+</tr>
+<tr class="odd">
+<td>Depth compression</td>
+<td>CNN 활성화 / 병합 경계</td>
+<td>dense</td>
+<td>지연 인식 얕은 CNN</td>
+</tr>
+<tr class="even">
+<td>LayerMerge</td>
+<td>CNN 합성곱 + 활성화</td>
+<td>dense</td>
+<td>깊이·레이어 결합 가지치기</td>
+</tr>
+<tr class="odd">
+<td>LLM-Pruner</td>
+<td>헤드 / 뉴런 / 그룹</td>
+<td>dense</td>
+<td>아키텍처 수준 LLM 가지치기</td>
+</tr>
+<tr class="even">
+<td>SliceGPT</td>
+<td>은닉 차원</td>
+<td>dense</td>
+<td>더 작은 조밀 LLM</td>
+</tr>
+<tr class="odd">
+<td>2:4 sparsity</td>
+<td>고정 그룹 가중치</td>
+<td>sparse, 하드웨어 패턴</td>
+<td>하드웨어 지원 희소성</td>
+</tr>
+<tr class="even">
+<td>ShortGPT</td>
+<td>트랜스포머 레이어</td>
+<td>dense</td>
+<td>더 얕은 LLM</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="강의-요약-lecture-summary" class="level2">
+<h2 class="anchored" data-anchor-id="강의-요약-lecture-summary">6.4 강의 요약 (Lecture summary)</h2>
+<ul>
+<li>가지치기는 성능을 보존하려 노력하면서 가중치나 구성 요소를 제거합니다.</li>
+<li><strong>비정형 희소성</strong>은 파라미터를 줄이지만, 표준 하드웨어를 가속하지 못할 수 있습니다.</li>
+<li><strong>정형 가지치기</strong>는 더 작은 조밀 모델을 만들어 배포가 쉬운 경우가 많습니다.</li>
+<li><strong>CNN 깊이 압축</strong>은 활성화를 제거하고 합성곱을 병합하되, 반드시 <strong>지연 인식</strong>이어야 합니다.</li>
+<li><strong>LayerMerge</strong>는 합성곱과 활성화 레이어를 <strong>동시에</strong> 가지치기합니다.</li>
+<li><strong>LLM 가지치기</strong>는 가중치 희소성, 헤드/뉴런 가지치기, 은닉 차원 가지치기, 레이어 가지치기를 포괄합니다.</li>
+<li>CNN과 LLM 모두에서 핵심 지표는 파라미터 수가 아니라 <strong>배포 파레토 프론티어(deployment Pareto frontier)</strong> 입니다.</li>
+</ul>
+</section>
+<section id="최종-시사점-final-takeaway" class="level2">
+<h2 class="anchored" data-anchor-id="최종-시사점-final-takeaway">6.5 최종 시사점 (Final takeaway)</h2>
+<p>가지치기는 단순히 작은 가중치를 삭제하는 작업이 아닙니다. 좋은 가지치기는 다음 세 요소의 결합입니다.</p>
+<p><img src="https://latex.codecogs.com/png.latex?%0A%5Ctext%7B%EC%A2%8B%EC%9D%80%20%EA%B0%80%EC%A7%80%EC%B9%98%EA%B8%B0%7D%20=%20%5Ctext%7B%EC%A4%91%EC%9A%94%EB%8F%84%20%EC%B6%94%EC%A0%95%7D%20+%20%5Ctext%7B%EA%B5%AC%EC%A1%B0%EC%A0%81%20%ED%83%90%EC%83%89%7D%20+%20%5Ctext%7B%ED%95%98%EB%93%9C%EC%9B%A8%EC%96%B4%20%EC%9D%B8%EC%8B%9D%20%EB%B0%B0%ED%8F%AC%7D%0A"></p>
+<p>현대 모델에서 CNN 가지치기와 LLM 가지치기는 같은 원리를 공유합니다.</p>
+<blockquote class="blockquote">
+<p><strong>원리(Principle):</strong> 추론 시스템이 실제로 활용할 수 있는 형태로 <strong>중복(redundancy)을 제거하라.</strong></p>
+</blockquote>
+<p>이 한 문장이 본 강의 전체를 관통하는 결론입니다. 파라미터를 줄이는 것 자체가 목적이 아니라, 그 감소가 <strong>실제 배포 환경에서 측정 가능한 이득(지연, 메모리, 처리량)</strong> 으로 이어지도록 만드는 것이 가지치기 연구의 본질입니다.</p>
+
+
+
+</section>
+</section>
+
+ ]]></description>
+  <category>Deep Learning</category>
+  <guid>https://shsha0110.github.io/posts/Deep Learning/25.Neural-Network-Prunning-and-LLM-Compression/25.1/</guid>
+  <pubDate>Sun, 07 Jun 2026 15:00:00 GMT</pubDate>
+</item>
 <item>
   <title>[Deep Learning] 24. Reinforcement Learning 3</title>
   <dc:creator>유성현 </dc:creator>
@@ -15229,366 +16132,6 @@ font-style: inherit;">7.</span>     Q_old를 Q_new로 업데이트합니다.</sp
  ]]></description>
   <category>Deep Learning</category>
   <guid>https://shsha0110.github.io/posts/Deep Learning/21.Diffusion-Model-2/21.1/</guid>
-  <pubDate>Sun, 17 May 2026 15:00:00 GMT</pubDate>
-</item>
-<item>
-  <title>[Optimization] 21. Newton’s Method</title>
-  <dc:creator>유성현 </dc:creator>
-  <link>https://shsha0110.github.io/posts/Optimization/21.Newton’s-Method/21.1/</link>
-  <description><![CDATA[ 
-
-
-
-
-
-<section id="들어가며" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며">들어가며</h2>
-<p>이번 강의에서는 <strong>뉴턴법(Newton’s Method)</strong>을 다룹니다. 뉴턴법은 경사하강법(Gradient Descent)이 1차 근사(first-order approximation)를 활용하는 것과 달리, <strong>2차 근사(second-order approximation)</strong>를 기반으로 하여 훨씬 빠른 수렴 속도를 달성하는 최적화 알고리즘입니다.</p>
-<p>강의에서 다루는 핵심 주제는 다음과 같습니다.</p>
-<ul>
-<li>뉴턴법의 업데이트 규칙 및 하강 방향에 대한 직관</li>
-<li>2차 근사와 아핀 변환(affine transformation) 관점에서의 해석</li>
-<li>역추적 선탐색(backtracking line search)을 결합한 수렴 분석</li>
-<li>경사하강법과의 시간 복잡도 비교</li>
-</ul>
-<hr>
-</section>
-<section id="뉴턴법-newtons-method" class="level1">
-<h1>1. 뉴턴법 (Newton’s Method)</h1>
-<section id="경사하강법의-업데이트-규칙-복습" class="level2">
-<h2 class="anchored" data-anchor-id="경사하강법의-업데이트-규칙-복습">1-1. 경사하강법의 업데이트 규칙 복습</h2>
-<p>경사하강법의 업데이트 규칙은 목적함수 <img src="https://latex.codecogs.com/png.latex?f">의 <strong>2차 근사(quadratic approximation)의 최솟값</strong>을 구하는 과정으로 이해할 수 있습니다. 구체적으로,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ax_%7Bt+1%7D%20%5Cin%20%5Carg%5Cmin_%7Bx%7D%20%5Cleft%5C%7B%20f(x_t)%20+%20%5Cnabla%20f(x_t)%5E%5Ctop%20(x%20-%20x_t)%20+%20%5Cfrac%7B1%7D%7B2%5Ceta_t%7D%20%5C%7Cx%20-%20x_t%5C%7C_2%5E2%20%5Cright%5C%7D%0A"></p>
-<p>여기서</p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?f(x_t)%20+%20%5Cnabla%20f(x_t)%5E%5Ctop%20(x%20-%20x_t)">는 <img src="https://latex.codecogs.com/png.latex?x_t"> 주변의 <strong>1차 근사(first-order approximation)</strong>,</li>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cfrac%7B1%7D%7B2%5Ceta_t%7D%5C%7Cx%20-%20x_t%5C%7C_2%5E2">는 <strong>근접 항(proximity term)</strong>으로, 이를 더함으로써 전체 함수가 2차식(quadratic)이 됩니다.</li>
-</ul>
-<p>이 근접 항은 스텝 사이즈 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t">에 의존하는 인위적인 곡률(curvature)을 부여하는 것입니다.</p>
-</section>
-<section id="차-근사와-뉴턴법의-업데이트-규칙-유도" class="level2">
-<h2 class="anchored" data-anchor-id="차-근사와-뉴턴법의-업데이트-규칙-유도">1-2. 2차 근사와 뉴턴법의 업데이트 규칙 유도</h2>
-<p><img src="https://latex.codecogs.com/png.latex?f">가 두 번 미분 가능하다면, <img src="https://latex.codecogs.com/png.latex?x_t"> 주변의 <strong>2차 근사(second-order approximation)</strong>는 다음과 같습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Af(x_t)%20+%20%5Cnabla%20f(x_t)%5E%5Ctop%20(x%20-%20x_t)%20+%20%5Cfrac%7B1%7D%7B2%7D(x%20-%20x_t)%5E%5Ctop%20%5Cnabla%5E2%20f(x_t)(x%20-%20x_t)%0A"></p>
-<p>이 2차 근사는 인위적인 근접 항 대신 <strong>함수 자체의 헤시안(Hessian) <img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20f(x_t)"></strong>를 곡률로 사용합니다. 따라서 경사하강법의 근사보다 훨씬 정확합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?f">가 강볼록(strongly convex)이면 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20f(x)">는 양정치(positive definite)이며 가역(invertible)합니다. 이 2차 근사의 최솟값 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D">을 최적성 조건(optimality condition)으로부터 구하면,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cnabla%5E2%20f(x_t)(x_%7Bt+1%7D%20-%20x_t)%20+%20%5Cnabla%20f(x_t)%20=%200%0A"></p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cboxed%7Bx_%7Bt+1%7D%20=%20x_t%20-%20%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D%20%5Cnabla%20f(x_t)%7D%0A"></p>
-<p>이것이 바로 <strong>뉴턴법의 업데이트 규칙</strong>입니다. 방향 벡터 <img src="https://latex.codecogs.com/png.latex?d_t%20=%20-%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D%20%5Cnabla%20f(x_t)">를 <strong>뉴턴 방향(Newton direction)</strong>이라고 부릅니다.</p>
-<hr>
-</section>
-<section id="뉴턴-방향의-직관-proposition-21.1-21.2" class="level2">
-<h2 class="anchored" data-anchor-id="뉴턴-방향의-직관-proposition-21.1-21.2">1-3. 뉴턴 방향의 직관 — Proposition 21.1 &amp; 21.2</h2>
-<p>뉴턴 방향 <img src="https://latex.codecogs.com/png.latex?d%20=%20-%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D%20%5Cnabla%20f(x_t)">가 왜 좋은 방향인지 두 가지 관점에서 살펴봅니다.</p>
-<section id="proposition-21.1-하강-방향임을-증명" class="level3">
-<h3 class="anchored" data-anchor-id="proposition-21.1-하강-방향임을-증명">Proposition 21.1: 하강 방향임을 증명</h3>
-<p><strong>명제:</strong> <img src="https://latex.codecogs.com/png.latex?d%20=%20-%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D%20%5Cnabla%20f(x_t)">는 <img src="https://latex.codecogs.com/png.latex?x_t">에서 <strong>하강 방향(descent direction)</strong>이다.</p>
-<ul>
-<li>방향 <img src="https://latex.codecogs.com/png.latex?d">가 하강 방향이 되려면 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x_t)%5E%5Ctop%20d%20%3C%200">이어야 합니다.</li>
-<li>계산하면,</li>
-</ul>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cnabla%20f(x_t)%5E%5Ctop%20d%20=%20-%5Cnabla%20f(x_t)%5E%5Ctop%20%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D%20%5Cnabla%20f(x_t)%0A"></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20f(x_t)">가 양정치이면 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D">도 양정치이므로, <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x_t)%20%5Cneq%200">인 한 위 값은 <strong>순음수(strictly negative)</strong>입니다. <img src="https://latex.codecogs.com/png.latex?%5Csquare"></li>
-</ul>
-</section>
-<section id="proposition-21.2-이차-놈에서의-최급하강-방향" class="level3">
-<h3 class="anchored" data-anchor-id="proposition-21.2-이차-놈에서의-최급하강-방향">Proposition 21.2: 이차 놈에서의 최급하강 방향</h3>
-<p><strong>명제:</strong> <img src="https://latex.codecogs.com/png.latex?d%20=%20-%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D%20%5Cnabla%20f(x_t)">는 <strong>이차 놈(quadratic norm)</strong> <img src="https://latex.codecogs.com/png.latex?%5C%7C%5Ccdot%5C%7C_%7B%5Cnabla%5E2%20f(x_t)%7D">에 대한 (스케일된) 최급하강 방향이다.</p>
-<p>이차 놈은 다음과 같이 정의됩니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5C%7Cy%5C%7C_%7B%5Cnabla%5E2%20f(x_t)%7D%20=%20%5Cleft(y%5E%5Ctop%20%5Cnabla%5E2%20f(x_t)%20y%5Cright)%5E%7B1/2%7D%0A"></p>
-<p><strong>증명 개요:</strong></p>
-<p>이차 놈 단위 공 안에서 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x_t)%5E%5Ctop%20y">를 최소화하는 문제,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmin%20%5Cleft%5C%7B%20%5Cnabla%20f(x_t)%5E%5Ctop%20y%20:%20%5C%7Cy%5C%7C_%7B%5Cnabla%5E2%20f(x_t)%7D%20%5Cleq%201%20%5Cright%5C%7D%0A"></p>
-<p>의 라그랑지안(Lagrangian)은</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AL(y,%20%5Clambda)%20=%20%5Cnabla%20f(x_t)%5E%5Ctop%20y%20+%20%5Clambda%20%5Cleft(%20y%5E%5Ctop%20%5Cnabla%5E2%20f(x_t)%20y%20-%201%20%5Cright)%0A"></p>
-<p>KKT 조건을 만족하는 해를 구하면,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ay%5E*%20=%20%5Cfrac%7B1%7D%7B%5Cnabla%20f(x_t)%5E%5Ctop%20%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D%20%5Cnabla%20f(x_t)%7D%20%5Ccdot%20d,%20%5Cquad%20%5Clambda%5E*%20=%20%5Cfrac%7B%5Cnabla%20f(x_t)%5E%5Ctop%20%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D%20%5Cnabla%20f(x_t)%7D%7B2%7D%0A"></p>
-<p>따라서 <img src="https://latex.codecogs.com/png.latex?d">는 이차 놈에 대한 최급하강 방향의 <strong>스케일된 버전</strong>임을 확인할 수 있습니다. <img src="https://latex.codecogs.com/png.latex?%5Csquare"></p>
-</section>
-<section id="직관-3-그래디언트를-0으로-만드는-방향" class="level3">
-<h3 class="anchored" data-anchor-id="직관-3-그래디언트를-0으로-만드는-방향">직관 3: 그래디언트를 0으로 만드는 방향</h3>
-<p>최적성 조건은 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x%5E*)%20=%200">입니다. 따라서 이상적으로는 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x_t%20+%20d)%20%5Capprox%200">을 만족하는 방향 <img src="https://latex.codecogs.com/png.latex?d">를 찾고 싶습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(x_t%20+%20d)">의 1차 테일러 근사는</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cnabla%20f(x_t%20+%20d)%20%5Capprox%20%5Cnabla%20f(x_t)%20+%20%5Cnabla%5E2%20f(x_t)%20d%0A"></p>
-<p>이 식을 0으로 만드는 <img src="https://latex.codecogs.com/png.latex?d">는 정확히 뉴턴 방향</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ad%20=%20-%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D%20%5Cnabla%20f(x_t)%0A"></p>
-<p>임을 알 수 있습니다. 즉, 뉴턴법은 <strong>그래디언트를 0에 가깝게 만드는 방향</strong>으로 이동하는 알고리즘입니다.</p>
-<hr>
-</section>
-</section>
-<section id="경사하강법과-뉴턴법의-비교-예시" class="level2">
-<h2 class="anchored" data-anchor-id="경사하강법과-뉴턴법의-비교-예시">1-4. 경사하강법과 뉴턴법의 비교 예시</h2>
-<section id="이차-최소화-문제-설정" class="level3">
-<h3 class="anchored" data-anchor-id="이차-최소화-문제-설정">이차 최소화 문제 설정</h3>
-<p>다음과 같은 이차 함수를 고려합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmin_%7Bu,%20v%7D%20f(u,%20v)%20=%20%5Cfrac%7B1%7D%7B2%7D%20%5Cbegin%7Bpmatrix%7D%20u%20&amp;%20v%20%5Cend%7Bpmatrix%7D%20%5Cbegin%7Bpmatrix%7D%20M%20&amp;%200%20%5C%5C%200%20&amp;%20m%20%5Cend%7Bpmatrix%7D%20%5Cbegin%7Bpmatrix%7D%20u%20%5C%5C%20v%20%5Cend%7Bpmatrix%7D%20=%20%5Cfrac%7B1%7D%7B2%7D(Mu%5E2%20+%20mv%5E2)%0A"></p>
-<ul>
-<li>여기서 <img src="https://latex.codecogs.com/png.latex?0%20%5Cleq%20m%20%5Cleq%20M">이므로, <img src="https://latex.codecogs.com/png.latex?f">는 <img src="https://latex.codecogs.com/png.latex?M">-매끄럽고(smooth) <img src="https://latex.codecogs.com/png.latex?m">-강볼록(strongly convex)합니다.</li>
-<li>최적해는 <img src="https://latex.codecogs.com/png.latex?x%5E*%20=%20(0,%200)%5E%5Ctop">이며, 그래디언트는 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20f(u,v)%20=%20(Mu,%20mv)%5E%5Ctop">입니다.</li>
-</ul>
-</section>
-<section id="경사하강법의-경우" class="level3">
-<h3 class="anchored" data-anchor-id="경사하강법의-경우">경사하강법의 경우</h3>
-<p>초기점 <img src="https://latex.codecogs.com/png.latex?x_1%20=%20(0,%201)%5E%5Ctop">에서 스텝 사이즈 <img src="https://latex.codecogs.com/png.latex?1/M">으로 경사하강법을 수행하면,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ax_2%20=%20x_1%20-%20%5Cfrac%7B1%7D%7BM%7D%5Cnabla%20f(x_1)%20=%20%5Cbegin%7Bpmatrix%7D%200%20%5C%5C%201%20%5Cend%7Bpmatrix%7D%20-%20%5Cfrac%7B1%7D%7BM%7D%5Cbegin%7Bpmatrix%7D%200%20%5C%5C%20m%20%5Cend%7Bpmatrix%7D%20=%20%5Cbegin%7Bpmatrix%7D%200%20%5C%5C%201%20-%20m/M%20%5Cend%7Bpmatrix%7D%0A"></p>
-<p>귀납적으로 계산하면,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ax_%7Bt+1%7D%20=%20%5Cleft(1%20-%20%5Cfrac%7Bm%7D%7BM%7D%5Cright)%5Et%20%5Cbegin%7Bpmatrix%7D%200%20%5C%5C%201%20%5Cend%7Bpmatrix%7D%0A"></p>
-<p>즉, 수렴 속도가 조건수(condition number) <img src="https://latex.codecogs.com/png.latex?M/m">에 의존하며 <img src="https://latex.codecogs.com/png.latex?O%5C!%5Cleft(%5Cfrac%7BM%7D%7Bm%7D%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D%5Cright)">번의 반복이 필요합니다.</p>
-</section>
-<section id="뉴턴법의-경우" class="level3">
-<h3 class="anchored" data-anchor-id="뉴턴법의-경우">뉴턴법의 경우</h3>
-<p>헤시안과 그 역행렬은</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cnabla%5E2%20f(u,v)%20=%20%5Cbegin%7Bpmatrix%7D%20M%20&amp;%200%20%5C%5C%200%20&amp;%20m%20%5Cend%7Bpmatrix%7D,%20%5Cquad%20%5Cnabla%5E2%20f(u,v)%5E%7B-1%7D%20=%20%5Cbegin%7Bpmatrix%7D%201/M%20&amp;%200%20%5C%5C%200%20&amp;%201/m%20%5Cend%7Bpmatrix%7D%0A"></p>
-<p>따라서 첫 번째 반복에서,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ax_2%20=%20x_1%20-%20%5Cnabla%5E2%20f(x_1)%5E%7B-1%7D%5Cnabla%20f(x_1)%20=%20%5Cbegin%7Bpmatrix%7D%200%20%5C%5C%201%20%5Cend%7Bpmatrix%7D%20-%20%5Cbegin%7Bpmatrix%7D%201/M%20&amp;%200%20%5C%5C%200%20&amp;%201/m%20%5Cend%7Bpmatrix%7D%5Cbegin%7Bpmatrix%7D%200%20%5C%5C%20m%20%5Cend%7Bpmatrix%7D%20=%20%5Cbegin%7Bpmatrix%7D%200%20%5C%5C%200%20%5Cend%7Bpmatrix%7D%0A"></p>
-<p><strong>단 1번의 반복만으로 최적해에 도달</strong>합니다! 이는 헤시안이 함수의 정확한 곡률 정보를 담고 있기 때문입니다.</p>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="https://shsha0110.github.io/posts/Optimization/21.Newton’s-Method/21.1/images/gd_vs_newton_quadratic.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 이차 함수에서 경사하강법(빨간 지그재그 경로)과 뉴턴법(파란 직선 경로)의 수렴 경로 비교. 경사하강법은 조건수 <img src="https://latex.codecogs.com/png.latex?M/m">에 따라 느리게 지그재그하며 수렴하는 반면, 뉴턴법은 헤시안 역행렬을 이용해 이차 함수에서 단 한 번에 최적해 <img src="https://latex.codecogs.com/png.latex?(0,0)">에 도달한다.</figcaption>
-</figure>
-</div>
-<p>[이미지 생성 필요: <img src="https://latex.codecogs.com/png.latex?Mu%5E2%20+%20mv%5E2"> 형태의 등고선(타원)이 그려진 2D 평면 위에서, 경사하강법은 긴 축 방향을 따라 느리게 지그재그하며 수렴하는 빨간 경로를, 뉴턴법은 단 한 번에 최적해로 직선 이동하는 파란 화살표를 표시한 그림]</p>
-<hr>
-</section>
-</section>
-<section id="아핀-변환affine-transformation-관점" class="level2">
-<h2 class="anchored" data-anchor-id="아핀-변환affine-transformation-관점">1-5. 아핀 변환(Affine Transformation) 관점</h2>
-<section id="좌표-변환을-통한-경사하강법-개선" class="level3">
-<h3 class="anchored" data-anchor-id="좌표-변환을-통한-경사하강법-개선">좌표 변환을 통한 경사하강법 개선</h3>
-<p>앞선 이차 함수 예시에서 다음 변환을 도입합니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AQ%20=%20%5Cbegin%7Bpmatrix%7D%20%5Csqrt%7BM%7D%20&amp;%200%20%5C%5C%200%20&amp;%20%5Csqrt%7Bm%7D%20%5Cend%7Bpmatrix%7D,%20%5Cquad%20y%20=%20Qx%0A"></p>
-<p>그러면</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Af(x)%20=%20%5Cfrac%7B1%7D%7B2%7Dx%5E%5Ctop%20Q%5E%5Ctop%20Q%20x%20=%20%5Cfrac%7B1%7D%7B2%7Dy%5E%5Ctop%20y%20=:%20g(y)%0A"></p>
-<p>변환 후 함수 <img src="https://latex.codecogs.com/png.latex?g">는 <strong>1-매끄럽고 1-강볼록</strong>하므로, <img src="https://latex.codecogs.com/png.latex?y"> 좌표에서 경사하강법은 <img src="https://latex.codecogs.com/png.latex?O(%5Clog(1/%5Cvarepsilon))">번만에 수렴합니다. 즉, <strong>적절한 아핀 변환이 경사하강법을 크게 개선</strong>시킵니다.</p>
-</section>
-<section id="뉴턴법-국소-최적-아핀-변환을-매-반복마다-적용" class="level3">
-<h3 class="anchored" data-anchor-id="뉴턴법-국소-최적-아핀-변환을-매-반복마다-적용">뉴턴법 = 국소 최적 아핀 변환을 매 반복마다 적용</h3>
-<p>뉴턴법은 각 반복마다 <strong>현재 점 <img src="https://latex.codecogs.com/png.latex?x_t">에서 국소적으로 최적인 아핀 변환</strong>을 자동으로 찾습니다.</p>
-<p><img src="https://latex.codecogs.com/png.latex?y%20=%20Q_t%20x">로 변환했을 때 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20g(y_t)%20=%20I">가 되려면 어떤 <img src="https://latex.codecogs.com/png.latex?Q_t">가 필요한지 계산합니다.</p>
-<p>변환 후 함수 <img src="https://latex.codecogs.com/png.latex?g(y)%20=%20f(Q_t%5E%7B-1%7Dy)">의 헤시안은</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cnabla%5E2%20g(y_t)%20=%20(Q_t%5E%7B-1%7D)%5E%5Ctop%20%5Cnabla%5E2%20f(Q_t%5E%7B-1%7Dy_t)%20Q_t%5E%7B-1%7D%0A"></p>
-<p>이것이 항등행렬 <img src="https://latex.codecogs.com/png.latex?I">가 되려면,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AQ_t%20=%20%5Cleft(%5Cnabla%5E2%20f(x_t)%5Cright)%5E%7B1/2%7D%0A"></p>
-<p>이어야 합니다. 이 경우 <img src="https://latex.codecogs.com/png.latex?g">는 1-매끄럽고 1-강볼록하므로, <img src="https://latex.codecogs.com/png.latex?y"> 좌표에서의 경사하강법 업데이트는</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ay_%7Bt+1%7D%20=%20y_t%20-%20%5Cnabla%20g(y_t)%0A"></p>
-<p><img src="https://latex.codecogs.com/png.latex?y_t%20=%20Q_t%20x_t">이고 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%20g(y_t)%20=%20Q_t%5E%7B-1%7D%5Cnabla%20f(x_t)">이므로,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ay_%7Bt+1%7D%20=%20Q_t%20x_t%20-%20Q_t%5E%7B-1%7D%5Cnabla%20f(x_t)%0A"></p>
-<p>양변에 <img src="https://latex.codecogs.com/png.latex?Q_t%5E%7B-1%7D">을 곱하면</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ax_%7Bt+1%7D%20=%20Q_t%5E%7B-1%7Dy_%7Bt+1%7D%20=%20x_t%20-%20Q_t%5E%7B-2%7D%5Cnabla%20f(x_t)%20=%20x_t%20-%20%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D%5Cnabla%20f(x_t)%0A"></p>
-<p>이는 정확히 <strong>뉴턴법의 업데이트 규칙과 동일</strong>합니다. 즉, 뉴턴법은 매 반복마다 헤시안 기반의 최적 아핀 변환을 암묵적으로 수행하는 알고리즘입니다.</p>
-<hr>
-</section>
-</section>
-</section>
-<section id="뉴턴법의-수렴-분석-convergence-of-newtons-method" class="level1">
-<h1>2. 뉴턴법의 수렴 분석 (Convergence of Newton’s Method)</h1>
-<section id="역추적-선탐색을-결합한-뉴턴법-newtons-method-with-backtracking-line-search" class="level2">
-<h2 class="anchored" data-anchor-id="역추적-선탐색을-결합한-뉴턴법-newtons-method-with-backtracking-line-search">2-1. 역추적 선탐색을 결합한 뉴턴법 (Newton’s Method with Backtracking Line Search)</h2>
-<section id="순수-뉴턴법의-발산-가능성" class="level3">
-<h3 class="anchored" data-anchor-id="순수-뉴턴법의-발산-가능성">순수 뉴턴법의 발산 가능성</h3>
-<p>스텝 사이즈를 항상 1로 고정하면 발산할 수 있습니다. 예를 들어,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cmin_%7Bx%20%5Cin%20%5Cmathbb%7BR%7D%7D%20f(x)%20=%20%5Csqrt%7B1%20+%20x%5E2%7D%0A"></p>
-<p>에서</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Af'(x)%20=%20%5Cfrac%7Bx%7D%7B%5Csqrt%7B1+x%5E2%7D%7D,%20%5Cquad%20f''(x)%20=%20%5Cfrac%7B1%7D%7B(1+x%5E2)%5E%7B3/2%7D%7D%0A"></p>
-<p>뉴턴법의 업데이트는</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Ax_%7Bt+1%7D%20=%20x_t%20-%20%5Cfrac%7Bf'(x_t)%7D%7Bf''(x_t)%7D%20=%20x_t%20-%20x_t(1%20+%20x_t%5E2)%20=%20-x_t%5E3%0A"></p>
-<ul>
-<li><img src="https://latex.codecogs.com/png.latex?%7Cx_1%7C%20%3C%201">이면 수렴하지만, <img src="https://latex.codecogs.com/png.latex?%7Cx_1%7C%20%5Cgeq%201">이면 <strong>발산</strong>합니다.</li>
-</ul>
-</section>
-<section id="역추적-선탐색-backtracking-line-search" class="level3">
-<h3 class="anchored" data-anchor-id="역추적-선탐색-backtracking-line-search">역추적 선탐색 (Backtracking Line Search)</h3>
-<p>이를 해결하기 위해 다음 알고리즘을 사용합니다.</p>
-<p><strong>파라미터:</strong> <img src="https://latex.codecogs.com/png.latex?0%20%3C%20%5Cbeta%20%3C%201">, <img src="https://latex.codecogs.com/png.latex?0%20%3C%20%5Calpha%20%3C%20%5Cfrac%7B1%7D%7B2%7D"></p>
-<p><strong>절차:</strong></p>
-<ol type="1">
-<li>초기 스텝 사이즈 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20=%201">로 설정</li>
-<li>다음 <strong>충분 감소 조건(sufficient decrease condition)</strong>이 만족될 때까지 <img src="https://latex.codecogs.com/png.latex?%5Ceta%20%5Cleftarrow%20%5Cbeta%5Ceta">로 축소</li>
-</ol>
-<p><img src="https://latex.codecogs.com/png.latex?%0Af(x%20+%20%5Ceta%20d)%20%3C%20f(x)%20+%20%5Calpha%20%5Ceta%20%5Cnabla%20f(x)%5E%5Ctop%20d%0A"></p>
-<p>여기서 <img src="https://latex.codecogs.com/png.latex?d%20=%20-%5Cnabla%5E2%20f(x)%5E%7B-1%7D%5Cnabla%20f(x)">는 뉴턴 방향.</p>
-<ol start="3" type="1">
-<li>조건을 만족하는 최종 <img src="https://latex.codecogs.com/png.latex?%5Ceta">를 스텝 사이즈로 채택</li>
-</ol>
-<p><strong>알고리즘 1: 역추적 선탐색을 결합한 뉴턴법</strong></p>
-<pre><code>초기점 x_1 설정
-for t = 1, ..., T-1:
-    뉴턴 방향 d_t = -∇²f(x_t)⁻¹∇f(x_t) 계산
-    역추적 선탐색으로 스텝 사이즈 η_t 계산
-    x_{t+1} = x_t + η_t d_t 로 업데이트
-return x_T</code></pre>
-<hr>
-</section>
-</section>
-<section id="감쇠-뉴턴-위상과-비감쇠-뉴턴-위상-damped-undamped-phases" class="level2">
-<h2 class="anchored" data-anchor-id="감쇠-뉴턴-위상과-비감쇠-뉴턴-위상-damped-undamped-phases">2-2. 감쇠 뉴턴 위상과 비감쇠 뉴턴 위상 (Damped &amp; Undamped Phases)</h2>
-<p>뉴턴법은 수렴 과정에서 <strong>두 위상(phase)</strong>을 거칩니다.</p>
-<ul>
-<li><strong>감쇠 뉴턴 위상 (Damped Newton Phase):</strong> <img src="https://latex.codecogs.com/png.latex?%5C%7C%5Cnabla%20f(x_t)%5C%7C_2">가 클 때. 역추적 선탐색이 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t%20%3C%201">을 반환하며, 목적함수 값이 매 반복마다 일정량 이상 감소합니다.</li>
-<li><strong>비감쇠 뉴턴 위상 (Undamped Newton Phase):</strong> <img src="https://latex.codecogs.com/png.latex?%5C%7C%5Cnabla%20f(x_t)%5C%7C_2">가 충분히 작아진 후. 역추적 선탐색이 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t%20=%201">을 반환하며, <strong>2차 수렴(quadratic convergence)</strong>이 시작됩니다.</li>
-</ul>
-<p><strong>알고리즘 2: 비감쇠 뉴턴법 (Undamped Newton’s Method)</strong></p>
-<pre><code>초기점 x_1 설정
-for t = 1, ..., T-1:
-    뉴턴 방향 d_t = -∇²f(x_t)⁻¹∇f(x_t) 계산
-    x_{t+1} = x_t + d_t 로 업데이트 (스텝 사이즈 = 1 고정)
-return x_T</code></pre>
-<hr>
-</section>
-<section id="수렴-속도-분석-convergence-rate-analysis" class="level2">
-<h2 class="anchored" data-anchor-id="수렴-속도-분석-convergence-rate-analysis">2-3. 수렴 속도 분석 (Convergence Rate Analysis)</h2>
-<section id="가정" class="level3">
-<h3 class="anchored" data-anchor-id="가정">가정</h3>
-<p>다음 조건을 만족하는 목적함수 <img src="https://latex.codecogs.com/png.latex?f">를 고려합니다.</p>
-<ul>
-<li><strong>두 번 연속 미분 가능</strong> (twice continuously differentiable)</li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?m">-강볼록 (strongly convex):</strong> <img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20f(x)%20%5Csucceq%20mI"></li>
-<li><strong><img src="https://latex.codecogs.com/png.latex?M">-매끄러움 (smooth):</strong> <img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20f(x)%20%5Cpreceq%20MI"></li>
-<li><strong>헤시안의 <img src="https://latex.codecogs.com/png.latex?L">-립시츠 연속성:</strong> <img src="https://latex.codecogs.com/png.latex?%5C%7C%5Cnabla%5E2%20f(x)%20-%20%5Cnabla%5E2%20f(y)%5C%7C_2%20%5Cleq%20L%5C%7Cx-y%5C%7C_2"></li>
-</ul>
-</section>
-<section id="핵심-수렴-결과" class="level3">
-<h3 class="anchored" data-anchor-id="핵심-수렴-결과">핵심 수렴 결과</h3>
-<p>임계값 <img src="https://latex.codecogs.com/png.latex?%5Cdelta">와 감소량 <img src="https://latex.codecogs.com/png.latex?%5Cgamma">가 존재하여 다음이 성립합니다.</p>
-<p><strong>경우 1 (감쇠 위상): <img src="https://latex.codecogs.com/png.latex?%5C%7C%5Cnabla%20f(x_t)%5C%7C_2%20%5Cgeq%20%5Cdelta">인 경우</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Af(x_%7Bt+1%7D)%20-%20f(x_t)%20%5Cleq%20-%5Cgamma%0A"></p>
-<p>즉, 목적함수가 매 반복마다 최소 <img src="https://latex.codecogs.com/png.latex?%5Cgamma">만큼 감소합니다.</p>
-<p><strong>경우 2 (비감쇠 위상): <img src="https://latex.codecogs.com/png.latex?%5C%7C%5Cnabla%20f(x_t)%5C%7C_2%20%3C%20%5Cdelta">인 경우</strong></p>
-<p>역추적 선탐색이 <img src="https://latex.codecogs.com/png.latex?%5Ceta_t%20=%201">을 반환하고,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cfrac%7BL%7D%7B2m%5E2%7D%5C%7C%5Cnabla%20f(x_%7Bt+1%7D)%5C%7C_2%20%5Cleq%20%5Cleft(%5Cfrac%7BL%7D%7B2m%5E2%7D%5C%7C%5Cnabla%20f(x_t)%5C%7C_2%5Cright)%5E2%0A"></p>
-<p>이 부등식은 <img src="https://latex.codecogs.com/png.latex?u_%7Bt+1%7D%20%5Cleq%20u_t%5E2"> 형태(여기서 <img src="https://latex.codecogs.com/png.latex?u_t%20=%20%5Cfrac%7BL%7D%7B2m%5E2%7D%5C%7C%5Cnabla%20f(x_t)%5C%7C_2">)로, <strong>그래디언트 놈의 2차 수렴</strong>을 의미합니다.</p>
-<p>두 상수의 구체적 값은</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cdelta%20=%20%5Cmin%5C%7B1,%203(1-2%5Calpha)%5C%7D%5Cfrac%7Bm%5E2%7D%7BL%7D,%20%5Cquad%20%5Cgamma%20=%20%5Calpha%5Cbeta%5Cdelta%5E2%5Cfrac%7Bm%7D%7BM%5E2%7D%0A"></p>
-</section>
-<section id="비감쇠-위상에서의-수렴-속도-유도" class="level3">
-<h3 class="anchored" data-anchor-id="비감쇠-위상에서의-수렴-속도-유도">비감쇠 위상에서의 수렴 속도 유도</h3>
-<p><img src="https://latex.codecogs.com/png.latex?%5C%7C%5Cnabla%20f(x_k)%5C%7C_2%20%3C%20%5Cdelta">가 되는 최초 반복 <img src="https://latex.codecogs.com/png.latex?k">가 존재한다고 하면, 이후 모든 <img src="https://latex.codecogs.com/png.latex?t%20%5Cgeq%20k">에 대해 비감쇠 위상이 지속됩니다. 반복적으로 경우 2의 부등식을 적용하면,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cfrac%7BL%7D%7B2m%5E2%7D%5C%7C%5Cnabla%20f(x_%7Bt+1%7D)%5C%7C_2%20%5Cleq%20%5Cleft(%5Cfrac%7BL%7D%7B2m%5E2%7D%5C%7C%5Cnabla%20f(x_k)%5C%7C_2%5Cright)%5E%7B2%5E%7Bt+1-k%7D%7D%20%5Cleq%20%5Cleft(%5Cfrac%7B1%7D%7B2%7D%5Cright)%5E%7B2%5E%7Bt+1-k%7D%7D%0A"></p>
-<p>따라서</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5C%7C%5Cnabla%20f(x_t)%5C%7C_2%20%5Cleq%20%5Cfrac%7B2m%5E2%7D%7BL%7D%20%5Cleft(%5Cfrac%7B1%7D%7B2%7D%5Cright)%5E%7B2%5E%7Bt-k%7D%7D%0A"></p>
-<p><img src="https://latex.codecogs.com/png.latex?f">의 <img src="https://latex.codecogs.com/png.latex?m">-강볼록성으로부터 (2차 하한 부등식),</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Af(x%5E*)%20%5Cgeq%20f(x_t)%20+%20%5Cnabla%20f(x_t)%5E%5Ctop(x%5E*%20-%20x_t)%20+%20%5Cfrac%7Bm%7D%7B2%7D%5C%7Cx%5E*%20-%20x_t%5C%7C_2%5E2%20%5Cgeq%20f(x_t)%20-%20%5Cfrac%7B1%7D%7B2m%7D%5C%7C%5Cnabla%20f(x_t)%5C%7C_2%5E2%0A"></p>
-<p>이를 정리하면</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0Af(x_t)%20-%20f(x%5E*)%20%5Cleq%20%5Cfrac%7B1%7D%7B2m%7D%5C%7C%5Cnabla%20f(x_t)%5C%7C_2%5E2%20%5Cleq%20%5Cfrac%7B2m%5E3%7D%7BL%5E2%7D%5Cleft(%5Cfrac%7B1%7D%7B2%7D%5Cright)%5E%7B2%5E%7Bt-k+1%7D%7D%0A"></p>
-<p>이 부등식의 오른쪽은 <strong>이중 지수적으로 감소(doubly exponentially decreasing)</strong>하므로, <img src="https://latex.codecogs.com/png.latex?%5Cvarepsilon">-최적해를 얻기 위한 비감쇠 위상의 반복 수는</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AO%5C!%5Cleft(%5Clog%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D%5Cright)%0A"></p>
-<p>입니다.</p>
-</section>
-<section id="전체-반복-수-상한" class="level3">
-<h3 class="anchored" data-anchor-id="전체-반복-수-상한">전체 반복 수 상한</h3>
-<p>감쇠 위상에서는 매 반복마다 <img src="https://latex.codecogs.com/png.latex?f"> 값이 <img src="https://latex.codecogs.com/png.latex?%5Cgamma">만큼 감소하므로, 감쇠 위상의 반복 수는 최대</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cfrac%7Bf(x_1)%20-%20f(x%5E*)%7D%7B%5Cgamma%7D%0A"></p>
-<p>따라서 <strong><img src="https://latex.codecogs.com/png.latex?%5Cvarepsilon">-최적해를 얻기 위한 전체 반복 수</strong>의 상한은</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cfrac%7Bf(x_1)%20-%20f(x%5E*)%7D%7B%5Cgamma%7D%20+%20%5Clog%5Clog%5C!%5Cleft(%5Cfrac%7B2m%5E3%7D%7BL%5E2%7D%20%5Ccdot%20%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D%5Cright)%0A"></p>
-<p>이며, <img src="https://latex.codecogs.com/png.latex?%5Cgamma%20=%20%5Calpha%5Cbeta%5Cdelta%5E2%5Cfrac%7Bm%7D%7BM%5E2%7D">와 <img src="https://latex.codecogs.com/png.latex?%5Cdelta">의 값을 대입하면</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0A%5Cleq%20%5Calpha%5Cbeta(f(x_1)-f(x%5E*))%5Cfrac%7BL%5E2%20M%5E2%7D%7Bm%5E5%20%5Cmin%5C%7B1,3(1-2%5Calpha)%5C%7D%5E2%7D%20+%20%5Clog%5Clog%5C!%5Cleft(%5Cfrac%7B2m%5E3%7D%7BL%5E2%5Cvarepsilon%7D%5Cright)%0A"></p>
-<p>비감쇠 위상의 반복 수 <img src="https://latex.codecogs.com/png.latex?O(%5Clog%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D)">가 <strong>지배적으로 작기 때문에</strong>, 높은 정확도가 요구될수록 경사하강법 대비 뉴턴법의 우위가 두드러집니다.</p>
-<hr>
-</section>
-</section>
-<section id="시간-복잡도-비교-time-complexity" class="level2">
-<h2 class="anchored" data-anchor-id="시간-복잡도-비교-time-complexity">2-4. 시간 복잡도 비교 (Time Complexity)</h2>
-<section id="경사하강법의-시간-복잡도" class="level3">
-<h3 class="anchored" data-anchor-id="경사하강법의-시간-복잡도">경사하강법의 시간 복잡도</h3>
-<p><img src="https://latex.codecogs.com/png.latex?m">-강볼록, <img src="https://latex.codecogs.com/png.latex?M">-매끄러운 함수에 대해 경사하강법은</p>
-<ul>
-<li><strong>반복 수:</strong> <img src="https://latex.codecogs.com/png.latex?O%5C!%5Cleft(%5Cfrac%7BM%7D%7Bm%7D%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D%5Cright)"></li>
-<li><strong>반복당 비용:</strong> 그래디언트 계산 + 벡터 연산 = <img src="https://latex.codecogs.com/png.latex?O(d)"></li>
-</ul>
-<p>따라서 <strong>전체 시간 복잡도:</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AO%5C!%5Cleft(d%20%5Ccdot%20%5Cfrac%7BM%7D%7Bm%7D%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D%5Cright)%0A"></p>
-</section>
-<section id="뉴턴법의-시간-복잡도" class="level3">
-<h3 class="anchored" data-anchor-id="뉴턴법의-시간-복잡도">뉴턴법의 시간 복잡도</h3>
-<p>뉴턴법은</p>
-<ul>
-<li><strong>반복 수:</strong> <img src="https://latex.codecogs.com/png.latex?O(%5Clog%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D)"> (비감쇠 위상 기준)</li>
-<li><strong>반복당 비용:</strong>
-<ul>
-<li>헤시안 <img src="https://latex.codecogs.com/png.latex?%5Cnabla%5E2%20f(x_t)"> 계산: <img src="https://latex.codecogs.com/png.latex?O(d%5E2)"></li>
-<li>헤시안 역행렬(또는 선형계 풀기) 계산: <img src="https://latex.codecogs.com/png.latex?O(d%5E%5Comega)"> (여기서 <img src="https://latex.codecogs.com/png.latex?%5Comega">는 행렬 곱셈 지수)</li>
-<li>현재 알려진 <img src="https://latex.codecogs.com/png.latex?%5Comega">의 최솟값은 약 <img src="https://latex.codecogs.com/png.latex?2.373"></li>
-</ul></li>
-</ul>
-<p>따라서 <strong>전체 시간 복잡도:</strong></p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AO%5C!%5Cleft(d%5E%5Comega%20%5Clog%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D%5Cright)%0A"></p>
-<p>실용적으로는 가우스 소거법(<img src="https://latex.codecogs.com/png.latex?O(d%5E3)">)을 사용하므로,</p>
-<p><img src="https://latex.codecogs.com/png.latex?%0AO%5C!%5Cleft(d%5E3%20%5Clog%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D%5Cright)%0A"></p>
-</section>
-<section id="요약-비교" class="level3">
-<h3 class="anchored" data-anchor-id="요약-비교">요약 비교</h3>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 33%">
-<col style="width: 33%">
-<col style="width: 33%">
-</colgroup>
-<thead>
-<tr class="header">
-<th></th>
-<th>경사하강법</th>
-<th>뉴턴법</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><strong>반복 수</strong></td>
-<td><img src="https://latex.codecogs.com/png.latex?O%5C!%5Cleft(%5Cfrac%7BM%7D%7Bm%7D%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D%5Cright)"></td>
-<td><img src="https://latex.codecogs.com/png.latex?O%5C!%5Cleft(%5Clog%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D%5Cright)"></td>
-</tr>
-<tr class="even">
-<td><strong>반복당 비용</strong></td>
-<td><img src="https://latex.codecogs.com/png.latex?O(d)"></td>
-<td><img src="https://latex.codecogs.com/png.latex?O(d%5E%5Comega)"> 또는 <img src="https://latex.codecogs.com/png.latex?O(d%5E3)"></td>
-</tr>
-<tr class="odd">
-<td><strong>전체 복잡도</strong></td>
-<td><img src="https://latex.codecogs.com/png.latex?O%5C!%5Cleft(d%5Cfrac%7BM%7D%7Bm%7D%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D%5Cright)"></td>
-<td><img src="https://latex.codecogs.com/png.latex?O%5C!%5Cleft(d%5E%5Comega%5Clog%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D%5Cright)"></td>
-</tr>
-<tr class="even">
-<td><strong><img src="https://latex.codecogs.com/png.latex?%5Cvarepsilon"> 의존성</strong></td>
-<td>다항식 (<img src="https://latex.codecogs.com/png.latex?%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D">)</td>
-<td>이중 지수 (<img src="https://latex.codecogs.com/png.latex?%5Clog%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D">)</td>
-</tr>
-<tr class="odd">
-<td><strong>차원 의존성</strong></td>
-<td>낮음 (<img src="https://latex.codecogs.com/png.latex?O(d)">)</td>
-<td>높음 (<img src="https://latex.codecogs.com/png.latex?O(d%5E3)">)</td>
-</tr>
-</tbody>
-</table>
-<p><strong>핵심 결론:</strong></p>
-<ul>
-<li><strong>높은 정확도(<img src="https://latex.codecogs.com/png.latex?%5Cvarepsilon">가 매우 작은 경우):</strong> 뉴턴법의 <img src="https://latex.codecogs.com/png.latex?%5Clog%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D"> 의존성이 경사하강법의 <img src="https://latex.codecogs.com/png.latex?%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D">보다 훨씬 유리합니다.</li>
-<li><strong>고차원(<img src="https://latex.codecogs.com/png.latex?d">가 매우 큰 경우):</strong> 헤시안 계산 및 역행렬 계산의 비용 <img src="https://latex.codecogs.com/png.latex?O(d%5E3)">이 병목이 되어 뉴턴법이 불리합니다.</li>
-</ul>
-<p>따라서 <strong>저차원에서 높은 정확도가 요구될 때</strong> 뉴턴법이 가장 적합하며, <strong>고차원 대규모 문제</strong>에서는 경사하강법 계열이 더 실용적입니다.</p>
-<hr>
-</section>
-</section>
-<section id="마무리" class="level2">
-<h2 class="anchored" data-anchor-id="마무리">마무리</h2>
-<p>이번 강의에서는 2차 근사 기반의 최적화 알고리즘인 <strong>뉴턴법</strong>을 다뤘습니다. 핵심 내용을 정리하면,</p>
-<ul>
-<li>뉴턴법의 업데이트 규칙 <img src="https://latex.codecogs.com/png.latex?x_%7Bt+1%7D%20=%20x_t%20-%20%5Cnabla%5E2%20f(x_t)%5E%7B-1%7D%5Cnabla%20f(x_t)">은 <strong>헤시안 역행렬</strong>을 통해 최적 방향을 결정합니다.</li>
-<li>뉴턴 방향은 (1) 하강 방향임, (2) 이차 놈에서의 최급하강 방향임, (3) 그래디언트를 0으로 만드는 방향임을 각각 확인했습니다.</li>
-<li>아핀 변환 관점에서 뉴턴법은 <strong>매 반복마다 헤시안 기반의 국소 최적 좌표 변환</strong>을 수행하는 알고리즘으로 해석됩니다.</li>
-<li>역추적 선탐색을 결합한 뉴턴법은 <strong>감쇠 위상</strong>과 <strong>비감쇠 위상</strong>으로 나뉘며, 비감쇠 위상에서 <img src="https://latex.codecogs.com/png.latex?O(%5Clog%5Clog%5Cfrac%7B1%7D%7B%5Cvarepsilon%7D)">의 빠른 수렴을 달성합니다.</li>
-<li>반복 수 측면에서는 경사하강법 대비 압도적이지만, 차원이 커지면 헤시안 계산 비용(<img src="https://latex.codecogs.com/png.latex?O(d%5E3)">)이 병목이 됩니다.</li>
-</ul>
-<p>다음 강의에서는 헤시안 계산 없이 2차 수렴을 근사하는 준뉴턴법(Quasi-Newton Methods, 예: L-BFGS) 등으로 이어질 수 있습니다.</p>
-
-
-
-</section>
-</section>
-
- ]]></description>
-  <category>Optimization</category>
-  <guid>https://shsha0110.github.io/posts/Optimization/21.Newton’s-Method/21.1/</guid>
   <pubDate>Sun, 17 May 2026 15:00:00 GMT</pubDate>
 </item>
 </channel>

@@ -1,0 +1,590 @@
+---
+title: "[Causal Inference] 05. Adjustment Criterion"
+description: "Adjustment Criterion"
+author: "유성현"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+이번 강의에서는 인과효과 식별의 가장 널리 쓰이는 도구인 **조정(adjustment)**의 이론적 근거를 끝까지 파고듭니다. 우리는 이미 **Back-door 기준(Back-door Criterion)**을 통해 "어떤 공변량 집합 $Z$를 통제하면 인과효과를 식별할 수 있는가"에 대한 충분조건을 알고 있습니다. 하지만 Back-door 기준은 어디까지나 **충분조건일 뿐 필요조건은 아닙니다**.
+
+이 포스트의 핵심 질문은 다음과 같습니다.
+
+> **"조정 공식 $P(y \mid do(x)) = \sum_z P(y \mid x, z)P(z)$이 성립하기 위한 정확한(필요충분) 조건은 무엇인가?"**
+
+이 질문에 대한 답이 바로 **조정 기준(Adjustment Criterion)** 입니다. 나아가, 조정 가능한 집합이 여러 개 존재할 때 이를 **다항 지연(polynomial delay)** 시간 안에 모두 나열하는 알고리즘과, 잠재적 결과(Potential Outcome) 프레임워크의 **조건부 무시가능성(Conditional Ignorability)** 가정과의 연결점까지 살펴보겠습니다.
+
+---
+
+# 1. Back-door 기준 복습 (Backdoor Criterion)
+
+## 1.1 Back-door 조정 정리
+
+먼저 출발점이 되는 정리를 복습합니다.
+
+::: {.callout-note title="Theorem (Back-door Adjustment, Pearl 2000, Thm. 3.3.2)"}
+집합 $Z$가 쌍 $\langle X, Y \rangle$에 대해 **Back-door 기준**을 만족한다는 것은 다음 두 조건을 동시에 만족함을 의미합니다.
+
+* **(i)** $Z$에 속한 어떤 노드도 $X$의 후손(descendant)이 아니다.
+* **(ii)** $Z$는 $X \in \mathbf{X}$와 $Y \in \mathbf{Y}$ 사이의 경로 중 **$X$로 들어오는 화살표(arrow into $X$)를 포함하는 모든 경로**를 차단(block)한다.
+
+이때 $Y$에 대한 인과효과는 식별 가능하며 다음으로 주어집니다.
+
+$$
+P(y \mid do(x)) = \sum_{z} P(y \mid x, z)\, P(z)
+$$
+:::
+
+* **조건 (i)의 직관:** $X$의 후손을 통제하면 $X$가 만들어 낸 인과적 효과의 일부를 사후적으로 막아버려, 식별하려던 효과 자체를 왜곡할 수 있습니다.
+* **조건 (ii)의 직관:** $X$로 들어오는 화살표를 포함하는 경로는 모두 **혼란(confounding) 경로**, 즉 비인과적 연관(spurious association)을 만드는 통로입니다. 이를 모두 막아야 $X \to Y$의 순수한 인과적 신호만 남습니다.
+
+## 1.2 Simpson의 역설 다시 보기 (Back to Simpson's paradox)
+
+조정의 필요성을 가장 극적으로 보여주는 예시가 바로 **Simpson의 역설**입니다. 동일한 데이터를 어떻게 집계하느냐에 따라 약(drug)의 효과가 정반대로 보이는 현상입니다.
+
+성별별 회복률을 정리한 가상의 데이터는 다음과 같습니다.
+
+**남성 ($\neg F$)**
+
+| | 생존 ($Y$) | 사망 ($\neg Y$) | 합계 | 회복률 |
+|---|---|---|---|---|
+| 약 복용 ($X$) | 18 | 12 | 30 | **60%** |
+| 미복용 ($\neg X$) | 7 | 3 | 10 | **70%** |
+| $\sum$ | 25 | 15 | 40 | |
+
+**여성 ($F$)**
+
+| | 생존 ($Y$) | 사망 ($\neg Y$) | 합계 | 회복률 |
+|---|---|---|---|---|
+| 약 복용 ($X$) | 2 | 8 | 10 | **20%** |
+| 미복용 ($\neg X$) | 9 | 21 | 30 | **30%** |
+| $\sum$ | 11 | 29 | 40 | |
+
+* **성별별로 보면(F-specific):** 남성(60% vs 70%)과 여성(20% vs 30%) 모두에서 약을 먹지 않은 쪽의 회복률이 더 높습니다.
+* **전체를 합치면(Aggregated):** 약 복용 집단의 생존 $20/40 = 50\%$, 미복용 집단의 생존 $16/40 = 40\%$로 약을 먹은 쪽이 더 높아 보입니다.
+
+이 역설의 본질은 **데이터만으로는 어느 분석이 옳은지 결정할 수 없으며, 오직 인과 그래프(causal graph)가 결정한다**는 데 있습니다. 동일한 표를 만들어 내는 세 가지 서로 다른 그래프를 비교해 봅시다.
+
+![Figure: 동일한 데이터를 설명할 수 있는 세 가지 인과 구조. (왼쪽) $F$가 $X$와 $Y$ 모두의 공통 원인인 **교란자(confounder)**인 경우($F \to X$, $F \to Y$, $X \to Y$): 공집합 $\varnothing$은 admissible하지 않고 $\{F\}$가 admissible하므로, **성별별(F-specific)** 회복률을 보아야 합니다. (가운데) $F$가 $X$의 효과를 매개하는 **매개자(mediator)**인 경우($X \to F \to Y$): $\varnothing$이 admissible하고 $\{F\}$는 admissible하지 않으므로, $F$를 통제하지 말고 **집계된(aggregated)** 수치를 보아야 합니다. (오른쪽) $F$가 $X$와 $Y$의 공통 결과인 경우 역시 $\varnothing$이 admissible하고 $\{F\}$는 admissible하지 않아 **집계된** 수치가 옳습니다. 즉 통제 여부의 정답은 데이터가 아니라 그래프 구조가 결정합니다.](./images/fig_simpson_three_graphs.png)
+
+* **핵심 메시지:** "성별을 통제해야 하는가?"라는 질문의 답은 표 속 숫자가 아니라, **$F$가 인과 구조상 어떤 역할을 하는가**에 달려 있습니다. 교란자라면 통제해야 하고($\{F\}$ admissible), 매개자나 공통 결과라면 통제하지 말아야 합니다($\varnothing$ admissible).
+
+## 1.3 조건부 Back-door (Conditional Back-door)
+
+특정 부분 모집단($w$)에 대한 효과를 보고 싶을 때를 위한 확장입니다.
+
+::: {.callout-note title="Theorem (Conditional Back-door Criterion)"}
+$w$-특정 효과 $P(y \mid do(x), w)$는, 집합 $\mathbf{W} \cup \mathbf{Z}$가 Back-door 기준을 만족하도록 하는 집합 $\mathbf{Z}$를 측정할 수 있을 때 식별됩니다. 그 효과는 다음으로 주어집니다.
+
+$$
+P(y \mid do(x), w) = \sum_{z} P(y \mid x, z, w)\, P(z \mid w)
+$$
+:::
+
+* 일반적인 조정 공식과 비교하면, 조건이 붙는 변수 $w$가 곱해지는 항과 합산되는 항 모두에 추가로 들어갑니다($P(z) \to P(z \mid w)$, $P(y \mid x, z) \to P(y \mid x, z, w)$).
+* 이 정리의 유도는 **do-calculus**(Lecture 6)에 대한 이해를 필요로 합니다.
+
+---
+
+# 2. Back-door 기준의 한계 (Tightness of the Back-door Criterion)
+
+## 2.1 BD-admissible 집합이 존재하지 않는 경우
+
+Back-door 기준은 강력하지만, 다음과 같은 그래프에서는 무력해집니다.
+
+![Figure: $\mathbf{X} = \{X_1, X_2\}$, $Y$에 대한 인과 다이어그램. $Z_1$, $Z_2$를 비롯한 $X$ 이외의 모든 변수가 $X$의 후손(descendant)이므로, Back-door 기준의 조건 (i)에 의해 어떤 변수도 조정 집합에 넣을 수 없습니다. 따라서 이 그래프에는 **BD-admissible 집합이 전혀 존재하지 않습니다**. 그럼에도 불구하고 단순 조정 공식이 성립한다는 점이 이 절의 핵심 긴장(tension)입니다.](./images/fig_tightness_no_bd_set.png)
+
+이 그래프에서 $X$를 제외한 모든 변수가 $X$의 후손이므로, "후손을 넣지 말라"는 조건 (i) 때문에 **공집합을 제외하면 아무것도 조정 집합에 넣을 수 없습니다**. 즉 Back-door 의미의 조정 가능한 집합은 존재하지 않습니다.
+
+**그런데** (아직 증명하지는 않았지만) 사실은 다음이 성립합니다.
+
+$$
+P(y \mid do(x)) = \sum_{z} P(y \mid x, z)\, P(z)
+$$
+
+즉, **Back-door 기준은 조정을 위한 충분조건이지 필요조건이 아닙니다.** BD 기준이 실패해도 조정 공식 자체는 유효할 수 있습니다.
+
+## 2.2 우리가 진짜로 피해야 할 변수는 무엇인가?
+
+이 관찰로부터 다음 세 가지 통찰이 따라옵니다.
+
+* 조건 (i)이 $X$의 후손을 조정 집합에서 배제하는 이유는 **인과 경로(causal paths)를 교란하지 않고 보존하기 위함**입니다.
+* 그러나 앞에서 보았듯, $X$의 후손 중에서도 **동시에 $X$의 조상(ancestor)이면서 인과 경로를 교란하지 않는** 변수는 조정에 사용될 수 있고, 때로는 필요하기까지 합니다.
+* 그렇다면 진짜 질문은 이것입니다. **"조정을 수행할 때 우리가 정말로 피해야 할 변수는 정확히 무엇인가?"**
+
+이 질문에 대한 정밀한 답이 바로 조정 기준입니다.
+
+---
+
+# 3. 조정 기준 (Adjustment Criterion)
+
+## 3.1 무엇을 찾으려 하는가
+
+지금까지의 논리를 함의(implication) 관계로 정리하면 다음과 같습니다.
+
+$$
+Z \text{가 } \langle X, Y\rangle\text{에 대한 BD 집합} \;\Longrightarrow\; P(y \mid do(x)) = \sum_z P(y \mid x, z) P(z)
+$$
+
+우리가 원하는 것은 화살표가 양방향(필요충분, $\Longleftrightarrow$)이 되는 조건입니다.
+
+$$
+Z \text{가 } \langle X, Y\rangle\text{에 대해 } \boxed{???} \;\Longleftrightarrow\; P(y \mid do(x)) = \sum_z P(y \mid x, z) P(z)
+$$
+
+이 $\boxed{???}$를 채우는 조건이 **조정 기준(Adjustment Criterion)** 입니다.
+
+## 3.2 적절한 인과 경로 (Proper Causal Paths)
+
+조정 기준을 정의하려면 먼저 "보존해야 할 경로"를 정밀하게 규정해야 합니다.
+
+::: {.callout-tip title="Definition (Proper Causal Paths, Shpitser et al. 2010)"}
+$X \in \mathbf{X}$에서 $Y \in \mathbf{Y}$로의 경로가
+* **인과적(causal)**이라는 것은 그 경로가 **유향(directed)**임을 의미하고,
+* **적절한(proper)**이라는 것은 그 경로가 **오직 시작점에서만 $\mathbf{X}$의 원소를 포함**함을 의미합니다.
+:::
+
+다음 그래프로 예시를 봅시다.
+
+![Figure: Proper causal path의 예시 그래프. 노드는 $X_1, W_1, X_2, W_2, Y, W_3$이며 $\mathbf{X} = \{X_1, X_2\}$입니다. 경로 $X_1 \to W_3 \to Y$와 $X_2 \to W_2 \to Y$는 시작점에서만 $\mathbf{X}$의 원소를 거치므로 **적절한 인과 경로**입니다. 반면 $X_1 \to W_1 \to X_2 \to W_2 \to Y$는 중간에 $\mathbf{X}$의 또 다른 원소 $X_2$를 다시 거치므로 유향 경로임에도 **적절하지 않은(non-proper) 인과 경로**입니다.](./images/fig_proper_causal_paths.png)
+
+* **적절한 인과 경로:** $X_1 \to W_3 \to Y$, $\quad X_2 \to W_2 \to Y$
+* **적절하지 않은 인과 경로:** $X_1 \to W_1 \to X_2 \to W_2 \to Y$ (중간에 $X_2 \in \mathbf{X}$를 다시 통과)
+
+다중 처치 $\mathbf{X}$를 다룰 때, "$\mathbf{X}$ 내부의 다른 변수를 거쳐가는 효과"는 식별 대상이 아니므로 **적절한** 경로만이 보존 대상이 됩니다.
+
+### 적절한 인과 경로의 교란 (Disturbance)
+
+핵심 규칙은 다음과 같습니다.
+
+> **적절한 인과 경로는, 그 경로 위의 변수 또는 그 변수의 후손을 조정할 때 교란된다.**
+
+이를 구체적인 계산으로 확인해 봅시다.
+
+![Figure: 적절한 인과 경로가 교란되는 예시 그래프. 노드 $X, W, Z, Y$에 대해 $X \to Z \to W \to Y$ 및 $X \to W$의 간선이 존재합니다. 따라서 $X \to W \to Y$뿐 아니라 $X \to Z \to W \to Y$도 적절한 인과 경로이며, $Z$는 이 경로 위에 놓인 매개 변수입니다. 모든 $X$-$Y$ 경로가 인과적이므로 공집합으로 조정해도 됩니다($P(y \mid do(x)) = P(y \mid x)$). 그러나 경로 위의 $Z$(또는 $W$ 자체)를 조정하면 인과 경로가 교란되어 단순 조정 공식이 깨집니다.](./images/fig_disturbed_pcp.png)
+
+이 그래프에서는 모든 $X$-$Y$ 경로가 인과적이므로(공집합으로 back-door가 막힘) 다음이 성립합니다.
+
+$$
+P(y \mid do(x)) = P(y \mid x)
+$$
+
+그렇다면 $Z$를 굳이 조정하면 어떤 일이 일어날까요? **잘못된 조정 공식**을 전개해 봅니다.
+
+$$
+\begin{aligned}
+\sum_{z} P(y \mid x, z) P(z)
+&= \sum_{z, w} P(w, y \mid x, z)\, P(z) \\
+&= \sum_{z, w} P(y \mid x, z, w)\, P(w \mid x, z)\, P(z) \\
+&= \sum_{w} P(y \mid w) \sum_{z} P(w \mid x, z)\, P(z)
+\end{aligned}
+$$
+
+* **첫째 줄:** 결합확률 $P(w, y \mid x, z)$를 $w$에 대해 합산하면 $P(y\mid x,z)$가 되므로, 잠재 변수 $w$를 명시적으로 도입했습니다(주변화의 역방향).
+* **둘째 줄:** 연쇄 법칙(chain rule) $P(w, y \mid x, z) = P(y \mid x, z, w) P(w \mid x, z)$.
+* **셋째 줄:** 그래프 구조상 $Y$는 $W$에만 의존하므로 $P(y \mid x, z, w) = P(y \mid w)$로 간소화됩니다.
+
+이제 **참인 인과효과**를 전개합니다.
+
+$$
+\begin{aligned}
+P(y \mid do(x)) = P(y \mid x)
+&= \sum_{w, z} P(y \mid x, z, w)\, P(w \mid x, z)\, P(z \mid x) \\
+&= \sum_{w} P(y \mid w) \sum_{z} P(w \mid x, z)\, P(z \mid x)
+\end{aligned}
+$$
+
+두 식을 나란히 놓으면 차이는 **단 한 군데**입니다.
+
+$$
+\underbrace{\sum_{w} P(y \mid w) \sum_{z} P(w \mid x, z)\, \color{red}{P(z)}}_{\text{잘못된 조정}}
+\qquad \text{vs.} \qquad
+\underbrace{\sum_{w} P(y \mid w) \sum_{z} P(w \mid x, z)\, \color{blue}{P(z \mid x)}}_{\text{참인 효과}}
+$$
+
+* $X \to Z$ 간선이 존재하므로 일반적으로 $P(z) \neq P(z \mid x)$ 입니다.
+* 따라서 $P(y \mid w)$와 $P(w \mid x, z)$에 대해서는 일치하지만 $P(z) \neq P(z \mid x)$인 임의의 SCM을 잡으면,
+
+$$
+P(y \mid do(x)) \neq \sum_{z} P(y \mid x, z) P(z)
+$$
+
+* $Z$ 대신 **$W$ 자체를 조정해도** 동일한 문제가 발생합니다. $W$ 역시 적절한 인과 경로 위의 변수이기 때문입니다.
+
+**결론:** 적절한 인과 경로 위의 변수(또는 그 후손)를 조정하면, $X$가 그 변수를 통해 만들어 내는 정당한 인과적 흐름까지 차단해 버려 식별이 망가집니다.
+
+## 3.3 조정 기준의 정의
+
+이제 위의 모든 직관을 하나의 정의로 응축합니다.
+
+::: {.callout-important title="Definition (Adjustment Criterion, Shpitser et al. 2010)"}
+집합 $Z$가 **조정에 대해 admissible**하다는 것은 다음 두 조건을 만족함을 의미합니다.
+
+* **(i) $Z$는 어떤 적절한 인과 경로도 교란하지 않는다.**
+  * 즉, $Z$의 어떤 원소도, $X$에서 $Y$로의 적절한 인과 경로 위에 놓인 $\mathbf{X}$ 바깥의 변수 $W \notin \mathbf{X}$의 (그래프 $G_{\overline{X}}$에서의) 후손이 아니다.
+* **(ii) $G$에서 $X$로부터 $Y$로의 모든 적절한 비인과 경로(proper non-causal paths)가 $Z$에 의해 차단된다.**
+:::
+
+그리고 이 정의가 바로 우리가 찾던 필요충분조건입니다.
+
+$$
+\boxed{\;Z \text{가 조정 기준을 만족} \;\Longleftrightarrow\; P(y \mid do(x)) = \sum_{z} P(y \mid x, z) P(z)\;}
+$$
+
+* 여기서 $G_{\overline{X}}$는 **$X$로 들어오는 모든 간선을 제거한 그래프**를 뜻합니다. 이 그래프에서 후손을 계산하면, $\mathbf{X}$의 다른 원소를 다시 거치는 비-적절(non-proper) 경로가 자연스럽게 배제되어, **적절한** 인과 경로 위의 변수만을 정확히 포착할 수 있습니다.
+* 증명은 강의에서 다루기에는 다소 복잡하여 생략합니다.
+
+::: {.callout-warning title="역사적 주석: '비인과 경로' vs '적절한 비인과 경로'"}
+원래 Shpitser et al. (2010)에서는 조건 (ii)가 단순히 '비인과 경로(non-causal paths)'로 서술되었습니다. 이후 Shpitser (2012)의 부록(addendum)에서 '**적절한** 비인과 경로(proper non-causal paths)'로 수정되었습니다. 관련하여 van der Zander et al. (2014)도 참고할 수 있습니다.
+:::
+
+## 3.4 조정 기준의 구현 아이디어 (Optional)
+
+조정 기준을 알고리즘으로 검사하는 방법을 세 단계로 나누어 봅니다.
+
+**입력:** $\mathbf{X}, \mathbf{Y}, \mathbf{Z}, G$ / **출력:** $\mathbf{Z}$가 $\langle \mathbf{X}, \mathbf{Y}\rangle$에 대한 조정 admissible 집합인지 여부.
+
+#### 단계 1 — 적절한 인과 경로 위의 변수 찾기
+
+적절한 인과 경로 위에 놓일 수 있는 변수들의 **상위 집합(superset)**은 다음과 같이 구합니다.
+
+$$
+W = De(\mathbf{X})_{G_{\overline{X}}} \cap An(\mathbf{Y})_{G_{\overline{X}}}
+$$
+
+* **$De(\mathbf{X})_{G_{\overline{X}}}$:** $G_{\overline{X}}$에서 $\mathbf{X}$의 후손들. $X$의 들어오는 간선이 제거되었으므로, $\mathbf{X}$를 다시 통과하지 않는 **적절한** 유향 경로로 도달 가능한 노드만 포함됩니다.
+* **$An(\mathbf{Y})_{G_{\overline{X}}}$:** $G_{\overline{X}}$에서 $\mathbf{Y}$의 조상들.
+* 교집합은 "$\mathbf{X}$의 후손이면서 동시에 $\mathbf{Y}$의 조상", 즉 **$X \rightsquigarrow Y$ 적절한 인과 경로 위의 변수**들입니다.
+
+이렇게 얻은 $W$로부터 인과 경로만으로 구성된 부분 그래프(양방향 간선 제거)를 $H$라고 둡니다($H = G[W]$).
+
+#### 단계 2 — 조정이 금지된 변수 (Forbidden set)
+
+적절한 인과 경로를 교란하는, 즉 **조정해서는 안 되는** 변수 집합은 다음과 같습니다.
+
+$$
+F = De(W \setminus \mathbf{X})_{G_{\overline{X}}}
+$$
+
+먼저 $Z \cap F = \varnothing$인지 확인하는 것이 조건 (i) 점검의 첫걸음입니다.
+
+#### 단계 3 — d-분리 (D-Separation)로 조건 (ii) 점검
+
+조건 (ii)는 "**적절한 비인과 경로**만"을 고려해야 한다는 점에서 까다롭습니다. 핵심 아이디어는, **적절한 인과 경로들의 첫 간선을 제거한 그래프 $G'$에서 d-분리를 점검**하는 것입니다.
+
+$G'$에서 첫 간선을 제거하면 $G$의 적절·비적절 인과 경로가 모두 끊기지만, 조건 (i)을 만족하는 $Z$ 하에서 적절한 비인과 경로는 그대로 보존됩니다. 따라서 $G'$에서 남아 있는 비인과 경로의 존재는 $G$의 적절한 비인과 경로의 존재를 함의합니다. 결국 조건 (ii)는 다음 d-분리 점검으로 환원됩니다.
+
+$$
+\left( \mathbf{X} \perp\!\!\!\perp \mathbf{Y} \mid Z \right)_{\,G \setminus \{X \to W \in H \,\mid\, W \in W,\, X \in \mathbf{X}\}}
+$$
+
+> 활용 가능한 하위 모듈: $De$(후손), $An$(조상), 부분그래프(subgraph), 조작된 그래프(manipulated-graph), d-분리(d-sep).
+
+---
+
+# 4. 예제: 집합 $Z$의 admissibility 판정 (An Example)
+
+이제 구체적인 그래프에서 주어진 집합이 조정 admissible한지 직접 판정해 봅니다.
+
+**문제:** 집합 $Z = \{C, D, I\}$가 조정에 대해 admissible한지 판정하시오.
+
+![Figure: admissibility 판정을 위한 예제 그래프. 노드는 $X_1, X_2, Y_1, Y_2, A, B, C, D, E, F, H, I, G$이며, 처치는 $\mathbf{X} = \{X_1, X_2\}$, 결과는 $\mathbf{Y} = \{Y_1, Y_2\}$입니다. (i) 단계에서는 적절한 인과 경로 위의 변수와 그 후손을 식별하여 조정 금지 변수 $\{E, F, H\}$를 표시합니다. $Z$는 이 변수들을 포함해서는 안 됩니다.](./images/fig_example_eval_z_original.png)
+
+#### (i) 조정 금지 변수 식별
+
+먼저 적절한 인과 경로 위에 놓인 변수($X$와 그 후손 제외)와 그 후손들을 표시합니다. 그 결과,
+
+$$
+Z \text{는 } \{E, F, H\} \text{ 중 어떤 것도 포함할 수 없습니다.}
+$$
+
+다행히 $Z = \{C, D, I\}$는 $\{E, F, H\}$와 겹치지 않으므로 조건 (i)은 통과합니다.
+
+#### (ii) 적절한 인과 경로의 첫 간선 제거 후 d-분리 점검
+
+다음으로 모든 적절한 인과 경로의 **첫 간선을 잘라** 그래프 $G'$를 만듭니다.
+
+![Figure: 적절한 인과 경로의 첫 간선을 제거하여 만든 그래프 $G'$. $G'$에서 $X$와 $Y$ 사이에 남아 있는 경로는 모두 비인과 경로이며, 이는 $G$의 적절한 비인과 경로의 존재를 함의합니다. 조건 (ii)를 만족하려면 이 경로들이 $Z = \{C, D, I\}$에 의해 차단되어야 합니다. 그러나 점검 결과 $(X \not\perp\!\!\!\perp Y \mid C, D, I)$가 $G'$에서 성립하므로, $Z$는 조건 (ii)를 위반합니다.](./images/fig_example_eval_z_gprime.png)
+
+$G'$에서 남은 $X$-$Y$ 경로는 모두 비인과적이며, $Z$($\{E,F,H\}$를 포함하지 않는)에 의해 차단되어야 합니다. 그러나 점검 결과,
+
+$$
+(\mathbf{X} \not\perp\!\!\!\perp \mathbf{Y} \mid C, D, I)_{G'}
+$$
+
+즉 $X$와 $Y$가 $G'$에서 **여전히 연결되어 있습니다**.
+
+> **결론:** $Z = \{C, D, I\}$는 조건 (ii)를 위반하므로 **admissible하지 않습니다.**
+
+---
+
+# 5. Admissible 집합의 명시적 구성 (Explicit Construction)
+
+판정만으로는 부족합니다. "**조정 가능한 집합이 하나라도 존재하는가?**"를 효율적으로 확인하고 싶습니다. 다음 보조정리가 그 답을 줍니다.
+
+::: {.callout-important title="Lemma (Explicit Admissible Set Construction)"}
+그래프 $G$, $\mathbf{X}$, $\mathbf{Y}$가 주어지고, $F$를 조정 기준 조건 (i)에 의해 금지된 변수 집합이라 하자. 만약 **admissible 집합 $Z$가 하나라도 존재한다면**, 다음 집합도 admissible하다.
+
+$$
+Z_0 = An^{-}(\mathbf{X} \cup \mathbf{Y}) \setminus F
+$$
+
+여기서 $An^{-}(W) = An(W) \setminus W$ 이다. (엄밀히는 $An$을 $G'$에서 취해야 하지만, 결과는 $G$에서와 동일하다.)
+:::
+
+* **직관:** "$X$나 $Y$의 조상이면서, 금지되지 않은 모든 변수"를 한꺼번에 통제하는 $Z_0$이야말로 가장 후한(largest) 후보입니다. 만약 어떤 분리 집합이 존재한다면, 이 최대 후보가 반드시 분리에 성공합니다.
+
+## 5.1 구성 예제
+
+앞서의 복잡한 그래프에 이 보조정리를 적용해 봅니다.
+
+![Figure: 명시적 admissible 집합 구성의 예시. 동일한 예제 그래프와, 적절한 인과 경로의 첫 간선을 제거한 $G'$를 함께 보여줍니다. 조건 (i)이 금지하는 집합은 $F = \{E, F, H\}$이고, $X$와 $Y$의 (자기 자신을 제외한) 조상 집합은 $An^{-}(X \cup Y) = \{A, B, C, D, E, F, I\}$입니다. 이로부터 $Z_0 = An^{-}(X \cup Y) \setminus F = \{A, B, C, D, I\}$를 얻으며, $G'$에서 $(X \perp\!\!\!\perp Y \mid Z_0)$가 성립하므로 $Z_0$은 admissible합니다.](./images/fig_construction_example.png)
+
+* 조건 (i)이 금지하는 집합: $F = \{E, F, H\}$
+* 조상 집합: $An^{-}(\mathbf{X} \cup \mathbf{Y}) = \{A, B, C, D, E, F, I\}$
+* 따라서 후보 집합:
+
+$$
+Z_0 = An^{-}(\mathbf{X} \cup \mathbf{Y}) \setminus F = \{A, B, C, D, I\}
+$$
+
+* 점검 결과 $(\mathbf{X} \perp\!\!\!\perp \mathbf{Y} \mid Z_0)_{G'}$이 성립하므로, **$Z_0$은 admissible합니다!**
+
+> 4절에서 $\{C,D,I\}$가 실패했던 것과 달리, $A, B$를 추가로 통제한 $Z_0$은 비인과 경로를 모두 차단합니다.
+
+## 5.2 존재성에 대한 일격(One-shot) 검증
+
+이 보조정리의 진짜 위력은 **존재성 검증**에 있습니다.
+
+::: {.callout-note title="Lemma (재진술)"}
+admissible 집합 $Z$가 하나라도 존재한다면, $Z_0 = An^{-}(\mathbf{X} \cup \mathbf{Y}) \setminus F$ 역시 admissible하다.
+:::
+
+* 이 명제의 대우(contrapositive)에 의해, **만약 $Z_0$이 admissible하지 않다면, 어떤 분리 집합(separator)도 존재하지 않습니다.**
+* 따라서 $Z_0$ 하나만 점검하면 해(solution)의 존재 여부를 **단 한 번에** 판정할 수 있습니다. 이것이 "one-shot verification"입니다.
+
+---
+
+# 6. 알고리즘: 모든 Admissible 집합 나열하기 (Algorithm, Optional)
+
+## 6.1 동기 (Motivation)
+
+하나의 admissible 집합만으로 충분할까요? 일반적으로 admissible 집합은 **여러 개** 존재합니다.
+
+![Figure: 여러 admissible 집합이 존재하는 예시 그래프. 노드 $X, Y, A, B, C$로 구성되며, 집합 $\{A, B\}$, $\{A\}$, $\{B\}$가 모두 admissible합니다. 만약 $A$가 '유전적 조건(genetic condition)'이고 $B$가 '두통(headache)'이라면, 측정 비용·가용성·분산 등을 고려하여 어떤 집합을 선택할지 실무적으로 달라집니다.](./images/fig_motivation_multiple_sets.png)
+
+* 위 그래프에서 $\{A, B\}$, $\{A\}$, $\{B\}$가 모두 admissible합니다. 그렇다면 **어떤 것을 선택해야 할까요?**
+* 선택 기준은 다양합니다. **가용성(availability)**, **측정 비용(measurement cost)**, **분산(variance)**, **프라이버시·공정성(privacy-fairness)** 고려 등.
+* 예컨대 $A$가 측정하기 어려운 '유전적 조건'이고 $B$가 측정하기 쉬운 '두통'이라면, $\{B\}$를 선호할 수 있습니다.
+* 따라서 "**모든 admissible 집합을 어떻게 찾고 나열할 것인가**"가 중요한 문제가 됩니다.
+
+## 6.2 도전 과제 (Challenges)
+
+여기서 근본적인 계산복잡도 문제가 등장합니다.
+
+![Figure: admissible 집합이 지수적으로 많은 그래프. $X$와 $Y$ 사이에 $W_{1,1}, W_{1,2}$부터 $W_{k,1}, W_{k,2}$까지 $k$개의 변수 쌍이 병렬로 놓여 있습니다. 각 쌍에서 어느 쪽을 조정 집합에 넣느냐의 선택이 독립적이므로 admissible 집합의 수는 $X$, $Y$의 노드 수에 대해 지수적($\sim 2^k$)으로 늘어납니다. 따라서 모든 집합을 단순히 출력하는 것만으로도 지수 시간이 소요됩니다.](./images/fig_challenge_exponential.png)
+
+* admissible 집합을 $O(1)$에 모두 반환하는 **마법의 오라클(oracle) $f$**가 있다고 가정합시다.
+* 그럼에도 다음 코드의 최악 실행 시간은 무엇일까요?
+
+```python
+for Zs in f(G, Xs, Ys):
+    output(Zs)
+```
+
+* 위 그래프처럼 admissible 집합이 $2^k$개라면, **출력 자체가 지수적으로 길어** 전체 다항 시간(total polynomial time)은 원천적으로 불가능합니다.
+* 그렇다면 우리가 현실적으로 보장할 수 있는 효율성의 기준은 무엇일까요?
+
+## 6.3 다항 지연 클래스 (Polynomial Delay Class)
+
+전체 시간이 지수적일 수밖에 없으므로, 대신 **출력 사이의 간격**을 보장하는 개념을 도입합니다.
+
+::: {.callout-tip title="Definition (Polynomial Delay)"}
+나열 알고리즘(listing algorithm)이 **다항 지연(polynomial delay)**으로 동작한다는 것은, 어떤 상수 $d$가 존재하여 다음 두 구간에서 최대 $O(n^d)$ 시간만 소요함을 의미합니다.
+
+1. 프로그램 시작 시점부터 **첫 번째 객체를 출력**하거나 출력 없이 정지(halt)할 때까지,
+2. 한 객체를 출력한 시점부터 **다음 객체를 출력**하거나 정지할 때까지.
+:::
+
+![Figure: 다항 지연의 시간 축 모식도. 출력 객체 $s_1, s_2, s_3, \ldots, s_{\ell-1}, s_\ell$이 시간 축 위에 표시되어 있고, 인접한 출력 사이의 모든 간격이 각각 $O(n^d)$로 상한이 잡혀 있습니다. 핵심은 전체 실행 시간이 아니라 **연속된 출력 사이의 지연**을 다항식으로 보장한다는 점입니다.](./images/fig_polynomial_delay_timeline.png)
+
+* 즉, 전체 출력이 지수적이더라도 **사용자는 일정한(다항) 시간마다 새로운 결과를 받아볼 수 있고**, 해가 없으면 다항 시간 안에 그 사실을 알 수 있습니다.
+
+## 6.4 이론적 도구: d-분리의 포함·제한 경계 (Bounds for d-Separation)
+
+알고리즘의 핵심 부품은 다음 보조정리입니다.
+
+::: {.callout-important title="Lemma (Inclusion and Restriction)"}
+그래프 $G$와 서로소인 $\mathbf{X}, \mathbf{Y}, R \subseteq V$가 주어졌을 때, 만약 $G$에서 $\mathbf{X}$와 $\mathbf{Y}$를 분리하면서
+
+$$
+I \subseteq Z \subseteq R
+$$
+
+를 만족하는 집합 $Z$가 하나라도 존재한다면, 다음 집합도 $G$에서 $\mathbf{X}$와 $\mathbf{Y}$를 분리한다.
+
+$$
+Z_0 = An(\mathbf{X} \cup \mathbf{Y} \cup I) \cap R
+$$
+:::
+
+* $I$는 "**반드시 포함(include)**"해야 할 집합, $R$은 "**여기로 제한(restrict to)**"할 집합입니다.
+* $I \subseteq Z \subseteq R$ 범위에 분리 집합이 존재하는지를, **단지 $Z_0$이 분리자인지 확인하는 것만으로** 점검할 수 있습니다.
+* 이 점검을 함수 $\texttt{exist-sep}(G, \mathbf{X}, \mathbf{Y}, I, R)$로 캡슐화합니다.
+* 5절의 구성 보조정리는 사실 이 보조정리에서 $I = \varnothing$, $R = V \setminus F^{+}$인 특수한 경우에 해당합니다.
+
+## 6.5 모든 Admissible 집합 찾기 — 아이디어
+
+* 목표는 $\texttt{list-seps}(G, \mathbf{X}, \mathbf{Y})$를 구현하는 것입니다.
+* **분할 정복(divide and conquer)** 전략을 씁니다. 주어진 집합 $I$와 $R$로 제한하여, $G$에서 $\mathbf{X}$와 $\mathbf{Y}$를 분리하는 **모든** 집합 $Z$를 출력하는 함수를 만듭니다.
+
+$$
+\texttt{list-seps}(G, \mathbf{X}, \mathbf{Y}, I, R)
+$$
+
+* 이를 이용해 유효한 조정 집합들의 공간을 체계적이고 효율적으로 탐색합니다.
+
+## 6.6 알고리즘 (Algorithm)
+
+조정 기준과 분리 나열을 연결하는 셋업은 다음과 같습니다.
+
+* $\mathbf{X}, \mathbf{Y}$와 금지 변수 $F$의 합집합을 $F^{+}$로 정의합니다.
+
+$$
+F^{+} = \mathbf{X} \cup \mathbf{Y} \cup F
+$$
+
+* 초기 $I = \varnothing$, $R = V \setminus F^{+}$로 두고, $G'$을 **모든 적절한 인과 경로의 첫 간선을 제거한 그래프**로 둡니다.
+* 그러면 $\texttt{list-seps}(G', \mathbf{X}, \mathbf{Y}, I, R)$은
+  * $G'$에서 $\mathbf{X}$와 $\mathbf{Y}$를 분리하고(**조건 (ii)** 만족),
+  * $F^{+}$의 변수를 전혀 포함하지 않는(**조건 (i)** 만족, 적절한 인과 경로를 교란하지 않음)
+  * 모든 집합 $Z$를 출력합니다.
+* 따라서 **모든 출력이 조정 기준을 만족합니다.**
+
+## 6.7 실행 예제 (Running Example)
+
+#### 단계 1 — 금지 변수 $F^{+}$ 결정
+
+![Figure: list-seps 실행 예제 그래프. 노드 $X, Y, A, B, C, D$로 구성됩니다. 적절한 인과 경로 위에 놓인 변수($X$ 제외)와 그 후손, 그리고 $X$와 $Y$ 자체를 금지 변수에 추가합니다. 그 결과 $F^{+} = \{C, X, Y\}$가 됩니다.](./images/fig_running_example_forbidden.png)
+
+적절한 인과 경로 위의 변수와 그 후손, 그리고 $X, Y$ 자신을 더하면,
+
+$$
+F^{+} = \{C, X, Y\}
+$$
+
+#### 단계 2 — 초기화 및 첫 간선 제거
+
+![Figure: 초기화 단계. $I = \varnothing$, $R = V \setminus F^{+} = \{A, B, D\}$로 설정하고, 모든 적절한 인과 경로의 첫 간선을 $G$에서 제거합니다(왼쪽 $G$ → 오른쪽 $G'$). 이렇게 만든 $G'$ 위에서 $I$, $R$의 제약을 둔 채 분리 집합을 탐색합니다.](./images/fig_running_example_init.png)
+
+$$
+I = \varnothing, \qquad R = V \setminus F^{+} = \{A, B, D\}
+$$
+
+#### 단계 3 — 재귀 트리 탐색
+
+![Figure: list-seps가 유도하는 재귀 트리. 루트는 $I = \{\}$, $R = \{A, B, D\}$에서 시작합니다. 각 단계에서 변수 $W \in R \setminus I$를 하나 골라 "포함(include)" 가지($I \cup \{W\}$)와 "배제(exclude)" 가지($R \setminus \{W\}$)로 분기합니다. 그림에서는 $D$, $A$, $B$를 차례로 분기하여 $I = R$이 되는 잎(leaf)에서 분리 집합을 출력하는 과정을 보여줍니다.](./images/fig_running_example_recursion_tree.png)
+
+알고리즘의 의사 코드는 다음과 같습니다.
+
+```python
+def list_seps(G, X, Y, I, R):
+    if exist_sep(G, X, Y, I, R):      # 이 범위에 분리자가 존재하는가?
+        if I == R:                    # 더 이상 나눌 변수가 없으면
+            output(I)                 #   I 자체가 하나의 분리 집합
+        else:
+            W = pick(R \ I)           # R\I 에서 변수 하나 선택
+            list_seps(G, X, Y, I | {W}, R)      # W 를 포함하는 가지
+            list_seps(G, X, Y, I, R \ {W})      # W 를 배제하는 가지
+```
+
+이 재귀 트리의 동작 원리를 정리하면 다음과 같습니다.
+
+* **각 노드**는 "$I$의 모든 변수를 포함하고, $R$의 변수만으로 이루어진" 분리자들의 **부분 가족(family)**을 나타냅니다.
+* **각 노드는 두 자식**을 가지며, 가족을 둘로 분할합니다. 하나는 $W_i$를 **반드시 포함**하는 분리자들, 다른 하나는 $W_i$를 **절대 포함하지 않는** 분리자들입니다.
+* **출력은 잎(leaf)에서** 생성되며, 잎에서는 항상 $I = R$입니다.
+* **가지치기(pruning):** $\texttt{exist-sep}$이 거짓이면 그 노드는 확장되지 않습니다. 이는 $I \subseteq Z \subseteq R$ 범위에 $\mathbf{X}, \mathbf{Y}$를 분리하는 $Z$가 없음을 뜻하므로, 해당 가지를 안전하게 무시할 수 있습니다.
+* 도달한 잎은 $\texttt{exist-sep}$이 참이면 출력 $Z = I = R$을 만들고, 이 $Z$는 $G'$에서 $\mathbf{X}, \mathbf{Y}$를 분리하므로 **조건 (ii)**를, 그리고 $R$이 애초에 $F$를 포함하지 않으므로 **조건 (i)**를 만족합니다.
+* 트리의 깊이는 최대 $k = n - |F| < n$이며($n$은 변수 수), **새 출력을 내기까지 $O(n)$번의 재귀 호출**만 발생합니다.
+
+## 6.8 시간 분석 (Time Analysis)
+
+각 연산의 비용을 의사 코드에 표기하면 다음과 같습니다.
+
+```python
+def list_seps(G, X, Y, I, R):
+    if exist_sep(G, X, Y, I, R):      # O(n + m)
+        if abs(I) == abs(R):          # O(1)
+            output(I)                 # O(n)
+        else:
+            W = pick(R \ I)
+            list_seps(G, X, Y, I | {W}, R)   # 출력 사이 O(n)번 호출
+            list_seps(G, X, Y, I, R \ {W})
+```
+
+* $\texttt{exist-sep}$: $O(n + m)$ ($n$ = 노드 수, $m$ = 간선 수)
+* $|I| = |R|$ 비교: $O(1)$
+* 출력: $O(n)$
+* 한 출력과 다음 출력 사이에 $O(n)$번의 재귀 호출
+
+이를 종합하면,
+
+$$
+\text{지연(delay)} = O\big(n \cdot (n + m)\big)
+$$
+
+* 전체 실행 시간은 (출력 자체가 지수적일 수 있으므로) 여전히 지수적일 수 있습니다. 이는 **피할 방법이 없습니다(no way around it).**
+* 그러나 다음 두 가지가 **보장**됩니다.
+  * 출력이 존재한다면 **다항 시간마다 새로운 출력**을 받아볼 수 있습니다.
+  * 해가 없다면 **다항 시간 안에 실패(no solution)를 확정**할 수 있습니다.
+
+이것이 바로 다항 지연 클래스가 제공하는 실질적 가치입니다.
+
+---
+
+# 7. 잠재적 결과 프레임워크와의 연결: 조건부 무시가능성 (Conditional Ignorability)
+
+마지막으로, 그래프 기반 조정 기준이 통계학·계량경제학에서 널리 쓰이는 **잠재적 결과(Potential Outcome) 프레임워크**와 어떻게 연결되는지 봅니다.
+
+* 잠재적 결과 프레임워크에서 인과효과를 식별하기 위한 가장 핵심적이고 대중적인 가정은 **조건부 무시가능성(Conditional Ignorability)**으로, 반사실(counterfactual) 표기로 다음과 같이 씁니다.
+
+$$
+Y_x \perp\!\!\!\perp X \mid Z
+$$
+
+* 무시가능성이 요구하는 바는, **공변량 집합 $Z$를 조건으로 두면 개입(intervention) 하에서 처치 $X$가 결과 $Y$와 독립**이 된다는 것입니다. 즉,
+
+$$
+P(y \mid do(x), z) = P(y \mid x, z)
+$$
+
+* 잠재적 결과 프레임워크에서는 이 가정을 보통 **'그냥 성립한다고 가정(assumed)'**합니다.
+* 그러나 **조정 기준은**, 주어진 현실 모델(인과 그래프)을 토대로 **그러한 집합 $Z$가 어떤 조건에서 존재하는지에 대한 정당화(justification)**를 제공합니다. 즉, "무시가능성을 만족하는 $Z$가 존재하는가?"라는 질문에 그래프가 원리적인 답을 줄 수 있습니다.
+
+이로써 그래프 모형(Pearl류)과 잠재적 결과 모형(Neyman–Rubin류)이라는 두 인과추론 전통이 **조정**이라는 지점에서 만나게 됩니다.
+
+---
+
+# 8. 요약 (Summary)
+
+이번 강의의 핵심을 정리합니다.
+
+* **조정(adjustment)**은 데이터 과학 전반에서 인과효과를 식별하기 위해 사용되는 가장 대중적인 기법 중 하나입니다.
+* **Back-door/조정 기준**은 어떤 변수 집합 $Z$를 통한 조정이 목표 인과효과를 식별하는 데 유효한지를 판정하는 **원리적인 조건**을 제공합니다. 특히 조정 기준은 단순 조정 공식의 **필요충분조건**입니다.
+* admissible 집합이 존재한다면, 이를 **체계적이고 효율적으로(다항 지연)** 모두 찾아낼 수 있습니다.
+* admissible 집합을 일단 찾으면, **IPW(역확률 가중)**나 그 변형 같은 추정 기법을 통해 유한 표본으로부터 목표 효과를 **통계적으로 효율적이고 견고하게** 추정할 수 있습니다.
+
+---
+
+# 참고문헌 (References)
+
+* Judea Pearl. *Causality: Models, Reasoning, and Inference.* Cambridge University Press, New York, 2000.
+* I. Shpitser, T. J. VanderWeele, and J. M. Robins. *On the validity of covariate adjustment for estimating causal effects.* In *Proceedings of the Twenty-Sixth Conference on Uncertainty in Artificial Intelligence (UAI)*, pages 527–536. AUAI, Corvallis, OR, 2010.
+* Ilya Shpitser. *Addendum to "On the validity of covariate adjustment for estimating causal effects".* 2012.
+* Benito van der Zander, Maciej Liśkiewicz, and Johannes Textor. *Constructing separators and adjustment sets in ancestral graphs.* In *Proceedings of the UAI 2014 Workshop on Causal Inference: Learning and Prediction*, pages 11–24, 2014.

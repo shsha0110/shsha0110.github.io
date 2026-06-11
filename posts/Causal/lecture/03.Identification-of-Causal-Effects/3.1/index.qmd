@@ -1,0 +1,412 @@
+---
+title: "[Causal Inference] 03. Identification of Causal Effects"
+description: "Identification of Causal Effects"
+author: "유성현"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+## 들어가며: 인과 계층의 2번째 층위 (2nd Layer of the Causal Hierarchy)
+
+지난 논의에서 우리는 **구조적 인과 모형(Structural Causal Model, SCM)** 이 단순한 관측 분포 $P(v)$ 이상의 정보를 담고 있음을 보았습니다. 이번 글에서는 인과 계층(Causal Hierarchy)의 **2번째 층위인 인과 효과(Causal Effects)** 를 다룹니다. 이 층위가 던지는 핵심 질문은 다음과 같습니다.
+
+> **"만약 내가 $X = x$ 로 개입(do)한다면 어떤 일이 벌어지는가?"** — *What if I do $X = x$?*
+
+이는 단순히 "$X = x$ 인 사람들을 관찰했을 때 $Y$ 가 어떻더라"는 질문(1번째 층위, 연관)과는 근본적으로 다릅니다. 우리가 시스템에 **능동적으로 손을 대어** 분포 자체를 바꾸었을 때 무슨 일이 일어나는지를 묻는 것이기 때문입니다.
+
+### 서로 다른 세계를 연결하기 (Connecting Different Worlds)
+
+인과 추론의 본질은 **서로 다른 두 세계(world)를 연결하는 것**입니다.
+
+* 우리에게 주어진 것은 결합 분포 $P$ 입니다. 이는 특정 **체제(regime)** 하에서 모집단이 보이는 정적인(static) 모습입니다.
+* 어떤 **변화(change)** 가 가해지면 분포는 $P'$ 으로 바뀝니다.
+* 우리가 알고 싶은 것은 변화된 세계 $P'$ 의 어떤 측면, 즉 $Q(P')$ 입니다.
+
+대표적인 예시를 들어보겠습니다.
+
+> "흡연을 금지하면 암에 걸리는 사람이 줄어들까?"
+>
+> $$ Q = P(\text{Cancer}=\text{true} \mid do(\text{Smoking}=\text{no})) $$
+
+여기서 결정적으로 중요한 사실은, 이 $Q$ 가 **관측 분포 $P$ 의 한 측면(aspect)이 아니라는 점**입니다. 우리는 흡연을 "금지한" 세계를 직접 관측한 적이 없으므로, $Q$ 는 $P$ 만으로는 정의되지 않는 새로운 세계 $P'$ 에 속하는 양입니다.
+
+이로부터 두 가지 핵심 관찰(Observation)을 얻습니다.
+
+* **관찰 1 (Observation 1):** 분포 그 자체만으로는 **변화에 대해 아무것도 말해주지 않습니다.** 분포는 단지 (특정 체제 하의) 모집단의 정적인 조건을 묘사할 뿐입니다.
+* **관찰 2 (Observation 2):** 따라서 우리는 **"변화"를 표현할 수 있는 도구**, 즉 체제가 바뀔 때 모집단이 어떻게 반응하는지를 기술할 수 있는 수단이 필요합니다. 바로 이 도구가 SCM과 $do(\cdot)$ 연산자입니다.
+
+### 인과 추론의 도전 과제 (The Challenge of Causal Inference)
+
+다음과 같은 인과 그래프를 생각해 봅시다. 변수의 의미는 다음과 같습니다.
+
+* $Z$: 나이, 성별 (age, sex) — 공통 원인(common cause)
+* $X$: 행동/처치 (action)
+* $W$: 매개 변수 (mediator)
+* $Y$: 결과 (outcome)
+
+![Figure: 실제 세계(Real world)와 가상 세계(Hypothetical world)의 대비. 왼쪽 '실제 세계'에서는 $Z \to X$, $Z \to Y$, $X \to W \to Y$ 의 엣지가 모두 존재하여 결합 분포 $P(z,x,w,y)$ 를 이룹니다. 주황색 'change' 화살표를 따라가면, 오른쪽 '가상 세계'에서는 $X$ 가 분홍색 상수 $x$ 로 고정되면서 $Z \to X$ 엣지가 잘려 나가고($x$ 로 들어오는 화살표가 사라짐), 분포는 $P(z,w,y \mid do(x))$ 가 됩니다. 아래쪽 두 박스는 각각 $X$ 를 서로 다른 상수 $x_0$, $x_1$ 로 고정한 두 개의 '가상 세계'(주사위 눈으로 구분)를 나타내며, $Z$ 에서 $x$ 로 향하던 회색 화살표가 끊겨 있어 $Z$ 의 영향으로부터 자유롭게 $X$ 값만을 바꿀 수 있음을 시각화합니다.](./images/challenge_real_vs_hypothetical.png)
+
+* **실제 세계(Real world):** 모든 변수가 자연스러운 메커니즘에 따라 생성되며, 결합 분포는 $P(z, x, w, y)$ 입니다.
+* **가상 세계(Hypothetical world):** $X$ 를 특정 상수 $x$ 로 **강제 고정**합니다. 이때 $X$ 의 자연적 메커니즘(즉 $Z$ 가 $X$ 에 미치던 영향)은 사라지고, 분포는 $P(z, w, y \mid do(x))$ 가 됩니다.
+
+> **목표:** $Z$ 의 영향으로부터 **자유로운 상태에서** $X$ 를 두 개의 서로 다른 상수($x_0$, $x_1$)로 변화시켰을 때 $Y$ 가 얼마나 변하는지를 알고 싶습니다. 이러한 변화량이 바로 **인과 효과(causal effect)** 입니다.
+
+이로부터 가장 핵심적인 질문이 도출됩니다.
+
+> $P(z, x, w, y)$ 와 $P(y \mid do(x))$ 사이의 관계는 무엇인가? 과연
+> $$ P(y \mid do(x)) \stackrel{?}{=} P(y \mid x) $$
+> 가 성립하는가?
+
+직관적으로, $Z$ 가 $X$ 와 $Y$ 의 **공통 원인(혼란 변수, confounder)** 이기 때문에 일반적으로 두 양은 **같지 않습니다.** 이 글의 목표는 언제, 그리고 어떻게 $P(y \mid do(x))$ 를 관측 분포 $P(v)$ 만으로 계산할 수 있는지를 규명하는 것입니다.
+
+---
+
+## 1. 구조적 인과 모형과 인과 효과의 정의 (Structural Causal Model)
+
+### 1.1. 인과 효과의 형식적 정의 (Causal Effect, formal)
+
+위의 직관을 엄밀하게 정의해 보겠습니다.
+
+::: {.callout-note}
+## 정의 3.2.1 (Causal Effect)
+
+서로소(disjoint)인 두 변수 집합 $X$ 와 $Y$ 가 주어졌을 때, **$X$ 가 $Y$ 에 미치는 인과 효과** $P(y \mid do(x))$ 는 **$X$ 에서 $Y$ 의 확률 분포 공간으로 가는 함수(function)** 입니다.
+
+$X$ 의 각 실현값(realization) $x$ 에 대해, $P(y \mid do(x))$ 는 다음 절차로 유도되는 $Y = y$ 의 확률을 줍니다.
+
+1. 모형에서 $X$ 에 해당하는 모든 구조 방정식(equation)을 **삭제(delete)** 한다.
+2. 남은 방정식들에 $X = x$ 를 **대입(substitute)** 한다.
+
+이를 기호로 다음과 같이 씁니다.
+$$ P(y \mid do(x)) = P_x(y) $$
+즉, **하위 모형(submodel) $M_x$** 에서의 $Y = y$ 의 확률입니다.
+:::
+
+핵심은 "**방정식을 삭제하고 값을 대입한다**"는 것입니다. 관측 조건화 $P(y \mid x)$ 는 단지 $X = x$ 인 부분 모집단을 들여다볼 뿐이지만, $do(x)$ 는 $X$ 를 생성하던 메커니즘 자체를 외과적으로 제거(graph surgery)합니다. 바로 이 차이가 두 양을 다르게 만듭니다.
+
+---
+
+## 2. SCM이 유도하는 L2-분포 (SCM induces L2-distribution)
+
+### 2.1. 관측 데이터로부터 인과 효과 계산하기
+
+앞서 본 그래프($Z \to X$, $Z \to Y$, $X \to W$, $W \to Y$)를 다시 가져옵니다. **Markovian 모형**(모든 관련 변수가 측정됨)에서 관측 분포는 각 변수를 자신의 부모 $pa_i$ 로 조건화한 곱으로 분해(factorization)됩니다.
+
+$$ P(v) = \underbrace{P(z)}_{} \times \underbrace{P(x \mid z)}_{} \times \underbrace{P(w \mid x)}_{} \times \underbrace{P(y \mid w, z)}_{} $$
+
+이제 $do(x)$ 를 적용하면 어떻게 될까요? 정의에 따라 $X$ 의 방정식을 삭제합니다. 분해식 관점에서 이는 **$X$ 에 해당하는 인자 $P(x \mid z)$ 를 제거**하는 것과 같습니다. 하위 모형 $M_x$ 에서는 $X$ 가 상수로 고정되므로 그 항이 $1$ 로 취급되기 때문입니다.
+
+$$ P_x(v \setminus \{X\}) = P(z) \times \underbrace{P(x \mid z)}_{\text{Mx 에서 1}} \times P(w \mid x) \times P(y \mid w, z) = P(z)\,P(w \mid x)\,P(y \mid w, z) $$
+
+이것이 다음 절에서 일반화할 **절단된 분해(truncated factorization)** 의 직관적 원형입니다. 관측 분포에서 처치 변수의 생성 메커니즘에 해당하는 인자만 도려내면 개입 분포가 된다는 것입니다.
+
+### 2.2. 스프링클러 예제 (Sprinkler Example)
+
+이론을 구체적인 예로 확인해 봅시다. 다섯 개의 변수 — **계절(Season, $Sn$)**, **스프링클러(Sprinkler, $Sp$)**, **비(Rain, $Rn$)**, **젖음(Wet, $Wt$)**, **미끄러움(Slippery, $Sl$)** — 에 대한 인과 그래프를 생각합니다.
+
+![Figure: 스프링클러 예제의 인과 그래프. 최상단의 '계절(season)'은 '스프링클러(sprinkler)'와 '비(rain)'의 공통 원인입니다($Sn \to Sp$, $Sn \to Rn$). 스프링클러와 비는 모두 '젖음(wet)'의 원인이며($Sp \to Wt$, $Rn \to Wt$), 젖은 바닥은 '미끄러움(slippery)'을 유발합니다($Wt \to Sl$). 여기서 $Sn \to Sp$ 와 $Sn \to Rn$ 으로 인해 $Sp$ 와 $Rn$ 은 계절을 매개로 한 비인과적 연관(spurious association)을 가집니다. 이 백도어 경로가 관측 조건화 $Q_1$ 과 개입 $Q_2$ 의 차이를 만드는 핵심입니다.](./images/sprinkler_graph.png)
+
+이 그래프에 대응하는 관측 분포의 분해식은 다음과 같습니다.
+
+$$ P(v) = P(Sn)\,P(Sp \mid Sn)\,P(Rn \mid Sn)\,P(Wt \mid Sp, Rn)\,P(Sl \mid Wt) $$
+
+이제 두 개의 질의(query)를 비교합니다.
+
+* **질의 1 (관측 조건화):** $Q_1 = P(Wt \mid Sp = on)$
+* **질의 2 (개입):** $Q_2 = P(Wt \mid do(Sp = on))$
+
+#### 질의 1: $Q_1 = P(Wt \mid Sp = on)$
+
+이는 평범한 조건부 확률이므로 베이즈 정리로 전개합니다. 분자는 $P(Wt, Sp=on)$ 을 $Sn, Rn$ 에 대해 주변화(marginalize)한 것이고, 분모는 $P(Sp=on)$ 입니다.
+
+$$ Q_1 = \frac{\sum_{sn, rn} P(sn)\,P(Sp = on \mid sn)\,P(rn \mid sn)\,P(wt \mid Sp = on, rn)}{\sum_{sn} P(Sp = on \mid sn)\,P(sn)} $$
+
+여기서 분자·분모에 모두 **$P(Sp = on \mid sn)$ 항이 살아 있다**는 점에 주목하십시오. 스프링클러가 계절에 의존하기 때문에, 이 조건화는 $Sp \leftarrow Sn \to Rn \to Wt$ 라는 **백도어 경로(backdoor path)** 를 통한 가짜 정보까지 함께 끌어들입니다.
+
+#### 질의 2: $Q_2 = P(Wt \mid do(Sp = on))$
+
+개입을 하면 $Sn \to Sp$ 엣지가 잘려 나가므로, 위 식에서 $P(Sp = on \mid sn)$ 이 더 이상 계절에 의존하지 않게 됩니다. 슬라이드는 이를 $P(Sp = on \mid sn) \to P(Sp = on)$ 으로 치환하여 표기합니다($Sp$ 가 상수이므로 이 항은 사실상 분자·분모에서 상쇄되는 상수입니다).
+
+$$ Q_2 = \frac{\sum_{sn, rn} P(sn)\,P(Sp = on)\,P(rn \mid sn)\,P(wt \mid Sp = on, rn)}{\sum_{sn} P(Sp = on)\,P(sn)} $$
+
+상수 $P(Sp = on)$ 을 분자·분모에서 약분하고, 분모의 $\sum_{sn} P(sn) = 1$ 을 적용하면 다음의 깔끔한 형태를 얻습니다.
+
+$$ \boxed{\; Q_2 = \sum_{sn, rn} P(sn)\,P(rn \mid sn)\,P(wt \mid Sp = on, rn) \;} $$
+
+두 결과를 비교하면, $Q_2$ 에는 $Q_1$ 에 있던 **$P(Sp = on \mid sn)$ 가중치가 사라졌습니다.** 즉 개입은 스프링클러와 계절 사이의 의존성을 끊어, 계절을 매개로 한 가짜 상관을 제거합니다. 이것이 $P(y \mid do(x)) \ne P(y \mid x)$ 인 이유의 구체적 증거입니다.
+
+---
+
+## 3. 절단된 분해 곱 (Truncated Factorization Product)
+
+### 3.1. 절단된 분해의 정의
+
+스프링클러 예제에서 얻은 직관을 일반 정리로 승격합니다.
+
+::: {.callout-important}
+## 절단된 분해 (Truncated Factorization)
+
+Markovian 모형 $M$ 에서 개입 $do(X = x)$ 가 생성하는 분포는 다음의 **절단된 분해**로 주어집니다.
+
+$$ P(v \setminus x \mid do(x)) = \prod_{V_i \in V \setminus X} P(v_i \mid pa_i) $$
+
+이는 **Manipulation Theorem**, **G-Computation** 등으로도 불립니다.
+:::
+
+핵심은 일반 분해 $P(v) = \prod_{V_i \in V} P(v_i \mid pa_i)$ 에서 **처치 변수 $X$ 에 해당하는 인자들을 통째로 잘라낸다(truncate)** 는 점입니다. 이름이 "절단된" 분해인 이유가 여기에 있습니다.
+
+값의 정합성(consistency)까지 고려하면 다음과 같이 더 엄밀하게 표현할 수 있습니다. 개입으로 고정한 $X = x$ 와 모순되지 않는 $v$ 에 대해서만 확률이 양수이고, 그렇지 않으면 $0$ 입니다.
+
+$$
+P(v \mid do(x)) =
+\begin{cases}
+\displaystyle\prod_{V_i \in V \setminus X} P(v_i \mid pa_i) & \text{if } v \text{ and } x \text{ are consistent} \\[2mm]
+0 & \text{otherwise}
+\end{cases}
+$$
+
+### 3.2. 절단된 분해 공식의 유도 (Truncated Factorization Formula)
+
+이제 절단된 곱을 **관측 분포 $P(v)$ 에 대한 비율**로 다시 쓰는 유도를 단계적으로 따라가 보겠습니다. 기호를 다음과 같이 정의합니다.
+
+* $V' = V \setminus X$ (처치를 제외한 변수들)
+* $V'' = V \setminus Pa_X \setminus \{X\}$ (처치와 그 부모를 제외한 변수들)
+
+**1단계 — 출발점.** 절단된 곱은 다음과 같습니다.
+
+$$ P(v' \mid do(x)) = \prod_{V_i \in V \setminus X} P(v_i \mid pa_i) $$
+
+**2단계 — 관측 분포로 다시 쓰기.** 전체 분해 $P(v) = \prod_{V_i \in V \setminus X} P(v_i \mid pa_i) \cdot \prod_{X \in X} P(x \mid pa_X)$ 에서, 처치에 해당하는 인자 곱으로 양변을 나누면 절단된 곱만 남습니다.
+
+$$ P(v' \mid do(x)) = \frac{P(v)}{\prod_{X \in X} P(x \mid pa_X)} $$
+
+이 형태는 **개입 분포가 곧 관측 분포의 재가중(re-weighting)** 임을 보여줍니다. 분모 $\prod_X P(x \mid pa_X)$ 는 자연 상태에서 그 처치 값이 나타날 "성향(propensity)"이며, 이것으로 나누어 주는 과정이 바로 가중치 보정입니다(역확률 가중, inverse-probability weighting의 모태).
+
+**3단계 — 단일 처치(singleton)인 경우.** $X = \{X\}$ 가 단일 변수일 때는 더 의미 있는 형태로 정리됩니다.
+
+$$
+\begin{aligned}
+P(v' \mid do(x))
+&= \frac{P(v)}{P(x \mid pa_X)} \\[2mm]
+&= \frac{P(v)\,P(pa_X)}{P(x, pa_X)} \qquad\left(\because P(x \mid pa_X) = \frac{P(x, pa_X)}{P(pa_X)}\right) \\[2mm]
+&= P(v'' \mid x, pa_X)\,P(pa_X)
+\end{aligned}
+$$
+
+마지막 등식을 검증해 보겠습니다. $V = V'' \cup \{X\} \cup Pa_X$ 이므로 $P(v) = P(v'', x, pa_X)$ 입니다. 따라서
+
+$$ \frac{P(v)\,P(pa_X)}{P(x, pa_X)} = \frac{P(v'', x, pa_X)}{P(x, pa_X)}\,P(pa_X) = P(v'' \mid x, pa_X)\,P(pa_X). $$
+
+> **요약:** 관측 분포와 개입 분포 사이의 변환은 **재가중(re-weighting) 과정**으로 볼 수 있습니다. 자연 상태의 처치 성향 $P(x \mid pa_X)$ 으로 나눔으로써 "강제 개입"의 효과를 복원하는 것입니다.
+
+---
+
+## 4. 식별 문제 (The Identification Problem)
+
+### 4.1. 식별 가능성의 정의
+
+지금까지의 논의는 "모든 변수가 측정된" 이상적인 상황을 가정했습니다. 그러나 현실에서는 일부 변수가 **잠재(latent)** 일 수 있습니다. 그렇다면 근본적인 질문이 생깁니다. **관측 분포 $P(v)$ 와 그래프 $G$ 만으로 인과 효과 $P(y \mid do(x))$ 를 유일하게 결정할 수 있는가?** 이것이 **식별(identification) 문제**입니다.
+
+::: {.callout-note}
+## 정의 3.2.2 (Causal Effect Identifiability, Pearl 2000)
+
+$X$ 가 $Y$ 에 미치는 인과 효과가 인과 다이어그램 $G$ 로부터 **식별 가능(identifiable)** 하다는 것은, $P(y \mid do(x))$ 가 관측 변수의 (양의 확률을 갖는) 분포로부터 **유일하게(uniquely) 계산될 수 있음**을 뜻합니다.
+
+즉, $G$ 를 유도하는 임의의 두 모형 $M_1$, $M_2$ 에 대해
+$$ P^{M_1}(v) = P^{M_2}(v) > 0 \;\Longrightarrow\; P^{M_1}(y \mid do(x)) = P^{M_2}(y \mid do(x)) $$
+가 항상 성립하는 것을 말합니다.
+:::
+
+### 4.2. 식별 문제의 구조
+
+식별 문제의 전체 구도를 그림으로 정리하면 다음과 같습니다.
+
+![Figure: 식별 문제의 정보 흐름도. 최상단의 구조적 인과 모형 SCM $M$ 은 진리(Truth)이지만 우리에게 '관측되지 않습니다(Unobserved)'. 이 $M$ 으로부터 세 가지가 유도되는데, 그중 관측 분포 $P(v)$ 와 인과 그래프 $G$ 는 우리가 '관측할 수 있는(Observed)' 진리이고, 실험 분포(개입 분포) $P(v' \mid do(x))$ 는 우리가 알고 싶지만 직접 '관측되지 않는' 목표량입니다. 식별이란 관측 가능한 두 정보 $\{P(v), G\}$ 만으로 관측 불가능한 $P(v' \mid do(x))$ 를 복원할 수 있는지를 묻는 문제입니다.](./images/identification_information_flow.png)
+
+* **SCM $M$ (진리, 관측 불가):** 데이터를 생성한 실제 메커니즘. 우리는 결코 직접 알 수 없습니다.
+* **관측 분포 $P(v)$ (진리, 관측 가능):** 데이터로부터 추정할 수 있습니다.
+* **인과 그래프 $G$ (진리, 관측 가능):** 전문가 지식이나 가정으로 주어집니다.
+* **실험 분포 $P(v' \mid do(x))$ (목표, 관측 불가):** 우리가 알고 싶은 것.
+
+### 4.3. 식별 가능성의 의미: 두 모형의 합의
+
+식별 가능성의 본질은 **"같은 관측 증거를 내는 모든 모형이 같은 인과 결론에 도달하는가"** 입니다. 임의의 두 SCM $M_1$, $M_2$ 를 생각합시다.
+
+![Figure: 두 SCM $M_1$, $M_2$ 의 합의를 통한 식별 가능성의 정의. 두 모형은 동일한 그래프 $G$ 를 유도하고($G(M_1) = G(M_2) = G$), 동일한 관측 분포를 유도합니다($P^{M_1}(v) = P^{M_2}(v) = P(v)$). 이렇게 관측 가능한 모든 증거에 대해 합의가 이루어졌을 때, 만약 두 모형이 인과 효과에 대해서도 반드시 합의한다면($P^{M_1}(y \mid do(x)) = P^{M_2}(y \mid do(x))$), 그 인과 효과는 식별 가능합니다. 식별 가능성이란 결국 $\langle G, P(v) \rangle$ 에 부합하는 모든 모형이 $P(y \mid do(x))$ 에 대해 예외 없이 같은 답을 낸다는 뜻입니다.](./images/identification_two_scms.png)
+
+> **식별 가능성의 직관:** $M_1$, $M_2$ 의 구체적 형태가 무엇이든, $\langle G, P(v) \rangle$ 에 부합하는 **모든 모형이 $P(y \mid do(x))$ 에 대해서도 일치한다**면, 그 인과 효과는 식별 가능합니다. 반대로 같은 $\langle G, P(v) \rangle$ 를 내면서도 인과 효과는 서로 다른 두 모형이 존재한다면, 식별 **불가능**합니다.
+
+### 4.4. 식별 가능성의 집합론적 해석 (Venn Diagram)
+
+이 개념은 모형들의 집합에 대한 벤 다이어그램으로 우아하게 시각화됩니다.
+
+![Figure: 식별 가능성의 집합론적 해석. 큰 사각형은 '모든 모형(all models)'의 공간입니다. 위쪽 원은 주어진 관측 분포 $P(\mathbf{V})$ 를 유도하는 모형들의 집합, 아래쪽 원은 주어진 그래프 $G$ 를 유도하는 모형들의 집합이며, 둘의 교집합(겹치는 렌즈 모양 영역)이 바로 $\langle G, P(\mathbf{V}) \rangle$ 와 모두 부합하는 모형들입니다. 왼쪽 그림에서 이 교집합이 초록색으로 칠해져 있으면, 그 안의 모든 모형이 동일한 $P(y \mid do(x))$ 를 내므로 효과는 '식별 가능'합니다. 오른쪽 그림처럼 교집합 영역에서 빨강과 초록이 섞여 있으면, 동일한 증거를 내면서도 인과 효과가 서로 다른 모형들이 공존한다는 뜻이므로 효과는 '식별 불가능'합니다.](./images/identification_venn.png)
+
+* **위쪽 원 (inducing $P(\mathbf{V})$):** 관측 분포 $P(\mathbf{V})$ 를 똑같이 재현하는 모든 모형.
+* **아래쪽 원 (inducing $G$):** 그래프 $G$ 를 똑같이 유도하는 모든 모형.
+* **교집합:** 두 조건을 모두 만족하는 모형들. 우리가 가진 증거로는 이들을 구별할 수 없습니다.
+* **식별 가능 (초록):** 교집합 내 모든 모형이 같은 $P(y \mid do(x))$ 값을 가짐.
+* **식별 불가능 (빨강/초록 혼합):** 교집합 내에서 $P(y \mid do(x))$ 값이 갈림 → 데이터와 그래프만으로는 답을 정할 수 없음.
+
+---
+
+## 5. Markovian 모형에서의 식별 (Identification in Markovian Models)
+
+### 5.1. 전역 식별 정리
+
+다행히 **Markovian 모형**(모든 관련 변수가 측정됨, 즉 잠재 혼란 변수가 없음)에서는 식별이 항상 보장됩니다.
+
+::: {.callout-tip}
+## 정리 (Identification in Markovian Models)
+
+임의의 Markovian 모형의 인과 다이어그램 $G$ 가 주어지면, 모든 변수 부분집합 $X$, $Y$ 에 대해 인과 효과 $Q = P(y \mid do(x))$ 는 **항상 식별 가능**하며, 절단된 분해로부터 얻어집니다.
+
+$$ P(v' \mid do(x)) = \prod_{V_i \in V \setminus X} P(v_i \mid pa_i) $$
+
+따라서 $Y$ 이외의 변수들을 주변화하면,
+
+$$ P(y \mid do(x)) = \sum_{v' \setminus y} \;\prod_{V_i \in V \setminus X} P(v_i \mid pa_i). $$
+:::
+
+즉 모든 변수가 측정되기만 하면, 인과 효과는 관측 가능한 조건부 확률들의 곱과 합으로 언제나 표현됩니다.
+
+### 5.2. 직접 부모에 의한 보정 — 단일 처치 (Adjustment by Direct Parents, Singleton)
+
+전체 분해식이 아니라, **처치의 직접 부모(direct parents)** 만 알아도 효과를 식별할 수 있는 더 실용적인 결과가 있습니다.
+
+::: {.callout-tip}
+## 정리 (Adjustment by Direct Parents, Singleton)
+
+Markovian 모형의 인과 다이어그램 $G$ 에서 변수 부분집합 $V$ 가 측정되었을 때, $X, Y, Pa_X \subseteq V$ 이면 — 즉 **$X$, $Y$, 그리고 $X$ 의 모든 부모가 측정**되었다면 — 인과 효과 $Q = P(y \mid do(x))$ 는 식별 가능하며, **$Pa_X$ 에 대한 보정(adjustment)** 으로 주어집니다.
+
+$$ P(y \mid do(x)) = \sum_{pa_X} P(y \mid x, pa_X)\,P(pa_X). $$
+:::
+
+이것이 바로 그 유명한 **부모 보정 공식(parent adjustment formula)** 입니다. $X$ 의 부모를 모두 조건화하면 $X$ 로 들어오는 모든 백도어 경로가 차단되기 때문에, 단순 조건화 $P(y \mid x)$ 에 $P(pa_X)$ 라는 가중치를 곱해 합산하는 것만으로 인과 효과가 복원됩니다. 3.2절의 단일 처치 결과 $P(v' \mid do(x)) = P(v'' \mid x, pa_X)P(pa_X)$ 에서 $Y$ 외 변수를 주변화하면 곧바로 이 공식이 나옵니다.
+
+### 5.3. (심화) 처치 집합으로의 일반화 (Adjustment by Direct Parents, set of treatments)
+
+위 단일 처치 결과를 **여러 개의 처치 집합 $X$** 로 확장합니다. 단일 처치와 달리, 이제 $Pa_X = \bigcup_{X \in X} Pa$ 가 처치 집합 $X$ 자신과 교집합을 가질 수 있다는 점이 까다롭습니다. 다음 기호를 도입합니다.
+
+* $Pa^-_W = Pa_W \setminus W$ (자기 자신을 제외한 부모)
+* $X = \{X_1, X_2, \ldots, X_k\}$ 를 위상 정렬(topological order)된 순서로 둠
+* $X_{\prec j} = \{X_1, \ldots, X_{j-1}\}$, $\quad X_{\preceq j} = \{X_1, \ldots, X_j\}$
+* $Pa'_{X_j} \triangleq Pa_{X_j} \setminus (X_{\prec j} \cup Pa^-_{X_{\prec j}})$ (앞선 처치/그 부모와 겹치지 않는 "순수한" 부모)
+
+::: {.callout-tip}
+## 정리 (Set Version)
+
+모든 $i < j$ 에 대해 $Pa'_{X_j}$ 가 $X_i$ 의 자손(descendant)이 아니라면,
+
+$$ \prod_{X \in X} P(x \mid pa_X) = P(x \mid pa^-_X). $$
+
+따라서
+
+$$ P(y \mid do(x)) = \sum_{pa^-_X} P(y \mid x, pa^-_X)\,P(pa^-_X). $$
+:::
+
+#### 귀납법에 의한 증명 (Proof by Induction)
+
+다음 명제를 모든 $i$ 에 대해 증명합니다.
+
+$$ \prod_{X \in X_{\preceq i}} P(x \mid pa_X) = P(x_{\preceq i} \mid pa^-_{X_{\preceq i}}). $$
+
+**(기저 단계, Base case)** $i = 1$ 일 때, $X_1$ 의 부모에서 자기 자신은 제외되므로 $Pa_{X_1} = Pa^-_{X_1}$ 이고,
+
+$$ P(x_1 \mid pa_{X_1}) = P(x_1 \mid pa_{X_1} \setminus \{X_1\}) = P(x_1 \mid pa^-_{X_1}) = P(x_{\preceq 1} \mid pa^-_{X_{\preceq 1}}). $$
+
+**(귀납 가정, Hypothesis)** $i-1$ 까지 성립한다고 가정하고, 다음 등식을 보이면 충분합니다.
+
+$$ P(x_{\prec i} \mid pa^-_{X_{\prec i}})\,P(x_i \mid pa_{X_i}) = P(x_{\preceq i} \mid pa^-_{X_{\preceq i}}). $$
+
+**(증명)** $Pa'_{X_i} = Pa_{X_i} \setminus (X_{\prec i} \cup Pa^-_{X_{\prec i}})$ 로 두면, $X_i$ 의 부모는 세 부분 $\{Pa'_{X_i},\, X_{\prec i},\, Pa^-_{X_{\prec i}}\}$ 으로 분해됩니다.
+
+$$
+\begin{aligned}
+&P(x_{\prec i} \mid pa^-_{X_{\prec i}})\,P(x_i \mid pa_{X_i}) \\[2mm]
+&= P(x_{\prec i} \mid pa^-_{X_{\prec i}})\,P(x_i \mid pa'_{X_i}, x_{\prec i}, pa^-_{X_{\prec i}}) && \text{(Markov Condition: 부모 분해)} \\[2mm]
+&= P(x_{\prec i} \mid pa^-_{X_{\prec i}})\,P(x_i \mid pa'_{X_i}, x_{\prec i}, pa^-_{X_{\prec i}}) \cdot \frac{P(pa'_{X_i} \mid x_{\prec i}, pa^-_{X_{\prec i}})}{P(pa'_{X_i} \mid x_{\prec i}, pa^-_{X_{\prec i}})} && \text{(1을 곱함)} \\[2mm]
+&= \frac{P(pa'_{X_i}, x_{\preceq i} \mid pa^-_{X_{\prec i}})}{P(pa'_{X_i} \mid x_{\prec i}, pa^-_{X_{\prec i}})} && \text{(연쇄 법칙, } \{X_i\}\cup X_{\prec i} = X_{\preceq i}) \\[2mm]
+&= \frac{P(pa'_{X_i}, x_{\preceq i} \mid pa^-_{X_{\prec i}})}{P(pa'_{X_i} \mid pa^-_{X_{\prec i}})} && (X_{\prec i} \perp\!\!\!\perp Pa'_{X_i} \mid Pa^-_{X_{\prec i}}, \text{ 가정}) \\[2mm]
+&= P(x_{\preceq i} \mid pa'_{X_i}, pa^-_{X_{\prec i}}) && \text{(조건부 확률 정의)} \\[2mm]
+&= P(x_{\preceq i} \mid pa^-_{X_{\preceq i}}) && \text{(정의에 의해)}
+\end{aligned}
+$$
+
+이로써 귀납이 완성됩니다. $\blacksquare$
+
+#### 구체적 예시 (Worked Example)
+
+다음 그래프에서 처치 집합 $X = \{X_1, X_2\}$ 에 대한 부모 보정을 확인합니다.
+
+![Figure: 처치 집합 보정의 예제 그래프. 변수 $A, B, X_1, C, X_2, D, Y$ 가 등장하며, $X_1$ 의 부모는 $\{A, B\}$, $X_2$ 의 부모는 $\{X_1, B, C\}$ 입니다. 두 처치 $X_1, X_2$ 가 동시에 개입 대상이며, $X_2$ 의 부모 중 $C$ 가 앞선 처치 $X_1$ 이나 그 부모와 겹치지 않는 '순수한 부모' $Pa'_{X_2}$ 에 해당합니다. 이 그림은 처치 집합에 대한 부모 보정 공식이 어떻게 $\prod_X P(x \mid pa_X)$ 를 $P(x \mid pa^-_X)$ 로 압축하는지를 보여주는 사례입니다.](./images/parent_adjustment_example.png)
+
+처치를 제외한 부모 보정을 다음과 같이 시작합니다.
+
+$$ P(y \mid do(x)) = \frac{P(v)}{P(x_1 \mid a, b)\,P(x_2 \mid x_1, b, c)} $$
+
+분모의 $P(x_1 \mid a, b)\,P(x_2 \mid x_1, b, c)$ 에 집중하여, $X_2$ 의 부모를 $x_1 (= x_{\prec 2})$, $a,b (= pa^-_{X_{\prec 2}})$, $c (= pa'_{X_2})$ 로 분류하면 위 정리의 증명과 동일한 과정을 거칩니다.
+
+$$
+\begin{aligned}
+P(x_1 \mid a, b)\,P(x_2 \mid x_1, b, c)
+&= P(x_1 \mid a, b)\,P(x_2 \mid \underbrace{x_1}_{x_{\prec 2}}, \underbrace{a, b}_{pa^-_{X_{\prec 2}}}, \underbrace{c}_{pa'_{X_2}}) \\[2mm]
+&= P(x_1 \mid a, b)\,P(x_2 \mid x_1, a, b, c) \cdot \frac{P(c \mid x_1, a, b)}{P(c \mid x_1, a, b)} \\[2mm]
+&= \frac{P(x_1, x_2, c \mid a, b)}{P(c \mid x_1, a, b)} \\[2mm]
+&= \frac{P(x_1, x_2, c \mid a, b)}{P(c \mid a, b)} \\[2mm]
+&= P(x_1, x_2 \mid a, b, c) \\[2mm]
+&= P(x \mid pa^-_X)
+\end{aligned}
+$$
+
+이렇게 여러 처치 인자들의 곱이 단 하나의 조건부 확률 $P(x \mid pa^-_X)$ 로 압축되며, 부모 보정 공식이 처치 집합에 대해서도 성립함을 확인할 수 있습니다.
+
+---
+
+## 6. 계절이 잠재 변수라면? (If Season is latent, is the effect still computable?)
+
+마지막으로 식별의 위력을 보여 주는 인상적인 예제로 마무리하겠습니다. 스프링클러 예제에서 **계절($Sn$)이 관측되지 않는 잠재 변수**라면, 그래도 $Q_2 = P(Wt \mid do(Sp = on))$ 을 계산할 수 있을까요?
+
+![Figure: 계절이 잠재 변수가 된 스프링클러 그래프(개입 후). 스프링클러는 $Sp = on$ 으로 고정되어 $Sn \to Sp$ 엣지가 제거된 상태입니다. 비록 최상단의 '계절(season)' 노드는 이제 관측되지 않지만, 최종 식별 공식은 계절을 명시적으로 요구하지 않습니다. 이는 잠재 혼란 변수가 존재하더라도 적절한 관측 변수(여기서는 비, rain)에 대한 보정만으로 인과 효과를 복원할 수 있음을 보여 주는 핵심 예시입니다.](./images/sprinkler_latent_season.png)
+
+앞서 유도한 결과에서 출발합니다.
+
+$$
+\begin{aligned}
+Q_2 = P(Wt \mid do(Sp = on))
+&= \frac{\sum_{sn, rn} P(sn)\,P(Sp = on)\,P(rn \mid sn)\,P(wt \mid Sp = on, rn)}{\sum_{sn} P(Sp = on)\,P(sn)} \\[2mm]
+&= \sum_{sn, rn} P(sn)\,P(rn \mid sn)\,P(wt \mid Sp = on, rn) && (\text{상수 } P(Sp=on) \text{ 약분}) \\[2mm]
+&= \sum_{sn, rn} P(rn, sn)\,P(wt \mid Sp = on, rn) && (\because P(sn)P(rn \mid sn) = P(rn, sn)) \\[2mm]
+&= \sum_{rn} P(wt \mid Sp = on, rn)\,P(rn) && \left(\because \sum_{sn} P(rn, sn) = P(rn)\right)
+\end{aligned}
+$$
+
+최종 결과를 보십시오.
+
+$$ \boxed{\; Q_2 = \sum_{rn} P(wt \mid Sp = on, rn)\,P(rn) \;} $$
+
+이 식에는 **계절 $Sn$ 이 전혀 등장하지 않습니다!** 최종 표현은 오직 $P(rn)$ 과 $P(wt \mid Sp = on, rn)$ — 즉 모두 관측 가능한 양 — 으로만 이루어져 있습니다. 따라서 계절을 직접 관측하지 못하더라도, **비($Rn$)에 대해 보정**하는 것만으로 인과 효과는 여전히 **식별 가능**합니다.
+
+이것이 식별 이론이 가진 실용적 위력입니다. 모든 변수를 측정할 수 없는 현실에서도, 그래프 구조가 허락한다면 적절한 관측 변수에 대한 보정만으로 인과 효과를 복원할 수 있습니다. 이는 다음 주제인 **백도어 기준(Backdoor Criterion)** 과 **do-calculus** 로 자연스럽게 이어집니다.
+
+---
+
+## 마치며
+
+이번 글에서 다룬 핵심을 정리하면 다음과 같습니다.
+
+* **인과 효과 $P(y \mid do(x))$** 는 관측 조건화 $P(y \mid x)$ 와 본질적으로 다르며, 하위 모형 $M_x$ 에서의 분포로 정의됩니다.
+* **절단된 분해(Truncated Factorization)** 는 처치 변수의 생성 인자를 도려내어 개입 분포를 관측 분포의 재가중으로 표현합니다.
+* **식별 문제**는 $\langle G, P(v) \rangle$ 만으로 $P(y \mid do(x))$ 를 유일하게 결정할 수 있는지를 묻습니다.
+* **Markovian 모형**에서는 효과가 항상 식별 가능하며, 특히 **부모 보정 공식**이 강력한 도구가 됩니다.
+* 잠재 변수가 있어도 그래프 구조에 따라 효과가 식별될 수 있습니다.
+
+## 참고문헌 (References)
+
+* Judea Pearl. *Causality: Models, Reasoning, and Inference.* Cambridge University Press, New York, 2000.

@@ -1,0 +1,593 @@
+---
+title: "[Causal Inference] 13. Instrumental Variables"
+description: "Instrumental Variables"
+author: "유성현"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+## 들어가며 (Overview)
+
+이번 포스트에서는 인과추론과 계량경제학을 가로지르는 가장 강력한 도구 중 하나인 **도구 변수(Instrumental Variable, IV)**를 다룹니다. IV는 처치(treatment)와 결과(outcome) 사이에 **관측되지 않은 교란(unobserved confounding)**이 존재하여 단순 회귀로는 인과 효과를 식별할 수 없을 때, 이를 우회하여 효과를 추정할 수 있게 해 주는 핵심 기법입니다.
+
+강의 자료는 IV를 두 가지 관점에서 조명합니다.
+
+* **선형 가정 하의 IV (IV under Linear Assumption)**: 계량경제학에서 전통적으로 사용해 온 관점으로, 선형 구조 방정식을 가정하고 ILS(간접 최소제곱)·2SLS(2단계 최소제곱)를 통해 계수 $\beta_1$을 추정합니다.
+* **비순응이 있는 무작위 실험 (Randomized Experiment with Noncompliance)**: 잠재적 결과(potential outcome) 프레임워크 위에서, 처치 배정(assignment)을 도구로 보고 **순응자(complier)**라는 특정 부분 모집단에 대한 인과 효과(CACE/LATE)를 식별합니다.
+
+이 두 관점은 서로 다른 가정에서 출발하지만, 마지막에 가서 **본질적으로 동일한 추정량**으로 수렴한다는 점이 이 강의의 백미입니다.
+
+---
+
+## 1. 선형 가정 하의 IV (IV under Linear Assumption)
+
+### 1.1 도구 변수란? (Instrumental Variable)
+
+먼저 IV가 등장하는 인과 그래프(causal graph)를 살펴보겠습니다.
+
+![Figure: 공변량 $W$를 포함한 IV 인과 그래프. 처치 $X$에서 결과 $Y$로 향하는 화살표의 계수 $\beta_1$이 우리가 알고자 하는 추정 대상(estimand)입니다. 핵심 문제는 $X$와 $Y$가 관측되지 않은 교란 요인(오차항 $\varepsilon$, 양방향 점선/곡선 화살표로 표현)에 의해 연결되어 있어 $X$가 **내생적(endogenous)**이라는 점입니다. 도구 변수 $Z$는 오직 $X$를 통해서만 $Y$에 영향을 주며($Z \to X \to Y$), $Y$의 오차항과는 독립이라는 성질을 가집니다. $W$는 관측된 공변량(외생 변수)입니다.](./images/iv_dag_covariates.png)
+
+이 그래프에서 우리의 목표는 처치 $X$가 결과 $Y$에 미치는 인과적 영향, 즉 화살표 위에 표시된 계수 $\beta_1$을 일관되게(consistently) 추정하는 것입니다.
+
+### 1.2 계량경제학적 IV 접근의 개요 (Brief review of econometric approach to IV)
+
+계량경제학에서는 결과 $Y$를 스칼라 처치 $X$와 공변량 집합 $W$에 선형으로 관계 짓는 전통적 모형에서 출발합니다.
+
+$$
+Y_i = \beta_0 + \beta_1 X_i + \beta_2 W_i + \varepsilon_i
+$$
+
+* 여기서 추정 대상(estimand)은 처치의 계수인 $\beta_1$입니다.
+* 용어 정리: 경제학에서는 $Y$와 **교란된(confounded)** 변수를 **내생적(endogenous)**, 교란되지 않은 변수를 **외생적(exogenous)**이라고 부릅니다.
+  * $X$: 내생적 처치 변수 (endogenous treatment)
+  * $W$: 외생적 공변량 (exogenous covariate)
+
+#### 핵심 난점: 내생성으로 인한 OLS 편향
+
+* **문제**: 오차항 $\varepsilon_i$가 처치 변수 $X_i$와 **상관되어 있습니다(교란됨)**. 즉,
+$$
+\mathrm{Cov}[X_i, \varepsilon_i] \neq 0
+$$
+* 이때 OLS 추정의 직교 조건(orthogonality condition)이 깨지므로, $\beta_1$의 **직접적인 OLS 추정량은 편향(biased)**됩니다.
+* 직관적으로, 우리가 $X$의 변화에 대응하는 $Y$의 변화를 보더라도, 그 변화의 일부는 진짜 인과 효과 $\beta_1$ 때문이 아니라 $X$와 $\varepsilon$이 함께 움직이는 교란 때문일 수 있습니다.
+
+이 난점을 해결하기 위해 **도구 변수 $Z$**를 도입합니다.
+
+### 1.3 도구 변수의 정의와 식별 (IV conditions)
+
+차원이 $K$인 도구 변수 벡터 $Z$는 다음 두 조건을 만족해야 합니다.
+
+1. $\varepsilon_i \perp W_i$
+2. $\varepsilon_i \perp Z_i \mid W_i$
+
+이 둘을 합치면 다음과 같이 표현됩니다.
+
+$$
+\varepsilon_i \perp (Z_i, W_i)
+$$
+
+* **직관**: 도구 $Z$는 $Y$의 오차항(교란을 포함)과 독립이어야 합니다. 즉, $Z$는 $X$를 통하지 않고서는 $Y$에 영향을 주는 어떤 경로도 가지면 안 됩니다(이후 2.2절의 **배제 제약**과 통하는 개념).
+
+#### 식별 상태(identification status)
+
+도구의 개수 $K$에 따라 식별 상태가 달라집니다.
+
+* $K > 1$: **과대식별(over-identified)** — 추정에 필요한 것보다 도구가 많음
+* $K = 1$: **정확식별(just-identified)** — 도구의 수가 미지수의 수와 정확히 일치
+
+이하에서는 가장 기본적인 정확식별(just-identified) 경우를 중심으로 전개합니다.
+
+### 1.4 정확식별·공변량이 없는 경우 (Case of just-identified, no covariates)
+
+가장 단순한 상황($K=1$, 공변량 $W$ 없음)에서 IV 추정량은 **두 공분산의 비(ratio of covariances)**로 주어집니다.
+
+$$
+\hat{\beta}_{1,\text{iv}}
+= \frac{\widehat{\mathrm{Cov}}(Y_i, Z_i)}{\widehat{\mathrm{Cov}}(X_i, Z_i)}
+= \frac{\frac{1}{N}\sum_{i=1}^{N} (Y_i - \bar{Y})(Z_i - \bar{Z})}
+       {\frac{1}{N}\sum_{i=1}^{N} (X_i - \bar{X})(Z_i - \bar{Z})}
+$$
+
+여기서 $\bar{Y}, \bar{X}, \bar{Z}$는 표본 평균입니다.
+
+#### 이진 도구의 경우: Wald 추정량 (Wald estimator)
+
+도구 $Z$가 **이진(binary)** 변수일 때, 위 식은 **Wald 추정량**으로 단순화됩니다.
+
+$$
+\hat{\beta}_{1,\text{iv}} = \frac{\bar{Y}_1 - \bar{Y}_0}{\bar{X}_1 - \bar{X}_0}
+$$
+
+* $\bar{Y}_z, \bar{X}_z$는 각각 $Z = z\,(=0,1)$ 그룹 내에서의 표본 평균입니다.
+* **해석**: 분자는 도구 값이 0에서 1로 바뀔 때 $Y$의 평균 변화, 분모는 같은 변화에 따른 $X$의 평균 변화입니다. 도구가 결과에 미친 효과를, 도구가 처치에 미친 효과로 "환산(scaling)"해 주는 것입니다. 이 직관은 뒤에서 다룰 CACE/LATE와 정확히 일치합니다.
+
+#### ILS 해석 (Indirect Least Squares)
+
+위 IV 추정량은 **간접 최소제곱(ILS)**으로도 해석됩니다. 두 개의 **축약형(reduced-form)** 회귀를 생각해 보겠습니다.
+
+$$
+\begin{aligned}
+Y_i &= \pi_{10} + \pi_{11}\cdot Z_i + \varepsilon_{1i} \\
+X_i &= \pi_{20} + \pi_{21}\cdot Z_i + \varepsilon_{2i}
+\end{aligned}
+$$
+
+* 첫 번째 식은 결과 $Y$를 도구 $Z$에 직접 회귀시킨 **축약형(reduced form)**입니다.
+* 두 번째 식은 처치 $X$를 도구 $Z$에 회귀시킨 **1단계(first stage)** 회귀입니다.
+
+ILS 추정량은 이 두 최소제곱 추정치의 **비(ratio)**로 정의됩니다.
+
+$$
+\hat{\beta}_{1,\text{ils}} = \frac{\hat{\pi}_{11}}{\hat{\pi}_{21}}
+$$
+
+* **직관**: $\hat{\pi}_{11}$은 "$Z$가 $Y$에 주는 총효과", $\hat{\pi}_{21}$은 "$Z$가 $X$에 주는 효과"입니다. 경로 $Z \to X \to Y$를 따라 생각하면, 총효과 = (1단계 효과) $\times$ ($X \to Y$ 효과)이므로, 총효과를 1단계 효과로 나누면 우리가 원하는 $X \to Y$ 효과 $\beta_1$이 분리되어 나옵니다.
+
+#### 2SLS 해석 (Two Stage Least Squares)
+
+같은 추정량을 **2단계 최소제곱(2SLS)**으로 다시 해석할 수 있습니다.
+
+* **1단계 (Stage 1)**: 도구 $Z$로부터 처치 값을 OLS로 예측합니다.
+$$
+X_i = \pi_0 + \pi_1 \cdot Z_i + \varepsilon_i, \qquad
+\hat{X}_i = \hat{\pi}_0 + \hat{\pi}_1 \cdot Z_i
+$$
+
+* **2단계 (Stage 2)**: 1단계에서 얻은 예측값 $\hat{X}_i$를 결과 모형에 대입합니다.
+$$
+Y_i = \pi_2 + \pi_3 \hat{X}_i + \varepsilon_i
+$$
+
+* 2단계에서 OLS로 $\pi_3$를 추정하면 그것이 곧 2SLS 추정량 $\hat{\beta}_{1,\text{2sls}}$가 됩니다.
+
+* **직관**: $\hat{X}_i$는 $X$ 중에서 오직 외생적 도구 $Z$로 설명되는 부분, 즉 $X$의 **"교란되지 않은(unconfounded) 성분"**입니다. 오차항과 얽힌 부분을 제거한 깨끗한 $X$만 사용하므로 편향이 제거됩니다.
+
+* 세 추정량이 모두 일치함을 쉽게 확인할 수 있습니다.
+$$
+\hat{\beta}_{1,\text{iv}} = \hat{\beta}_{1,\text{ils}} = \hat{\beta}_{1,\text{2sls}}
+$$
+
+### 1.5 정확식별·공변량이 있는 경우 (Case of just-identified, with covariates)
+
+위 논의는 공변량 $W$가 있는 경우로 자연스럽게 확장됩니다.
+
+* **간접 최소제곱(ILS)**: 두 개의 축약형 회귀에 $W$를 추가합니다.
+$$
+\begin{aligned}
+Y_i &= \pi_{10} + \pi_{11}Z_i + \pi_{12}W_i + \varepsilon_{1i} \\
+X_i &= \pi_{20} + \pi_{21}Z_i + \pi_{22}W_i + \varepsilon_{2i}
+\end{aligned}
+$$
+ILS 추정량은 여전히 $\hat{\beta}_{1,\text{ils}} = \hat{\pi}_{11}/\hat{\pi}_{21}$입니다.
+
+* **2SLS**: 1단계에서 $W$를 포함해 $\hat{X}_i$를 예측한 뒤,
+$$
+\hat{X}_i = \hat{\pi}_{20} + \hat{\pi}_{21}Z_i + \hat{\pi}_{22}W_i
+$$
+2단계에서 $W$와 $\hat{X}_i$를 함께 회귀변수로 넣어 $\beta_1$을 추정합니다.
+$$
+Y_i = \beta_0 + \beta_1 \hat{X}_i + \beta_2 W_i + \eta_i
+$$
+2SLS 추정량은 이 2단계 회귀에서 $\beta_1$의 OLS 추정량입니다.
+
+### 1.6 IV 추정량의 유도 (IV estimator derivation)
+
+이제 IV 추정량이 왜 위와 같은 공분산 비로 나오는지 직접 유도해 보겠습니다. 다음 두 식이 주어졌다고 합시다.
+
+$$
+\begin{aligned}
+X_i &= \pi_{20} + \pi_{21}Z_i + \pi_{22}W_i + \varepsilon_{2i} \\
+Y_i &= \beta_0 + \beta_1 X_i + \underbrace{\beta_2 W_i + \varepsilon_i}_{\eta_i}
+\end{aligned}
+$$
+
+여기서 결과 식의 $\beta_1 X_i$를 제외한 나머지 항을 묶어 $\eta_i$로 정의했습니다. IV의 핵심 성질은 다음 두 가지입니다.
+
+$$
+\mathrm{Cov}[X_i, Z_i] \neq 0 \quad (\text{관련성, relevance}),
+\qquad
+\mathrm{Cov}[\eta_i, Z_i] = 0 \quad (\text{외생성, exogeneity})
+$$
+
+* 첫째 조건은 도구가 처치와 실제로 연관되어 있어야 한다는 **관련성(relevance)** 조건입니다.
+* 둘째 조건은 도구가 결과의 오차 구조(교란 포함)와 무관해야 한다는 **외생성(exogeneity)** 조건입니다.
+
+#### 단계별 유도
+
+결과 식의 양변과 $Z_i$의 공분산을 취합니다. 공분산은 선형 연산이며, 상수항 $\beta_0$의 공분산은 0임을 이용합니다.
+
+$$
+\begin{aligned}
+\mathrm{Cov}[Y_i, Z_i]
+&= \mathrm{Cov}[\beta_0 + \beta_1 X_i + \eta_i,\; Z_i] \\
+&= \underbrace{\mathrm{Cov}[\beta_0, Z_i]}_{=0}
+ + \beta_1 \mathrm{Cov}[X_i, Z_i]
+ + \underbrace{\mathrm{Cov}[\eta_i, Z_i]}_{=0 \;(\text{외생성})} \\
+&= \beta_1 \mathrm{Cov}[X_i, Z_i]
+\end{aligned}
+$$
+
+따라서 $\beta_1$에 대해 정리하면,
+
+$$
+\beta_1 = \frac{\mathrm{Cov}[Y_i, Z_i]}{\mathrm{Cov}[X_i, Z_i]}
+$$
+
+분자와 분모를 모두 $\mathrm{Var}[Z_i]$로 나누면, 다음과 같이 **축약형과 1단계의 비**로 재해석됩니다.
+
+$$
+\beta_1
+= \frac{\;\dfrac{\mathrm{Cov}[Y_i, Z_i]}{\mathrm{Var}[Z_i]}\;}
+       {\;\dfrac{\mathrm{Cov}[X_i, Z_i]}{\mathrm{Var}[Z_i]}\;}
+= \frac{\text{Reduced form}}{\text{First stage}}
+$$
+
+* $\dfrac{\mathrm{Cov}[Y_i, Z_i]}{\mathrm{Var}[Z_i]}$ 는 $Y$를 $Z$에 회귀했을 때의 기울기, 즉 **축약형(reduced form)** 계수입니다.
+* $\dfrac{\mathrm{Cov}[X_i, Z_i]}{\mathrm{Var}[Z_i]}$ 는 $X$를 $Z$에 회귀했을 때의 기울기, 즉 **1단계(first stage)** 계수입니다.
+* 이 결과는 앞서 본 ILS 추정량 $\hat{\pi}_{11}/\hat{\pi}_{21}$과 정확히 같은 구조입니다.
+
+### 1.7 2SLS 추정량의 유도 (2SLS estimator derivation)
+
+2SLS가 왜 일관된 추정량을 주는지 대입(substitution)을 통해 확인해 보겠습니다. 1단계 회귀를 $X_i = \pi_{00} + \pi_{10}W_i + \pi_{11}Z_i + \varepsilon_{xi}$로 쓰고, 이를 결과 모형 $Y_i = \beta_0 + \beta_1 X_i + \beta_2 W_i + \varepsilon_i$에 대입합니다.
+
+$$
+Y_i = \beta_1\bigl(\pi_{00} + \pi_{10}W_i + \pi_{11}Z_i + \varepsilon_{xi}\bigr) + \beta_2 W_i + \beta_0 + \varepsilon_i
+$$
+
+이제 동류항을 $Z_i$, $W_i$, 그리고 나머지(상수·오차) 항으로 묶어 정리합니다.
+
+$$
+Y_i = \beta_1 \pi_{11} Z_i
+ + (\beta_2 + \beta_1 \pi_{10}) W_i
+ + \underbrace{\bigl(\beta_1(\pi_{00} + \varepsilon_{xi}) + \beta_0 + \varepsilon_i\bigr)}_{\xi_i}
+$$
+
+여기서 묶음 오차항을 $\xi_i$로 정의했습니다. 이를 다시 정리하면,
+
+$$
+\begin{aligned}
+Y_i &= \beta_1\bigl(\pi_{10}W_i + \pi_{11}Z_i\bigr) + \beta_2 W_i + \xi_i \\
+&= \beta_1 \underbrace{\,\mathbb{E}[X_i \mid W_i, Z_i]\,}_{\hat{X}_i} + \beta_2 W_i + \xi_i
+\end{aligned}
+$$
+
+* 핵심은 $\mathbb{E}[X_i \mid W_i, Z_i] = \pi_{00} + \pi_{10}W_i + \pi_{11}Z_i$ 가 곧 1단계 예측값 $\hat{X}_i$라는 점입니다(1단계 회귀에서 잡음 $\varepsilon_{xi}$를 제거한 결정적 부분).
+* 새 오차항 $\xi_i$는 외생적인 $W_i, Z_i$의 함수인 $\hat{X}_i$와 직교합니다. 따라서 $Y$를 $\hat{X}_i$와 $W_i$에 OLS로 회귀하면 $\beta_1$이 일관되게 추정됩니다.
+* 즉 2SLS는 내생적 $X$를 그것의 **조건부 기댓값(외생 정보로 설명되는 부분)** $\hat{X}$로 치환하여 내생성을 제거하는 절차입니다.
+
+### 1.8 2SLS 모형의 행렬 추정 (Estimating 2SLS models, optional)
+
+실제 회귀 소프트웨어가 2SLS를 어떻게 계산하는지 행렬 형태로 살펴보겠습니다(선택적 내용). $X$를 내생 변수, $\hat{X}$를 그 예측값, $W$를 회귀변수, $Z$를 도구라 하면, 2SLS 추정량은 다음과 같습니다.
+
+$$
+\hat{\Gamma}_{\text{2SLS}}
+= \Bigl(\underbrace{[\hat{X}\,W]'[\hat{X}\,W]}_{A}\Bigr)^{-1}
+  \underbrace{[\hat{X}\,W]'Y}_{B}
+$$
+
+여기서 $\hat{\Gamma}_{\text{2SLS}}$는 $\beta_1$을 비롯한 회귀 계수 추정치를 담고 있습니다(대괄호는 열 결합(concatenation)을 의미).
+
+#### 사영 행렬(hat matrix)의 도입
+
+먼저 도구·회귀변수 결합 행렬 $[Z\,W]$가 만드는 사영(projection, hat) 행렬을 정의합니다.
+
+$$
+M = [Z\,W]\bigl([Z\,W]'[Z\,W]\bigr)^{-1}[Z\,W]'
+$$
+
+* $M$은 **대칭(symmetric)**이며 **멱등(idempotent)**입니다. 즉 $M' = M$, $M^2 = M = M'M$.
+* 1단계 예측값은 $\hat{X} = MX$로 표현됩니다($X$를 $[Z\,W]$의 열공간으로 사영).
+* 중요한 성질: $W$는 이미 $[Z\,W]$의 열공간 안에 있으므로, $W$를 사영해도 그대로입니다. 즉 $MW = W$.
+
+#### $A$ 항의 전개
+
+$\hat{X} = MX$를 대입하여 $A = [\hat{X}\,W]'[\hat{X}\,W]$를 전개합니다.
+
+$$
+\begin{aligned}
+[\hat{X}\,W]'[\hat{X}\,W]
+&= [MX,\; W]'[MX,\; W] \\[4pt]
+&= \begin{bmatrix} X'M'MX & X'M'W \\ W'M'X & W'W \end{bmatrix}
+   &&(M' = M,\; M'M = M) \\[4pt]
+&= \begin{bmatrix} X'MX & X'MW \\ W'M'X & W'MW \end{bmatrix}
+   &&(W'W = W'MW,\; MW = W) \\[4pt]
+&= [X\,W]'\,M\,[X\,W] \\[4pt]
+&= [X\,W]'[Z\,W]\bigl([Z\,W]'[Z\,W]\bigr)^{-1}[Z\,W]'[X\,W]
+\end{aligned}
+$$
+
+* 둘째 줄에서 $M$의 멱등·대칭성으로 $(MX)'MX = X'M'MX = X'MX$가 됩니다.
+* 셋째 줄에서 $MW = W$이므로 $W'W = W'MW$, $X'M'W = X'MW$로 단정해집니다.
+* $B$ 항도 동일한 방식으로 정리됩니다.
+
+#### 최종 형태
+
+이를 모두 합치면 2SLS 추정량은 다음과 같이 정리됩니다.
+
+$$
+\hat{\Gamma}_{\text{2SLS}}
+= \Bigl([X\,W]'[Z\,W]\bigl([Z\,W]'[Z\,W]\bigr)^{-1}[Z\,W]'[X\,W]\Bigr)^{-1}
+  [X\,W]'[Z\,W]\bigl([Z\,W]'[Z\,W]\bigr)^{-1}[Z\,W]'Y
+$$
+
+이를 인과 모형의 전체 회귀변수 행렬 $\tilde{W} \equiv [X\,W]$와 사영 행렬 $M$으로 압축하면,
+
+$$
+\hat{\Gamma}_{\text{2SLS}} = \bigl(\tilde{W}'M\tilde{W}\bigr)^{-1}\tilde{W}'MY
+$$
+
+* 여기서 $\tilde{W}=[X\,W]$는 인과 모형의 회귀변수 행렬, $M$은 1단계에서 나온 hat 행렬입니다. 이것이 실제 통계 소프트웨어가 2SLS를 계산하는 방식입니다.
+* **참고 (OLS와의 대비)**: 일반 OLS에서는 $X$가 $n \times p$ 행렬일 때 $\hat{\beta} = (X'X)^{-1}X'y$이고 적합값은 $\hat{y} = X(X'X)^{-1}X'y$입니다. 2SLS는 이 구조에 사영 행렬 $M$을 끼워 넣어 내생성을 제거한 형태로 볼 수 있습니다.
+
+---
+
+## 2. 비순응이 있는 무작위 실험 (Randomized Experiment with Noncompliance)
+
+지금까지의 선형 IV는 강력하지만, **선형성**과 **상수 효과(constant effect)** 같은 강한 모수적 가정에 의존합니다. 이번 절에서는 잠재적 결과 프레임워크 위에서 이러한 가정을 완화하여 IV를 재해석합니다.
+
+![Figure: 비순응 분석에서 사용하는 단순화된 IV 그래프. 공변량 $W$를 생략하고 도구(처치 배정) $Z$, 처치 수령 $X$, 결과 $Y$만을 남긴 형태로, $Z \to X \to Y$의 단일 매개 경로와 $X$–$Y$ 사이의 미관측 교란을 핵심으로 합니다. 무작위 실험에서 $Z$는 연구자가 무작위로 배정하므로 정의상 유효한 도구가 됩니다.](./images/iv_dag_simple.png)
+
+### 2.1 자연 실험으로서의 IV
+
+* IV는 경제학에서 가장 널리 쓰이는 기법 중 하나입니다.
+* 그러나 경제학에서 사용되는 대부분의 IV는 **무작위 실험의 맥락이 아닙니다.** 대신 IV는 흔히 **자연 실험(natural experiment)**으로 간주됩니다. 즉, 연구자가 의도적으로 배정하지 않았지만 마치 무작위처럼 처치를 변화시키는 외생적 변동을 도구로 활용합니다.
+* IV에 대한 포괄적 리뷰로는 Imbens(2014), *"Instrumental Variables: An Econometrician's Perspective"*를 참고할 수 있습니다.
+
+### 2.2 "좋은" 도구의 조건 (Conditions of "Good" Instruments)
+
+* IV는 매우 인기 있지만, **좋은 도구를 찾기는 어렵습니다.**
+* 좋은 도구는 다음 두 조건을 동시에 만족해야 합니다.
+  1. **강한 관련성**: 처치에 강한 영향을 주어야 합니다(높은 $\mathrm{Cov}(X, Z)$). 그렇지 않으면(약한 도구, weak instrument) 2SLS 추정치의 **분산이 매우 커집니다.**
+  2. **배제 제약**: 결과에 대한 **직접적인 효과가 전혀 없어야 합니다.** 도구는 오직 처치를 통해서만 결과에 영향을 줄 수 있어야 합니다.
+
+### 2.3 비순응에 대한 IV 접근 (IV Approach to Noncompliance)
+
+Angrist, Imbens, Rubin(1996, *JASA*)은 **비순응(non-compliance)**에 대한 도구 변수 접근을 제안했습니다. 무작위 실험에서 참가자에게 처치를 **배정(assign)**하더라도, 참가자가 실제로 그 처치를 **수령(receive)**할지는 별개의 문제입니다. 이때 다음과 같이 잠재적 결과를 정의합니다.
+
+* **잠재적 결과(potential outcomes)**: 배정 $z$에 대해 $Y(z),\; z = 0, 1$
+* 실제 수령한 처치 $X$는 **배정 이후(post-treatment)** 결정되므로, $X$ 또한 두 개의 잠재적 결과를 가집니다: $X(z),\; z = 0, 1$
+* **관측 데이터(observed data)**: 배정 $Z_i$, 수령 $X_i = X(Z_i)$, 결과 $Y_i = Y(Z_i)$
+* **핵심 아이디어**: 단위(unit)들을 그들의 **순응 행동(compliance behavior)**에 따라 **잠재적 부분집단(latent subgroups)**으로 나눕니다.
+* **순응 유형(compliance type)** 정의: $X_i = (X_i(0), X_i(1))$ — 배정이 0일 때와 1일 때 각각 어떤 처치를 수령하는지의 쌍
+
+### 2.4 순응 유형 (Compliance Types)
+
+$\bigl(X_i(0), X_i(1)\bigr)$의 조합에 따라 네 가지 순응 유형이 존재합니다.
+
+| | $X_i(0) = 0$ | $X_i(0) = 1$ |
+|:---:|:---:|:---:|
+| $X_i(1) = 0$ | never-taker (불응자) | defier (반항자) |
+| $X_i(1) = 1$ | complier (순응자) | always-taker (항상수령자) |
+
+* **complier(순응자)**: 배정받은 대로 따름 ($X(0)=0, X(1)=1$)
+* **never-taker(불응자)**: 배정과 무관하게 항상 처치를 거부 ($X(0)=X(1)=0$)
+* **always-taker(항상수령자)**: 배정과 무관하게 항상 처치를 수령 ($X(0)=X(1)=1$)
+* **defier(반항자)**: 배정과 정반대로 행동 ($X(0)=1, X(1)=0$)
+
+#### 잠재 유형과 관측 셀의 혼합
+
+* 참된 순응 유형 $S$는 **모든 단위에서 관측되지 않습니다.** 우리는 한 단위에 대해 $X_i(0)$과 $X_i(1)$ 중 하나만(실제 배정에 해당하는 것만) 관측하기 때문입니다(잠재적 결과의 근본 문제).
+* 따라서 관측되는 $(Z, X)$ 셀들은 서로 다른 순응 유형의 **혼합(mixture)**입니다.
+
+| $Z$ | $X$ | 가능한 유형 $S$ |
+|:---:|:---:|:---:|
+| 0 | 0 | [C, NT] |
+| 0 | 1 | [AT, D] |
+| 1 | 0 | [NT, D] |
+| 1 | 1 | [C, AT] |
+
+* 예컨대 $(Z=1, X=1)$ 셀에는 순응자(C, 배정받아 수령)와 항상수령자(AT, 원래 수령)가 섞여 있습니다.
+* 각 유형의 인과 효과를 식별하려면 **추가 가정**이 필요합니다.
+
+### 2.5 의향 처치 효과 (Intent-To-Treat, ITT)
+
+* **핵심 관찰**: 순응 유형 $X_i = (X_i(0), X_i(1))$은 배정 $Z_i$에 따라 변하지 않습니다. 이는 단위가 가진 **기저 특성(baseline characteristic)**으로 볼 수 있습니다.
+* 각 순응 유형 $s$에 대한 ITT 효과를 정의합니다.
+$$
+\text{ITT}_s = \mathbb{E}[Y_i(1) - Y_i(0) \mid X_i = s], \qquad s = c, n, a, d
+$$
+* 여기서 $Y_i(1), Y_i(0)$은 **배정 $Z$**에 대한 잠재적 결과임에 유의합니다(처치 수령이 아니라 배정 의향에 따른 효과).
+
+#### 전역 ITT의 분해
+
+전역 ITT는 네 부분 모집단의 ITT 효과를, 각 유형의 비율 $\pi_s$로 가중 평균한 것으로 쓸 수 있습니다.
+
+$$
+\text{ITT} = \pi_c \text{ITT}_c + \pi_n \text{ITT}_n + \pi_a \text{ITT}_a + \pi_d \text{ITT}_d
+$$
+
+여기서 $\pi_s$는 유형 $s$ 단위의 비율입니다($\sum_s \pi_s = 1$).
+
+### 2.6 식별 가정 (Identification Assumptions)
+
+효과를 **비모수적으로(nonparametrically)** 식별하려면 추가 가정이 필요합니다.
+
+#### Assumption 1: 무작위 배정 (Random Assignment)
+
+$$
+\{Y_i(0), Y_i(1), X_i(0), X_i(1)\} \perp Z_i
+$$
+
+* 배정 $Z$가 모든 잠재적 결과·잠재적 처치와 독립이라는 가정으로, 무작위 실험에서는 **설계상 성립**합니다.
+
+#### Assumption 2: 강한 단조성 (Strong Monotonicity)
+
+(1) defier가 없고, (2) complier가 존재한다는 두 부분으로 구성됩니다.
+
+$$
+(1)\; X_i(1) \geq X_i(0), \qquad
+(2)\; 0 < P(X_i = 1 \mid Z_i = 1) < 1, \quad \forall i
+$$
+
+* (1) **단조성**: 배정이 증가할 때 처치 수령이 줄어드는 단위(defier)는 없습니다.
+* (2) **complier의 존재**: 배정이 처치 수령에 실제로 영향을 주는 단위가 존재해야 합니다(관련성에 대응).
+* 단조성은 많은 응용에서 **설계상 성립**합니다. 특히 **일방향 비순응(one-sided compliance)**에서는 $X_i(0) = 0$이 설계상 보장됩니다(통제군은 처치에 접근 자체가 불가능한 경우).
+
+#### Assumption 3: 배제 제약 (Exclusion Restriction, ER) for noncompliers
+
+$$
+Y_i(0) = Y_i(1), \qquad \forall\, i \in \{X_i = n, a\}
+$$
+
+* **불응자(n)와 항상수령자(a)**에 대해, 배정 $Z$가 0이든 1이든 **결과가 동일**하다는 가정입니다.
+* 직관: 이들은 배정과 무관하게 수령하는 처치가 같으므로(불응자는 항상 미수령, 항상수령자는 항상 수령), 배정 자체가 결과에 영향을 주는 직접 경로가 없다면 결과도 변하지 않아야 합니다.
+* 배제 제약의 형식적 정의는 처치 수령까지 명시한 **이중 첨자 잠재적 결과(double-indexed potential outcome)** $Y_i(z, x)$를 필요로 합니다. 즉 결과는 배정 $z$가 아니라 오직 수령한 처치 $x$에만 의존한다는 것입니다.
+
+### 2.7 인과 효과의 식별 (Identification of the Causal Effects)
+
+세 가정을 결합하면 전역 ITT 분해식이 극적으로 단순해집니다.
+
+* **단조성** → defier가 없으므로 $\pi_d = 0$
+* **배제 제약** → 불응자·항상수령자에 대해 $Y(1)=Y(0)$이므로 $\text{ITT}_n = \text{ITT}_a = 0$
+
+이를 전역 ITT 분해식에 대입합니다.
+
+$$
+\begin{aligned}
+\text{ITT}
+&= \pi_c \text{ITT}_c + \pi_n \text{ITT}_n + \pi_a \text{ITT}_a + \pi_d \text{ITT}_d \\
+&= \pi_c \text{ITT}_c + \pi_n \cdot 0 + \pi_a \cdot 0 + 0 \cdot \text{ITT}_d \\
+&= \pi_c \text{ITT}_c
+\end{aligned}
+$$
+
+따라서 순응자에 대한 ITT 효과가 **식별**됩니다.
+
+$$
+\boxed{\;\text{ITT}_c = \text{ITT} / \pi_c\;}
+$$
+
+* **해석**: 전역 ITT는 처치 효과에 대한 **보수적(conservative) 추정치**로 볼 수 있습니다. $0 < \pi_c < 1$이므로,
+$$
+\text{ITT} < \text{ITT}_c
+$$
+즉 전체 모집단을 대상으로 한 의향 효과(ITT)는, 실제로 처치에 반응하는 순응자만의 효과($\text{ITT}_c$)보다 (절댓값 기준) 작게 나타납니다. 처치를 무시한 불응자·항상수령자가 효과를 희석시키기 때문입니다.
+
+### 2.8 순응 유형 분포의 추정 (Estimating the Distribution of Compliance Types)
+
+무작위 배정과 단조성 하에서, 관측 데이터로부터 순응 유형의 분포를 직접 추정할 수 있습니다.
+
+$$
+\begin{aligned}
+\pi_a &= P\bigl(X_i(0) = X_i(1) = 1\bigr) = \mathbb{E}[X_i \mid Z_i = 0] \\
+\pi_n &= P\bigl(X_i(0) = X_i(1) = 0\bigr) = 1 - \mathbb{E}[X_i \mid Z_i = 1] \\
+\pi_c &= P\bigl(X_i(0) = 0, X_i(1) = 1\bigr) = \mathbb{E}[X_i \mid Z_i = 1] - \mathbb{E}[X_i \mid Z_i = 0]
+\end{aligned}
+$$
+
+각 식의 직관을 정리하겠습니다(단조성으로 defier가 없음을 활용).
+
+* $\pi_a$: 배정이 0인데도($Z=0$) 처치를 수령하는($X=1$) 사람은 오직 항상수령자뿐입니다. 따라서 $\mathbb{E}[X \mid Z=0] = \pi_a$.
+* $\pi_n$: 배정이 1인데도($Z=1$) 처치를 거부하는($X=0$) 사람은 오직 불응자뿐입니다. $\mathbb{E}[X \mid Z=1] = \pi_c + \pi_a$이므로, $1 - \mathbb{E}[X \mid Z=1] = 1 - \pi_c - \pi_a = \pi_n$.
+* $\pi_c$: 위 두 결과의 차를 취하면 $(\pi_c + \pi_a) - \pi_a = \pi_c$.
+
+#### $Z$가 $X$에 미치는 ITT
+
+도구 $Z$가 처치 수령 $X$에 미치는 ITT 효과도 정의할 수 있습니다.
+
+$$
+\text{ITT}_x = \mathbb{E}[X_i(1) - X_i(0)]
+$$
+
+무작위 배정 하에서 이는 정확히 순응자 비율과 같습니다.
+
+$$
+\text{ITT}_x = \mathbb{E}[X_i \mid Z_i = 1] - \mathbb{E}[X_i \mid Z_i = 0] = \pi_c
+$$
+
+### 2.9 순응자 평균 인과 효과 (CACE / LATE)
+
+순응자의 ITT 효과는 **순응자 평균 인과 효과(Complier Average Causal Effect, CACE)** 또는 **국소 평균 처치 효과(Local Average Treatment Effect, LATE)**로 불립니다(Imbens and Angrist, 1994, *Econometrica*).
+
+앞서 유도한 관계식들로부터 CACE는 두 ITT 효과의 비로 표현됩니다.
+
+$$
+\text{CACE} \equiv \mathbb{E}[Y_i(1) - Y_i(0) \mid X_i = c]
+= \frac{\text{ITT}_y}{\text{ITT}_x}
+$$
+
+* 분자 $\text{ITT}_y$는 배정이 결과에 미치는 효과($Y$에 대한 ITT), 분모 $\text{ITT}_x$는 배정이 처치 수령에 미치는 효과($=\pi_c$)입니다.
+* **이것은 무작위 배정 $Z$를 도구로 볼 때의 IV 추정량과 정확히 일치합니다.** 1.4절의 Wald 추정량 $\dfrac{\bar{Y}_1 - \bar{Y}_0}{\bar{X}_1 - \bar{X}_0}$이 곧 $\text{ITT}_y / \text{ITT}_x$의 표본 버전입니다. 선형 IV와 잠재적 결과 IV가 여기서 만납니다.
+
+### 2.10 인과 효과의 추정 (Estimating the Causal Effects)
+
+배정 $Z$와 수령 $X$로 분류한 평균 결과를 살펴보면, 각 셀이 순응 유형의 혼합으로 분해됩니다.
+
+$$
+\begin{aligned}
+\mathbb{E}[Y_i \mid X_i = 0, Z_i = 0]
+&= \frac{\pi_c}{\pi_c + \pi_n}\,\mathbb{E}[Y_i(0) \mid \text{complier}]
+ + \frac{\pi_n}{\pi_c + \pi_n}\,\mathbb{E}[Y_i(0) \mid \text{never-taker}] \\[4pt]
+\mathbb{E}[Y_i \mid X_i = 0, Z_i = 1]
+&= \mathbb{E}[Y_i(0) \mid \text{never-taker}] \\[4pt]
+\mathbb{E}[Y_i \mid X_i = 1, Z_i = 0]
+&= \mathbb{E}[Y_i(1) \mid \text{always-taker}] \\[4pt]
+\mathbb{E}[Y_i \mid X_i = 1, Z_i = 1]
+&= \frac{\pi_c}{\pi_c + \pi_a}\,\mathbb{E}[Y_i(1) \mid \text{complier}]
+ + \frac{\pi_a}{\pi_c + \pi_a}\,\mathbb{E}[Y_i(1) \mid \text{always-taker}]
+\end{aligned}
+$$
+
+각 셀의 구성을 정리하겠습니다(2.4절의 혼합 표 참조).
+
+* $(X=0, Z=1)$: 배정 1에서 미수령은 불응자뿐 → 순수하게 $\mathbb{E}[Y(0) \mid \text{NT}]$가 식별됩니다.
+* $(X=1, Z=0)$: 배정 0에서 수령은 항상수령자뿐 → 순수하게 $\mathbb{E}[Y(1) \mid \text{AT}]$가 식별됩니다.
+* $(X=0, Z=0)$: 순응자(미수령, $Y(0)$)와 불응자가 섞여 있음.
+* $(X=1, Z=1)$: 순응자(수령, $Y(1)$)와 항상수령자가 섞여 있음.
+
+이미 순수하게 식별된 불응자·항상수령자의 평균을 혼합 셀에서 빼내면, 순응자의 $\mathbb{E}[Y_i(0) \mid \text{complier}]$와 $\mathbb{E}[Y_i(1) \mid \text{complier}]$를 **비모수적으로 식별**할 수 있고, 따라서 CACE를 적률 추정(moment estimate)으로 얻을 수 있습니다.
+
+### 2.11 적률 추정량 (Moment Estimates)
+
+가정 1–3 하에서 CACE의 적률 추정량을 명시적으로 쓸 수 있습니다.
+
+#### 일방향 비순응 (항상수령자 없음)
+
+$$
+\widehat{\text{CACE}}
+= \frac{\dfrac{\sum_i Y_i Z_i}{\sum_i Z_i} - \dfrac{\sum_i Y_i (1 - Z_i)}{\sum_i (1 - Z_i)}}
+       {\dfrac{\sum_i X_i Z_i}{\sum_i Z_i}}
+$$
+
+* 분자는 배정군($Z=1$)과 통제군($Z=0$)의 평균 결과 차이, 즉 $\widehat{\text{ITT}}_y$입니다.
+* 분모는 배정군에서 처치를 수령한 비율로, 일방향 비순응에서는 곧 순응자 비율($\widehat{\pi}_c = \widehat{\text{ITT}}_x$)입니다.
+
+#### 양방향 비순응
+
+$$
+\widehat{\text{CACE}}
+= \frac{\dfrac{\sum_i Y_i Z_i}{\sum_i Z_i} - \dfrac{\sum_i Y_i (1 - Z_i)}{\sum_i (1 - Z_i)}}
+       {1 - \dfrac{\sum_i X_i (1 - Z_i)}{\sum_i (1 - Z_i)} - \dfrac{\sum_i (1 - X_i) Z_i}{\sum_i Z_i}}
+$$
+
+* 분모를 해석하면:
+  * $\dfrac{\sum_i X_i (1-Z_i)}{\sum_i (1-Z_i)} = \mathbb{E}[X \mid Z=0] = \pi_a$ (통제군 중 수령자 = 항상수령자)
+  * $\dfrac{\sum_i (1-X_i) Z_i}{\sum_i Z_i} = \mathbb{E}[1-X \mid Z=1] = 1 - (\pi_c + \pi_a) = \pi_n$ (배정군 중 미수령자 = 불응자)
+  * 따라서 분모 $= 1 - \pi_a - \pi_n = \pi_c = \widehat{\text{ITT}}_x$
+* 즉 두 경우 모두 **CACE = ITT$_y$ / ITT$_x$**라는 동일한 구조입니다.
+
+#### 추론 및 한계
+
+* **표준오차**는 점근적으로(asymptotically) 또는 **부트스트랩(bootstrap)**을 통해 얻을 수 있습니다.
+* 가정 1–3 없이도 효과에 대한 **비모수적 경계(nonparametric bounds)**를 구할 수 있지만, 그 경계는 흔히 너무 넓어서 유용한 정보를 주지 못합니다.
+
+### 2.12 논의 (Discussion)
+
+선형 모형과 비교했을 때, 비순응 IV 접근은 무엇이 같고 무엇이 다를까요?
+
+* **상수 효과(constant effect) 가정을 제거**했습니다. 모든 단위가 동일한 처치 효과를 가진다는 가정은 보통 비현실적입니다.
+* 대신 더 약한 **단조성(monotonicity) 가정**을 추가했습니다.
+* 효과가 식별되는 대상이 전체 모집단이 아니라 **순응자(complier)라는 특정 부분 모집단**으로 한정됨을 명확히 했습니다. 이것이 "Local" Average Treatment Effect의 "Local"이 의미하는 바입니다.
+* 만약 상수 효과가 우연히 성립한다면, 순응자에 대한 효과는 정의상 전체 모집단에 대한 효과와 동일해집니다. 이 경우 LATE와 ATE가 일치합니다.
+
+---
+
+## 마치며
+
+이번 포스트에서는 도구 변수를 **두 갈래의 시선**으로 정리했습니다. 선형 가정 하에서는 ILS·2SLS를 통해 계수 $\beta_1$을 추정하는 계량경제학적 절차를, 비순응 무작위 실험에서는 잠재적 결과 프레임워크 위에서 순응 유형을 도입하여 CACE/LATE를 식별하는 절차를 살펴보았습니다. 두 접근은 출발 가정이 다르지만, 결국 **"$Z$가 $Y$에 미친 효과를 $Z$가 $X$에 미친 효과로 나눈다"**는 동일한 핵심 직관($\text{ITT}_y / \text{ITT}_x$, 곧 Wald 추정량)으로 수렴합니다. IV의 강점은 미관측 교란을 우회한다는 데 있지만, 그 대가로 식별되는 효과가 순응자라는 국소 집단으로 한정된다는 점을 항상 유념해야 합니다.

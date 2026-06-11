@@ -1,0 +1,708 @@
+---
+title: "[Causal Inference] 07. An Algorithmic Approach to Identification"
+description: "An Algorithmic Approach to Identification"
+author: "유성현"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+## 들어가며 (Roadmap)
+
+지금까지 우리는 **Back-door 기준**이나 **Front-door 기준**, 혹은 **do-calculus**를 이용해 인과효과 $P(y \mid do(x))$를 관측 분포 $P(v)$로 환원(식별)하는 방법을 살펴보았습니다. 그러나 이 방법들에는 두 가지 아쉬움이 있었습니다.
+
+* Back-door / Front-door 기준은 **특정 그래프 구조에만 적용**되는 *충분조건*일 뿐입니다.
+* do-calculus는 강력하지만, "어떤 규칙을 어떤 순서로 적용해야 하는가"를 알려주지 않는 **비구성적(non-constructive)** 도구입니다. 즉, 식별이 *가능한지 아닌지*를 기계적으로 판정해 주지 못합니다.
+
+이 강의의 목표는 그래프만 주어지면 **자동으로 식별 여부를 판정하고, 가능하다면 추정식까지 출력**하는 알고리즘을 세우는 것입니다. 이를 위한 전략(Roadmap)은 다음 세 단계입니다.
+
+* **분해(Decomposition):** SCM이 생성하는 확률분포 $P(v)$를, 대응되는 인과 다이어그램에 기반하여 여러 **인자(factor)들의 곱**으로 분해(factorization)하는 방법을 정의합니다.
+* **연산(Operations):** 이렇게 분해된 분포로부터 특정 인자(factor)를 **식별(identify)** 해 내는 연산을 확립합니다.
+* **종합(Synthesis):** 목표 인과효과를 이 인자들의 함수로 표현한 뒤, 각 인자를 **독립적으로 식별**하는 체계적인 절차를 개발합니다.
+
+이 글에서 다룰 전체 흐름(Overview)은 다음과 같습니다.
+
+* Factorizing Observational Distributions (관측 분포의 인수분해)
+* C-Factors (C-인자)
+* Visualization (시각화)
+* Expressing Causal Queries in terms of C-factors (C-인자를 이용한 인과 질의의 표현: 예시)
+* A General Approach (일반적 접근)
+
+::: {.callout-note}
+이 강의 자료는 Bareinboim 교수의 슬라이드를 기반으로 하며, 핵심 이론은 **Jin Tian (2002)** 의 박사학위 논문에 기반합니다.
+:::
+
+---
+
+# 1. 관측 분포의 인수분해 (Factorizing Observational Distributions)
+
+## 1.1. 마르코프 모델의 경우 (Markovian Case)
+
+먼저 **마르코프 모델(Markovian model)**, 즉 모든 외생변수 $U_i$가 서로 **독립적**이고 각각 하나의 관측변수에만 영향을 주는 경우를 생각해 보겠습니다.
+
+관측 분포 $P(v)$는 외생변수 $u$에 대한 주변화(marginalization)로 정의됩니다. 여기에 **연쇄 법칙(chain rule)** 과 **인과 다이어그램의 마르코프 성질**을 적용하면 다음과 같이 분해됩니다.
+
+$$
+P(v) = \sum_u P(u,v) = \sum_u P(u) \prod_{V_i \in V} P(v_i \mid v_1,\dots,v_{i-1}, u) = \sum_u P(u) \prod_{V_i \in V} P(v_i \mid pa_i, u_i).
+$$
+
+* 두 번째 등호는 단순 연쇄 법칙입니다.
+* 세 번째 등호가 핵심인데, 각 변수 $V_i$는 **자신의 부모 $pa_i$와 자신에게 직접 연결된 외생변수 $u_i$가 주어지면 나머지 모든 과거 변수와 독립**이라는 마르코프 성질을 이용한 것입니다.
+
+### 예시: 세 변수 모델
+
+다음과 같은 구조($Z \to X$, $Z \to Y$, $X \to Y$)를 가정해 보겠습니다.
+
+![Figure: 세 개의 관측변수 X, Z, Y로 이루어진 마르코프 모델입니다. Z는 X와 Y의 공통 원인(부모)이며 X는 Y의 부모입니다. 각 관측변수 V_i는 자신만의 독립적인 외생변수 U_i(여기서는 u_z, u_x, u_y)로부터만 무작위성을 공급받으므로, 외생변수들 사이에 공유가 없어 분포가 깔끔하게 인자별로 분리될 수 있음을 보여줍니다.](./images/fig_markovian_xzy.png)
+
+이 모델에서 결합분포는 다음과 같이 전개됩니다.
+
+$$
+P(z,x,y) = \sum_u P(u)\, P(z \mid u_z)\, P(x \mid z, u_x)\, P(y \mid x, z, u_y).
+$$
+
+마르코프 모델에서는 $P(u) = P(u_z)P(u_x)P(u_y)$로 **완전히 분리**되므로, 각 외생변수에 대한 합을 따로 떼어낼 수 있습니다.
+
+$$
+P(z,x,y) = \underbrace{\left(\sum_{u_z} P(z \mid u_z) P(u_z)\right)}_{=\,P(z)}
+\underbrace{\left(\sum_{u_x} P(x \mid z, u_x) P(u_x)\right)}_{=\,P(x \mid z)}
+\underbrace{\left(\sum_{u_y} P(y \mid x, z, u_y) P(u_y)\right)}_{=\,P(y \mid x, z)}.
+$$
+
+$$
+\therefore\quad P(z,x,y) = P(z)\,P(x \mid z)\,P(y \mid x, z).
+$$
+
+* 즉, 마르코프 모델에서는 각 조건부 분포 $P(v_i \mid pa_i)$가 **"정준 인자(canonical factor)"** 역할을 합니다.
+
+### 정준 인자는 관측 분포로부터 계산 가능합니다
+
+가장 중요한 점은, 이 인자들이 모두 **관측 분포 $P(v)$로부터 직접 계산 가능**하다는 것입니다.
+
+$$
+P(v_i \mid pa_i) = \frac{\sum_{v \setminus \{v_i\} \setminus pa_i} P(v)}{\sum_{v \setminus pa_i} P(v)}.
+$$
+
+위 세 변수 예시에 적용해 보면 다음과 같습니다.
+
+$$
+P(z) = \sum_{x,y} P(v), \qquad
+P(x \mid z) = \frac{\sum_y P(v)}{\sum_{x,y} P(v)}, \qquad
+P(y \mid x, z) = \frac{P(v)}{\sum_y P(v)}.
+$$
+
+따라서 **마르코프 모델에서 모든 인과효과는 항상 식별 가능**합니다. 문제는 다음 절에서 다룰, 외생변수가 여러 관측변수에 영향을 주는 경우입니다.
+
+## 1.2. 준마르코프 모델의 경우 (semi-Markovian Case)
+
+**준마르코프 모델(semi-Markovian model)** 은 하나의 외생변수 $U$가 **둘 이상의 관측변수**에 영향을 줄 수 있는, 즉 **잠재 교란(latent confounding)** 이 존재하는 더 현실적인 모델입니다. 이 경우 외생변수에 대한 합이 인자들을 서로 묶어 버려서 깔끔한 분리가 깨집니다.
+
+가장 단순한 마르코프 사슬에서 출발하겠습니다.
+
+$$
+P(v) = P(v_1)P(v_2 \mid v_1)P(v_3 \mid v_2)P(v_4 \mid v_3)P(v_5 \mid v_4).
+$$
+
+![Figure: 다섯 개의 관측변수 V1→V2→V3→V4→V5가 일렬로 연결된 마르코프 사슬에 세 개의 비관측 외생변수 U1, U2, U3가 양방향 화살표(점선) 형태로 추가되는 과정을 보여줍니다. U1은 V1과 V3를, U2는 V3와 V5를, U3는 V2와 V4를 동시에 가리켜 마르코프 성질을 깨뜨립니다. 이 그림은 잠재 교란변수가 어떤 관측변수 쌍을 묶는지를 시각적으로 드러내며, 이후 정의할 C-component의 직관적 토대가 됩니다.](./images/fig_semimarkov_chain.png)
+
+### Step 1 — $U_1$ 추가 ($V_1, V_3$ 교란)
+
+$V_1$과 $V_3$를 동시에 가리키는 비관측 변수 $U_1$을 추가합니다.
+
+$$
+P(v) = \sum_{u_1} P(u_1)\, P(v_1 \mid u_1) P(v_2 \mid v_1) P(v_3 \mid v_2, u_1) P(v_4 \mid v_3) P(v_5 \mid v_4).
+$$
+
+$U_1$이 들어 있지 않은 인자들은 합 밖으로 빼낼 수 있으므로,
+
+$$
+P(v) = P(v_2 \mid v_1) P(v_4 \mid v_3) P(v_5 \mid v_4) \cdot \left(\sum_{u_1} P(u_1) P(v_1 \mid u_1) P(v_3 \mid v_2, u_1)\right).
+$$
+
+* $V_1$과 $V_3$가 $U_1$에 대한 공통의 합 안에 **함께 묶여** 더 이상 분리되지 않습니다.
+
+### Step 2 — $U_2$ 추가 ($V_3, V_5$ 교란)
+
+$$
+P(v) = \sum_{u_1,u_2} P(u_1,u_2) P(v_1 \mid u_1) P(v_2 \mid v_1) P(v_3 \mid v_2, u_1, u_2) P(v_4 \mid v_3) P(v_5 \mid v_4, u_2).
+$$
+
+$$
+= P(v_2 \mid v_1) P(v_4 \mid v_3) \cdot \left(\sum_{u_1,u_2} P(u_1,u_2) P(v_1 \mid u_1) P(v_3 \mid v_2, u_1, u_2) P(v_5 \mid v_4, u_2)\right).
+$$
+
+* 이제 $V_1, V_3, V_5$가 **하나의 거대한 합** 안에 묶입니다. $U_1$이 $V_1, V_3$를, $U_2$가 $V_3, V_5$를 묶었으므로, $V_3$를 매개로 $V_1$과 $V_5$가 간접적으로 연결된 것입니다.
+
+### Step 3 — $U_3$ 추가 ($V_2, V_4$ 교란)
+
+$$
+P(v) = \sum_u P(u) P(v_1 \mid u_1) P(v_2 \mid v_1, u_3) P(v_3 \mid v_2, u_1, u_2) P(v_4 \mid v_3, u_3) P(v_5 \mid v_4, u_2).
+$$
+
+$U_3$는 $V_2, V_4$만 묶으므로, 분포는 결국 두 덩어리로 나뉩니다.
+
+$$
+P(v) = \underbrace{\left(\sum_{u_3} P(v_2 \mid v_1, u_3) P(v_4 \mid v_3, u_3) P(u_3)\right)}_{V_2, V_4 \text{ 덩어리}}
+\cdot
+\underbrace{\left(\sum_{u_1,u_2} P(u_1,u_2) P(v_1 \mid u_1) P(v_3 \mid v_2, u_1, u_2) P(v_5 \mid v_4, u_2)\right)}_{V_1, V_3, V_5 \text{ 덩어리}}.
+$$
+
+## 1.3. 새로운 함수 $Q$의 정의
+
+위에서 본 것처럼, 합($\sum_u$)으로 이루어진 인자들은 $P(v,u)$로 일일이 풀어 쓰기엔 너무 길고 번잡합니다. 그러나 결정적으로, **이 인자들의 구조는 오직 다이어그램의 위상(topology)에서 결정**됩니다. 따라서 외생변수를 명시적으로 적지 않고 이 개념을 추상화하는 새로운 함수 $Q$를 정의합니다.
+
+$$
+\boxed{\;Q[C](c, pa_c) = \sum_{u^{(C)}} P\!\left(u^{(C)}\right) \prod_{V_i \in C} P(v_i \mid pa_i, u_i), \qquad \text{단 } U^{(C)} = \bigcup_{V_i \in C} U_i.\;}
+$$
+
+* $C \subseteq V$는 관측변수의 부분집합이며, $U^{(C)}$는 $C$에 속한 변수들에 영향을 주는 모든 외생변수의 합집합입니다.
+* 이 함수는 "**$C$에 속한 변수들의 조건부 인자들을, 그들이 공유하는 외생변수에 대해 합한 것**"입니다.
+
+이 정의를 이용하면, 앞서 본 다섯 변수 모델의 분해는 다음과 같이 매우 간결해집니다.
+
+$$
+P(v) = Q[\{V_2,V_4\}](v_2, v_4, v_1, v_3) \cdot Q[\{V_1,V_3,V_5\}](v_1, v_3, v_5, v_2, v_4).
+$$
+
+---
+
+# 2. C-인자 (C-Factors)
+
+## 2.1. 표기와 기본 성질
+
+편의상 부모 인자 $(c, pa_c)$를 생략하고 $Q[C](c, pa_c)$를 그냥 $Q[C]$로 적겠습니다. 그러면 앞의 예시는 다음처럼 깔끔하게 표현됩니다.
+
+$$
+P(v) = Q[\{V_1,V_3,V_5\}]\, Q[\{V_2,V_4\}].
+$$
+
+* **U 변수를 명시적으로 이름 붙일 필요가 없습니다.** $Q[C]$라는 표기 자체가 "이 변수 집합에 얽힌 모든 잠재 교란을 합산했다"는 의미를 내포합니다.
+
+기본 성질로 다음 두 가지를 기억해 두면 좋습니다.
+
+* **전체 집합:** 전체 변수에 대한 C-인자는 관측 분포 그 자체입니다.
+$$
+Q[V] = \sum_u P(u) \prod_{V_i \in V} P(v_i \mid pa_i, u_i) = P(v).
+$$
+* **공집합 (관례):** 일관성을 위해 $Q[\varnothing] = 1$로 정의합니다. (이후 나눗셈에서 분모가 됩니다.)
+
+## 2.2. C-인자는 곧 인과효과입니다 (C-factors are Causal Effects)
+
+이 절은 C-인자라는 추상적 개념에 **인과적 의미**를 부여하는 핵심입니다.
+
+집합 $C \subseteq V$를 생각하고, **$C$를 제외한 모든 변수가 $C$에 미치는 인과효과** $P(c \mid do(v \setminus c))$를 살펴봅시다. **절단된 곱 공식(truncated product formula, g-formula)** 에 의해,
+
+$$
+P(c \mid do(v \setminus c)) = \sum_u P(u) \prod_{V_i \in C} P(v_i \mid pa_i, u_i).
+$$
+
+* $do(v \setminus c)$는 $C$ 바깥의 변수를 모두 고정하므로, 곱에서 살아남는 인자는 $C$에 속한 변수들의 조건부뿐입니다.
+
+이제 **$C$의 어떤 원소의 부모도 아닌 외생변수들은 모두 합으로 소거(sum out)** 할 수 있습니다 ($\sum_{u} P(u) = 1$이므로). 따라서 $C$에 직접 닿는 외생변수 $u^{(C)}$만 남습니다.
+
+$$
+P(c \mid do(v \setminus c)) = \sum_{u^{(C)}} \left(\prod_{V_i \in C} P(v_i \mid pa_i, u_i)\right) P\!\left(u^{(C)}\right) = Q[C].
+$$
+
+$$
+\boxed{\;P(c \mid do(v \setminus c)) = Q[C].\;}
+$$
+
+즉, **C-인자 $Q[C]$는 $C$ 바깥 변수 전체를 개입(do)했을 때 $C$ 위에 유도되는 인과효과**와 정확히 같습니다. 이것이 C-인자와 인과효과를 잇는 핵심 연결고리이며, 이후 모든 식별 논의의 출발점입니다.
+
+## 2.3. C-인자의 직관적 이해
+
+예시의 C-인자 $Q[\{V_1,V_3,V_5\}]$를 펼쳐 보면 다음과 같습니다.
+
+$$
+Q[\{V_1,V_3,V_5\}](V_1,V_3,V_5, v_2, v_4) = \sum_{u_1,u_2} P(u_1,u_2)\, P(V_1 \mid u_1) P(V_3 \mid v_2, u_1, u_2) P(V_5 \mid v_4, u_2).
+$$
+
+![Figure: V1, V3, V5가 잠재변수 U1, U2를 통해 하나의 덩어리(c-component)로 묶여 있고, 이들의 부모인 v2, v4는 "고정된 외부 인자"로서 소문자로 표기되어 인자 안에서 조건부로만 등장하는 모습을 보여줍니다. 대문자(V1,V3,V5)는 c-인자의 인수(argument)이고 소문자(v2,v4)는 부모로서 주어진 값임을 구분하여, C-인자가 어떤 변수에 대해 함수인지를 명확히 합니다.](./images/fig_understanding_cfactor.png)
+
+* 대문자 $V_1, V_3, V_5$는 이 인자가 **함수로서 가지는 변수**이고,
+* 소문자 $v_2, v_4$는 $C$ 바깥의 **부모로서 주어진 값**입니다.
+
+## 2.4. C-인자에서 변수를 주변화하기 (Marginalizing Variables)
+
+C-인자는 어느 정도 **확률분포처럼** 행동하지만, 항상 그런 것은 아닙니다. 변수를 주변화(합산)할 수 있는지는 그 변수가 **인자 내부에서 다른 변수의 부모인지** 여부에 달려 있습니다.
+
+### 경우 1 — 부모가 아닌 변수의 주변화 (성공)
+
+$Q[\{V_1,V_3,V_5\}]$에서 $V_1, V_3, V_5$는 **인자 내부의 다른 변수의 부모가 아니므로** 단 하나의 항에만 등장합니다. 예를 들어 $V_3$에 대해 합하면,
+
+$$
+\sum_{v_3} Q[\{V_1,V_3,V_5\}] = \sum_{v_3} \sum_{u_1,u_2} P(u_1,u_2) P(v_1 \mid u_1) P(v_3 \mid v_2, u_1, u_2) P(v_5 \mid v_4, u_2).
+$$
+
+$\sum_{v_3} P(v_3 \mid v_2, u_1, u_2) = 1$이므로 그 항이 깔끔하게 사라집니다.
+
+$$
+= \sum_{u_1,u_2} P(u_1,u_2) P(v_1 \mid u_1) P(v_5 \mid v_4, u_2) = Q[\{V_1,V_5\}].
+$$
+
+* 즉, **부모가 아닌 변수를 합하면 그 변수를 단순히 빼낸 C-인자**가 됩니다.
+
+### 경우 2 — 부모인 변수의 주변화 (실패)
+
+이번에는 $Q[\{V_1,V_2,V_3\}]$를 보겠습니다. 여기서 $V_1$은 **$V_2$의 부모**이므로, $V_1$이 조건부 항 $P(v_2 \mid v_1, u_3)$ 안에 조건으로 등장합니다. $V_1$에 대해 합하면,
+
+$$
+\sum_{v_1} Q[\{V_1,V_2,V_3\}] = \sum_{v_1} \sum_u P(v_1 \mid u_1) P(v_2 \mid v_1, u_3) P(v_3 \mid v_2, u_1, u_2) P(u).
+$$
+
+$V_1$이 두 항에 걸쳐 있으므로 합이 항들을 가로질러 얽혀 버립니다.
+
+$$
+= \sum_{u_1,u_2} P(v_3 \mid v_2, u_1, u_2) P(u_1,u_2) \sum_{v_1} P(v_1 \mid u_1) \sum_{u_3} P(v_2 \mid v_1, u_3) P(u_3).
+$$
+
+이 결과는 우리가 기대했을 $Q[\{V_2,V_3\}]$와 **같지 않습니다.**
+
+$$
+\sum_{v_1} Q[\{V_1,V_2,V_3\}] \;\neq\; \sum_u P(u) P(v_3 \mid v_2, u_1, u_2) P(v_2 \mid v_1, u_3) = Q[\{V_2,V_3\}].
+$$
+
+* **핵심 교훈:** 어떤 변수가 인자 내부에서 다른 변수의 부모이면, 그것을 단순히 합산해서는 안 됩니다.
+
+## 2.5. 무엇을 주변화할 수 있는가? — 조상 축약 정리 (Ancestral-Reduction)
+
+그렇다면 정확히 어떤 부분집합으로 안전하게 축약할 수 있을까요? 그 조건이 **조상 축약 정리**입니다.
+
+::: {.callout-important title="Lemma (Ancestral-Reduction)"}
+$W \subset C \subseteq V$라 하자. 만약 $W$가 **조상적(ancestral)** 이라면, 즉 부분그래프 $\mathcal{G}[C]$ 안에서 $W$의 모든 조상 $An(W)$를 포함한다면,
+$$
+Q[W] = \sum_{c \setminus w} Q[C].
+$$
+:::
+
+* **조상적(ancestral)** 이라는 말은, $W$ 안에 어떤 변수의 조상이 $\mathcal{G}[C]$ 안에 존재한다면 그 조상도 $W$에 포함되어 있어야 한다는 뜻입니다.
+* 직관적으로, 합산해서 없애려는 변수($C \setminus W$)들이 **남기려는 변수($W$)의 부모/조상이 아니어야** 깔끔하게 사라진다는 것입니다.
+
+### 예시
+
+$C = \{V_1, V_2, V_3\}$이고, $\mathcal{G}[C]$가 $V_1 \to V_2 \to V_3$ 사슬이라고 하면,
+
+* $W = \{V_1, V_2\}$ → **조상적** (이들의 조상 $V_1, V_2$가 모두 포함됨)
+* $W = \{V_1\}$ → **조상적** ($V_1$은 조상이 없는 뿌리)
+* $W = \{V_2, V_3\}$ → **조상적이 아님** ($V_2$의 조상인 $V_1$이 누락됨)
+
+세 번째 경우가 바로 앞 절의 "실패" 사례와 일치합니다.
+
+## 2.6. 교란 성분 (Confounded Components, C-Components)
+
+이제 분해의 단위를 정의할 차례입니다.
+
+::: {.callout-note title="Definition (C-component)"}
+두 변수 $V_i$와 $V_j$가 **공통의 비관측 부모 $U$를 공유**하면, $P(v_i \mid pa_i, u_i)$와 $P(v_j \mid pa_j, u_j)$는 $U \in U_i \cap U_j$에 대한 합으로 서로 **묶이게(tied)** 됩니다. 이때 $V_i$와 $V_j$가 같은 **교란 성분(C-Component)** 에 속한다고 말합니다.
+:::
+
+다섯 변수 예시에 적용하면, 잠재 교란 관계는 다음과 같습니다.
+
+* $V_1$은 $U_1$을 통해 $V_3$와 같은 C-component
+* $V_3$는 $U_2$를 통해 $V_5$와 같은 C-component
+* **추이성(transitivity)** 에 의해 $V_1$도 $V_5$와 같은 C-component
+* $V_2$는 $U_3$를 통해 $V_4$와 같은 C-component
+
+![Figure: 다섯 변수 사슬에서 방향성 간선을 모두 지우고 잠재 교란을 나타내는 양방향(bidirected) 간선만 남긴 유도 그래프입니다. V1–V3–V5가 양방향 간선으로 연결된 하나의 연결 성분을, V2–V4가 또 다른 연결 성분을 이룹니다. 이 그림은 C-component가 결국 "양방향 간선 그래프의 연결 성분"으로 쉽게 식별됨을 보여주며, 이 관계가 반사적·대칭적·추이적이어서 관측변수 집합 V 위에 분할(partition)을 정의함을 시각적으로 증명합니다.](./images/fig_ccomponent_bidirected.png)
+
+* **쉽게 보는 법:** 방향성 간선을 무시하고 **양방향(bidirected) 간선만 남긴 그래프**를 그리면, 그 **연결 성분(connected component)** 이 곧 C-component입니다.
+* C-component 관계는 **반사적(Reflexive), 대칭적(Symmetric), 추이적(Transitive)** 이므로, 관측변수 집합 $V$ 위에 하나의 **분할(partition)** 을 정의합니다.
+
+## 2.7. C-Component 인수분해 (Tian의 정리)
+
+C-component를 분해의 단위로 삼으면, 임의의 부분집합에 대한 C-인자를 그 안의 C-component들의 곱으로 쪼갤 수 있습니다.
+
+::: {.callout-important title="Lemma (Tian, 2002) — C-component Factorization"}
+$\mathcal{C}(\cdot)$를 주어진 그래프의 (극대) C-component들의 집합이라 하자. 임의의 $H \subseteq V$에 대해, $\mathcal{G}[H]$의 C-component를 $H_1, \dots, H_k$라 하면,
+$$
+Q[H] = \prod_{H_j \in \mathcal{C}(\mathcal{G}[H])} Q[H_j].
+$$
+:::
+
+### 예시: 인과효과로의 해석
+
+다음 그래프를 생각해 봅시다 ($X, Y, Z_1, Z_2, Z_3$로 구성).
+
+![Figure: 변수 X, Y, Z1, Z2, Z3로 구성된 그래프와, 양방향 간선 유도 그래프를 단계별로 보여줍니다. 전체 변수 집합의 C-component 분해 결과 Z1이 단독 성분으로, 나머지 {Z2, Z3, X, Y}가 하나의 성분으로 갈라집니다. 오른쪽 패널은 각 C-인자가 "그 성분 바깥 변수를 모두 개입했을 때의 인과효과"라는 §2.2의 해석을 적용하여, Q[Z1]과 Q[{Z2,Z3,X,Y}]가 각각 어떤 개입 분포에 대응하는지를 나타냅니다.](./images/fig_tian_example_z123.png)
+
+C-component 분해는 다음과 같습니다.
+
+$$
+Q[V] = Q[\{Z_2, Z_3, X, Y\}]\, Q[Z_1].
+$$
+
+§2.2의 "C-인자 = 인과효과" 해석을 적용하면, 이를 개입 분포의 곱으로 읽을 수 있습니다.
+
+$$
+P(v) = P(z_2, z_3, x, y \mid do(z_1))\, P(z_1 \mid do(z_2, z_3, x, y)) = P(z_2, z_3, x, y \mid do(z_1))\, P(z_1 \mid do(z_2, x)).
+$$
+
+* 마지막 등호는 do-calculus(Rule 3)에 의해 $z_1$에 영향을 주지 않는 개입 $do(z_3, y)$를 제거한 것입니다.
+
+### Tian 정리의 일반형 (위상 순서를 이용한 계산식)
+
+위 곱 분해를 **실제로 계산 가능한 형태**로 만들어 주는 것이 다음의 일반형입니다.
+
+::: {.callout-important title="Lemma (Tian, 2002) — 계산식"}
+$H \subseteq V$가 주어지고 $\mathcal{G}[H]$의 C-component를 $H_1, \dots, H_k$라 하자. $\mathcal{G}[H]$에 따른 위상 순서(topological order) $\prec$를
+$$
+V_{(1)} \prec V_{(2)} \prec \cdots \prec V_{(|H|)}
+$$
+로 두고, $H^{\preceq i}$를 **$V_{(i)}$ 자신을 포함하여 $V_{(i)}$ 이전에 오는 $H$의 변수들**이라 하면,
+$$
+Q[H_j] = \prod_{V_{(i)} \in H_j} \frac{Q[H^{\preceq i}]}{Q[H^{\preceq i-1}]}, \qquad
+Q[H^{\preceq i}] = \sum_{h \succ i} Q[H].
+$$
+:::
+
+* 핵심 아이디어는 **"연쇄 법칙의 C-인자 버전"** 입니다. 각 C-component $H_j$를, 위상 순서에 따라 누적된 C-인자들의 **비(ratio)** 의 곱으로 표현합니다.
+* $Q[H^{\preceq i}]$는 $V_{(i)}$보다 뒤에 오는 변수들($h \succ i$)을 **조상 축약(주변화)** 하여 얻습니다.
+
+## 2.8. 분해 예시: 다섯 변수 모델 끝까지 풀기
+
+$H = V$로 두고, $C$-component가 $\{V_1, V_3, V_5\}$와 $\{V_2, V_4\}$임을 이용합니다.
+
+$$
+Q[V] = Q[\{V_1,V_3,V_5\}]\, Q[\{V_2,V_4\}].
+$$
+
+### $Q[\{V_1,V_3,V_5\}]$ 계산
+
+위상 순서 $V_1 \prec V_2 \prec V_3 \prec V_4 \prec V_5$에서, 성분 $\{V_1,V_3,V_5\}$에 속한 각 변수에 대해 비를 곱합니다.
+
+$$
+Q[\{V_1,V_3,V_5\}] =
+\frac{Q[\{V_1\}]}{Q[\{\,\}]} \cdot
+\frac{Q[\{V_3,V_2,V_1\}]}{Q[\{V_2,V_1\}]} \cdot
+\frac{Q[\{V_5,V_4,V_3,V_2,V_1\}]}{Q[\{V_4,V_3,V_2,V_1\}]}.
+$$
+
+각 $Q[H^{\preceq i}]$를 $\sum_{h \succ i} Q[V]$로 바꿔 씁니다.
+
+$$
+=
+\frac{\sum_{v_2,v_3,v_4,v_5} Q[V]}{\sum_{v} Q[V]} \cdot
+\frac{\sum_{v_4,v_5} Q[V]}{\sum_{v_3,v_4,v_5} Q[V]} \cdot
+\frac{\sum_{\varnothing} Q[V]}{\sum_{v_5} Q[V]}.
+$$
+
+$Q[V] = P(v)$이므로 전부 관측 분포로 환원됩니다.
+
+$$
+=
+\frac{\sum_{v_2,v_3,v_4,v_5} P(v)}{\sum_{v} P(v)} \cdot
+\frac{\sum_{v_4,v_5} P(v)}{\sum_{v_3,v_4,v_5} P(v)} \cdot
+\frac{\sum_{\varnothing} P(v)}{\sum_{v_5} P(v)}.
+$$
+
+각 항을 주변분포로 정리하면,
+
+$$
+=
+\frac{P(v_1)}{1} \cdot
+\frac{P(v_1, v_2, v_3)}{P(v_1, v_2)} \cdot
+\frac{P(v)}{P(v_1, v_2, v_3, v_4)}.
+$$
+
+$$
+\boxed{\;Q[\{V_1,V_3,V_5\}] = P(v_1)\, P(v_3 \mid v_1, v_2)\, P(v_5 \mid v_1, v_2, v_3, v_4).\;}
+$$
+
+* 비록 $\{V_1, V_3, V_5\}$가 잠재 교란으로 얽혀 있었지만, 그 C-인자가 **온전히 관측 분포의 조건부 곱으로 식별**되었음을 확인할 수 있습니다.
+
+### $Q[\{V_2,V_4\}]$ 계산
+
+$$
+Q[\{V_2,V_4\}] =
+\frac{Q[\{V_2,V_1\}]}{Q[\{V_1\}]} \cdot
+\frac{Q[\{V_4,V_3,V_2,V_1\}]}{Q[\{V_3,V_2,V_1\}]}
+= P(v_2 \mid v_1)\, P(v_4 \mid v_1, v_2, v_3).
+$$
+
+![Figure: 부분그래프 G[{V2,V4}]를 나타냅니다. V2와 V4는 잠재변수 U3에 의한 양방향 간선으로만 연결되어 있고 둘 사이에 방향성 간선이 없으므로, V2≺V4와 V4≺V2 두 위상 순서가 모두 유효합니다. 이 그림은 C-component 인수분해의 결과가 위상 순서 선택과 무관하게 동일함(순서 불변성)을 보여 주며, 따라서 V2 또는 V4를 주변화하여 단일 변수 C-인자를 얻을 수 있음을 시사합니다.](./images/fig_g_v2v4.png)
+
+* $\mathcal{G}[\{V_2,V_4\}]$에서는 $V_2 \prec V_4$와 $V_4 \prec V_2$ **두 순서가 모두 유효**하며, 어느 쪽을 택해도 결과는 같습니다.
+
+이로부터 개별 변수의 C-인자도 조상 축약으로 얻을 수 있습니다.
+
+$$
+Q[\{V_2\}] = \sum_{v_4} Q[\{V_2,V_4\}] = \sum_{v_4} P(v_2 \mid v_1) P(v_4 \mid v_1, v_2, v_3) = P(v_2 \mid v_1)\underbrace{\sum_{v_4} P(v_4 \mid v_1,v_2,v_3)}_{=1} = P(v_2 \mid v_1).
+$$
+
+$$
+Q[\{V_4\}] = \sum_{v_2} Q[\{V_2,V_4\}] = \sum_{v_2} P(v_2 \mid v_1) P(v_4 \mid v_1, v_2, v_3).
+$$
+
+* 주의: $Q[\{V_2\}]$는 $V_2$가 $V_4$의 부모가 아니어서 $V_4$를 깔끔히 합산할 수 있었지만, $Q[\{V_4\}]$를 구할 때 $V_2$는 $V_4$의 부모이므로 합이 완전히 떨어지지 않고 $v_2$에 대한 평균 형태로 남습니다.
+
+---
+
+# 3. 시각화 (Visualization)
+
+지금까지의 두 연산(**조상 축약**과 **C-component 인수분해**)을 반복 적용하면, $Q[V]$로부터 더 작은 C-인자들을 체계적으로 끌어낼 수 있습니다. 이 과정을 트리로 시각화하면 다음과 같습니다.
+
+![Figure: 최상단 Q[V]에서 출발하여 두 종류의 연산으로 가지를 뻗어 나가는 C-인자 분해 트리입니다. 왼쪽 가지는 조상 축약(Q[V]→Q[V1234]→Q[V123]→Q[V12]→Q[V1])으로 변수를 하나씩 주변화하는 사슬이고, Q[V]→Q[V135]·Q[V24]처럼 옆으로 갈라지는 분기는 C-component 인수분해입니다. 최종적으로 Q[V1], Q[V2], Q[V3], Q[V4], Q[V5]와 같은 단일 변수 C-인자에 도달합니다. 캡션의 표어 "Once factorized, no more factorized"는 일단 C-component로 쪼개진 인자는 다시 곱으로 쪼개지지 않으며, 그 이후로는 합산(조상 축약)만 추이적으로 적용된다는 사실을 강조합니다.](./images/fig_visualization_tree.png)
+
+* **왼쪽 사슬**: $Q[V] \to Q[V_{1234}] \to Q[V_{123}] \to Q[V_{12}] \to Q[V_1]$ — 변수를 뒤에서부터 하나씩 **조상 축약**.
+* **옆으로의 분기**: $Q[V] \to Q[V_{135}] \cdot Q[V_{24}]$ 등 — **C-component 인수분해**.
+* 표어: **"Once factorized, no more factorized. Summation is transitive."** (한번 곱으로 분해되면 더는 분해되지 않으며, 그 뒤로는 합산만 추이적으로 이어집니다.)
+
+## C-인자 대수 요약 (C-factor Algebra — Summary)
+
+C-인자에 대한 **두 가지 기본 연산**으로 모든 것이 정리됩니다.
+
+* **1. 조상 집합으로 축약 (Reduce to an ancestral set)**
+$$
+Q[W] = \sum_{c \setminus w} Q[C] \qquad (\text{단, } W\text{가 } \mathcal{G}[C]\text{에서 조상적일 때}).
+$$
+* **2. C-component로 인수분해 (Factorize into c-components)**
+$$
+Q[H] = \prod_j Q[H_j] \qquad (H_1, \dots, H_k\text{는 } \mathcal{G}[H]\text{의 C-component}).
+$$
+
+> 이 인수분해는 식별가능성에 대한 **필요충분(if-and-only-if) 조건**을 제공합니다. 이것이 do-calculus에 비한 이 접근의 결정적 강점입니다.
+
+---
+
+# 4. C-인자를 이용한 인과 질의의 표현: 예시
+
+이제 친숙한 식별 시나리오들을 C-인자 언어로 다시 풀어 보며, 이 도구의 위력을 확인하겠습니다.
+
+## 4.1. Back-door (뒷문) 사례
+
+$Z$가 $X$와 $Y$의 공통 원인인 전형적인 교란 구조입니다.
+
+![Figure: X→Y 경로와 그 위에 공통 원인 Z가 X와 Y를 모두 가리키는 뒷문(back-door) 그래프입니다. 왼쪽은 개입 전 그래프 G, 오른쪽은 do(x)를 가하여 X로 들어가는 간선을 절단한 그래프 G_X로, 소문자 x는 X가 외부에서 고정되었음을 의미합니다. 이 그림은 개입이 X의 C-인자 Q[X]를 자명하게 만들어 인과효과 계산에서 사라지게 함을 보여줍니다.](./images/fig_backdoor.png)
+
+개입 전 그래프에서 $X, Y, Z$는 각자 독립적인 외생변수만 가지므로 모두 별개의 C-component입니다.
+
+$$
+P(x,y,z) = \sum_u P(x,y,z,u) =
+\left(\sum_{u_x} P(x \mid z, u_x) P(u_x)\right)
+\left(\sum_{u_y} P(y \mid x, z, u_y) P(u_y)\right)
+\left(\sum_{u_z} P(z \mid u_z) P(u_z)\right)
+= Q[X]\,Q[Y]\,Q[Z].
+$$
+
+$do(x)$를 가한 모델 $P'$에서는 $X$가 외부에서 고정되어 $Q[X]$가 자명($P'(x)=1$)해지므로,
+
+$$
+P'(x,y,z) = Q[Y]\,Q[Z] \quad\Longrightarrow\quad P(y \mid do(x)) = \sum_z Q[Y]\,Q[Z].
+$$
+
+이제 각 C-인자를 관측 분포로 식별합니다.
+
+$$
+Q[Y] = \frac{Q[\{X,Y,Z\}]}{Q[\{X,Z\}]} = \frac{P(v)}{\sum_y P(v)} = P(y \mid x, z),
+$$
+$$
+Q[Z] = \sum_{x,y} Q[\{X,Y,Z\}] = P(z).
+$$
+
+따라서 익숙한 **조정 공식(adjustment formula)** 을 얻습니다.
+
+$$
+\boxed{\;P(y \mid do(x)) = \sum_z P(y \mid z, x)\, P(z).\;}
+$$
+
+## 4.2. Front-door (앞문) 사례
+
+$X$와 $Y$가 잠재변수로 교란되어 있지만, 그 사이를 완전 매개하는 $Z$가 있는 구조입니다 ($X \to Z \to Y$, 그리고 $X \leftrightarrow Y$).
+
+![Figure: X→Z→Y의 매개 경로와 함께 X와 Y가 양방향 간선으로 교란된 앞문(front-door) 그래프 G, 그리고 do(x)로 X 진입 간선을 절단한 G_X를 나란히 보여줍니다. 잠재 교란이 X와 Y를 묶으므로 C-component는 {X,Y}와 {Z}로 나뉘며(P(v)=Q[X,Y]·Q[Z]), 매개변수 Z는 X와 별개의 성분에 놓여 식별의 통로가 됩니다. 이 그림은 왜 Z를 통한 두 단계 분해가 X↔Y 교란을 우회할 수 있는지를 시각적으로 설명합니다.](./images/fig_frontdoor.png)
+
+C-component는 $\{X, Y\}$(양방향 교란)와 $\{Z\}$로 나뉩니다.
+
+$$
+P(v) = Q[X,Y] \cdot Q[Z].
+$$
+
+질의는 $G_X$에서 $Z, Y$에 대한 결합 개입 분포로 표현됩니다.
+
+$$
+P(y \mid do(x)) = \sum_z P(y, z \mid do(x)) = \sum_z Q[Y,Z] = \sum_z Q[Y]\,Q[Z].
+$$
+
+(마지막 등호는 $Y$와 $Z$가 서로 다른 C-component이므로 인수분해됨을 이용했습니다.) 이제 각 인자를 식별합니다.
+
+$$
+Q[X,Y] = \frac{Q[X]}{Q[\varnothing]} \cdot \frac{Q[X,Z,Y]}{Q[X,Z]} = P(x)\,P(y \mid x, z),
+$$
+$$
+Q[Z] = \frac{Q[X,Z]}{Q[X]} = P(z \mid x).
+$$
+
+$\{Y\}$가 $\mathcal{G}[\{X,Y\}]$에서 **조상적**이므로 ($X$는 $\{X,Y\}$ 부분그래프에서 $Y$의 부모가 아님 — 둘은 양방향으로만 연결), $X$를 주변화하여,
+
+$$
+Q[Y] = \sum_x Q[X,Y] = \sum_x P(x)\,P(y \mid x, z).
+$$
+
+이를 종합하면 **앞문 공식(front-door formula)** 이 그대로 도출됩니다.
+
+$$
+\boxed{\;P(y \mid do(x)) = \sum_z Q[Y]\,Q[Z] = \sum_z P(z \mid x) \sum_{x'} P(x')\, P(y \mid x', z).\;}
+$$
+
+## 4.3. Napkin (냅킨) 사례
+
+냅킨 문제는 Back-door도 Front-door도 직접 적용되지 않는 까다로운 구조로, C-인자 대수의 진가가 드러나는 예시입니다. 방향성 골격은 $W_2 \to W_1 \to X \to Y$이며, 잠재 교란이 $W_1, X, Y$를 하나의 C-component로 묶습니다.
+
+![Figure: 냅킨 그래프입니다. 방향성 간선 W2→W1→X→Y가 사슬을 이루고, 잠재 교란이 W1, X, Y를 하나의 c-component로 묶는 반면 W2는 단독 성분으로 남습니다(P(v)=Q[W1,X,Y]·Q[W2]). 오른쪽 패널은 do(x)를 가한 그래프를 나타내며, 목표 인과효과가 보조변수 W1, W2를 거쳐 우회적으로만 식별될 수 있는 구조임을 보여 줍니다. 이 그림은 단순 조정(adjustment)으로는 식별이 불가능하고, C-인자 비(ratio)를 통한 단계적 분해가 필요함을 시사합니다.](./images/fig_napkin.png)
+
+C-component 분해는 다음과 같습니다.
+
+$$
+P(v) = Q[W_1, X, Y]\, Q[W_2].
+$$
+
+### 질의의 환원
+
+$$
+P(y \mid do(x)) = \sum_w Q[W_1, W_2, Y].
+$$
+
+$\{Y\}$가 $\mathcal{G}[\{W_1, W_2, Y\}]$에서 **조상적**이므로 ($Y$가 가장 후손), $W_1, W_2$를 주변화하면,
+
+$$
+P(y \mid do(x)) = Q[\{Y\}].
+$$
+
+문제는 **$Q[\{Y\}]$를 관측 분포로부터 얻을 수 있는가**입니다. $Q[W_1, X, Y]$는 $Q[V]$로부터 계산 가능하므로, 여기서 $Q[Y]$를 끌어낼 수 있는지가 관건입니다.
+
+### 냅킨 풀기 (Solving the Napkin)
+
+먼저 $Q[W_1, X, Y]$를 Tian 정리로 전개합니다.
+
+$$
+Q[W_1, X, Y] =
+\frac{Q[W_1]}{Q[\varnothing]} \cdot
+\frac{Q[W_1, W_2, X]}{Q[W_1, W_2]} \cdot
+\frac{Q[W_1, W_2, X, Y]}{Q[W_1, W_2, X]}
+= P(w_1)\, P(x \mid w_1, w_2)\, P(y \mid w_1, w_2, x).
+$$
+
+$W_1$은 $\mathcal{G}[\{W_1, X, Y\}]$에서 조상적으로 축약 가능하므로 주변화하여 $Q[X,Y]$를 얻습니다.
+
+$$
+Q[X, Y] = \sum_{w_1} Q[W_1, X, Y] = \sum_{w_1} P(w_1)\, P(x \mid w_1, w_2)\, P(y \mid w_1, w_2, x).
+$$
+
+$\mathcal{G}[\{X,Y\}]$에서 $X$와 $Y$는 더 이상 양방향으로 묶이지 않으므로(잠재 교란의 통로였던 $W_1$이 제거됨) 별개의 C-component가 되어,
+
+$$
+Q[X, Y] = Q[X]\,Q[Y].
+$$
+
+따라서 $Q[Y]$를 비(ratio)로 분리할 수 있습니다.
+
+$$
+Q[Y] = \frac{Q[X,Y]}{Q[X]} = \frac{Q[X,Y]}{\sum_y Q[X,Y]}
+= \frac{\sum_{w_1} P(w_1) P(x \mid w_1, w_2) P(y \mid w_1, w_2, x)}{\sum_{w_1} P(w_1) P(x \mid w_1, w_2)} = P(y \mid do(x)).
+$$
+
+$$
+\boxed{\;P(y \mid do(x)) = \frac{\sum_{w_1} P(w_1)\, P(x \mid w_1, w_2)\, P(y \mid w_1, w_2, x)}{\sum_{w_1} P(w_1)\, P(x \mid w_1, w_2)}.\;}
+$$
+
+### 비교: do-calculus로 푼 냅킨
+
+같은 결과를 do-calculus로 유도하면 다음과 같습니다. 단계마다 어떤 규칙을 쓰는지 명시했습니다.
+
+$$
+\begin{aligned}
+P(y \mid do(x)) &= P(y \mid do(x, w_1, w_2)) && \text{(Rule 3: 무관한 개입 추가)}\\
+&= P(y \mid x, do(w_1, w_2)) && \text{(Rule 2: 개입}\to\text{관측)}\\
+&= \frac{P(y, x \mid do(w_1, w_2))}{P(x \mid do(w_1, w_2))} \\
+&= \frac{P(y, x \mid do(w_2))}{P(x \mid do(w_2))} && \text{(Rule 3: } do(w_1)\text{ 제거)}\\
+&= \frac{\sum_{w_1} P(y, x \mid do(w_2), w_1)\, P(w_1 \mid do(w_2))}{\sum_{w_1} P(x \mid do(w_2), w_1)\, P(w_1 \mid do(w_2))} \\
+&= \frac{\sum_{w_1} P(y, x \mid w_2, w_1)\, P(w_1)}{\sum_{w_1} P(x \mid w_2, w_1)\, P(w_1)}. && \text{(Rule 2 and 3)}
+\end{aligned}
+$$
+
+* **두 결과가 정확히 일치**합니다. C-인자 접근은 do-calculus와 동일한 답을 주되, **어떤 인자를 어떤 순서로 식별할지를 알고리즘적으로** 지시해 준다는 점에서 더 구성적입니다.
+
+---
+
+# 5. 일반적 접근 (A General Approach)
+
+## 5.1. 일반 식별 알고리즘 (A General Identification Algorithm)
+
+그래프 $\mathcal{G}$와 질의 변수 $X, Y$가 주어졌을 때의 일반 절차를 정리합니다. 먼저 관련 변수 집합을
+$$
+D = An(Y)_{\mathcal{G}_{\overline{X}}}
+$$
+로 둡니다. 즉, $X$로 들어가는 간선을 자른 그래프 $\mathcal{G}_{\overline{X}}$에서 $Y$의 **조상 집합**입니다. ($Y$에 영향을 줄 수 없는 변수들은 식별에 무관하므로 미리 잘라냅니다.)
+
+이때 인과효과는 다음과 같이 표현됩니다.
+
+$$
+P(y \mid do(x)) = \sum_{v \setminus (x \cup y)} Q[V \setminus X] = \sum_{d \setminus y} Q[D].
+$$
+
+만약 부분그래프 $\mathcal{G}[D]$가 C-component $D_1, D_2, \dots, D_k$를 가진다면, Tian 인수분해에 의해
+
+$$
+\boxed{\;P(y \mid do(x)) = \sum_{d \setminus y} \prod_i Q[D_i].\;}
+$$
+
+* 따라서 전체 식별 문제는 **"각 $Q[D_i]$를 관측 분포(또는 그것이 속한 C-component의 C-인자)로부터 식별할 수 있는가"** 라는 부분 문제들의 모음으로 환원됩니다.
+
+## 5.2. `Identify` 함수
+
+각 부분 문제를 푸는 재귀 함수가 `Identify`입니다. 이 함수는 **$Q[T]$가 주어졌을 때 $Q[C]$를 계산할 수 있는지**를 판정합니다 ($C \subseteq T$).
+
+```text
+Identify(C, T, Q, G):
+    A = An(C)_{G[T]}                       # T로 제한한 그래프에서 C의 조상 집합
+    if A == C:                             # (조상 축약으로 끝)
+        return  Q[C] = ∑_{t \ c} Q[T]
+    if A == T:                             # (더 줄일 수 없음 → 식별 실패)
+        return  FAIL
+    # 이하: C ⊊ A ⊊ T 인 경우
+    A_i = (G[A]에서 C를 포함하는 C-component)
+    Q[A_i] 를 Q[T] 로부터 계산              # C-component 인수분해
+    return  Identify(C, A_i, Q[A_i], G)     # 더 작은 T = A_i 로 재귀
+```
+
+이 함수는 §3에서 정리한 **두 연산만**을 번갈아 적용합니다.
+
+* `A == C` 이면 **조상 축약**만으로 $Q[C]$를 얻을 수 있으므로 성공적으로 반환합니다.
+* `A == T` 이면 더 이상 줄일 여지가 없으므로 **식별 실패(Fail)** 를 반환합니다. (이 지점이 바로 "헤지(hedge)"라 불리는 식별 불가능성의 증거에 해당합니다.)
+* 그 외에는 **C-component 인수분해**로 $C$를 품은 더 작은 성분 $A_i$를 떼어내어, $T \leftarrow A_i$로 **재귀**합니다. 매 단계에서 $T$가 엄격히 작아지므로 알고리즘은 반드시 종료합니다.
+
+## 5.3. 완전성 (Completeness)
+
+이 알고리즘이 단지 "충분조건"이 아니라 **식별가능성의 완전한 판정기**임을 보장하는 것이 다음 정리입니다.
+
+::: {.callout-important title="Theorem (Tian, 2002) — Completeness"}
+$P(y \mid do(x))$가 $\mathcal{G}$와 $P(v)$로부터 **식별 가능한 것은 다음과 필요충분**이다: 각 C-인자 $Q[D_i]$가
+$$
+\texttt{Identify}(D_i, C_i, Q[C_i], \mathcal{G})
+$$
+에 의해 식별된다. 여기서 $C_i$는 $D_i$를 포함하는 $\mathcal{G}$의 C-component이다.
+:::
+
+* 즉, 알고리즘이 어느 한 $D_i$에서라도 `FAIL`을 반환하면 그 인과효과는 **이론적으로 식별 불가능**합니다. 어떤 영리한 do-calculus 적용으로도 식별할 수 없습니다.
+* 이 결과는 이후 Huang & Valtorta (2006), Shpitser & Pearl (2006)의 연구로도 (do-calculus 규칙 적용의 완전성 형태로) 확인되었습니다.
+
+::: {.callout-tip title="정리하며"}
+* SCM이 생성한 관측 분포는 **C-component 단위의 C-인자 곱**으로 분해됩니다.
+* C-인자에 대한 연산은 **(1) 조상 축약**과 **(2) C-component 인수분해** 단 두 가지뿐입니다.
+* 임의의 인과효과는 관련 부분 $D$ 위의 C-인자 곱으로 환원되며, 각 인자를 `Identify`가 식별하면 전체가 식별됩니다.
+* 무엇보다 이 절차는 **필요충분(완전)** 하므로, 식별 가능/불가능을 기계적으로 판정하는 **완전한 알고리즘**을 제공합니다.
+:::
+
+---
+
+# 참고문헌 (References)
+
+* J. Tian. *Studies in Causal Reasoning and Learning.* PhD thesis, Computer Science Department, University of California, Los Angeles, CA, November 2002.
+* Y. Huang and M. Valtorta. *Identifiability in causal Bayesian networks: A sound and complete algorithm.* In Proceedings of the Twenty-First National Conference on Artificial Intelligence (AAAI 2006), pages 1149–1156. AAAI Press, Menlo Park, CA, 2006.
+* I. Shpitser and J. Pearl. *Identification of joint interventional distributions in recursive semi-Markovian causal models.* In Proceedings of the Twenty-First National Conference on Artificial Intelligence (AAAI 2006), pages 1219–1226. AAAI Press, Menlo Park, CA, 2006.

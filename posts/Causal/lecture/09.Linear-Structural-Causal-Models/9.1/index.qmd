@@ -1,0 +1,734 @@
+---
+title: "[Causal Inference] 09. Linear Structural Causal Models"
+description: "Linear Structural Causal Models"
+author: "유성현"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+    theme: cosmo
+---
+
+## 들어가며 (Introduction)
+
+비모수(non-parametric) SCM은 구조 함수 $f_i$의 형태를 전혀 가정하지 않기 때문에 일반성이 크지만, 그만큼 식별(identification)을 위해 do-calculus와 같은 무거운 도구가 필요합니다. 이번 강의에서는 **구조 함수가 선형(linear)이라는 단 하나의 가정**을 추가합니다. 이 작은 변화가 인과추론을 **선형대수의 문제**로 바꾸어 놓으며, 그 결과 우리는 다음과 같은 질문에 매우 구체적으로 답할 수 있게 됩니다.
+
+* 회귀계수(regression coefficient)는 **언제** 인과효과와 같아지고, **언제** 편향되는가?
+* 관측된 공분산 $\sigma_{ij}$만으로 구조계수 $\lambda$를 **유일하게 풀 수 있는가**(식별 가능성)?
+* 식별이 어려울 때, 도구변수(IV)·도구집합(Instrumental Set)·보조변수(Auxiliary Variable) 같은 그래프 기반 알고리즘을 어떻게 활용하는가?
+
+이 글은 강의자료의 세 가지 큰 축 — **(1) 선형 SCM 소개, (2) 회귀가 인과효과를 찾을 수 있는 경우와 없는 경우, (3) 선형 SCM의 현대적 식별 알고리즘** — 을 그대로 따라가며, 결과만 제시된 수식들은 가능한 한 유도 과정을 모두 풀어서 설명하겠습니다.
+
+---
+
+# 1. 선형 구조적 인과모형 (Linear Structural Causal Models)
+
+## 1.1 선형 SCM의 정의 (Definition)
+
+선형 SCM은 **참값(ground-truth)을 나타내는 선형 방정식 체계**로 정의됩니다. 변수 $Y$를 그 직접 원인(direct cause)들 $X_i$의 선형결합으로 표현합니다.
+
+$$
+Y = \sum_{i} \lambda_{x_i y} X_i + E_y
+$$
+
+여기서 핵심 약속들은 다음과 같습니다.
+
+* **$\lambda_{x_i y}$ (구조계수, Structural Coefficient):** $X_i$가 한 단위 변할 때 $Y$가 변하는 양, 즉 $X_i \to Y$의 직접 인과효과를 나타냅니다.
+* **오차항 $E$ 간의 상관:** 오차들 사이의 모든 상관(correlation)은 **명시적으로** 지정됩니다. 즉 숨겨두지 않고 모형에 드러냅니다.
+* **정규화(normalization) 가정 (WLOG):** 수식을 단순화하기 위해 데이터가 표준화되어 있다고 가정합니다.
+  $$
+  \mathbb{E}[X] = 0, \qquad \mathbb{E}[XX] = 1
+  $$
+  즉 평균이 0이고 분산이 1입니다. (여기서 $\mathbb{E}[XX]$는 $\mathbb{E}[X^2]$를 의미하며, 표준화된 변수에서는 분산과 같습니다.)
+* **정규성(Gaussianity) 가정:** $E_y \sim \mathcal{N}$. 오차가 정규분포를 따르므로 **전체 분포가 공분산 행렬 $\Sigma$(성분 $\sigma_{ij}$)에 의해 완전히 결정**됩니다. 이 점이 매우 중요합니다 — 앞으로의 모든 식별 논의는 결국 "관측 가능한 $\sigma_{ij}$로 구조계수 $\lambda$를 풀 수 있는가"라는 형태로 환원되기 때문입니다.
+
+## 1.2 비모수에서 선형으로 (Non-Parametric to Linear)
+
+우리가 유일하게 바꾸는 것은 구조 함수 $f$를 **선형으로 만드는 것**뿐입니다.
+
+$$
+V_i \leftarrow f_i(\mathrm{pa}_i, u_i)
+\quad\Longrightarrow\quad
+V_i \leftarrow \sum_{V_j \in \mathrm{Pa}_i} \lambda_{ji} V_j + E_i
+$$
+
+* $\lambda_{ji}$는 **구조계수**라고 부릅니다.
+* 외생변수 $U_i$ 대신 관례적으로 $E_i$로 표기를 바꿉니다.
+* 모든 $\lambda_{ji}$를 알면, $V_j$가 $V_i$에 미치는 **인과효과를 곧바로 알 수 있습니다.** 즉 선형 SCM에서 인과추론은 "구조계수 찾기" 문제로 귀결됩니다.
+
+## 1.3 예시: 그래프 위에 계수를 적기 (Example)
+
+다음은 같은 구조를 비모수 SCM과 선형 SCM으로 각각 표현한 예입니다.
+
+![Figure 1: 동일한 인과구조를 비모수 SCM(왼쪽)과 선형 SCM(오른쪽)으로 나타낸 비교. 왼쪽은 $X, W$가 $Y$의 부모이며 구조방정식 $Y \leftarrow f_Y(X, W, U_Y)$처럼 함수 형태만 지정됩니다. 오른쪽 선형 SCM에서는 각 화살표 위에 구조계수 $\lambda_{xy}, \lambda_{wy}$를 직접 적을 수 있고, $Y \leftarrow \lambda_{xy}X + \lambda_{wy}W + E_y$로 모형이 완전히 명세됩니다. 즉 선형 가정 덕분에 그래프의 간선(edge)마다 수치 파라미터가 대응됩니다.](./images/fig01_nonparam_vs_linear.png)
+
+선형 SCM에서는 구조계수를 **그래프의 간선 위에 직접 적을 수 있고**, 그것만으로 모형이 완전히 명세됩니다.
+
+## 1.4 잠재 교란과 양방향 간선 (Latent Confounding)
+
+오차항 $E_i$와 $E_j$ 사이의 공분산은 $\varepsilon_{ij}$로 표기하며, 이는 **양방향 간선(bidirected edge)의 값**으로 그래프에 그려집니다.
+
+$$
+\varepsilon_{xy} = \mathbb{E}[E_x E_y]
+$$
+
+![Figure 2: 잠재 교란(latent confounding)의 그래프 표현. 왼쪽에서는 $X$의 오차 $E_x$와 $Y$의 오차 $E_y$가 서로 상관되어 있음을 별도의 외생노드로 그렸으나, 오른쪽에서는 이를 $X \leftrightarrow Y$ 양방향 간선과 그 위의 값 $\varepsilon_{xy}$로 압축해 표현합니다. $\varepsilon_{xy}$는 잠재 변수들의 공분산이므로 직접 관측되지는 않지만(unobserved), 수학적으로 유용하기 때문에 구조계수와 마찬가지로 그래프에 표시합니다. 단, 이는 비모수 SCM에서 양방향 간선이 '명시적 잠재변수'를 의미하던 것과는 다른 약속입니다.](./images/fig02_latent_confounding.png)
+
+* $\varepsilon_{xy}$는 잠재변수의 공분산이므로 **관측 불가능(unobserved)** 합니다.
+* 그러나 수식 전개에 유용하므로 구조계수처럼 그래프에 그립니다.
+* 주의: 비모수 SCM에서 양방향 간선은 '명시적 잠재 공통원인'을 의미할 수 있었지만, 선형 SCM에서는 **오차 공분산**이라는 약속입니다.
+
+## 1.5 선형 SCM에서의 개입 (Interventions)
+
+$X \xrightarrow{\lambda} Y$ 구조에서 개입효과 $\mathbb{E}[Y \mid do(X = x)]$를 계산해 봅니다. 개입 $do(X=x)$는 $X$로 들어오는 구조방정식을 끊고 $X$를 상수 $x$로 고정하므로, $Y = \lambda X + E_y$에서 $X = x$를 대입합니다.
+
+$$
+\begin{aligned}
+\mathbb{E}[Y \mid do(X=x)]
+&= \int y\, P(Y=y \mid do(x))\, dy \\
+&= \int y\, P(\lambda X + E_y = y \mid do(x))\, dy \\
+&= \int y\, P(\lambda x + E_y = y)\, dy \qquad (X \text{는 } x \text{로 고정}) \\
+&= \int (\lambda x + e)\, P(E_y = e)\, de \qquad (\text{치환 } e = y - \lambda x) \\
+&= \lambda x \int P(E_y = e)\, de + \int e\, P(E_y = e)\, de \\
+&= \lambda x \cdot 1 + \mathbb{E}[E_y] \\
+&= \lambda x.
+\end{aligned}
+$$
+
+* 둘째 줄에서 셋째 줄: 개입은 $X$의 값을 외부에서 $x$로 강제하므로, $Y$ 방정식 안의 $X$를 $x$로 치환합니다.
+* 마지막에서 $\int P(E_y=e)de = 1$(확률밀도의 적분), $\mathbb{E}[E_y] = 0$(정규화 가정)을 사용했습니다.
+
+더 간결하게는 기댓값의 선형성으로 곧바로 얻을 수 있습니다.
+
+$$
+\mathbb{E}[Y \mid do(X=x)] = \mathbb{E}[\lambda x + E_y] = \lambda x + \mathbb{E}[E_y] = \lambda x.
+$$
+
+**결론: 구조계수 $\lambda$가 곧 개입효과의 기울기입니다.** 따라서 인과추론의 목표는 $\lambda$를 알아내는 것입니다.
+
+## 1.6 식별 문제의 정식화 (The Problem Statement)
+
+선형 SCM의 식별 문제는 다음 세 가지로 구성됩니다.
+
+* **그래프 $G$:** 무엇이 무엇의 원인인지, 어떤 변수가 미지의 공통원인을 갖는지에 대한 **가설적 인과구조**는 주어졌다고 가정합니다.
+* **관측 데이터:** 관측 가능한 모든 변수의 측정값 집합 $\{(x^{(i)}, y^{(i)})\}_{i=1}^{N}$을 가지고 있습니다. 이로부터 공분산 $\sigma_{ij}$를 추정할 수 있습니다.
+* **구조계수 $\lambda$:** 우리가 **알지 못하는** 대상이며, 바로 찾고자 하는 실제 인과효과입니다.
+
+핵심 질문: **관측 가능한 $\sigma$들로부터 미지의 $\lambda$를 풀어낼 수 있는가?**
+
+## 1.7 관측량과 미관측량의 연결 (Connecting Observed with Unobserved)
+
+### 교란이 없는 경우
+
+$X \xrightarrow{\lambda} Y$ ($E_x \perp E_y$)에서 공분산 $\sigma_{xy}$를 계산합니다.
+
+$$
+\begin{aligned}
+\sigma_{xy} = \mathbb{E}[XY]
+&= \mathbb{E}[X(\lambda X + E_y)] \\
+&= \mathbb{E}[\lambda XX + X E_y] \\
+&= \lambda \underbrace{\mathbb{E}[XX]}_{=1} + \underbrace{\mathbb{E}[X E_y]}_{=0} \\
+&= \lambda.
+\end{aligned}
+$$
+
+* $\mathbb{E}[XX]=1$: 정규화 가정.
+* $\mathbb{E}[XE_y]=0$: $X = E_x$이고 $E_x \perp E_y$이므로 $\mathbb{E}[E_x E_y]=0$.
+
+따라서 교란이 없으면 **관측 공분산이 곧 구조계수**입니다: $\sigma_{xy} = \lambda$.
+
+### 교란이 있는 경우
+
+이제 $X \leftrightarrow Y$ 양방향 간선($\varepsilon_{xy}$)이 추가되면,
+
+$$
+\begin{aligned}
+\sigma_{xy} = \mathbb{E}[XY]
+&= \mathbb{E}[X(\lambda X + E_y)] \\
+&= \lambda \,\mathbb{E}[XX] + \mathbb{E}[X E_y] \\
+&= \lambda + \mathbb{E}[E_x E_y] \\
+&= \lambda + \varepsilon_{xy}.
+\end{aligned}
+$$
+
+이번에는 $\mathbb{E}[E_x E_y] = \varepsilon_{xy} \neq 0$이므로 공분산이 **구조계수 + 교란항**으로 오염됩니다. 관측량 하나($\sigma_{xy}$)에 미지수가 둘($\lambda, \varepsilon_{xy}$)이므로 분리가 불가능합니다.
+
+## 1.8 흥미로운 성질 (A Curious Property)
+
+연쇄 구조 $X \xrightarrow{\lambda_{xz}} Z \xrightarrow{\lambda_{zy}} Y$를 봅니다. 먼저 $X \leftrightarrow Z$에 교란이 **없는** 경우:
+
+$$
+\begin{aligned}
+\sigma_{xy} = \mathbb{E}[XY]
+&= \mathbb{E}[X(\lambda_{zy} Z + E_y)] \\
+&= \lambda_{zy}\,\mathbb{E}[XZ] + \underbrace{\mathbb{E}[X E_y]}_{=0} \\
+&= \lambda_{zy}\,\mathbb{E}\big[X(\lambda_{xz} X + E_z)\big] \\
+&= \lambda_{zy}\lambda_{xz}\,\mathbb{E}[XX] + \lambda_{zy}\,\mathbb{E}[X E_z] \\
+&= \lambda_{zy}\lambda_{xz} + \lambda_{zy}\underbrace{\mathbb{E}[E_x E_z]}_{=0} \\
+&= \lambda_{zy}\lambda_{xz}.
+\end{aligned}
+$$
+
+**공분산이 경로 위 계수들의 곱**($\lambda_{xz}\lambda_{zy}$)으로 나타납니다. 이제 $X \leftrightarrow Z$에 교란 $\varepsilon_{xz}$가 **있는** 경우, 마지막 단계만 바뀝니다.
+
+$$
+\sigma_{xy} = \lambda_{zy}\lambda_{xz} + \lambda_{zy}\,\mathbb{E}[E_x E_z]
+= \lambda_{zy}\lambda_{xz} + \lambda_{zy}\varepsilon_{xz}.
+$$
+
+즉 $X \to Z \to Y$ 경로($\lambda_{xz}\lambda_{zy}$)와 $X \leftrightarrow Z \to Y$ 경로($\varepsilon_{xz}\lambda_{zy}$)가 더해집니다.
+
+## 1.9 경로와 공분산 (Paths and Covariances)
+
+$Z \xrightarrow{\lambda_{zx}} X \xrightarrow{\lambda_{xy}} Y$이고 $Z \leftrightarrow Y$에 $\varepsilon_{zy}$가 있는 경우:
+
+$$
+\begin{aligned}
+\sigma_{xy} = \mathbb{E}[XY]
+&= \mathbb{E}[X(\lambda_{xy} X + E_y)] \\
+&= \lambda_{xy}\,\mathbb{E}[XX] + \mathbb{E}[X E_y] \\
+&= \lambda_{xy} + \mathbb{E}\big[(\lambda_{zx} Z + E_x)E_y\big] \\
+&= \lambda_{xy} + \lambda_{zx}\underbrace{\mathbb{E}[E_z E_y]}_{=\varepsilon_{zy}} + \underbrace{\mathbb{E}[E_x E_y]}_{=0} \\
+&= \lambda_{xy} + \lambda_{zx}\varepsilon_{zy}.
+\end{aligned}
+$$
+
+![Figure 3: 경로와 공분산의 대응 관계. 그래프 $Z \to X \to Y$에 양방향 간선 $Z \leftrightarrow Y(\varepsilon_{zy})$가 있을 때, $\sigma_{xy} = \lambda_{xy} + \lambda_{zx}\varepsilon_{zy}$로 분해됩니다. 첫 항 $\lambda_{xy}$는 직접 경로 $X \to Y$에, 둘째 항 $\lambda_{zx}\varepsilon_{zy}$는 뒷문 경로 $X \leftarrow Z \leftrightarrow Y$에 대응합니다. 이처럼 공분산의 각 항이 그래프 위의 서로 다른 경로(path)에 일대일로 대응한다는 점이 Wright 규칙의 출발점입니다.](./images/fig03_paths_and_covariances.png)
+
+여기서 핵심 관찰: **공분산의 각 항이 그래프의 경로 하나하나에 대응**한다는 것입니다.
+
+## 1.10 트렉과 Wright의 규칙 (Treks & Wright's Rule)
+
+위 관찰을 일반화한 것이 **Wright의 경로 규칙(1921)** 입니다.
+
+> 두 변수 $X, Y$ 사이의 공분산은, 둘 사이의 모든 **트렉(trek)** — 즉 화살표 머리가 충돌하지 않는($\to \cdot \leftarrow$ 형태가 없는) 자기교차 없는 경로 — 위의 계수 곱의 합과 같다.
+
+예컨대 §1.9의 그래프에서
+
+$$
+\sigma_{xy} = \underbrace{(X \xrightarrow{\lambda_{xy}} Y)}_{\lambda_{xy}} + \underbrace{(X \xleftarrow{\lambda_{zx}} Z \xleftrightarrow{\varepsilon_{zy}} Y)}_{\lambda_{zx}\varepsilon_{zy}} = \lambda_{xy} + \lambda_{zx}\varepsilon_{zy}.
+$$
+
+좀 더 복잡한 그래프(아래 그림)에서도 같은 원리로 모든 트렉을 더합니다.
+
+![Figure 4: 더 복잡한 그래프에서의 Wright 규칙 적용. 노드 $W, X, Y, Z$가 $\lambda_{wx}, \lambda_{xy}, \lambda_{wz}, \lambda_{zx}$ 등의 간선과 $W \leftrightarrow Y(\varepsilon_{wy})$ 양방향 간선으로 연결되어 있을 때, $\sigma_{xy}$는 세 개의 트렉의 합으로 분해됩니다: 직접 경로 $X \to Y$의 $\lambda_{xy}$, 트렉 $X \leftarrow W \leftrightarrow Y$의 $\lambda_{wx}\varepsilon_{wy}$, 그리고 트렉 $X \leftarrow Z \leftarrow W \leftrightarrow Y$의 $\lambda_{zx}\lambda_{wz}\varepsilon_{wy}$. 화살표 머리가 충돌하는 콜라이더 경로는 합산에서 제외된다는 점이 핵심입니다.](./images/fig04_treks_wright.png)
+
+$$
+\sigma_{xy} = \lambda_{xy} + \lambda_{wx}\varepsilon_{wy} + \lambda_{zx}\lambda_{wz}\varepsilon_{wy}.
+$$
+
+### Wright의 규칙 (1921) — 정리
+
+$$
+\sigma_{xy} = \sum (\text{$X$와 $Y$ 사이의 모든 열린 경로를 따라 계산한 경로계수 곱})
+$$
+
+* $X$와 $Y$가 **d-분리(d-separated)** 되어 있으면 $\sigma_{xy} = 0$.
+* 모형에 간선 $X \xrightarrow{\alpha} Y$가 있으면 $\sigma_{xy} = \alpha + (\text{다른 경로들})$. 따라서 간선 $\alpha$를 제거한 그래프 $G_{\alpha^-}$에서 $X, Y$가 d-분리되면 $\sigma_{xy} = \alpha$.
+* Wright의 규칙은 **비순환(acyclic) 모형**에 대해 정의됩니다.
+
+한 가지 더 복잡한 예시:
+
+$$
+\sigma_{xy} = (\lambda_{xz} + \varepsilon_{xz})\lambda_{zy} + \lambda_{wx}\lambda_{wv}\lambda_{vy}.
+$$
+
+---
+
+# 2. 선형 회귀와 인과효과 (Linear Regression)
+
+이 절의 구성(강의 내 두 번째 Overview)은 다음과 같습니다: **선형 회귀 → 알고리즘적 식별 → IV에서 도구집합으로 → 보조변수 기법.** 먼저 회귀가 인과효과를 줄 때와 그렇지 않을 때를 직관적인 예시로 살펴봅니다.
+
+## 2.1 예시: 의료 연구자 (The Medical Researcher)
+
+어떤 신약이 질병 치료에 도움이 되는지 판단하려는 의료 연구자가 있다고 합시다. 그의 권고는 전국의 의사들이 따르게 됩니다.
+
+* **Step 1 — 데이터 수집:** 약을 복용한 환자들에 대해 (1) 복용량과 (2) 혈중 바이오마커(항체) 양을 측정합니다.
+
+* **Step 2 — 회귀 수행:** $X$=복용량, $Y$=바이오마커로 회귀 $Y = \beta X + e$를 적합하니 $\beta = 0.375$. 약이 유익해 보여 사용을 승인합니다.
+
+![Figure 5: Step 2의 회귀 산점도. 가로축은 약 복용량($X$), 세로축은 혈중 바이오마커 양($Y$)이며, 표본 데이터에 적합한 회귀직선(빨간색)의 기울기는 $\beta = 0.375$로 양(+)의 기울기입니다. 이 데이터셋만 보면 약이 바이오마커를 증가시키는 듯한 긍정적 연관으로 보입니다.](./images/fig05_step2_regression.png)
+
+* **Step 3 — 전 인구에 투약:** 약을 모든 사람에게 투여하자, 결과는 기울기 $-1$의 명확한 음(−)의 연관으로 나타납니다. **이 약은 오히려 해롭습니다!**
+
+![Figure 6: Step 3의 전 인구 산점도. 동일한 축에서 약을 전체 인구에 투여한 뒤의 데이터(주황색 점)에 적합한 직선(초록색)의 기울기는 $-1$입니다. 표본에서 보였던 양의 연관과 정반대로, 실제 인과효과는 음수임을 보여줍니다 — 약이 바이오마커를 감소시킵니다.](./images/fig06_step3_population.png)
+
+* **무슨 일이 일어난 걸까?** 음의 효과가 원래 데이터에서 보이지 않은 이유는 데이터 부족이 아닙니다. 원래 회귀(빨간 선)가 '실패'한 이유, 그리고 참 인과효과(초록 선)를 얻을 방법이 있는지가 핵심 질문입니다.
+
+![Figure 7: 두 회귀선의 중첩 비교. 같은 산점도 위에 표본 회귀선(빨간색, 기울기 $+0.375$)과 참 인과효과선(초록색, 기울기 $-1$)을 함께 그렸습니다. '데이터를 더 모았어야 했나'라는 가설은 취소선으로 기각되고, 문제의 본질이 표본의 크기가 아니라 교란(confounding)에 의한 회귀계수의 편향임을 시사합니다. 빨간 선은 관측된 연관을, 초록 선은 개입했을 때의 진짜 효과를 나타냅니다.](./images/fig07_whats_happening.png)
+
+## 2.2 핵심 가정: 교란의 부재 (Key Assumption: Lack of Confounding)
+
+회귀계수에 인과적 의미를 부여할 때 **암묵적으로** 가정되는 세계 모형은 다음과 같습니다.
+
+$$
+X \leftarrow E_x, \qquad Y \leftarrow \lambda_{xy} X + E_y, \qquad E_x \perp E_y.
+$$
+
+이때 공분산은 §1.7에서 본 대로
+
+$$
+\sigma_{xy} = \mathbb{E}[XY] = \lambda_{xy}\underbrace{\mathbb{E}[XX]}_{=1} + \underbrace{\mathbb{E}[X E_y]}_{=0} = \lambda_{xy}
+$$
+
+가 되어 회귀가 인과효과를 정확히 줍니다.
+
+## 2.3 참 모형: 교란이 있을 때 (The Ground-Truth Model)
+
+그러나 $X$와 $Y$ 사이 교란의 부재를 확신할 수 없다면, 대응하는 그래프는 $E_x, E_y$가 상관된 모형입니다. 이때 회귀 $Y = \beta X + e$는 **편향된** 답을 줍니다.
+
+$$
+\sigma_{xy} = \lambda_{xy}\,\mathbb{E}[XX] + \mathbb{E}[E_x E_y] = \lambda_{xy} + \varepsilon_{xy}.
+$$
+
+약의 효과($\lambda_{xy}$)와 교란($\varepsilon_{xy}$)을 분리하는 것은 **증명 가능하게 불가능(provably impossible)** 합니다. 즉 $\lambda_{xy}$는 **식별 불가능(not identifiable)** 합니다. (Figure 7의 음/양 역전이 바로 이 $\varepsilon_{xy}$ 때문입니다.)
+
+## 2.4 회귀는 무엇을 계산하는가 (What does Regression Compute?)
+
+$Y = \beta X + e$에서 $\beta$가 실제로 무엇인지 최소제곱으로 기호적으로 풀어 봅니다. 손실은
+
+$$
+\begin{aligned}
+\mathbb{E}[(Y - \beta X)^2]
+&= \mathbb{E}[YY - 2\beta XY + \beta^2 XX] \\
+&= \mathbb{E}[YY] - 2\beta\,\mathbb{E}[XY] + \beta^2\,\mathbb{E}[XX] \\
+&= 1 - 2\beta\sigma_{xy} + \beta^2 \qquad (\mathbb{E}[YY]=\mathbb{E}[XX]=1,\ \mathbb{E}[XY]=\sigma_{xy}).
+\end{aligned}
+$$
+
+$\beta$에 대해 미분하여 0으로 놓으면,
+
+$$
+\frac{\partial}{\partial \beta}\big(1 - 2\beta\sigma_{xy} + \beta^2\big) = -2\sigma_{xy} + 2\beta = 0
+\quad\Longrightarrow\quad \boxed{\beta = \sigma_{xy}}.
+$$
+
+**회귀계수는 그저 $X$와 $Y$의 공분산일 뿐입니다.** (표준화 가정 하에서는 상관계수와 같습니다.)
+
+## 2.5 회귀식 vs 구조식: 세기의 혼동 (Confusion of the Century)
+
+* **회귀식 (Regression Equation):**
+  $$
+  Y = \beta X + e, \qquad e \perp X
+  $$
+  풀면 $\beta = \sigma_{xy}$이며, 이 해를 $r_{yx}$로 표기합니다($Y$를 $X$에 회귀한 해). **인과적 주장을 전혀 하지 않습니다.** $e \perp X$는 가정이 아니라, 최소제곱 잔차의 정의에서 따라오는 성질입니다.
+* **구조식 (Structural Equation):**
+  $$
+  Y = \lambda X + E_y, \qquad \mathbb{E}[Y \mid do(X)] = \lambda X
+  $$
+  개입 분포에 대한 주장을 하며, 따라서 **검증 가능(testable)** 하고 **반증 가능(falsifiable)** 합니다.
+
+같은 형태의 방정식이지만 의미가 전혀 다릅니다. $r_{yx}$는 관측적 양, $\lambda$는 인과적 양입니다.
+
+## 2.6 회귀의 암묵적 가정 (The Implicit Assumption)
+
+회귀로 인과적 주장을 할 때 암묵적으로 가정되는 모형은 다음과 같이 **공통의 결과를 향해 화살표가 모이는** 구조입니다.
+
+![Figure 8: 다중회귀가 인과효과를 주는 표준 가정 그래프. 두 독립적 원인 $X_1, X_2$가 각각 계수 $b_1, b_2$로 $Y$를 가리키는 구조($X_1 \to Y \leftarrow X_2$)에서, $Y = \beta_1 X_1 + \beta_2 X_2 + e$의 OLS 추정치는 정확히 구조계수와 일치합니다: $\beta_1 = b_1$, $\beta_2 = b_2$. 즉 회귀변수들이 모두 $Y$의 직접 부모이고 서로 교란이 없을 때 다중회귀는 직접효과를 올바르게 복원합니다.](./images/fig08_implicit_assumption.png)
+
+$$
+Y = \beta_1 X_1 + \beta_2 X_2 + e \quad\Longrightarrow\quad \beta_1 = b_1,\ \beta_2 = b_2.
+$$
+
+## 2.7 경고: 올바른 그래프를 쓰고 있는가 (Make sure you have the right graph)
+
+그런데 화살표 방향이 뒤집혀 **$Y$가 $X_1, X_2$의 공통원인**인 경우($Y \to X_1$, $Y \to X_2$, 즉 $X_1 \leftarrow Y \to X_2$)를 봅시다.
+
+![Figure 9: 회귀변수가 콜라이더가 아니라 공통원인의 자식인 경우. $Y$가 $X_1, X_2$를 가리키는 구조($X_1 \leftarrow Y \to X_2$)에서, 단순회귀로는 $r_{yx_1}=b_1$, $r_{yx_2}=b_2$가 그대로 나오지만, 다중회귀 $Y = \beta_1 X_1 + \beta_2 X_2 + e$를 하면 두 회귀변수가 서로의 효과를 부분적으로 상쇄·증폭하여 계수가 왜곡됩니다. 같은 데이터라도 어떤 변수를 함께 통제하느냐에 따라 회귀계수의 의미가 완전히 달라짐을 경고하는 그림입니다.](./images/fig09_wrong_graph.png)
+
+단순회귀로는 $r_{yx_1} = b_1$, $r_{yx_2} = b_2$가 나오지만, **다중회귀** $Y = \beta_1 X_1 + \beta_2 X_2 + e$를 하면 계수가 다음과 같이 왜곡됩니다.
+
+$$
+\beta_1 = \frac{b_1(1 - b_2^2)}{1 - b_1^2 b_2^2}, \qquad
+\beta_2 = \frac{b_2(1 - b_1^2)}{1 - b_1^2 b_2^2}.
+$$
+
+**무엇을 함께 통제하느냐에 따라 회귀계수의 값과 의미가 완전히 달라집니다.** 올바른 그래프를 모르면 회귀는 위험합니다.
+
+## 2.8 회귀로 d-분리 검정하기 (Testing D-Separation with Regression)
+
+회귀는 d-분리와 깊게 연결됩니다.
+
+$$
+(X \perp Y \mid Z) \quad\Longleftrightarrow\quad r_{yx\cdot z} = 0.
+$$
+
+검정 방법은 다음 회귀를 수행하는 것입니다.
+
+$$
+Y = \beta X + \alpha Z.
+$$
+
+* $\beta = 0$이면 $Z$가 $X$와 $Y$를 d-분리합니다.
+* $\beta \neq 0$이면 $(X \not\perp Y \mid Z)$입니다.
+
+여기서 $r_{yx\cdot z}$는 "$Z$를 통제한 뒤 $Y$를 $X$에 회귀한 부분회귀계수(partial regression coefficient)"를 뜻합니다.
+
+## 2.9 회귀는 조심해서 (Be Careful with Regression)
+
+같은 그래프에서도 **어떤 변수를 회귀에 포함하느냐**에 따라 $X \to Y$의 추정치가 달라집니다. 아래 그림의 모형($W$가 $X, Y$의 자식이자 매개, $Z$가 교란)을 예로 들면:
+
+![Figure 10: 조건화 집합에 따라 달라지는 회귀계수. 노드 $X, Y, W, Z$가 $\lambda_{wx}, \lambda_{wy}, \lambda_{xy}$ 등의 간선과 $X \leftrightarrow Z(\varepsilon_{xz})$, $Z \leftrightarrow Y(\varepsilon_{zy})$ 양방향 간선으로 얽혀 있을 때, 회귀에 어떤 변수를 넣느냐에 따라 $\beta$가 세 가지로 달라집니다. (1) $X$만 회귀하면 $\beta = \lambda_{xy} + \lambda_{wx}\lambda_{wy}$(매개 경로가 더해져 편향), (2) $X, W, Z$를 모두 회귀하면 콜라이더 $W$를 열어 새로운 교란이 들어와 편향, (3) $X, W$만 회귀하면 $\beta = \lambda_{xy}$로 정확히 식별됩니다. 같은 그래프라도 통제 변수 선택이 결과를 좌우함을 보여줍니다.](./images/fig10_be_careful.png)
+
+* **$Y = \beta X + e$** : $\beta = \sigma_{xy} = \lambda_{xy} + \lambda_{wx}\lambda_{wy}$ — 매개/뒷문 경로가 더해져 편향됩니다.
+* **$Y = \beta X + \alpha W + \gamma Z + e$** : $\beta = \lambda_{xy} - \dfrac{\varepsilon_{xz}\varepsilon_{zy}}{1 - \lambda_{wx}^2 - \varepsilon_{xz}^2}$ — 콜라이더 $W$를 조건화하면서 오히려 새 편향이 생깁니다.
+* **$Y = \beta X + \alpha W + e$** : $\beta = \lambda_{xy}$ — **정확히 식별**됩니다.
+
+핵심 교훈: 변수를 더 많이 통제한다고 항상 좋은 것이 아니며, **그래프가 시키는 대로** 정확한 집합을 통제해야 합니다.
+
+## 2.10 단일문 기준 (Single-Door Criterion)
+
+그렇다면 회귀를 **올바르게** 쓰려면 어떤 변수를 통제해야 할까요? 이를 그래프로 규정한 것이 단일문 기준입니다. 모형 $Z \xrightarrow{\lambda_{zx}} X \xrightarrow{\lambda_{xy}} Y$, $Z \leftrightarrow Y(\varepsilon_{zy})$에서 $\lambda_{xy}$를 찾고자 합니다.
+
+단순회귀로는 $r_{yx} = \sigma_{xy} = \lambda_{xy} + \lambda_{zx}\varepsilon_{zy}$로 편향됩니다. 대신 $Z$를 함께 넣어 $Y = \alpha X + \beta Z + e$를 풀어 봅니다. 손실은
+
+$$
+\mathbb{E}[(Y - \alpha X - \beta Z)^2] = 1 - 2\alpha\sigma_{xy} - 2\beta\sigma_{yz} + 2\alpha\beta\sigma_{xz} + \alpha^2 + \beta^2.
+$$
+
+편미분을 0으로 놓으면,
+
+$$
+\frac{\partial}{\partial\alpha} = 2\alpha - 2\sigma_{xy} + 2\beta\sigma_{xz} = 0, \qquad
+\frac{\partial}{\partial\beta} = 2\beta - 2\sigma_{yz} + 2\alpha\sigma_{xz} = 0,
+$$
+
+즉 정규방정식(normal equations)
+
+$$
+\begin{cases}
+\sigma_{xy} = \alpha + \beta\sigma_{xz} \\
+\sigma_{yz} = \beta + \alpha\sigma_{xz}
+\end{cases}
+$$
+
+이 얻어집니다. 여기에 Wright 규칙으로 계산한 $\sigma_{xy} = \lambda_{xy} + \lambda_{zx}\varepsilon_{zy}$, $\sigma_{yz} = \lambda_{xy}\lambda_{zx} + \varepsilon_{zy}$, $\sigma_{xz} = \lambda_{zx}$를 대입하면
+
+$$
+\begin{cases}
+\lambda_{xy} + \lambda_{zx}\varepsilon_{zy} = \alpha + \beta\lambda_{zx} \\
+\lambda_{xy}\lambda_{zx} + \varepsilon_{zy} = \alpha\lambda_{zx} + \beta
+\end{cases}
+\quad\Longrightarrow\quad
+\boxed{\alpha = \lambda_{xy},\quad \beta = \varepsilon_{zy}}.
+$$
+
+따라서 $Z$를 통제한 회귀계수 $\alpha$가 바로 구조계수 $\lambda_{xy}$가 됩니다.
+
+### 정리: 단일문 기준 (Single-Door, 직접효과의 식별)
+
+> $G$를 경로 다이어그램, $\lambda$를 간선 $X \to Y$의 경로계수라 하고, $G_\lambda$를 $X \to Y$를 제거한 다이어그램이라 하자. 다음을 만족하는 집합 $Z$가 존재하면 $\lambda$는 식별 가능하다.
+>
+> * $Z$는 $Y$의 후손(descendant)을 포함하지 않으며,
+> * $Z$는 $G_\lambda$에서 $X$와 $Y$를 d-분리한다.
+>
+> 이때 $\lambda = r_{yx \cdot z}$.
+
+### 예시 (Single-Door — Examples)
+
+* $A \to Y$, $A \leftarrow B \to Y$ 형태(공통원인 $B$): $\lambda_{ay} = r_{ya \cdot b}$ ($B$를 통제).
+* 대칭적으로 $\lambda_{by} = r_{yb \cdot a}$.
+* $X \xrightarrow{\lambda_{xy}} Y$이고 다른 경로가 없으면 단순히 $\lambda_{xy} = r_{yx}$.
+* $W \xrightarrow{\lambda_{wz}} Z$를 찾을 때 추가 경로가 있으면 적절한 집합을 조건화하여 $\lambda_{wz} = r_{zw \cdot yx}$처럼 식별합니다.
+
+## 2.11 뒷문 기준 (Back-Door Criterion)
+
+단일문이 **직접효과**($\lambda$, 하나의 간선)를 식별한다면, 뒷문 기준은 **총효과(total effect)** 를 식별합니다.
+
+### 정리: 뒷문 기준 (Back-Door, 총효과의 식별)
+
+> 인과 다이어그램 $G$의 두 변수 $X, Y$에 대해, 다음을 만족하는 측정 집합 $Z$가 존재하면 $X$가 $Y$에 미치는 총효과는 식별 가능하다.
+>
+> * $Z$의 어떤 원소도 $X$의 후손이 아니며,
+> * $Z$는 부분그래프 $G_{\underline{X}}$($X$에서 나가는 간선을 제거한 그래프)에서 $X$와 $Y$를 d-분리한다.
+>
+> 이때 총효과는 $r_{yx \cdot z}$로 주어진다.
+
+**단일문 vs 뒷문 비교:** 단일문은 간선을 제거한 $G_\lambda$를 보고 **직접효과**를, 뒷문은 나가는 화살을 제거한 $G_{\underline{X}}$를 보고 **총효과**를 다룹니다.
+
+![Figure 11: 뒷문 기준의 예시. $X \to Y$의 직접효과 $\lambda_{xy}$와 $X \to Z \to Y$의 간접효과 $\lambda_{xz}\lambda_{zy}$가 함께 존재하고, $W$가 $X \leftrightarrow W \to Y$ 형태로 뒷문 교란을 만드는 그래프입니다. $X$가 $Y$에 미치는 총효과는 직접·간접의 합인 $\lambda_{xz}\lambda_{zy} + \lambda_{xy}$이며, 뒷문 경로를 차단하는 $W$를 조건화한 회귀 $r_{yx \cdot w}$로 이 총효과를 식별할 수 있습니다.](./images/fig11_backdoor.png)
+
+* 총효과 $= \lambda_{xz}\lambda_{zy} + \lambda_{xy}$ (직접 + 간접).
+* 뒷문 경로를 막는 $W$를 통제하여 $r_{yx \cdot w}$로 식별합니다.
+
+---
+
+# 3. 알고리즘적 식별 방법 (Algorithmic Identification Methods)
+
+## 3.1 선형 식별의 방정식 (The Equations of Linear Identification)
+
+$Z \to X \to Y$, $Z \leftrightarrow Y(\varepsilon_{zy})$ 모형에서 (표준화로 대각이 1인) 공분산 행렬을 Wright 규칙으로 쓰면:
+
+$$
+\Sigma =
+\begin{pmatrix}
+\sigma_{xx} & \sigma_{xy} & \sigma_{xz} \\
+\sigma_{yx} & \sigma_{yy} & \sigma_{yz} \\
+\sigma_{zx} & \sigma_{zy} & \sigma_{zz}
+\end{pmatrix}
+=
+\begin{pmatrix}
+1 & \lambda_{xy} + \lambda_{zx}\varepsilon_{zy} & \lambda_{zx} \\
+\lambda_{xy} + \lambda_{zx}\varepsilon_{zy} & 1 & \lambda_{zx}\lambda_{xy} + \varepsilon_{zy} \\
+\lambda_{zx} & \lambda_{zx}\lambda_{xy} + \varepsilon_{zy} & 1
+\end{pmatrix}.
+$$
+
+* 좌변 $\Sigma$의 성분들은 **계산 가능(computable)** — 데이터에서 추정됩니다.
+* 우변은 **미관측 파라미터들의 식(expressions with unobservables)** $\lambda, \varepsilon$로 이루어져 있습니다.
+
+식별이란, 이 등식 체계를 풀어 미관측 $\lambda$를 관측 $\sigma$로 표현하는 일입니다.
+
+## 3.2 식별의 일반적 아이디어 (The General Idea)
+
+위 행렬에서 독립적인 방정식만 추리면
+
+$$
+\sigma_{xz} = \lambda_{zx}, \qquad
+\sigma_{xy} = \lambda_{xy} + \lambda_{zx}\varepsilon_{zy}, \qquad
+\sigma_{zy} = \lambda_{zx}\lambda_{xy} + \varepsilon_{zy}.
+$$
+
+* 첫 식에서 곧바로 $\lambda_{zx} = \sigma_{xz}$를 **이미 알게** 됩니다.
+* 이를 나머지 두 식에 대입하면
+  $$
+  \sigma_{xy} = \lambda_{xy} + \sigma_{xz}\varepsilon_{zy}, \qquad
+  \sigma_{zy} = \sigma_{xz}\lambda_{xy} + \varepsilon_{zy}.
+  $$
+* 이제 두 미지수 $\lambda_{xy}, \varepsilon_{zy}$에 대한 **두 개의 완전계수(full-rank) 선형방정식**이므로 (가우스 소거법으로) 유일하게 풀립니다. → **식별 가능.**
+
+이처럼 "이미 푼 파라미터를 다른 식에 대입"하는 연쇄가 식별 알고리즘의 핵심 동작입니다.
+
+## 3.3 비식별성 (Non-Identifiability)
+
+반면 $X \xrightarrow{\lambda_{xy}} Y$, $X \leftrightarrow Y(\varepsilon_{xy})$만 있는 모형에서는
+
+$$
+\begin{pmatrix} \sigma_{xx} & \sigma_{xy} \\ \sigma_{yx} & \sigma_{yy} \end{pmatrix}
+=
+\begin{pmatrix} 1 & \lambda_{xy} + \varepsilon_{xy} \\ \lambda_{xy} + \varepsilon_{xy} & 1 \end{pmatrix}.
+$$
+
+![Figure 12: 비식별 사례. $X \to Y$ 간선($\lambda_{xy}$)과 $X \leftrightarrow Y$ 양방향 간선($\varepsilon_{xy}$)만 있는 가장 단순한 교란 모형으로, 관측 가능한 정보는 오직 $\sigma_{xy} = \lambda_{xy} + \varepsilon_{xy}$ 하나뿐입니다. 미지수가 둘($\lambda_{xy}, \varepsilon_{xy}$)인데 방정식이 하나이므로, 같은 공분산 행렬을 만드는 $(\lambda_{xy}, \varepsilon_{xy})$ 조합이 무한히 많습니다. 따라서 $\lambda_{xy}$는 식별 불가능합니다.](./images/fig12_non_identifiability.png)
+
+유효한 정보는 $\sigma_{xy} = \lambda_{xy} + \varepsilon_{xy}$ 하나인데 미지수는 둘입니다. **하나의 방정식에 두 미지수** → 같은 공분산을 주는 $(\lambda_{xy}, \varepsilon_{xy})$가 무한히 많아 식별 불가능합니다.
+
+## 3.4 유한 식별성 (Finite Identifiability)
+
+어떤 그래프에서는 식별 방정식이 **비선형(예: 이차)** 이 되어 해가 **유한 개** 나옵니다. 강의의 예시 그래프($X$가 $W, Z, Y$의 부모이고 다수의 양방향 간선이 있는 구조)에서 식별 방정식은 다음과 같은 이차식으로 정리됩니다.
+
+$$
+0 = (\sigma_{xw}\sigma_{xz} - \sigma_{wz})\lambda_{xy}^2 + 2(\sigma_{xy}\sigma_{wz} - \sigma_{xw}\sigma_{xz}\sigma_{xy})\lambda_{xy} + (\sigma_{yw}\sigma_{xz}\sigma_{xy} + \sigma_{yz}\sigma_{xy}\sigma_{xy} - \sigma_{xy}^2\sigma_{wz} - \sigma_{yz}\sigma_{yw}).
+$$
+
+![Figure 13: 유한 식별 사례. 공통원인 $X$가 $W, Z, Y$로 화살을 보내고 $X \leftrightarrow W, X \leftrightarrow Z, X \leftrightarrow Y$ 양방향 간선이 얽혀 있는 그래프입니다. 이 구조에서 $\lambda_{xy}$에 대한 식별 방정식이 선형이 아니라 이차식이 되며, 근의 공식을 적용하면 두 개의 후보 해가 나옵니다. 즉 관측 데이터와 일치하는 $\lambda_{xy}$ 값이 무한히 많지도($\to$ 비식별), 유일하지도($\to$ 식별) 않은, 유한 개로 좁혀지는 중간 사례입니다.](./images/fig13_finite_id.png)
+
+이차방정식이므로 근의 공식으로 두 개의 후보 해를 얻습니다.
+
+$$
+\lambda_{xy} = \frac{-(\sigma_{xy}\sigma_{wz} - \sigma_{xw}\sigma_{xz}\sigma_{xy}) \pm \sqrt{(\sigma_{xy}\sigma_{wz} - \sigma_{xw}\sigma_{xz}\sigma_{xy})^2 - (\sigma_{xw}\sigma_{xz} - \sigma_{wz})(\sigma_{yw}\sigma_{xz}\sigma_{xy} + \sigma_{yz}\sigma_{xy}^2 - \sigma_{xy}^2\sigma_{wz} - \sigma_{wz}\sigma_{yz}\sigma_{yw})}}{(\sigma_{xw}\sigma_{xz} - \sigma_{wz})}.
+$$
+
+## 3.5 선형 식별성의 3가지 경우 (The 3 Cases)
+
+* **식별 가능(Identifiable):** 관측 데이터와 일치하는 $\lambda_{xy}$ 값이 **유일**.
+* **유한 식별(Finite ID):** 일치하는 값이 **유한 개**.
+* **식별 불가(Not Identifiable):** 일치하는 값이 **무한**.
+
+## 3.6 선형 SCM에서의 식별 — 그래프적 접근 (Identification in Linear SCM)
+
+원리적으로는 §3.1의 다항 방정식 체계를 컴퓨터 대수(computer algebra)로 풀면 됩니다. 그러나 이 방법은 **파라미터 수에 대해 이중 지수적(doubly exponential)** 복잡도를 가져 실용적이지 않습니다.
+
+> **식별 알고리즘의 목표:** 풀 수 있는 부분 방정식 체계(solvable subsystems) 또는 연쇄적 대입(series of substitutions)을 **효율적으로** 찾아내는 패턴을 발견하는 것이며, 이는 **그래프적 기준(graphical criteria)** 을 통해 접근합니다.
+
+다음 절들에서 이러한 그래프적 기준 — IV, 조건부 IV, 도구집합, 보조변수 — 을 차례로 봅니다.
+
+---
+
+# 4. IV에서 도구집합으로 (IV to Instrumental Sets)
+
+## 4.1 출발점: 도구변수 (Instrumental Variables)
+
+의료 연구자 예시로 돌아가, 환자의 복용량에 영향을 주는 **독립적인 의사 권고** 변수 $Z$가 추가되었다고 합시다. 그래프는 $Z \xrightarrow{\lambda_{zx}} X \xrightarrow{\lambda_{xy}} Y$이고 $X \leftrightarrow Y(\varepsilon_{xy})$입니다.
+
+![Figure 14: 도구변수(IV) 그래프. 의사 권고 $Z$가 복용량 $X$에만 영향을 주고($Z \to X$), $X$와 결과 $Y$ 사이에는 교란 $X \leftrightarrow Y(\varepsilon_{xy})$가 있는 구조입니다. $Z$는 (1) $X \to Y$ 간선을 제거한 그래프에서 $Y$와 d-분리되고, (2) 그 그래프에서도 $X$와는 d-분리되지 않기 때문에 도구변수의 조건을 만족합니다. 비록 $X \leftrightarrow Y$ 교란 때문에 $X$만으로는 $\lambda_{xy}$를 식별할 수 없지만, $Z$를 도구로 활용하면 식별이 가능해집니다.](./images/fig14_iv.png)
+
+### 정의: 도구변수 (Instrumental Variable, Pearl p.248)
+
+> 변수 $Z$가 $X \to Y$의 $\lambda_{xy}$에 대한 IV이려면, 부분그래프 $G_{\lambda_{xy}}$($X \to Y$ 간선을 제거한 그래프)에서
+>
+> * $Z$가 $Y$와 **d-분리**되고,
+> * $Z$가 $X$와는 **d-분리되지 않아야** 한다.
+
+직관적으로 $Z$는 "오직 $X$를 통해서만 $Y$에 영향을 주는" 외부 변동의 원천입니다.
+
+## 4.2 2단계 최소제곱 (2-Stage Least Squares)
+
+IV로 $\lambda_{xy}$를 추정하는 방법은 두 가지로 볼 수 있습니다.
+
+**방법 1 — 비율로 직접:** Wright 규칙에서 $\sigma_{zy} = \lambda_{zx}\lambda_{xy}$, $\sigma_{zx} = \lambda_{zx}$이므로
+
+$$
+\lambda_{xy} = \frac{\sigma_{zy}}{\sigma_{zx}} = \frac{r_{zy}}{r_{zx}}.
+$$
+
+**방법 2 — 2단계 회귀(2SLS):**
+
+* **1단계:** $X$를 $Z$에 회귀. $X = \alpha Z + e \Rightarrow \alpha = \sigma_{zx}$. 적합값은 $\hat{X} = \sigma_{zx} Z$.
+* **2단계:** 원래 $X$ 대신 $\hat{X} = \sigma_{zx} Z$를 넣어 $Y$를 회귀.
+  $$
+  Y = \beta(\sigma_{zx} Z) + e \quad\Longrightarrow\quad \beta = \frac{\sigma_{zy}}{\sigma_{zx}}.
+  $$
+
+1단계가 $X$에서 **교란과 무관한 변동분**($Z$로 설명되는 부분)만 뽑아내고, 2단계가 그 정제된 변동으로 $Y$를 설명하므로 교란을 우회합니다.
+
+## 4.3 조건부 도구변수 (Conditional Instrumental Variables)
+
+순수 IV가 없을 때, 어떤 집합 $W$를 조건화하면 IV 조건을 만족시킬 수 있습니다.
+
+### 정의: 조건부 IV (Conditional IV)
+
+> 변수 $Z$가 집합 $W$가 주어졌을 때 $X \to Y$의 $\lambda_{xy}$에 대한 조건부 IV이려면,
+>
+> * $W$는 $Y$의 **비후손(non-descendant)** 만 포함하고,
+> * $W$가 $G_{\lambda_{xy}}$에서 $Z$와 $Y$를 **d-분리**하며,
+> * $W$가 $G_{\lambda_{xy}}$에서 $Z$와 $X$는 **d-분리하지 않아야** 한다.
+
+![Figure 15: 조건부 도구변수. 단독으로는 $Z$가 $Y$와 분리되지 않아 IV가 될 수 없지만($Z \to X \to Y$ 외에 $Z$를 $Y$로 잇는 경로가 존재), 적절한 비후손 집합 $W$를 조건화하면 $Z$가 $Y$로 가는 추가 경로가 차단되어 조건부 IV의 자격을 얻습니다. 왼쪽은 $W$를 조건화하기 전, 오른쪽은 $W$가 $Z$-$Y$ 경로를 막아 $Z$가 유효한 도구가 된 상태를 나타냅니다.](./images/fig15_conditional_iv.png)
+
+## 4.4 IV의 확장: 도구집합 (Instrumental Sets)
+
+이번에는 $Y$의 부모가 둘($X_1, X_2$)이고, $Z_1, Z_2$에서 $Y$로 가는 모든 경로가 $X_1, X_2$를 모두 거치는 경우입니다. 단일 IV가 존재하지 않습니다. 모형은
+
+$$
+\begin{aligned}
+Z_1 &= E_{z_1}, \quad Z_2 = E_{z_2}, \\
+X_1 &= \lambda_{z_1 x_1} Z_1 + \lambda_{z_2 x_1} Z_2 + E_{x_1}, \\
+X_2 &= \lambda_{z_1 x_2} Z_1 + \lambda_{z_2 x_2} Z_2 + E_{x_2}, \\
+Y &= \lambda_{x_1 y} X_1 + \lambda_{x_2 y} X_2 + E_y,
+\end{aligned}
+$$
+
+이고 $E_{x_1}, E_y$ 및 $E_{x_2}, E_y$가 상관되어 있습니다. Wright 규칙으로 $\sigma_{z_i x_j} = \lambda_{z_i x_j}$ ($i,j \in \{1,2\}$)이고,
+
+$$
+\begin{cases}
+\sigma_{z_1 y} = \lambda_{z_1 x_1}\lambda_{x_1 y} + \lambda_{z_1 x_2}\lambda_{x_2 y} \\
+\sigma_{z_2 y} = \lambda_{z_2 x_1}\lambda_{x_1 y} + \lambda_{z_2 x_2}\lambda_{x_2 y}
+\end{cases}
+\;\Longleftrightarrow\;
+\begin{cases}
+\sigma_{z_1 y} = \sigma_{z_1 x_1}\lambda_{x_1 y} + \sigma_{z_1 x_2}\lambda_{x_2 y} \\
+\sigma_{z_2 y} = \sigma_{z_2 x_1}\lambda_{x_1 y} + \sigma_{z_2 x_2}\lambda_{x_2 y}
+\end{cases}
+$$
+
+**$\{Z_1, Z_2\}$에서 $\{X_1, X_2\}$로 가는 경로를 이용한 선형 연립방정식**이 됩니다. 미지수 $\lambda_{x_1 y}, \lambda_{x_2 y}$가 둘, 방정식도 둘입니다.
+
+### 비공선성(non-collinearity) 조건
+
+이 연립방정식이 풀리려면 두 방정식이 **공선(collinear)이 아니어야** 합니다. 만약 $Z_1$에서 $Y$로 가는 경로가 $Z_2$에서 $Y$로 가는 경로의 상수배($\lambda_{z_1 z_2}$배)로 쓰일 수 있다면, 두 방정식이 동일해져 체계가 **퇴화(degenerate)** 합니다.
+
+$$
+\lambda_{z_1, z_2}\,\sigma_{z_2 y} = \lambda_{z_1, z_2}(\sigma_{z_2 x_1}\lambda_{x_1 y} + \sigma_{z_2 x_2}\lambda_{x_2 y})
+\;\Longrightarrow\;
+\sigma_{z_2 y} = \sigma_{z_2 x_1}\lambda_{x_1 y} + \sigma_{z_2 x_2}\lambda_{x_2 y}.
+$$
+
+### 비교차 경로 ⇔ 완전계수 (Non-Intersecting Paths imply Full-Rank)
+
+> 이 연립방정식이 비퇴화(non-degenerate)일 필요충분조건은, $\{Z_1, Z_2\}$와 $\{X_1, X_2\}$ 사이에 **서로 교차하지 않는(non-intersecting) 경로로 이루어진 완전 매칭(full matching)** 이 존재하는 것이다.
+
+![Figure 16: 비교차 경로와 완전계수성. 도구 $\{Z_1, Z_2\}$에서 처치 $\{X_1, X_2\}$로 가는 경로들이 노드를 공유하지 않고 서로 분리되어 $Z_1 \to X_1$, $Z_2 \to X_2$처럼 완전 매칭을 이루면 연립방정식이 완전계수(full-rank)가 되어 $\lambda_{x_1 y}, \lambda_{x_2 y}$를 유일하게 풀 수 있습니다. 이러한 비교차 경로의 존재 여부는 그래프에서 최대유량(max-flow) 문제로 효율적으로 판정할 수 있습니다.](./images/fig16_instrumental_sets.png)
+
+이러한 경로들은 **최대유량(max-flow)** 알고리즘으로 찾을 수 있습니다.
+
+### 정의: 도구집합 (Instrumental Set, optional)
+
+> 집합 $\mathbf{Z}$가 $\mathbf{X} \subseteq \mathrm{Pa}(Y)$에 대한 도구집합(IS)이려면:
+>
+> 1. $|\mathbf{Z}| = |\mathbf{X}| = n$;
+> 2. $Z \in \mathbf{Z}$는 어떤 $X$의 후손도 아니며;
+> 3. $Z \in \mathbf{Z}$에서 $Y$로 가는 모든 트렉은 어떤 $X \in \mathbf{X}$를 지나고;
+> 4. $1 \le i < j \le n$에 대해 $Z_j$는 트렉 $p_i$에 나타나지 않으며, 만약 트렉 $p_i, p_j$가 공통 변수 $V$를 가지면 $p_i[V \sim Y]$와 $p_j[Z_j \sim V]$ 모두 $V$를 가리켜야 한다.
+
+## 4.5 도구 부분집합과 Match-Block (Instrumental Subsets)
+
+때로는 $Y$의 부모 전체에 대한 완전한 도구집합이 존재하지 않습니다. 예컨대 $X_3$에 대응할 도구가 없는 경우, 전체 IS는 불가능하지만 부모의 **부분집합** $\{X_1, X_2\}$에 대해서는 유효한 도구집합 $\{Z_1, Z_2\}$가 존재할 수 있습니다. 이를 **도구 부분집합(instrumental subset, ISs)** 이라 합니다. 문제는 어떤 부모가 부분집합에 속하는지 미리 모른다는 점, 그리고 이를 **효율적으로** 찾는 것입니다.
+
+### Match-Block 알고리즘 (Kumor et al. 2019)
+
+여러 $Z$와 $X$가 얽힌 그래프에서 유효한 ISs를 찾는 절차는 다음과 같습니다.
+
+![Figure 17: Match-Block 알고리즘의 진행. 모든 $Z = \{Z_1, ..., Z_5\}$에서 모든 $X = \{X_1, ..., X_5\}$로 최대유량을 흘려, 유량이 도달하지 못한 $X$(예: $X_4$)의 조상들을 제거(disable)하고 남은 노드에 대해 최대유량을 반복합니다. 더 이상 제거할 노드가 없을 때 남은 $X$들($\{X_1, X_2, X_5\}$)이 유효한 도구 부분집합을 이룹니다. 매 단계 비활성화되는 노드를 점선/흐림으로 표시하여, 반복적 최대유량으로 식별 가능한 부분집합을 좁혀가는 과정을 보여줍니다.](./images/fig17_match_block.png)
+
+1. 모든 $Z$에서 모든 $X$로 **최대유량**을 실행합니다.
+2. 유량이 0인 $X$(예: $X_4$)는 어떤 조상도 유효 IS에 속할 수 없으므로, 그 $X$와 관련 $Z$들(예: $X_4, Z_5, Z_3$)을 비활성화합니다.
+3. 활성 노드에 대해 다시 최대유량을 실행하고, 같은 기준으로 노드를 제거합니다(예: $X_3$ 비활성화).
+4. 최종 최대유량에서 남은 모든 $X$가 여전히 활성이면, 이들이 **유효한 ISs** 입니다(예: $\{X_1, X_2, X_5\}$).
+
+---
+
+# 5. 보조변수 기법 (The Method of Auxiliary Variables)
+
+## 5.1 보조변수의 아이디어 (How to Solve This?)
+
+조건화(conditioning)를 쓰지 않고 $\lambda_{xy}$를 풀 수 있을까요? 모형 $Z \xrightarrow{\lambda_{zx}} X \xrightarrow{\lambda_{xy}} Y$, $Z \leftrightarrow Y(\varepsilon_{zy})$에서
+
+$$
+Z = E_z, \qquad X = \lambda_{zx} Z + E_x, \qquad Y = \lambda_{xy} X + E_y,
+$$
+
+$E_z, E_y$가 상관되어 있어 뒷문 경로 $X \leftarrow Z \leftrightarrow Y$가 결과를 교란합니다($\sigma_{xy} = \lambda_{xy} + \lambda_{xz}\varepsilon_{zy}$).
+
+**핵심 아이디어: 이미 풀어 둔 파라미터($\lambda_{zx}$)를 활용해 새로운 변수를 만들자.** 보조변수(auxiliary variable) $X^*$를 다음과 같이 정의합니다.
+
+$$
+X^* = X - \lambda_{zx} Z = (\lambda_{zx} Z + E_x) - \lambda_{zx} Z = E_x.
+$$
+
+![Figure 18: 보조변수 $X^*$의 구성. 이미 식별된 $\lambda_{zx}$를 이용해 $X$에서 $Z$의 효과를 빼낸 잔차 $X^* = X - \lambda_{zx}Z = E_x$를 만듭니다. 이 $X^*$는 오차 $E_x$ 그 자체이므로 교란을 일으키는 $Z \leftrightarrow Y$ 경로와 무관하며, $X$와는 상관($\sigma_{x^* x}$)을 갖습니다. 따라서 $X^*$를 도구변수처럼 사용하여 $\lambda_{xy} = \sigma_{x^* y}/\sigma_{x^* x}$로 직접효과를 식별할 수 있습니다.](./images/fig18_auxiliary_variable.png)
+
+이제 $X^* = E_x$는 교란 경로와 무관하므로, **도구변수(IV)처럼** 사용할 수 있습니다.
+
+$$
+\lambda_{xy} = \frac{\sigma_{x^* y}}{\sigma_{x^* x}}.
+$$
+
+즉 이미 알아낸 계수로 변수의 일부 효과를 "제거"하여 깨끗한 도구를 인공적으로 만들어내는 것이 보조변수 기법입니다.
+
+## 5.2 보조변수 집합 (Auxiliary Variable Set, AV Set)
+
+보조변수는 도구집합에도 활용됩니다. 아래 그래프에서는 $Y$로 가는 뒷문 경로 때문에 $\lambda_{x_1 y}$에 대한 IV/IS가 존재하지 않습니다.
+
+![Figure 19: 보조변수 집합(AV Set). 공통원인 $W$가 $Z_1, Z_2$를 가리켜 $Y$로 가는 뒷문 경로를 만들기 때문에 $\{Z_1, Z_2\}$는 그대로는 $\{X_1, X_2\}$의 도구집합이 되지 못합니다. 먼저 식별 가능한 간선 $\lambda_{wz_1}, \lambda_{wz_2}$를 구한 뒤, $W$의 효과를 제거한 보조변수 $Z_1^* , Z_2^*$를 생성하면, $\{Z_1^*, Z_2^*\}$가 $\{X_1, X_2\}$에 대한 유효한 도구집합이 되어 $Z_1^* \to X_1$, $Z_2^* \to X_2$ 매칭으로 $\lambda_{x_1 y}, \lambda_{x_2 y}$를 식별할 수 있습니다.](./images/fig19_av_set.png)
+
+* $W$가 $Z_1, Z_2$의 공통원인이라 뒷문 경로가 생깁니다.
+* 그러나 간선 $\lambda_{wz_1}, \lambda_{wz_2}$는 식별 가능합니다.
+* 이를 이용해 $W$의 효과를 제거한 보조변수 $Z_1^* , Z_2^*$를 만들면,
+* $\{Z_1^*, Z_2^*\}$가 $\{X_1, X_2\}$에 대한 도구집합이 되어, $Z_1^* \to X_1$, $Z_2^* \to X_2$ 매칭으로 $\lambda_{x_1 y}, \lambda_{x_2 y}$를 식별할 수 있습니다.
+
+---
+
+# 6. 결론 (Conclusions)
+
+1. **선형 SCM은 실세계 응용에서 가장 흔히 쓰이는 인과모형**입니다. 선형 가정 하나로 인과추론이 선형대수 문제로 환원됩니다.
+2. **회귀 분석은 조심해서** 다루어야 하며, 그것이 실제로 무엇을 계산하는지($\beta = \sigma_{xy}$) 항상 의식해야 합니다.
+3. **구조식은 회귀식과 같지 않지만**, 올바른 그래프 아래에서는 회귀가 구조계수를 찾는 데 도움을 줄 수 있습니다(단일문·뒷문 기준).
+4. **인과 다이어그램을 적극 활용**하면, 많은 실용적이고 일반적인 상황에서 IV·도구집합·보조변수 같은 그래프 기준으로 인과효과를 풀 수 있습니다.
+
+## 참고문헌 (References)
+
+1. Wikipedia. *Instrumental variables estimation.*
+2. M. Bardet. *On the Complexity of a Gröbner Basis Algorithm.* 2002.
+3. C. Brito and J. Pearl. *Generalized Instrumental Variables.* UAI, pp. 85–93, 2002.
+4. B. Chen, J. Pearl, and E. Bareinboim. *Incorporating Knowledge into Structural Equation Models using Auxiliary Variables.* IJCAI, pp. 3577–3583, 2016.
+5. C. Cinelli, D. Kumor, B. Chen, J. Pearl, and E. Bareinboim. *Sensitivity Analysis of Linear Structural Causal Models.* ICML, vol. 97, pp. 1252–1261, 2019.
+6. L. D. Garcia-Puente, S. Spielvogel, and S. Sullivant. *Identifying Causal Effects with Computer Algebra.* 2010.
+7. D. Kumor, B. Chen, and E. Bareinboim. *Efficient Identification in Linear Structural Causal Models with Instrumental Cutsets.* NeurIPS 32, pp. 12477–12486, 2019.
+8. J. Pearl. *Causality: Models, Reasoning and Inference.* 2003.
+9. S. Wright. *Correlation and Causation.* Journal of Agricultural Research, 20(7):557–585, 1921.
+10. C. Zhang, B. Chen, and J. Pearl. *A Simultaneous Discover-Identify Approach to Causal Inference in Linear Models.* AAAI, 2020.

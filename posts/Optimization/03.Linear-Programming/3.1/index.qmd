@@ -1,6 +1,6 @@
 ---
-title: "[Optimization] 3. Linear Programming (Part 1)"
-description: "Convex Programming Hierarchy and Linear Programming"
+title: "[Optimization] 3. Linear Programming"
+description: "Linear Programming"
 author: "유성현"
 date: "2026-03-11"
 categories: [Optimization]
@@ -13,123 +13,482 @@ format:
     theme: cosmo
 ---
 
-# 1. Introduction: 볼록 최적화(Convex Optimization)의 계층 구조
+이번 강의에서는 다음 세 가지를 다룹니다.
 
-* 최적화(Optimization) 이론, 그중에서도 **볼록 최적화(Convex Optimization)**는 머신러닝, 계량경제학, 그리고 오퍼레이션 리서치(OR) 등 수많은 응용 분야의 뼈대를 이루는 핵심적인 수학적 도구입니다. 우리가 다루고자 하는 다양한 최적화 문제들은 그 특성에 따라 여러 가지 "클래스(Classes)"로 분류될 수 있으며 , 이들은 독립적으로 존재하는 것이 아니라 서로 포함 관계를 가지는 **계층 구조(Hierarchy)**를 이룹니다.
+- **볼록 최적화 계층 구조 (Convex programming hierarchy)**
+- **선형계획법 소개 (Introduction to linear programming)**
+- **선형계획법으로 표현되는 최적화 문제들 (Optimization problems represented as linear programs)**
 
-* 주요 볼록 최적화 문제 클래스들은 다음과 같습니다:
-  * **선형 계획법 (Linear Programming, LP)** 
-  * **볼록 2차 계획법 (Convex Quadratic Programming, QP)** 
-  * **2차 뿔 계획법 (Second-order Cone Programming, SOCP)** 
-  * **반정부호 계획법 (Semidefinite Programming, SDP)** 
-  * **원뿔 계획법 (Conic Programming)** 
+선형계획법(Linear Programming, LP)은 모든 볼록 최적화 문제 가운데 **가장 단순하면서도 가장 널리 쓰이는** 부류입니다. 그러나 이 강의의 핵심 메시지는 "LP는 단순하다"가 아니라, **"겉보기에 비선형으로 보이는 많은 문제들이 사실은 LP로 변환될 수 있다"**는 점입니다. 이 변환의 이론적 근거가 바로 뒤에서 다룰 **선형 표현 가능성(linear representability)**입니다.
 
-![Figure: 볼록 최적화 문제들의 계층 구조를 나타내는 벤 다이어그램. 가장 바깥쪽의 넓은 범주인 "Convex optimization" 내부에 "Conic programming"이 있으며, 그 안으로 차례대로 "Semidefinite programming", "Second-order cone programming", "Convex quadratic programming"이 중첩되어 포함되어 있습니다. 그리고 이 모든 구조의 가장 안쪽, 즉 가장 특수하고 기본적인 형태로서 "Linear programming (선형 계획법)"이 자리 잡고 있음을 시각적으로 보여줍니다.](./images/convex_hierarchy.png) 
+# 1. 볼록 최적화 계층 구조 (Convex Programming Hierarchy)
 
-* 이 계층 구조에서 알 수 있듯, **선형 계획법(LP)은 볼록 최적화의 가장 기본적이고 특수한 형태**입니다. LP를 완벽하게 이해하는 것은 더 복잡한 비선형적 제약이나 목적 함수를 가지는 상위 클래스의 문제(QP, SOCP 등)를 다루기 위한 필수적인 첫걸음이 됩니다.
+우리가 지금까지 살펴본 응용 사례들 외에도, 볼록 최적화 문제에는 흥미로운 여러 "부류(classes)"가 존재합니다. 이번 절에서는 다음 다섯 가지를 다룹니다.
 
----
+- **선형계획법 (Linear programming, LP)**
+- **이차계획법 (Quadratic programming, QP)**
+- **반정부호계획법 (Semidefinite programming, SDP)**
+- **원뿔계획법 (Conic programming)**
+- **이차원뿔계획법 (Second-order cone programming, SOCP)**
 
-# 2. 선형 계획법 (Linear Programming)의 수학적 정의와 기하학
+이들은 서로 무관한 별개의 문제가 아니라, **포함 관계로 이루어진 하나의 계층(hierarchy)**을 형성합니다. 즉, 더 안쪽에 있는 부류는 더 바깥쪽 부류의 **특수한 경우(special case)**입니다.
 
-## 2.1. 수학적 공식화 (Mathematical Formulation)
+![Figure 3.1: 볼록 최적화 문제 부류들의 계층 구조. 가장 바깥의 큰 상자가 전체 **볼록 최적화(Convex optimization)**를 나타내며, 그 안으로 갈수록 더 좁은 부류가 중첩되어 들어갑니다. 포함 순서는 바깥에서 안쪽으로 **원뿔계획법(Conic) ⊃ 반정부호계획법(SDP) ⊃ 이차원뿔계획법(SOCP) ⊃ 볼록 이차계획법(Convex QP) ⊃ 선형계획법(LP)** 입니다. 이 그림이 전달하는 핵심은, 가장 안쪽의 LP가 모든 부류 중 가장 제약이 강한(가장 단순한) 특수 사례이며, 따라서 LP에서 성립하는 성질은 더 바깥 부류로 일반화하며 연구할 수 있다는 점입니다.](./images/fig3_1_hierarchy.png)
 
-* **선형 계획법(LP)**은 목적 함수(Objective function)와 모든 제약 조건(Constraints)이 결정 변수(Decision variables)의 선형 결합으로 이루어진 최적화 문제를 의미합니다. 
-* 표준적인 LP 문제는 다음과 같은 행렬 형태(Matrix form)로 표현됩니다:
+이 계층 구조는 다음과 같이 직관적으로 이해할 수 있습니다.
+
+- LP는 **선형 목적함수 + 선형 부등식 제약**만을 허용합니다.
+- QP는 여기에 **이차(볼록) 목적함수**를 허용하므로 LP를 포함합니다.
+- SOCP는 **이차원뿔(second-order cone) 제약**을 허용하여 볼록 QP를 포함합니다.
+- SDP는 **반정부호 행렬 제약**을 허용하여 SOCP를 포함합니다.
+- Conic programming은 일반적인 **볼록 원뿔(convex cone)** 제약을 다루는 가장 넓은 틀입니다.
+
+# 2. 선형계획법 (Linear Programming)
+
+**선형계획(linear program, LP)**은 다음과 같은 형태의 최적화 문제입니다.
 
 $$
 \begin{aligned}
-\min_{x} \quad & c^\top x \\
-\text{s.t.} \quad & Ax \ge b
+\text{minimize} \quad & c^\top x \\
+\text{subject to} \quad & Ax \geq b
 \end{aligned}
+\tag{P}
 $$
 
-* 이 수식을 구성하는 요소들의 수학적 의미를 단계별로 분해해 보겠습니다:
-  * 1.  **결정 변수 벡터 $x \in \mathbb{R}^d$**: 우리가 최적화 과정을 통해 그 값을 찾아내야 하는 미지수들의 벡터입니다.
-  * 2.  **선형 목적 함수 $c^\top x$**: 최소화(Minimize)하고자 하는 대상입니다. 여기서 $c \in \mathbb{R}^d$는 각 결정 변수의 비용(Cost)이나 가중치를 나타내는 벡터이며, $c^\top x = c_1 x_1 + c_2 x_2 + \dots + c_d x_d$의 선형 결합(내적) 형태를 가집니다.
-  * 3.  **선형 제약 조건 $Ax \ge b$**: 결정 변수들이 만족해야 하는 부등식 시스템입니다. 
-      * 행렬 $A$는 $n \times d$ 차원을 가집니다.
-      * 행렬 $A$의 각 행(Row)을 $a_1^\top, a_2^\top, \dots, a_n^\top$이라고 합시다.
-      * 벡터 $b$는 $b = (b_1, \dots, b_n)^\top \in \mathbb{R}^n$입니다.
-      * 따라서 행렬 부등식 $Ax \ge b$는 사실 $n$개의 개별적인 선형 부등식 $a_i^\top x \ge b_i \quad (i = 1, \dots, n)$ 들의 모음입니다.
+각 구성 요소의 의미를 하나씩 살펴보겠습니다.
 
-## 2.2. 기하학적 해석 (Geometric Interpretation)
+- $c^\top x$ 는 **선형 목적함수(linear objective function)**입니다.
+- $Ax \geq b$ 는 **선형 제약들의 시스템**으로, 구체적으로는 $a_1^\top x \geq b_1, \dots, a_n^\top x \geq b_n$ 을 한꺼번에 쓴 것입니다. 여기서 $a_1^\top, \dots, a_n^\top$ 은 행렬 $A$ 의 **행(rows)**이고, $b = (b_1, \dots, b_n)^\top$ 입니다.
 
-* 기하학적으로 하나의 선형 부등식 $a_i^\top x \ge b_i$는 $d$-차원 공간을 둘로 나누는 평면(초평면, Hyperplane)을 기준으로 한쪽 공간, 즉 **반공간(Half-space)**을 정의합니다.
-* 우리의 제약 조건은 이러한 반공간들을 모두 동시에 만족해야 하므로, 실현 가능 영역(Feasible Region) $P$는 이 반공간들의 교집합(Intersection)으로 형성됩니다.
-$$P = \{x \in \mathbb{R}^d : Ax \ge b\}$$
-* 이러한 선형 부등식들의 교집합으로 만들어진 다각/다면의 입체 도형을 수학적으로 **다면체(Polyhedron)**라고 부릅니다.
+### 실현가능영역은 다면체이다
 
-![Figure: 2차원 변수 공간에서의 선형 계획법을 기하학적으로 표현한 그림. 검은색 선분들로 둘러싸인 볼록 다각형 영역 P가 행렬 부등식 Ax >= b를 만족하는 실현 가능 영역(Feasible region, Polyhedron)입니다. 붉은색의 평행한 직선들은 목적 함수 c^T x의 등고선(Level sets)을 나타내며, 벡터 c의 반대 방향으로 이동할 때 값이 최소화됩니다. 이 과정에서 최적해는 다각형의 한 꼭짓점(파란색 점)에서 결정됨을 시각적으로 확인할 수 있습니다.](./images/lp_geometry.png) 
+이때 **실현가능영역(feasible region)**
 
-* 결론적으로, 선형 계획법을 푼다는 것은 **다면체 $P$ 내부에 존재하는 수많은 점들 중에서, 선형 목적 함수 $c^\top x$의 값을 가장 작게 만드는 어떤 점(보통 꼭짓점)을 찾는 과정**으로 기하학적으로 해석할 수 있습니다.
+$$
+P = \left\{ x \in \mathbb{R}^d : Ax \geq b \right\}
+$$
 
----
+는 **다면체(polyhedron)**가 됩니다. 그 이유는 다음과 같습니다.
 
-# 3. 실생활 응용 문제의 LP 모델링
+- 각 제약 $a_i^\top x \geq b_i$ 는 하나의 **반공간(half-space)** $\{x \in \mathbb{R}^d : a_i^\top x \geq b_i\}$ 을 정의합니다.
+- $P$ 는 이러한 반공간들 $i = 1, \dots, n$ 의 **교집합(intersection)**입니다.
+- 유한 개의 반공간의 교집합이 바로 다면체의 정의입니다.
 
-* 이론적인 수식이 실제 문제에 어떻게 적용되는지, 두 가지 고전적인 비즈니스 및 오퍼레이션 문제를 통해 선형 계획법으로 모델링하는 과정을 살펴보겠습니다.
+따라서 선형계획이란 결국 **"다면체 안에서 선형 함수를 최소화하는 점을 찾는 문제"**라고 요약할 수 있습니다. 변수가 2개인 경우의 기하학적 그림은 다음과 같습니다.
 
-## 3.1. 생산 계획 문제 (Production Planning)
+![Figure 3.2: 변수가 2개($x \in \mathbb{R}^2$)인 선형계획의 기하학적 그림. 검은 다각형이 실현가능영역 $P = \{x \in \mathbb{R}^d : Ax \geq b\}$ 인 다면체를 나타냅니다. 왼쪽 위 화살표로 표시된 $c$ 는 목적함수의 계수 벡터(최소화 방향의 반대 방향)이며, 빗금 친 평행선들은 목적값이 일정한 **등위선(level lines)** $c^\top x = \text{const}$ 를 의미합니다. 이 등위선들을 $c$ 의 반대 방향으로 밀어 넣을 때 다면체와 마지막으로 닿는 점인 우측의 파란 점이 **최적해**입니다. 이 그림의 핵심 메시지는, 선형계획의 최적해가 다면체의 **꼭짓점(vertex)**에서 발생한다는 사실을 시각적으로 보여 준다는 점입니다.](./images/fig3_2_lp_geometry.png)
 
-* 한 제조 회사에서 $d$가지 종류의 제품을 생산하여 이윤을 창출하고자 합니다. 생산을 위해서는 $m$가지 종류의 자원(Resource)이 필요합니다.
+### Example 3.1: 생산 계획 문제 (Production planning)
 
-### **[주어진 데이터]**
-* **자원 소모량 행렬 $A$**: $A = (a_{ij})_{i \in [m], j \in [d]}$. 즉, 제품 $j$를 1단위 생산하는 데 특정 자원 $i$가 $a_{ij}$ 만큼 필요합니다.
-* **자원 가용량 벡터 $b$**: $b = (b_1, \dots, b_m)^\top$. 현재 회사가 보유하고 있는 자원 $i$의 총량은 최대 $b_i$입니다.
-* **이윤 벡터 $p$**: $p = (p_1, \dots, p_d)^\top$. 제품 $j$를 1단위 생산하여 얻는 이윤은 $p_j$입니다.
+**상황 설정**
 
-### **[결정 변수]**
-* $x_j$: 제품 $j$의 생산 수량 (단, 생산량은 음수가 될 수 없으므로 $x_j \ge 0$).
+- 한 회사가 $d$ 가지 제품을 생산합니다.
+- 제품 $j \in [d]$ 한 단위를 생산하려면 자원 $i \in [m]$ 이 $a_{ij}$ 단위 필요합니다.
+- 회사는 자원 $i$ 를 $b_i$ 단위 보유하고 있습니다.
+- 제품 $j$ 한 단위의 이윤은 $p_j$ 입니다.
+- **목표:** 총 이윤을 최대화한다.
 
-### **[목표]**
-* 회사의 총 이윤을 극대화(Maximize)해야 합니다.
-$$\text{Total Profit} = p_1 x_1 + p_2 x_2 + \dots + p_d x_d = p^\top x$$
+이를 다음 LP로 정식화할 수 있습니다.
 
-### **[제약 조건]**
-* 각 자원의 사용량은 가용량을 초과할 수 없습니다. 자원 $i$에 대해:
-$$a_{i1}x_1 + a_{i2}x_2 + \dots + a_{id}x_d \le b_i \quad \forall i \in [m]$$
-* 이는 행렬 형태로 $Ax \le b$가 됩니다.
-
-### **[최종 LP 수식]**
-* 이 내용을 종합하면 다음과 같은 형태의 선형 계획법이 도출됩니다:
 $$
 \begin{aligned}
-\max_{x} \quad & p^\top x \\
-\text{s.t.} \quad & Ax \le b \\
-& x \ge 0
+\text{maximize} \quad & p^\top x \\
+\text{subject to} \quad & Ax \leq b \\
+& x \geq 0
 \end{aligned}
 $$
 
-## 3.2. 운송 문제 (Transportation Problem)
+- $x_j$ : 생산할 제품 $j$ 의 수량
+- $A = (a_{ij})_{i \in [m], j \in [d]}$ : **자원 소비 행렬(resource consumption matrix)**
+- $b = (b_1, \dots, b_m)^\top$ : **자원 가용량 벡터(resource availability vector)**
+- $p = (p_1, \dots, p_d)^\top$ : **이윤 벡터(profit vector)**
 
-* 이번에는 공간적으로 분리된 여러 거점 간의 물류 비용을 최적화하는 문제를 살펴보겠습니다. 회사에 $m$개의 공장(Factory)과 $d$개의 창고(Warehouse)가 있습니다.
+제약 $Ax \leq b$ 는 "각 자원의 사용량이 보유량을 넘지 못한다"는 의미이고, $x \geq 0$ 은 "음수 생산은 불가능하다"는 자연스러운 비음(nonnegativity) 제약입니다.
 
-### **[주어진 데이터]**
-* **공급량 $s_i$**: 공장 $i$에서 최대로 공급(생산)할 수 있는 상품의 단위 수입니다 ($i \in [m]$).
-* **수요량 $d_j$**: 창고 $j$에서 반드시 필요로 하는 상품의 수요 단위 수입니다 ($j \in [d]$).
-* **운송 비용 $c_{ij}$**: 공장 $i$에서 창고 $j$로 상품을 1단위 운송하는 데 발생하는 비용입니다.
+### Example 3.2: 수송 문제 (Transportation problem)
 
-### **[결정 변수]**
-* $x_{ij}$: 공장 $i$에서 창고 $j$로 운송할 실제 상품의 양. (마찬가지로 $x_{ij} \ge 0$ ).
+**상황 설정**
 
-### **[목표]**
-* 수요와 공급 제약을 모두 만족시키면서 **총 운송 비용을 최소화(Minimize)**해야 합니다.
-$$\text{Total Cost} = \sum_{i=1}^{m} \sum_{j=1}^{d} c_{ij} x_{ij}$$ 
+- $m$ 개의 공장과 $d$ 개의 창고가 있습니다.
+- 각 공장 $i \in [m]$ 은 $s_i$ 단위의 물품을 **공급(supply)**합니다.
+- 각 창고 $j \in [d]$ 는 $d_j$ 단위의 **수요(demand)**를 가집니다.
+- 공장 $i$ 에서 창고 $j$ 로 한 단위를 수송하는 비용은 $c_{ij}$ 입니다.
+- **목표:** 공급·수요 제약을 만족하면서 총 수송 비용을 최소화한다.
 
-### **[제약 조건]**
-* 1.  **공급 제약(Supply constraints):** 각 공장 $i$에서 출발하는 상품의 총합은 그 공장의 최대 공급량 $s_i$를 초과할 수 없습니다.
-    $$\sum_{j=1}^{d} x_{ij} \le s_i, \quad \text{for } i = 1, \dots, m$$ 
-* 2.  **수요 제약(Demand constraints):** 각 창고 $j$에 도착하는 상품의 총합은 반드시 그 창고의 수요 $d_j$를 충족해야 합니다.
-    $$\sum_{i=1}^{m} x_{ij} \ge d_j, \quad \text{for } j = 1, \dots, d$$ 
+이를 다음 LP로 정식화합니다.
 
-### **[최종 LP 수식]**
-* 물류 운송 문제는 다음과 같은 LP로 완벽하게 표현됩니다:
 $$
 \begin{aligned}
-\min_{x} \quad & \sum_{i=1}^{m} \sum_{j=1}^{d} c_{ij} x_{ij} \\
-\text{s.t.} \quad & \sum_{j=1}^{d} x_{ij} \le s_i, \quad i = 1, \dots, m \\
-& \sum_{i=1}^{m} x_{ij} \ge d_j, \quad j = 1, \dots, d \\
-& x_{ij} \ge 0, \quad i=1,\dots,m, \; j=1,\dots,d 
+\text{minimize} \quad & \sum_{i=1}^{m} \sum_{j=1}^{d} c_{ij} x_{ij} \\
+\text{subject to} \quad & \sum_{j=1}^{d} x_{ij} \leq s_i, \quad i = 1, \dots, m \\
+& \sum_{i=1}^{m} x_{ij} \geq d_j, \quad j = 1, \dots, d \\
+& x_{ij} \geq 0, \quad i = 1, \dots, m,\ j = 1, \dots, d
 \end{aligned}
-$$ 
+$$
+
+여기서 $x_{ij}$ 는 공장 $i$ 에서 창고 $j$ 로 수송하는 물품의 양입니다. 각 제약의 해석은 다음과 같습니다.
+
+- $\sum_{j} x_{ij} \leq s_i$ : 공장 $i$ 에서 나가는 총량은 공급량 $s_i$ 를 넘을 수 없습니다. (**공급 제약**)
+- $\sum_{i} x_{ij} \geq d_j$ : 창고 $j$ 로 들어오는 총량은 수요 $d_j$ 이상이어야 합니다. (**수요 제약**)
+
+# 3. LP로 표현되는 최적화 문제들 (Optimization Problems Represented as Linear Programs)
+
+일반적으로 어떤 종류의 의사결정 문제가 선형계획으로 모델링될 수 있을까요? 다음과 같은 일반적인 최적화 문제를 떠올려 봅시다.
+
+$$
+\begin{aligned}
+\min \quad & f(x) \\
+\text{s.t.} \quad & g_i(x) \leq 0, \quad i \in [m], \\
+& x \in \mathbb{R}^d.
+\end{aligned}
+$$
+
+- 만약 목적함수 $f$ 와 제약함수 $g_1, \dots, g_m$ 이 **모두 선형**이라면, 이 문제는 그 자체로 선형계획입니다.
+- 그러나 핵심은, **함수가 비선형이더라도 문제를 LP로 표현할 수 있는 경우가 많다**는 사실입니다.
+
+### 동기를 주는 문제: 클러스터 중심 찾기
+
+다음 문제를 생각해 봅시다. $V = \{v^1, \dots, v^n\} \subseteq \mathbb{R}^d$ 를 한 클러스터에 속한 벡터들의 집합이라 하겠습니다. 우리의 목표는 이 클러스터의 **중심(center)**을 결정하는 것입니다. 여기서 중심이란, $n$ 개의 벡터까지의 거리가 최소가 되는 점입니다. **어떤 거리 척도(distance metric)를 쓰느냐**에 따라 중심이 달라집니다.
+
+점 $x$ 와 집합 $V$ 사이의 거리를 $d(x)$ 라 정의하고, 다음을 풀어 중심을 정합니다.
+
+$$
+\min_x \ d(x).
+$$
+
+이제 네 가지 거리 함수를 고려합니다.
+
+1. 각 벡터 $v^i$ 까지의 **$\ell_1$-거리의 합**:
+$$
+d(x) = \sum_{i \in [n]} \left\| x - v^i \right\|_1.
+$$
+
+2. 각 벡터 $v^i$ 까지의 **$\ell_\infty$-거리의 합**:
+$$
+d(x) = \sum_{i \in [n]} \left\| x - v^i \right\|_\infty.
+$$
+
+3. 벡터들까지의 **최대 $\ell_1$-거리**:
+$$
+d(x) = \max_{i \in [n]} \left\| x - v^i \right\|_1.
+$$
+
+4. 벡터들까지의 **최대 $\ell_\infty$-거리**:
+$$
+d(x) = \max_{i \in [n]} \left\| x - v^i \right\|_\infty.
+$$
+
+벡터 노름(norm)은 선형이 아니므로, 위 거리 함수들도 선형이 아닙니다. 그럼에도 불구하고, **네 경우 모두 선형계획으로 다시 쓸 수 있음**을 곧 보게 됩니다. 이를 가능하게 하는 일반 원리가 다음에 나올 **선형 표현 가능성**입니다.
+
+## 3.1 선형 표현 가능 함수 (Linearly Representable Functions)
+
+### 에피그래프(epigraph)의 복습
+
+함수 $f : \mathbb{R}^d \to \mathbb{R}$ 의 **에피그래프(epigraph)**는 다음과 같이 정의됩니다.
+
+$$
+\operatorname{epi}(f) = \left\{ (x, t) \in \mathbb{R}^d \times \mathbb{R} : f(x) \leq t \right\} \subseteq \mathbb{R}^{d+1}.
+$$
+
+직관적으로 에피그래프는 **함수 그래프의 "위쪽 영역"** 전체를 모은 집합입니다.
+
+### 선형 표현 가능성의 정의
+
+함수 $f : \mathbb{R}^d \to \mathbb{R}$ 가 **선형 표현 가능(linearly representable)**하다는 것은, 그 에피그래프 $\operatorname{epi}(f)$ 가 **유한 개의 선형 부등식 시스템**으로 표현된다는 뜻입니다. 즉,
+
+$$
+\operatorname{epi}(f) = \left\{ (x, t) \in \mathbb{R}^d \times \mathbb{R} : \exists\, y \in \mathbb{R}^p \ \text{s.t.}\ Ax + Dy + ht \leq r \right\}
+$$
+
+를 만족하는 $A \in \mathbb{R}^{\ell \times d}$, $D \in \mathbb{R}^{\ell \times p}$, 그리고 $h, r \in \mathbb{R}^\ell$ 이 존재하는 경우입니다.
+
+- 여기서 선형 표현에 등장하는 변수 $y$ 를 **보조 변수(auxiliary variables)**라고 부릅니다.
+- 우리가 원하는 것은 변수 $(x, y, t)$ 가 선형 부등식 $Ax + Dy + ht \leq r$ 을 만족하는 것이지만, $\operatorname{epi}(f)$ 자체는 그중 **$(x, t)$ 성분만** 모은 집합이라는 점에 유의해야 합니다. (이 "성분만 추출"하는 연산이 바로 §3.2의 사영입니다.)
+
+### Theorem 3.3: 선형 표현 가능 함수의 LP 재정식화
+
+> **정리 3.3.** 최적화 문제
+> $$
+> \min \left\{ f(x) : g_i(x) \leq 0,\ \forall i \in [m] \right\}
+> $$
+> 는, 목적함수와 제약함수가 모두 **선형 표현 가능**하다면 선형계획으로 재정식화할 수 있다.
+
+**증명 (단계별 유도)**
+
+- **(1) 에피그래프 트릭으로 목적함수 선형화.** 목적은 $f(x)$ 의 최소화입니다. 보조 변수 $t \in \mathbb{R}$ 를 도입하면, "$f(x)$ 를 최소화"하는 것은 "추가 제약 $f(x) \leq t$ 하에서 $t$ 를 최소화"하는 것과 **동치**입니다. 따라서
+
+$$
+\min \left\{ t : f(x) \leq t,\ g_i(x) \leq 0,\ \forall i \in [m] \right\}.
+$$
+
+- **(2) 에피그래프 언어로 다시 쓰기.** 제약 $f(x) \leq t$ 는 $(x,t) \in \operatorname{epi}(f)$ 와 같고, $g_i(x) \leq 0$ 은 $(x, 0) \in \operatorname{epi}(g_i)$ 와 같습니다. 그러므로
+
+$$
+\min \left\{ t : (x, t) \in \operatorname{epi}(f),\ (x, 0) \in \operatorname{epi}(g_i),\ \forall i \in [m] \right\}.
+$$
+
+- **(3) 선형 표현 대입.** $f$ 가 선형 표현 가능하므로
+
+$$
+\operatorname{epi}(f) = \left\{ (x, t) : \exists\, y \in \mathbb{R}^p \ \text{s.t.}\ Ax + Dy + ht \leq r \right\}
+$$
+
+를 만족하는 $A, D, h, r$ 이 존재합니다. 마찬가지로 $g_1, \dots, g_m$ 도 선형 표현 가능하므로
+
+$$
+\operatorname{epi}(g_i) = \left\{ (x, t) : \exists\, z^i \in \mathbb{R}^{q_i} \ \text{s.t.}\ A^i x + D^i z^i + h^i t \leq r^i \right\}
+$$
+
+를 만족하는 $A^i \in \mathbb{R}^{\ell_i \times d}$, $D^i \in \mathbb{R}^{\ell_i \times p}$, $h^i, r^i \in \mathbb{R}^{\ell_i}$ 이 존재합니다.
+
+- **(4) 모두 합쳐 LP 완성.** $(x, 0) \in \operatorname{epi}(g_i)$ 이므로 $t = 0$ 을 대입하면 $h^i t$ 항이 사라집니다. 결과적으로 문제는 다음과 동치가 됩니다.
+
+$$
+\begin{aligned}
+\min \quad & t \\
+\text{s.t.} \quad & Ax + Dy + ht \leq r, \\
+& A^i x + D^i z^i \leq r^i, \quad i \in [m], \\
+& x \in \mathbb{R}^d,\ t \in \mathbb{R},\ y \in \mathbb{R}^p,\ z^i \in \mathbb{R}^{q_i},\ i \in [m].
+\end{aligned}
+$$
+
+이것은 변수 $(x, t, y, z^1, \dots, z^m)$ 에 대한 **선형계획**입니다. $\qquad \blacksquare$
+
+> **핵심 정리:** 정의상 임의의 선형 함수는 당연히 선형 표현 가능합니다. 하지만 더 흥미로운 사실은, **비선형이면서도 선형 표현 가능한 함수가 존재한다**는 점입니다. 다음 예시가 이를 보여 줍니다.
+
+### Example 3.4: 비선형이지만 선형 표현 가능한 함수
+
+$$
+f(x_1, x_2, x_3) = \max\{x_1,\ 2x_2 + x_3,\ 2x_3 - x_1\}.
+$$
+
+이 함수의 에피그래프는
+
+$$
+\left\{ (x_1, x_2, x_3, t) : \max\{x_1,\ 2x_2 + x_3,\ 2x_3 - x_1\} \leq t \right\}.
+$$
+
+여기서 핵심 관찰은, **세 항의 최댓값이 $t$ 이하라는 것은 세 항이 각각 모두 $t$ 이하라는 것과 동치**라는 점입니다. 즉,
+
+$$
+\max\{x_1,\ 2x_2 + x_3,\ 2x_3 - x_1\} \leq t
+\iff
+x_1 \leq t,\quad 2x_2 + x_3 \leq t,\quad 2x_3 - x_1 \leq t.
+$$
+
+따라서
+
+$$
+\operatorname{epi}(f) = \left\{ (x_1, x_2, x_3, t) : x_1 \leq t,\ 2x_2 + x_3 \leq t,\ 2x_3 - x_1 \leq t \right\}
+$$
+
+이고, 이는 유한 개의 선형 부등식 시스템이므로 $f$ 는 선형 표현 가능합니다. (이때 보조 변수 $y$ 는 필요하지 않습니다.)
+
+## 3.2 사영 (Projection)
+
+선형 표현 $\operatorname{epi}(f)$ 에는 보조 변수 $y$ 가 등장합니다. 그렇다면 **"보조 변수를 가진다"는 것은 무엇을 의미할까요?** 이 질문에 답하기 위해 **사영(projection)** 개념을 도입합니다.
+
+### 사영의 정의
+
+집합 $C \subseteq \mathbb{R}^d \times \mathbb{R}^p$ 를 생각하고, 그 안의 각 점을 $(x, y)$ ($x \in \mathbb{R}^d$, $y \in \mathbb{R}^p$)로 표기합니다. 그러면 $C$ 를 **$x$-공간($\mathbb{R}^d$)으로 사영(project)**한 것은 다음과 같이 정의됩니다.
+
+$$
+\operatorname{proj}_x(C) = \left\{ x \in \mathbb{R}^d : \exists\, y \in \mathbb{R}^p \ \text{s.t.}\ (x, y) \in C \right\}.
+$$
+
+이 연산을 **"$y$ 변수를 소거(projecting out)한다"**고도 표현합니다. 즉 사영은 "$y$ 에 대한 정보를 잊고, $x$ 성분만 남기는" 연산입니다.
+
+![Figure 3.3: $\mathbb{R}^2$ 의 집합 $C$ 를 $\mathbb{R}$ 로 사영하는 예시. 평면 위의 붉은 영역이 집합 $C$ 이고, 가로축($x$축) 위에 굵게 표시된 붉은 선분이 $C$ 의 사영 $\operatorname{proj}_x(C)$ 입니다. 즉 $C$ 에 속하는 어떤 점 $(x, y)$ 라도 가질 수 있는 $x$ 좌표 전체를 가로축에 "그림자처럼" 내린 것이 사영입니다. 이 그림의 핵심 메시지는, 세로 방향($y$)으로 빛을 비추어 집합을 바닥($x$축)에 투영했을 때 생기는 그림자가 바로 보조 변수 $y$ 를 소거한 결과라는 직관을 제공한다는 점입니다.](./images/fig3_3_projection.png)
+
+### 에피그래프는 다면체의 사영이다
+
+다시 $\operatorname{epi}(f)$ 로 돌아와, $(x, y, t)$ 성분을 모두 가진 집합을 정의합니다.
+
+$$
+P = \left\{ (x, y, t) \in \mathbb{R}^d \times \mathbb{R}^p \times \mathbb{R} : Ax + Dy + ht \leq r \right\}.
+$$
+
+그러면 $\operatorname{epi}(f)$ 는 바로 이 $P$ 를 $(x, t)$-공간으로 사영한 것입니다. 여기서 $P$ 는 (선형 부등식들로 정의되므로) **다면체**이고, $\operatorname{epi}(f)$ 는 그 다면체의 사영입니다. 따라서 다음과 같이 **선형 표현 가능성을 재해석**할 수 있습니다.
+
+> 함수가 선형 표현 가능하다는 것은, 그 **에피그래프가 어떤 다면체의 사영**으로 표현된다는 것과 같다.
+
+그런데 다행히도, **다면체의 사영은 여전히 다면체**입니다. 이는 다음 결과의 따름정리이며, **Fourier–Motzkin 소거법**으로 알려져 있습니다.
+
+### Theorem 3.5: Fourier–Motzkin 소거법
+
+> **정리 3.5 (Fourier–Motzkin elimination).** 다면체의 사영은 여전히 다면체이다.
+
+**증명 (한 변수 소거의 구체적 절차)**
+
+다면체 $P = \{(x, y) \in \mathbb{R}^d \times \mathbb{R}^p : Ax + Dy \leq r\}$ 가 주어졌을 때, $\operatorname{proj}_x(P)$ 가 다면체임을 보이면 됩니다. $A = (a_{ij})_{i \in [\ell], j \in [d]}$, $D = (d_{ij})_{i \in [\ell], j \in [p]}$ 라 두겠습니다.
+
+먼저 보조 변수 $y_1$ 을 소거하기 위해, 부등식들을 **$y_1$ 의 계수 $d_{i1}$ 의 부호**에 따라 세 그룹으로 나눕니다.
+
+- **그룹 1 (Group 1):** $d_{i1} > 0$ 인 $i \in I_1$,
+- **그룹 2 (Group 2):** $d_{i1} < 0$ 인 $i \in I_2$,
+- **그룹 3 (Group 3):** $d_{i1} = 0$ 인 $i \in I_3$.
+
+부등식들을 다음과 같이 다시 쓸 수 있습니다($y_1$ 항을 분리하여 표시).
+
+$$
+\begin{aligned}
+a_{i1}x_1 + \sum_{j=2}^{d} a_{ij}x_j + d_{i1}y_1 + \sum_{j=2}^{p} d_{ij}y_j \leq r_i, \quad & i \in I_1, \\
+a_{i1}x_1 + \sum_{j=2}^{d} a_{ij}x_j + d_{i1}y_1 + \sum_{j=2}^{p} d_{ij}y_j \leq r_i, \quad & i \in I_2, \\
+a_{i1}x_1 + \sum_{j=2}^{d} a_{ij}x_j + \sum_{j=2}^{p} d_{ij}y_j \leq r_i, \quad & i \in I_3.
+\end{aligned}
+$$
+
+$P$ 를 $x$-공간으로 사영하면
+
+$$
+\operatorname{proj}_x(P) = \left\{ x : \exists\, y_1, \dots, y_p \ \text{s.t.}\ Ax + Dy \leq r \right\}.
+$$
+
+이제 **$y_1$ 을 소거**하는 절차는 다음과 같습니다.
+
+- **그룹 1 (계수 양수)** 부등식은 $y_1$ 에 대한 **상계(upper bound)**를 제공합니다.
+- **그룹 2 (계수 음수)** 부등식은 $y_1$ 에 대한 **하계(lower bound)**를 제공합니다.
+- 따라서 임의의 $i \in I_1$ 과 $j \in I_2$ 쌍에 대해, 그룹 1의 부등식에 $-d_{j1}$($>0$)을 곱하고 그룹 2의 부등식에 $d_{i1}$($>0$)을 곱한 뒤 **더하면**, $y_1$ 항이 정확히 상쇄됩니다. 그 결과 $y_1$ 을 포함하지 않는 새로운 선형 부등식을 얻습니다.
+- **그룹 3**의 부등식들은 애초에 $y_1$ 을 포함하지 않으므로 그대로 유지합니다.
+
+이렇게 $y_1$ 을 소거한 뒤, 같은 과정을 $y_2$ 에 대해 반복하고, 이를 모든 보조 변수가 사라질 때까지 진행합니다. 최종적으로 남는 선형 부등식들의 집합이 $\operatorname{proj}_x(P)$ 를 정의하며, 이는 (유한 개의 선형 부등식으로 정의되므로) **다면체**입니다. $\qquad \blacksquare$
+
+> **함의:** 이 정리 덕분에, 선형 표현에서 보조 변수 $y$ 를 마음껏 도입해도 됩니다. 보조 변수를 소거하더라도 결과는 여전히 다면체이므로, "보조 변수를 가진 선형 표현"은 "보조 변수가 없는 다면체"와 본질적으로 동등한 표현력을 가집니다.
+
+## 3.3 흔히 쓰이는 선형 표현 가능 함수들 (Common Linearly Representable Functions)
+
+앞 절에서 몇 가지 선형 표현 가능 함수를 보았습니다. 이번 절에서는 자주 등장하는 함수들을 더 정리합니다.
+
+### 절댓값 (Absolute value)
+
+$f(x) = |x|$ ($x \in \mathbb{R}$) 를 생각합니다. 핵심 관찰은 $|x| \leq t$ 가 $-t \leq x \leq t$ 와 동치라는 점입니다. 따라서
+
+$$
+\operatorname{epi}(f) = \left\{ (x, t) \in \mathbb{R} \times \mathbb{R} : -t \leq x \leq t \right\}.
+$$
+
+### 볼록 조각선형 함수 (Convex piecewise linear functions)
+
+$f(x) = \max_{i \in [n]} \{ c_i^\top x + d_i \}$ 를 생각합니다. **최댓값이 $t$ 이하**라는 것은 **모든 항이 각각 $t$ 이하**라는 것과 동치이므로, $f(x) \leq t \iff c_i^\top x + d_i \leq t,\ \forall i \in [n]$. 따라서
+
+$$
+\operatorname{epi}(f) = \left\{ (x, t) \in \mathbb{R}^d \times \mathbb{R} : c_i^\top x + d_i \leq t,\ \forall i \in [n] \right\}.
+$$
+
+(Example 3.4가 바로 이 형태의 특수 사례입니다.)
+
+### $\ell_1$-노름 ($\ell_1$-norm)
+
+$f(x) = \|x\|_1 = \sum_{j \in [d]} |x_j|$ 를 생각합니다. $\|x\|_1 \leq t$ 라는 것은, **보조 변수** $s_1, \dots, s_d \in \mathbb{R}$ 가 존재하여
+
+$$
+|x_j| \leq s_j,\ \forall j \in [d], \qquad \sum_{j \in [d]} s_j \leq t
+$$
+
+를 만족하는 것과 동치입니다. 절댓값 부분을 다시 풀어 쓰면
+
+$$
+-s_j \leq x_j \leq s_j,\ \forall j \in [d], \qquad \sum_{j \in [d]} s_j \leq t.
+$$
+
+여기서 $s_j$ 는 각 좌표 $|x_j|$ 의 상계 역할을 하는 보조 변수이며, 이 표현은 정확히 선형 부등식 시스템입니다.
+
+### $\ell_\infty$-노름 ($\ell_\infty$-norm)
+
+$f(x) = \|x\|_\infty = \max_{j \in [d]} |x_j|$ 를 생각합니다. $\|x\|_\infty \leq t$ 라는 것은 **모든 좌표의 절댓값이 $t$ 이하**라는 것과 동치이므로,
+
+$$
+|x_j| \leq t,\ \forall j \in [d]
+\quad\iff\quad
+-t \leq x_j \leq t,\ \forall j \in [d].
+$$
+
+($\ell_1$ 과 달리 보조 변수가 필요 없다는 점에 주목하세요.)
+
+### Theorem 3.6: 선형 표현 가능성을 보존하는 연산
+
+선형 표현 가능 함수들로부터 더 복잡한 선형 표현 가능 함수를 **조립**할 수 있게 해 주는 연산들이 있습니다.
+
+> **정리 3.6.** $f_1(x), \dots, f_n(x)$ 가 선형 표현 가능 함수라 하자. 그러면 다음이 성립한다.
+>
+> 1. 임의의 **비음 스칼라** $\alpha_1, \dots, \alpha_n \geq 0$ 에 대해, 선형 결합
+> $$ f(x) = \sum_{i \in [n]} \alpha_i f_i(x) $$
+> 는 선형 표현 가능하다.
+>
+> 2. **점별 최댓값(point-wise maximum)**
+> $$ f(x) = \max_{i \in [n]} f_i(x) $$
+> 는 선형 표현 가능하다.
+
+**증명**
+
+**(1) 비음 선형 결합.** 각 $f_i$ 의 값을 받아 줄 보조 변수 $s_i$ 를 도입합니다.
+
+$$
+\begin{aligned}
+\operatorname{epi}(f)
+&= \left\{ (x, t) \in \mathbb{R}^d \times \mathbb{R} : \sum_{i \in [n]} \alpha_i f_i(x) \leq t \right\} \\
+&= \left\{ (x, t) : \exists\, s \in \mathbb{R}^n \ \text{s.t.}\ \sum_{i \in [n]} \alpha_i s_i \leq t,\ f_i(x) \leq s_i,\ \forall i \in [n] \right\} \\
+&= \left\{ (x, t) : \exists\, s \in \mathbb{R}^n \ \text{s.t.}\ \sum_{i \in [n]} \alpha_i s_i \leq t,\ (x, s_i) \in \operatorname{epi}(f_i),\ \forall i \in [n] \right\}.
+\end{aligned}
+$$
+
+두 번째 등호에서, "$\sum \alpha_i f_i(x) \leq t$" 를 직접 다루는 대신 각 $f_i(x) \leq s_i$ 로 풀고 $\sum \alpha_i s_i \leq t$ 를 추가했습니다. $\alpha_i \geq 0$ 이므로 $f_i(x) \leq s_i$ 이면 $\sum \alpha_i f_i(x) \leq \sum \alpha_i s_i \leq t$ 가 성립하여 동치가 유지됩니다. 마지막 줄에서 $f_i(x) \leq s_i$ 는 $(x, s_i) \in \operatorname{epi}(f_i)$ 이고, 각 $f_i$ 가 선형 표현 가능하므로 전체가 유한 개의 선형 부등식으로 표현됩니다.
+
+**(2) 점별 최댓값.** 최댓값이 $t$ 이하라는 것은 모든 항이 $t$ 이하라는 것과 동치이므로,
+
+$$
+\begin{aligned}
+\operatorname{epi}(f)
+&= \left\{ (x, t) \in \mathbb{R}^d \times \mathbb{R} : \max_{i \in [n]} f_i(x) \leq t \right\} \\
+&= \left\{ (x, t) : f_i(x) \leq t,\ \forall i \in [n] \right\} \\
+&= \left\{ (x, t) : (x, t) \in \operatorname{epi}(f_i),\ \forall i \in [n] \right\}.
+\end{aligned}
+$$
+
+두 경우 모두, $f_1, \dots, f_n$ 이 선형 표현 가능하므로 $\operatorname{epi}(f)$ 가 유한 개의 선형 부등식 시스템으로 표현됩니다. $\qquad \blacksquare$
+
+## (보충) 클러스터 중심 문제를 실제 LP로 변환하기
+
+이제 §3 도입부의 네 가지 클러스터 중심 문제를 위 도구들로 마무리하겠습니다. 각 거리 함수는 **노름 표현(§3.3) + 합/최댓값 보존 연산(Theorem 3.6) + 에피그래프 트릭(Theorem 3.3)**의 조합으로 LP가 됩니다.
+
+- **(1) $\ell_1$-거리의 합** $d(x) = \sum_i \|x - v^i\|_1$. 각 좌표 차이의 상계 보조 변수 $w^i_k$ 를 도입하면:
+$$
+\begin{aligned}
+\min_{x,\, w} \quad & \sum_{i \in [n]} \sum_{k \in [d]} w^i_k \\
+\text{s.t.} \quad & -w^i_k \leq x_k - v^i_k \leq w^i_k, \quad \forall i \in [n],\ \forall k \in [d].
+\end{aligned}
+$$
+
+- **(2) $\ell_\infty$-거리의 합** $d(x) = \sum_i \|x - v^i\|_\infty$. 각 $i$ 마다 하나의 상계 $t_i$ 만 두면 됩니다:
+$$
+\begin{aligned}
+\min_{x,\, t} \quad & \sum_{i \in [n]} t_i \\
+\text{s.t.} \quad & -t_i \leq x_k - v^i_k \leq t_i, \quad \forall i \in [n],\ \forall k \in [d].
+\end{aligned}
+$$
+
+- **(3) 최대 $\ell_1$-거리** $d(x) = \max_i \|x - v^i\|_1$. 전체 최댓값을 받는 단일 변수 $t$ 와 좌표별 보조 변수 $w^i_k$ 를 둡니다:
+$$
+\begin{aligned}
+\min_{x,\, t,\, w} \quad & t \\
+\text{s.t.} \quad & -w^i_k \leq x_k - v^i_k \leq w^i_k, \quad \forall i, k, \\
+& \sum_{k \in [d]} w^i_k \leq t, \quad \forall i \in [n].
+\end{aligned}
+$$
+
+- **(4) 최대 $\ell_\infty$-거리** $d(x) = \max_i \|x - v^i\|_\infty$. 가장 간결합니다:
+$$
+\begin{aligned}
+\min_{x,\, t} \quad & t \\
+\text{s.t.} \quad & -t \leq x_k - v^i_k \leq t, \quad \forall i \in [n],\ \forall k \in [d].
+\end{aligned}
+$$
+
+네 경우 모두 처음에는 비선형 노름으로 정의되었지만, 결국 **선형 목적 + 선형 제약**으로 정확히 환원되었습니다. 이것이 이번 강의가 보여 주려던 핵심, 즉 **"선형 표현 가능성이 LP의 모델링 범위를 비선형 문제로 넓혀 준다"**는 메시지입니다.
+
+# 마무리 (Summary)
+
+- LP는 볼록 최적화 계층의 **가장 안쪽(가장 단순한)** 부류이지만, 표현력은 결코 좁지 않습니다.
+- **선형 표현 가능성**은 "에피그래프가 (다면체의 사영으로서) 유한 개 선형 부등식으로 표현됨"을 뜻하며, 이것이 성립하면 **Theorem 3.3**에 의해 LP로 재정식화할 수 있습니다.
+- **사영**과 **Fourier–Motzkin 소거법(Theorem 3.5)**은 보조 변수의 자유로운 도입을 정당화합니다 — 소거 후에도 결과는 다면체입니다.
+- 절댓값, 볼록 조각선형 함수, $\ell_1$/$\ell_\infty$-노름 등은 대표적인 선형 표현 가능 함수이며, **비음 선형 결합과 점별 최댓값(Theorem 3.6)**으로 더 복잡한 함수를 조립할 수 있습니다.

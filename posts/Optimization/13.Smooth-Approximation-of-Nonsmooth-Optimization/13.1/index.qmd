@@ -1,6 +1,6 @@
 ---
-title: "[Optimization] 13. Smooth Approximation of Nonsmooth Optimization (Part 1)"
-description: "Smooth approximation"
+title: "[Optimization] 13. Smooth Approximation of Nonsmooth Optimization"
+description: "Smooth Approximation of Nonsmooth Optimization"
 author: "유성현"
 date: "2026-04-20"
 categories: [Optimization]
@@ -13,111 +13,426 @@ format:
     theme: cosmo
 ---
 
-# 들어가며
+## 들어가며
 
-* 머신러닝과 최적화 이론에서 자주 등장하는 $L_1$ 노름이나 Hinge Loss와 같은 함수들은 특정 지점에서 미분이 불가능한 비매끄러운(Nonsmooth) 형태를 가집니다. 이러한 함수에 일반적인 Subgradient Method를 적용하면 수렴 속도가 $O(1/\sqrt{T})$로 제한된다는 단점이 있습니다. 
+지난 강의에서 우리는 **근접 경사하강법(Proximal Gradient Descent)** 을 통해 $g + h$ 형태의 합성 최적화 문제를 다루는 방법을 살펴보았습니다. 여기서 $g$는 매끄러운(smooth) 부분, $h$는 미분 불가능하지만 근접 연산자(prox operator)를 명시적으로 계산할 수 있는 부분이었습니다.
 
-* 이번 포스트에서는 미분 불가능한 함수를 부드러운 함수로 근사하는 **평활화 근사(Smooth Approximation)** 기법을 다루며 , 이를 통해 비매끄러운 목적 함수의 최적화 문제를 어떻게 효율적으로 해결할 수 있는지 살펴봅니다.
+이번 강의의 핵심 질문은 다음과 같습니다.
 
----
+* 매끄러운 볼록 최소화에서 **Nesterov 가속**이 $O(1/T)$를 $O(1/T^2)$로 끌어올렸던 것처럼, 합성 문제에서도 같은 가속을 적용할 수 있을까요?
+* 그 답이 바로 **FISTA (Fast ISTA)** 이며, 이를 정당화하는 핵심 정리(Theorem 13.2)를 단계별로 유도해 보겠습니다.
+* 마지막으로, 근접 경사법의 한 특수 사례인 **근접점 알고리즘(Proximal Point Algorithm)** 을 살펴보고, 놀랍게도 경사하강법 자체가 이 알고리즘의 한 인스턴스로 해석될 수 있음을 확인하겠습니다.
 
-# 1. 평활화 근사 (Smooth Approximation)
+# 1. 개요 (Outline)
 
-## 1.1. $(p, q)$-평활화 가능 함수의 정의
+이번 강의에서 다루는 주제는 다음과 같습니다.
 
-* 어떤 볼록 함수 $f$가 임의의 $\mu > 0$에 대하여 다음 두 가지 조건을 만족하는 볼록 함수 $f_\mu$를 가질 때, 함수 $f$는 **$(p, q)$-smoothable** 하다고 정의합니다:
-  * 1. $f_\mu$는 $(p/\mu)$-smooth 함수입니다. (즉, 기울기가 $\frac{p}{\mu}$-Lipschitz 연속임을 의미합니다.)
-  * 2. 모든 $x$에 대하여 $f_\mu(x) \le f(x) \le f_\mu(x) + q\mu$ 를 만족합니다.
+* **Nesterov의 가속(Nesterov's acceleration)** 과 **FISTA**
 
-* 이 정의는 파라미터 $\mu$를 조절함에 따라 원래 함수와의 오차($q\mu$)와 곡률의 상한($p/\mu$) 간의 트레이드오프를 형성함을 보여줍니다.
+# 2. LASSO: 최소 절댓값 수축 및 선택 연산자 (Least Absolute Shrinkage and Selection Operator)
 
-## 1.2. Example 1: $L_1$ 노름과 Huber 함수
+## 2.1 문제 정의와 동기
 
-* $L_1$ 노름의 부드러운 근사로 널리 알려진 **Huber 함수** $L_\mu(z)$는 다음과 같이 정의됩니다.
+LASSO의 정식화(formulation)는 다음과 같이 주어집니다.
 
 $$
-L_\mu(z) = \begin{cases} 
-\frac{z^2}{2\mu}, & \text{if } |z| \le \mu \\
-|z| - \frac{\mu}{2}, & \text{otherwise}
-\end{cases}
-$$ 
+\min_{\theta} \; \frac{1}{n}\|y - X\theta\|_2^2 + \lambda\|\theta\|_1.
+$$
 
-* 이 함수는 모든 실수 $z$에 대하여 다음 부등식을 만족합니다:
-$$L_\mu(z) \le |z| \le L_\mu(z) + \frac{\mu}{2}$$ 
+* 여기서 첫 번째 항 $\frac{1}{n}\|y - X\theta\|_2^2$는 **데이터 적합도(data fidelity)** 를 측정하는 최소제곱 오차 항입니다.
+* 두 번째 항 $\lambda\|\theta\|_1$은 **$\ell_1$-정규화(regularization)** 항으로, 계수 벡터 $\theta$를 희소(sparse)하게 만들어 변수 선택(variable selection) 효과를 냅니다.
 
-* 또한 $L_\mu$의 2차 도함수 상한을 고려할 때 이 함수는 $(1/\mu)$-smooth 합니다. 따라서 1차원 절댓값 함수 $|\cdot|$는 $(1, 1/2)$-smoothable 합니다. 
+이 목적 함수는 $\ell_1$-정규화 항 $\lambda\|\theta\|_1$ 때문에 **미분 불가능(non-differentiable)** 하며, 따라서 **비매끄러운(non-smooth)** 함수입니다.
 
-* 이를 다차원 공간 $\mathbb{R}^d$로 확장하여 $f_\mu(x) = \sum_{i=1}^d L_\mu(x_i)$로 정의하면 , $f_\mu$ 역시 $(1/\mu)$-smooth 하며, 각 차원별로 오차가 누적되어 다음을 만족합니다:
-$$f_\mu(x) \le \|x\|_1 \le f_\mu(x) + \frac{d\mu}{2}$$ 
-* 결과적으로 $L_1$ 노름 $\|\cdot\|_1$은 **$(1, d/2)$-smoothable** 합니다.
+* 다만 이 함수는 여전히 **볼록(convex)** 하고, $\|\theta\|_1$의 **하위미분(subdifferential)** 에 대한 명확한 특성화를 알고 있으므로, 단순하게 **하위경사법(subgradient method)** 을 적용할 수 있습니다.
+* 그러나 하위경사법은 가법 오차(additive error)를 $\epsilon$ 이하로 줄이기 위해 $O(1/\epsilon^2)$ 번의 반복을 필요로 합니다. 이는 상당히 느린 속도입니다.
 
-## 1.3. Example 2: $L_2$ 노름
+## 2.2 근접 경사하강법과 ISTA
 
-* 다차원 벡터 $x \in \mathbb{R}^d$에 대한 $L_2$ 노름 $g(x) = \|x\|_2$는 다음과 같은 함수로 근사할 수 있습니다.
+지난 강의에서 논의했듯, 목적 함수의 첫 번째 항은 매끄러운 반면, 다른 부분은 그 하위미분이 잘 이해되어 있습니다. 따라서 다음과 같이 분해하여 **근접 경사하강법**을 적용할 수 있습니다.
 
-$$f_\mu(x) = \sqrt{\|x\|_2^2 + \mu^2} - \mu$$ 
+* 매끄러운 부분: $g(\theta) = \frac{1}{n}\|y - X\theta\|_2^2$
+* 비매끄러운 부분: $h(\theta) = \lambda\|\theta\|_1$
 
-* 이 함수에 대한 오차 바운드는 삼각 부등식을 통해 다음처럼 도출됩니다:
-$$f_\mu(x) \le \|x\|_2 \le f_\mu(x) + \mu$$ 
+여기서 $h(\theta) = \lambda\|\theta\|_1$에 대응하는 근접 연산자는 다음과 같이 **수축 연산자(shrinkage operator)** 로 명시적으로 주어집니다.
 
-* 매끄러움(Smoothness)을 증명하기 위해 그래디언트와 헤시안을 계산해보겠습니다:
-  * **1차 미분:** $\nabla f_\mu(x) = \frac{x}{\sqrt{\|x\|_2^2 + \mu^2}}$ 
-  * **2차 미분:** $\nabla^2 f_\mu(x) = \frac{1}{\sqrt{\|x\|_2^2 + \mu^2}}I - \frac{1}{(\|x\|_2^2 + \mu^2)^{3/2}}xx^\top$ 
+$$
+\operatorname{prox}_{\eta\lambda\|\cdot\|_1}(\theta) = \Bigl( \underbrace{\max\{0,\ |\theta_i| - \eta\lambda\}}_{\text{수축 연산자 (shrinkage)}} \cdot \operatorname{sign}(\theta_i) \Bigr)_{i\in[d]}.
+$$
 
-* 여기서 두 번째 항인 $xx^\top$ 기반의 행렬은 양의 준정부호(Positive Semi-Definite) 행렬이므로 빼는 효과를 가져와 다음 부등식이 성립합니다.
-$$\nabla^2 f_\mu(x) \le \frac{1}{\sqrt{\|x\|_2^2 + \mu^2}}I \le \frac{1}{\mu}I$$ 
+### 수축 연산자에 대한 보충 설명
 
-* 따라서 $f_\mu$는 $(1/\mu)$-smooth 하며, $\|\cdot\|_2$는 차원 수 $d$에 의존하지 않는 **$(1, 1)$-smoothable** 함수입니다.
+이 연산자는 각 좌표 $\theta_i$에 대해 독립적으로 작동합니다.
 
-## 1.4. 립시츠 함수의 Moreau-Yosida 평활화 (Smoothing Lipschitz functions)
+* 만약 $|\theta_i| \le \eta\lambda$이면, $\max\{0, |\theta_i| - \eta\lambda\} = 0$이 되어 해당 좌표는 **정확히 0으로 수축**됩니다. 이것이 LASSO가 희소 해를 만들어내는 메커니즘입니다.
+* 만약 $|\theta_i| > \eta\lambda$이면, 부호를 유지한 채 크기를 $\eta\lambda$만큼 줄입니다(soft-thresholding).
 
-* 어떤 상수 $L > 0$에 대해 $f$가 $L$-Lipschitz 볼록 함수라고 가정해봅시다. 이 함수는 항상 $(1, L^2/2)$-smoothable 함을 증명할 수 있습니다.
+근접 경사 알고리즘은 이 합성 문제에 대해 다음의 갱신 규칙(update rule)으로 진행됩니다.
 
-* 이를 위해 임의의 $\eta > 0$에 대하여 **Moreau-Yosida smoothing**을 다음과 같이 정의합니다.
-$$f_\eta(x) := \inf_u \left\{ f(u) + \frac{1}{2\eta}\|u - x\|_2^2 \right\}$$ 
+$$
+\theta_{t+1} = \operatorname{prox}_{\eta h}\bigl(\theta_t - \eta\nabla g(\theta_t)\bigr).
+$$
 
-* 이 함수가 올바른 근사임을 보이기 위해 오차의 상하한을 확인합니다.
-  * 1. **상한 (Upper Bound):** $u = x$를 대입하면 $f_\eta(x) \le f(x) + \frac{1}{2\eta}\|x - x\|_2^2 = f(x)$ 가 성립합니다.
-  * 2. **하한 (Lower Bound):** Subgradient $g_x \in \partial f(x)$의 성질을 이용하면 $f(u) - f(x) \ge g_x^\top(u - x)$를 얻을 수 있습니다.
-     $$f_\eta(x) - f(x) = \inf_u \left\{ f(u) - f(x) + \frac{1}{2\eta}\|u - x\|_2^2 \right\}$$ 
-     $$\ge \inf_u \left\{ g_x^\top(u - x) + \frac{1}{2\eta}\|u - x\|_2^2 \right\} = -\frac{\eta}{2}\|g_x\|_2^2$$ 
-* 결과적으로 $f_\eta$는 $(1/\eta)$-smooth 함수가 됩니다.
+> **ISTA**: LASSO에 적용된 근접 경사하강법을 특별히 **반복 수축-임계화 알고리즘(Iterative Shrinkage-Thresholding Algorithm, ISTA)** 이라고 부릅니다.
 
----
+# 3. Nesterov의 가속과 FISTA (Nesterov's Acceleration and FISTA)
 
-# 2. 비매끄러운 함수의 평활화 기반 최적화
+## 3.1 가속의 동기
 
-## 2.1. 문제 정의 및 알고리즘
+우리는 근접 경사하강법이 $O(1/T)$의 수렴률을 달성한다는 것을 관찰했고, 따라서 ISTA가 LASSO를 $O(1/T)$의 속도로 푼다는 것을 알고 있습니다.
 
-* 다음과 같은 최적화 문제를 고려해봅시다.
-$$\text{minimize} \quad g(x) + h(x)$$ 
-  * 여기서 $g$는 볼록 함수이면서 $(p,q)$-smoothable 하고, $h$는 단순한 볼록 함수입니다. 
+* 사실 우리는 **Nesterov의 가속**에 기반하여 더 빠른 수렴률을 이끌어낼 수 있습니다.
+* Nesterov의 가속 경사하강법(accelerated gradient descent)이 매끄러운 볼록 최소화에 대해 $O(1/T^2)$의 수렴률을 보장한다는 점은 이미 언급한 바 있습니다.
+* 이번 절에서는 **가속된 버전의 근접 경사하강법**이, $g$가 매끄럽고 볼록한 합성 볼록 최소화 문제에 대해 $O(1/T^2)$의 속도를 달성함을 보이겠습니다.
 
-* 이 문제를 직접 푸는 대신, 앞서 배운 평활화 함수를 사용하여 다음의 **근사 문제(Approximate problem)**를 풉니다.
-$$\text{minimize} \quad g_\mu(x) + h(x)$$ 
-* 이때 $g_\mu$는 $(p/\mu)$-smooth하며 $g_\mu \le g \le g_\mu + q\mu$를 만족합니다. 목적 함수가 부드러운 텀과 일반 볼록 텀의 합이 되었으므로, **Nesterov 가속 기울기 하강법 (Accelerated Gradient Descent)**을 적용하여 효율적으로 최소화할 수 있습니다.
+## 3.2 모멘텀의 도입
 
-## 2.2. 수렴 속도 증명 (Theorem 14.3)
+$g$가 $\beta$-매끄럽고 볼록하며 $h$가 볼록할 때, $g + h$를 최소화하는 근접 경사하강법은 다음의 갱신 규칙을 따릅니다.
 
-> **정리:** Nesterov 알고리즘을 $T-1$번 반복하여 얻은 결과를 $x_T$라고 할 때, 다음 오차 상한이 성립합니다.
-> 
-> $$g(x_T) + h(x_T) - \min_x \{g(x) + h(x)\} \le q\mu + \frac{p}{\mu T^2} \|x_1 - x^*\|_2^2$$ 
+$$
+x_{t+1} = \operatorname{prox}_{h/\beta}\Bigl(x_t - \frac{1}{\beta}\nabla g(x_t)\Bigr).
+$$
 
-### **증명 (Proof):**
-* $x^*$를 원래 목적함수 $g+h$의 최적해(minimizer)라고 합시다. Nesterov 알고리즘의 일반적인 수렴 보장에 의해, 근사 목적 함수에 대한 수렴 바운드는 다음과 같습니다.
-$$g_\mu(x_T) + h(x_T) - g_\mu(x^*) - h(x^*) \le \frac{p}{\mu T^2} \|x_1 - x^*\|_2^2$$ 
+가속의 핵심 아이디어는 다음과 같습니다.
 
-* 평활화 함수의 오차 바운드 조건 $g_\mu \le g \le g_\mu + q\mu$에 따라 다음 두 부등식을 얻습니다:
-  * 1. $g_\mu(x_T) \ge g(x_T) - q\mu$ 
-  * 2. $g_\mu(x^*) \le g(x^*)$ 
+* 현재 점 $x_t$에 곧바로 경사하강 갱신을 적용하는 대신, **$x_{t-1}$에서 $x_t$로 이동했던 모멘텀(momentum) 방향**을 따라 $x_t$로부터 조금 더 멀리 이동합니다.
+* 가중치 $\gamma_t > 0$에 대해, 모멘텀이 적용된 보조점 $y_t$를 다음과 같이 정의합니다.
 
-* 이 부등식들을 위의 수렴 식에 대입하면 다음과 같습니다.
-$$g_\mu(x_T) + h(x_T) - g_\mu(x^*) - h(x^*) \ge g(x_T) - q\mu + h(x_T) - g(x^*) - h(x^*)$$ 
+$$
+y_t = x_t + \gamma_t(x_t - x_{t-1}).
+$$
 
-* 항들을 이항하여 정리하면 원하는 최종 부등식을 얻습니다.
-$$g(x_T) + h(x_T) - g(x^*) - h(x^*) \le q\mu + \frac{p}{\mu T^2} \|x_1 - x^*\|_2^2$$ 
+* 그런 다음, 이 $y_t$에 근접 경사하강 갱신을 적용하여 다음 점 $x_{t+1}$을 얻습니다.
 
-* **최적화 결과 해석:**
-  * 이 바운드를 최소화하기 위해 $\mu$를 반복 횟수 $T$에 반비례하도록 $\mu = 1/T$로 설정하면, 최종 오차는 다음과 같이 스케일링됩니다.
-  $$g(x_T) + h(x_T) - \min_x \{g(x) + h(x)\} = O(1/T)$$ 
-  * 이는 기존의 기본적인 Subgradient Method가 가지는 수렴 속도인 $O(1/\sqrt{T})$를 크게 개선한 결과입니다.
+$$
+x_{t+1} = \operatorname{prox}_{h/\beta}\Bigl(y_t - \frac{1}{\beta}\nabla g(y_t)\Bigr).
+$$
+
+## 3.3 알고리즘: 가속 근접 경사하강법
+
+위에서 설명한 절차를 정리하면 다음과 같습니다.
+
+> **Algorithm 1: Accelerated Proximal Gradient Descent**
+>
+> 1. $x_1 \in \mathbb{R}^d$를 초기화하고, $x_0 = x_1$로 설정한다.
+> 2. **for** $t = 1, \dots, T$ **do**
+>    * 어떤 $\gamma_t > 0$에 대해 $y_t = x_t + \gamma_t(x_t - x_{t-1})$.
+>    * $x_{t+1} = \operatorname{prox}_{h/\beta}\bigl(y_t - \frac{1}{\beta}\nabla g(y_t)\bigr)$.
+> 3. **end for**
+> 4. $x_{T+1}$을 반환한다.
+
+## 3.4 핵심 보조정리 (Lemma 13.1)
+
+가속 근접 경사하강법의 수렴 결과를 제시하기 위해, 먼저 다음 보조정리가 필요합니다. 이 보조정리는 근접 연산자의 최적성 조건을 부등식 형태로 표현한 것으로, 정리 증명의 핵심 도구가 됩니다.
+
+> **Lemma 13.1.** $u, v \in \mathbb{R}^d$라 하자. 그러면 모든 $z \in \mathbb{R}^d$에 대해
+> $$
+> \frac{1}{\eta}\bigl(\operatorname{prox}_{\eta h}(x) - x\bigr)^\top\bigl(z - \operatorname{prox}_{\eta h}(x)\bigr) + h(z) \ge h\bigl(\operatorname{prox}_{\eta h}(x)\bigr).
+> $$
+
+**증명.**
+
+**(1) 근접 연산자의 정의.** 정의에 의해 근접 연산자는 다음 최소화 문제의 해입니다.
+
+$$
+\operatorname{prox}_{\eta h}(x) = \operatorname*{arg\,min}_{z\in\mathbb{R}^d} \Bigl\{ h(z) + \frac{1}{2\eta}\|x - z\|_2^2 \Bigr\}.
+$$
+
+**(2) 최적성 조건.** 위 목적 함수에서 매끄러운 항 $\frac{1}{2\eta}\|x - z\|_2^2$의 그래디언트는 $z = \operatorname{prox}_{\eta h}(x)$에서 $\frac{1}{\eta}(\operatorname{prox}_{\eta h}(x) - x)$입니다. 비매끄러운 항 $h$의 하위미분을 고려하면, 볼록 최적화의 1차 최적성 조건에 의해 임의의 $z \in \mathbb{R}^d$와 $g \in \partial h(\operatorname{prox}_{\eta h}(x))$에 대해 다음이 성립합니다.
+
+$$
+\Bigl( g + \frac{1}{\eta}\bigl(\operatorname{prox}_{\eta h}(x) - x\bigr) \Bigr)^\top \bigl(z - \operatorname{prox}_{\eta h}(x)\bigr) \ge 0.
+$$
+
+> 직관적으로, 최적점에서는 "이동하려는 방향 $z - \operatorname{prox}_{\eta h}(x)$"이 목적 함수를 감소시킬 수 없다는 의미입니다.
+
+이 식을 풀어쓰면 다음 부등식을 얻습니다.
+
+$$
+\frac{1}{\eta}\bigl(\operatorname{prox}_{\eta h}(x) - x\bigr)^\top \bigl(z - \operatorname{prox}_{\eta h}(x)\bigr) + g^\top\bigl(z - \operatorname{prox}_{\eta h}(x)\bigr) \ge 0. \tag{i}
+$$
+
+**(3) $h$의 볼록성.** $h$가 볼록하고 $g \in \partial h(\operatorname{prox}_{\eta h}(x))$이므로, 하위미분의 정의에 의해
+
+$$
+h(z) \ge h\bigl(\operatorname{prox}_{\eta h}(x)\bigr) + g^\top\bigl(z - \operatorname{prox}_{\eta h}(x)\bigr). \tag{ii}
+$$
+
+**(4) 결합.** 부등식 (i)과 (ii)를 더하면, 공통으로 등장하는 $g^\top(z - \operatorname{prox}_{\eta h}(x))$ 항이 소거되면서 보조정리의 부등식이 도출됩니다. $\blacksquare$
+
+## 3.5 주요 수렴 정리 (Theorem 13.2)
+
+> **Theorem 13.2.** $f = g + h$라 하고, $g$는 $\ell_2$ 노름에서 $\beta$-매끄러운 볼록 함수, $h$는 볼록 함수라 하자. $\eta$와 $\gamma_t$를 다음과 같이 설정한다.
+> $$
+> \eta = \frac{1}{\beta}, \qquad \gamma_t = \frac{t-2}{t+1}.
+> $$
+> 그러면 Algorithm 1이 반환하는 $x_{T+1}$은 다음을 만족한다.
+> $$
+> f(x_{T+1}) - f(x^*) \le \frac{2\beta}{(T+1)^2}\|x_1 - x^*\|_2^2,
+> $$
+> 여기서 $x^*$는 $\min_{x\in\mathbb{R}^d} f(x)$의 최적해이다.
+
+**증명.**
+
+**(1) 동등한 3-시퀀스 형태로의 재구성.** Algorithm 1은 다음과 동등합니다.
+
+$$
+\begin{aligned}
+y_t &= (1 - \lambda_t)x_t + \lambda_t v_t, \\
+x_{t+1} &= \operatorname{prox}_{h/\beta}\Bigl(y_t - \frac{1}{\beta}\nabla g(y_t)\Bigr), \\
+v_{t+1} &= x_t + \frac{1}{\lambda_t}(x_{t+1} - x_t),
+\end{aligned}
+$$
+
+여기서 $\lambda_t = \dfrac{2}{t+1}$입니다.
+
+이것이 성립하는 이유를 확인해 보겠습니다. 첫 번째 식에서 $y_t = x_t + \lambda_t(v_t - x_t)$이고, $v_t$의 정의를 대입하면
+
+$$
+\begin{aligned}
+\lambda_t(v_t - x_t)
+&= \lambda_t\Bigl( \Bigl(\frac{1}{\lambda_{t-1}} - 1\Bigr)x_t + \Bigl(1 - \frac{1}{\lambda_{t-1}}\Bigr)x_{t-1} \Bigr) \\
+&= \frac{\lambda_t(1 - \lambda_{t-1})}{\lambda_{t-1}}(x_t - x_{t-1}) \\
+&= \gamma_t(x_t - x_{t-1}).
+\end{aligned}
+$$
+
+즉, 이 3-시퀀스 형태는 원래의 모멘텀 갱신 $y_t = x_t + \gamma_t(x_t - x_{t-1})$과 정확히 일치합니다. 또한 $\lambda_1 = 1$이고, $t \ge 2$에 대해 다음 성질이 성립합니다.
+
+$$
+\frac{1 - \lambda_t}{\lambda_t^2} \le \frac{1}{\lambda_{t-1}^2}. \tag{$\star$}
+$$
+
+**(2) 매끄러움 부등식.** $g$가 $\beta$-매끄러우므로, $y_t$ 주변에서의 2차 상계(quadratic upper bound)에 의해
+
+$$
+g(x_{t+1}) \le g(y_t) + \nabla g(y_t)^\top(x_{t+1} - y_t) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2.
+$$
+
+**(3) Lemma 13.1의 적용.** $\eta = 1/\beta$이고 $x_{t+1} = \operatorname{prox}_{h/\beta}(y_t - \frac{1}{\beta}\nabla g(y_t))$임을 이용해 보조정리를 적용하면, 임의의 $z \in \mathbb{R}^d$에 대해
+
+$$
+\begin{aligned}
+h(x_{t+1})
+&\le h(z) + \beta\Bigl(x_{t+1} - y_t + \frac{1}{\beta}\nabla g(y_t)\Bigr)^\top(z - x_{t+1}) \\
+&= h(z) + \nabla g(y_t)^\top(z - x_{t+1}) + \beta(x_{t+1} - y_t)^\top(z - x_{t+1}).
+\end{aligned}
+$$
+
+**(4) 두 부등식의 결합.** (2)와 (3)을 더하면
+
+$$
+\begin{aligned}
+f(x_{t+1})
+&\le h(z) + g(y_t) + \nabla g(y_t)^\top(z - y_t) + \beta(x_{t+1} - y_t)^\top(z - x_{t+1}) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2 \\
+&\le f(z) + \beta(x_{t+1} - y_t)^\top(z - x_{t+1}) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2,
+\end{aligned}
+$$
+
+여기서 두 번째 부등식은 $g$의 볼록성, 즉 $g(z) \ge g(y_t) + \nabla g(y_t)^\top(z - y_t)$를 이용한 것입니다.
+
+**(5) 두 가지 대입: $z = x^*$와 $z = x_t$.**
+
+$$
+\begin{aligned}
+f(x_{t+1}) - f(x^*) &\le \beta(x_{t+1} - y_t)^\top(x^* - x_{t+1}) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2, \\
+f(x_{t+1}) - f(x_t) &\le \beta(x_{t+1} - y_t)^\top(x_t - x_{t+1}) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2.
+\end{aligned}
+$$
+
+**(6) 가중합과 완전제곱(complete the square).** 첫 번째 부등식에 $\lambda_t$를, 두 번째 부등식에 $(1 - \lambda_t)$를 곱하여 더하면
+
+$$
+\begin{aligned}
+&f(x_{t+1}) - f(x^*) - (1 - \lambda_t)\bigl(f(x_t) - f(x^*)\bigr) \\
+&\quad\le \beta(x_{t+1} - y_t)^\top\bigl(\lambda_t x^* + (1 - \lambda_t)x_t - x_{t+1}\bigr) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2 \\
+&\quad= \frac{\beta}{2}(x_{t+1} - y_t)^\top\bigl(2\lambda_t x^* + 2(1 - \lambda_t)x_t - x_{t+1} - y_t\bigr) \\
+&\quad= \frac{\beta}{2}\|y_t - (1 - \lambda_t)x_t - \lambda_t x^*\|_2^2 - \frac{\beta}{2}\|x_{t+1} - (1 - \lambda_t)x_t - \lambda_t x^*\|_2^2 \\
+&\quad= \frac{\beta\lambda_t^2}{2}\|v_t - x^*\|_2^2 - \frac{\beta\lambda_t^2}{2}\|v_{t+1} - x^*\|_2^2.
+\end{aligned}
+$$
+
+> 마지막 등식에서 $y_t - (1-\lambda_t)x_t = \lambda_t v_t$와 $x_{t+1} - (1-\lambda_t)x_t = \lambda_t v_{t+1}$ 관계를 사용하여, 두 노름 항을 $\lambda_t^2$로 묶어내었습니다.
+
+**(7) 망원합(telescoping)을 위한 정리.** 양변을 $\lambda_t^2$로 나누어 정리하면
+
+$$
+\frac{1}{\lambda_t^2}\bigl(f(x_{t+1}) - f(x^*)\bigr) + \frac{\beta}{2}\|v_{t+1} - x^*\|_2^2 \le \frac{1 - \lambda_t}{\lambda_t^2}\bigl(f(x_t) - f(x^*)\bigr) + \frac{\beta}{2}\|v_t - x^*\|_2^2.
+$$
+
+이제 성질 ($\star$), 즉 $\frac{1-\lambda_t}{\lambda_t^2} \le \frac{1}{\lambda_{t-1}^2}$를 이용해 망원적으로 펼치면
+
+$$
+\begin{aligned}
+\frac{1}{\lambda_t^2}\bigl(f(x_{t+1}) - f(x^*)\bigr) + \frac{\beta}{2}\|v_{t+1} - x^*\|_2^2
+&\le \frac{1}{\lambda_{t-1}^2}\bigl(f(x_t) - f(x^*)\bigr) + \frac{\beta}{2}\|v_t - x^*\|_2^2 \\
+&\;\;\vdots \\
+&\le \frac{1}{\lambda_1^2}\bigl(f(x_2) - f(x^*)\bigr) + \frac{\beta}{2}\|v_2 - x^*\|_2^2 \\
+&\le \frac{1 - \lambda_1}{\lambda_1^2}\bigl(f(x_1) - f(x^*)\bigr) + \frac{\beta}{2}\|v_1 - x^*\|_2^2 \\
+&= \frac{\beta}{2}\|v_1 - x^*\|_2^2 = \frac{\beta}{2}\|x_1 - x^*\|_2^2.
+\end{aligned}
+$$
+
+> 마지막 줄에서 $\lambda_1 = 1$이므로 $1 - \lambda_1 = 0$이 되어 $f(x_1)$ 항이 사라지고, 초기화 $v_1 = x_1$에 의해 $\|v_1 - x^*\| = \|x_1 - x^*\|$가 됩니다.
+
+**(8) 결론.** $t = T$로 두고 비음수 항 $\frac{\beta}{2}\|v_{T+1} - x^*\|_2^2 \ge 0$을 버리면
+
+$$
+f(x_{T+1}) - f(x^*) \le \frac{\beta\lambda_T^2}{2}\|x_1 - x^*\|_2^2 = \frac{2\beta}{(T+1)^2}\|x_1 - x^*\|_2^2,
+$$
+
+여기서 $\lambda_T = \frac{2}{T+1}$를 대입하였습니다. 이로써 증명이 완료됩니다. $\blacksquare$
+
+## 3.6 수렴률 해석과 FISTA
+
+이 정리로부터 다음을 결론지을 수 있습니다.
+
+* 수렴률은 $O(1/T^2)$이며, 이는 **오라클 하한(oracle lower bound)** 과 일치합니다. 즉, 1차 정보(gradient)만을 사용하는 방법 중에서 이론적으로 최적입니다.
+* 오차를 $\epsilon$ 이하로 줄이는 데 필요한 반복 횟수는 $O(1/\sqrt{\epsilon})$입니다.
+
+> **FISTA (Fast ISTA)**: ISTA의 가속 버전을 의미합니다. 본질적으로 FISTA는 **LASSO에 적용된 가속 근접 경사하강법**입니다.
+
+ISTA와 FISTA의 복잡도를 비교하면 다음과 같습니다.
+
+* **ISTA**: $\epsilon$-근사 해로 수렴하는 데 $O(1/\epsilon)$ 번의 반복이 필요합니다.
+* **FISTA**: $O(1/\sqrt{\epsilon})$ 번의 반복이 필요합니다.
+
+## 3.7 실험적 비교
+
+300개의 특성 변수(feature variable)와 100개의 데이터 샘플로 구성된 무작위 인스턴스를 생성하여, 하위경사법, ISTA, FISTA를 비교한 결과는 아래 그림과 같습니다.
+
+![Figure 13.1: 무작위 LASSO 인스턴스(특성 300개, 샘플 100개)에 대해 하위경사법(빨강), ISTA(파랑), FISTA(초록)의 손실(LASSO Loss) 수렴을 반복 횟수(Iteration, 0~10000)에 따라 비교한 그래프입니다. 가로축은 반복 횟수, 세로축은 LASSO 손실값입니다. 초록색 FISTA 곡선이 약 1000회 이내에 가장 낮은 손실(약 5.5)로 가파르게 급강하하여 가장 빠른 수렴률을 보입니다. 파란색 ISTA 곡선은 그보다 완만하게 감소하지만 빨간색 하위경사법보다는 빠르며, 빨간색 하위경사법 곡선이 가장 느리게 감소합니다. 이 그래프는 $O(1/\sqrt{\epsilon})$ 복잡도의 FISTA가 $O(1/\epsilon)$의 ISTA보다, 그리고 ISTA가 $O(1/\epsilon^2)$의 하위경사법보다 실제로 우월함을 시각적으로 확인시켜 줍니다.](./images/lasso_convergence_comparison.png)
+
+그래프에서 확인할 수 있듯, **FISTA가 가장 빠른 수렴률**을 보이며, **ISTA 역시 하위경사법보다 빠릅니다.**
+
+# 4. 근접점 알고리즘 (Proximal Point Algorithm)
+
+## 4.1 동기: 근접 경사법의 특수 사례
+
+근접 경사법은 다음의 합성 최소화 문제에 대해 작동함을 기억합시다.
+
+$$
+\text{minimize}\quad f(x) = g(x) + h(x),
+$$
+
+갱신 규칙은
+
+$$
+x_{t+1} = \operatorname{prox}_{\eta h}\bigl(x_t - \eta\nabla g(x_t)\bigr).
+$$
+
+이번 절에서는 근접 경사법의 **특수 사례**인 **근접점 방법(proximal point method)** 과 그 쌍대 문제(dual problem)로의 응용을 논의합니다.
+
+핵심 관찰은, 닫힌 볼록 함수(closed convex function) $f$의 최소화를 다음과 같은 (자명한) 합성 최소화로 쓸 수 있다는 것입니다.
+
+$$
+\text{minimize}\quad f(x) = 0 + f(x).
+$$
+
+* 첫 번째 항 $g = 0$은 자명하게 매끄럽습니다.
+* 두 번째 항 $h = f$입니다.
+
+그러면 이에 대응하는 근접 경사 갱신은 다음과 같습니다.
+
+$$
+x_{t+1} = \operatorname{prox}_{\eta f}(x_t).
+$$
+
+> 이 갱신 규칙을 사용하는 알고리즘을 **근접점 방법(proximal point method)** 이라 합니다. $g = 0$이 매끄러우므로(실제로 $\beta = 0$으로 볼 수 있음), 근접점 알고리즘은 $O(1/T)$의 속도로 수렴합니다.
+
+## 4.2 알고리즘: 근접점 방법
+
+> **Algorithm 2: Proximal Point Algorithm**
+>
+> 1. $x_1$을 초기화한다.
+> 2. **for** $t = 1, \dots, T$ **do**
+>    * $x_{t+1} = \operatorname{prox}_{\eta f}(x_t)$로 갱신한다.
+> 3. **end for**
+> 4. $x_{T+1}$을 반환한다.
+
+## 4.3 임의의 함수를 이용한 일반화
+
+이론적으로는, 목적 함수가 $h_t$가 아니더라도 임의의 함수 $h_t$를 사용하여 근접점 알고리즘을 실행할 수 있습니다. 이 경우 갱신 규칙은 다음에 대응합니다.
+
+$$
+x_{t+1} = \operatorname{prox}_{\eta h_t}(x_t).
+$$
+
+즉, 각 시간 단계 $t$마다 가설적으로 서로 다른 함수 $h_t$를 사용할 수 있습니다. 이제 $f$의 $x = x_t$에서의 **1차 근사(first-order approximation)** 를 고려해 봅시다.
+
+$$
+h_t(x) = f(x_t) + \nabla f(x_t)^\top(x - x_t).
+$$
+
+# 5. 경사하강법의 재해석과 후방 갱신 (Gradient Descent as a Proximal Point Method)
+
+## 5.1 1차 근사를 이용한 근접점 갱신은 경사하강법이다
+
+볼록성에 의해 모든 $x$에 대해 $f(x) \ge h_t(x)$가 성립합니다(접평면은 볼록 함수의 하계). 그렇다면 $h_t$를 이용한 근접점 갱신은 무엇일까요?
+
+$$
+\begin{aligned}
+\operatorname{prox}_{\eta h_t}(x_t)
+&= \operatorname*{arg\,min}_{u} \Bigl\{ f(x_t) + \nabla f(x_t)^\top(u - x_t) + \frac{1}{2\eta}\|u - x_t\|_2^2 \Bigr\} \\
+&= x_t - \eta\nabla f(x_t).
+\end{aligned}
+$$
+
+> **유도 보충:** 위 목적 함수를 $u$에 대해 미분하여 0으로 두면, $\nabla f(x_t) + \frac{1}{\eta}(u - x_t) = 0$, 즉 $u = x_t - \eta\nabla f(x_t)$를 얻습니다. (상수항 $f(x_t)$와 $\nabla f(x_t)^\top x_t$는 $u$에 무관하므로 최소화에 영향을 주지 않습니다.)
+
+따라서, **$f$의 1차 근사를 사용한 근접점 알고리즘은 정확히 경사하강법(gradient descent)** 입니다. 즉, 경사하강법을 근접점 알고리즘의 한 인스턴스로 해석할 수 있습니다.
+
+## 5.2 근접점 방법과 경사하강법의 비교 (Lemma 13.3)
+
+이제 목적 함수 $f$를 그대로 사용한 근접점 알고리즘과, 경사하강법을 비교해 보겠습니다. 이를 위해 근접 연산자를 **결합 연산자(resolvent operator)** 형태로 표현하는 보조정리가 필요합니다.
+
+> **Lemma 13.3.** $\operatorname{prox}_{\eta f}(x) = (I + \eta\partial f)^{-1}(x)$.
+
+**증명.** $u = \operatorname{prox}_{\eta f}(x)$라 하자. 근접 연산자의 최적성 조건에 의해
+
+$$
+u = \operatorname{prox}_{\eta f}(x) \;\Longleftrightarrow\; x - u \in \eta\partial f(u).
+$$
+
+이 조건을 변형하면
+
+$$
+x - u \in \eta\partial f(u) \;\Longleftrightarrow\; x \in (I + \eta\partial f)(u) \;\Longleftrightarrow\; u \in (I + \eta\partial f)^{-1}(x).
+$$
+
+정리하면 다음과 같습니다.
+
+$$
+u = \operatorname{prox}_{\eta f}(x) \;\Longleftrightarrow\; u \in (I + \eta\partial f)^{-1}(x).
+$$
+
+근접 연산자의 해 $u$는 (강볼록성에 의해) 유일하므로, $u = (I + \eta\partial f)^{-1}(x)$가 성립합니다. $\blacksquare$
+
+## 5.3 후방(암묵적) 경사 갱신으로서의 근접점 방법
+
+이 보조정리에 의해, 근접점 갱신 규칙은 다음과 같이 쓸 수 있습니다.
+
+$$
+x_{t+1} = \operatorname{prox}_{\eta f}(x_t) = (I + \eta\partial f)^{-1}(x_t).
+$$
+
+이는 $x_t = (I + \eta\partial f)(x_{t+1}) = x_{t+1} + \eta\nabla f(x_{t+1})$와 동등하며, 정리하면
+
+$$
+\boxed{\,x_{t+1} = x_t - \eta\nabla f(x_{t+1})\,}.
+$$
+
+* 표준 경사하강법은 $x_{t+1} = x_t - \eta\nabla f(x_t)$로 진행하며, **현재 점 $x_t$에서의 그래디언트**를 사용합니다. (전방/명시적, forward/explicit)
+* 반면 근접점 방법은 **다음 점 $x_{t+1}$에서의 그래디언트**를 사용합니다. (후방/암묵적, backward/implicit)
+
+> 이러한 이유로 근접점 방법은 **암묵적 경사하강법(implicit gradient descent)** 또는 후방 오일러(backward Euler) 갱신으로도 불립니다. $x_{t+1}$이 양변에 모두 등장하므로 명시적으로 풀려면 근접 연산자(즉, 또 하나의 최소화 문제)를 풀어야 하지만, 그 대가로 더 안정적인 수렴 특성을 얻습니다.
+
+## 마치며
+
+이번 강의의 핵심을 요약하면 다음과 같습니다.
+
+* **FISTA**는 ISTA에 Nesterov 모멘텀을 결합하여, 합성 볼록 문제에서 $O(1/T)$를 $O(1/T^2)$로 가속하며, 이는 1차 방법의 오라클 하한과 일치하는 최적 속도입니다.
+* 증명의 핵심은 (i) 알고리즘을 $x_t, y_t, v_t$의 3-시퀀스로 재구성하고, (ii) 매끄러움 부등식과 Lemma 13.1을 결합한 뒤, (iii) 완전제곱과 망원합으로 정리하는 흐름이었습니다.
+* **근접점 알고리즘**은 $g = 0$인 근접 경사법의 특수 사례이며, 1차 근사를 쓰면 경사하강법이 되고, $f$를 그대로 쓰면 그래디언트를 $x_{t+1}$에서 평가하는 **암묵적(후방) 갱신**이 됩니다.
+
+이러한 결합 연산자 $(I + \eta\partial f)^{-1}$ 관점은 이후 다룰 쌍대 문제로의 응용과 연산자 분할(operator splitting) 기법으로 자연스럽게 이어집니다.

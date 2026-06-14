@@ -1,6 +1,6 @@
 ---
-title: "[Optimization] 11. Accelerated and Projection-free Methods (Part 1)"
-description: "Lower bounds on the iteration complexity of gradient methods"
+title: "[Optimization] 11. Accelerated and Projection-free Methods"
+description: "Accelerated and Projection-free Methods"
 author: "유성현"
 date: "2026-04-08"
 categories: [Optimization]
@@ -13,89 +13,475 @@ format:
     theme: cosmo
 ---
 
-# 1. 서론: 최적화 알고리즘의 한계점 탐구
+## 들어가며 (Outline)
 
-* 이번 포스트에서는 최적화 알고리즘, 특히 1차 미분 정보(Gradient)를 활용하는 방법론들이 과연 "얼마나 빠르게 수렴할 수 있는가?"에 대한 근본적인 질문을 다룹니다. 본 강의 노트는 크게 세 가지 주제를 목표로 합니다:
-  * 1. 1차 오라클 방법론의 반복 복잡도 하한(Lower bounds on iteration complexity)
-  * 2. 가속화 기법: 모멘텀을 활용한 경사하강법 (Accelerated method)
-  * 3. 사영 없는 기법: Frank-Wolfe 알고리즘 (Projection-free method)
+지난 강의들에서 우리는 경사하강법(gradient descent)과 부분경사법(subgradient method)의 수렴률(convergence rate)을 살펴보았습니다. 이번 강의에서는 한 걸음 더 나아가 다음 세 가지 주제를 다룹니다.
 
-* 이 중 본 포스트에서는 알고리즘의 성능 한계를 규명하는 **1차 오라클 복잡도의 하한(Lower Bounds)**에 집중하여 상세히 알아봅니다.
+* **1차 방법(first-order method)의 반복 복잡도(iteration complexity)에 대한 하한(lower bound)**: "경사 정보만 사용하는 알고리즘이 근본적으로 넘을 수 없는 한계는 무엇인가?"
+* **가속 방법(accelerated method)**: 모멘텀(momentum)을 도입한 경사하강법, 즉 **Nesterov의 가속 경사하강법**.
+* **투영이 필요 없는 방법(projection-free method)**: **Frank-Wolfe 알고리즘**.
 
----
+본격적으로 들어가기 전에, 지금까지 알려진 수렴 속도들을 한 번 정리하고 넘어가겠습니다. 이 표가 이번 강의 전체의 출발점이 됩니다.
 
-# 2. 기존 경사하강법의 수렴 속도 리뷰
+| 함수 클래스 | 알고리즘 | 수렴률 | $\epsilon$-오차까지 필요한 반복 수 |
+|---|---|---|---|
+| Lipschitz 연속 (볼록) | 부분경사법 | $O(1/\sqrt{T})$ | $O(1/\epsilon^2)$ |
+| $\beta$-smooth (볼록) | 경사하강법 | $O(1/T)$ | $O(1/\epsilon)$ |
+| $\beta$-smooth & $\alpha$-strongly convex | 경사하강법 | $O(\gamma^T),\ 0<\gamma<1$ | $O(\log(1/\epsilon))$ |
 
-* 하한을 논하기 전에, 우리가 이미 알고 있는 기본적인 경사(Gradient) 및 서브경사(Subgradient) 방법론들의 수렴 속도를 되짚어 볼 필요가 있습니다.
-  * **Lipschitz 연속 함수 (Subgradient Method):**
-    일반적인 립시츠 연속(Lipschitz continuous) 함수에 대해 서브경사 방법론은 $O(1/\sqrt{T})$의 수렴 속도를 보장합니다. 즉, 오차를 $\epsilon$ 이하로 줄이기 위해서는 $O(1/\epsilon^2)$ 번의 반복(iteration)이 필요합니다.
-  * **평활한 볼록 함수 (Gradient Descent):**
-    함수가 평활(Smooth)한 특성을 가질 때, 표준 경사하강법은 $O(1/T)$의 수렴 속도를 달성하며, 오차 $\epsilon$ 도달을 위해 $O(1/\epsilon)$ 번의 반복을 요구합니다.
-  * **평활하고 강볼록한 함수 (Gradient Descent):**
-    함수가 평활하면서 동시에 강볼록(Strongly convex)하다면, 경사하강법은 어떤 상수 $0 < \gamma < 1$에 대해 $O(\gamma^T)$라는 선형 수렴(Linear convergence) 속도를 보입니다. 이때 오차 $\epsilon$을 달성하기 위한 반복 횟수는 기하급수적으로 줄어들어 $O(\log(1/\epsilon))$이 됩니다.
-
-* 여기서 자연스러운 질문이 떠오릅니다. **"과연 이보다 더 빠르고 효율적인 알고리즘을 찾을 수 있을까?"** 이 질문에 답하기 위해 우리는 "오라클 복잡도(Oracle Complexity)"라는 개념을 도입합니다.
+여기서 자연스럽게 떠오르는 질문은 **"더 빠른 수렴률을 가진 알고리즘을 찾을 수 있을까?"** 입니다. 이 질문에 답하기 위해서는 먼저 "1차 정보를 사용하는 알고리즘이라면 누구도 피할 수 없는 한계", 즉 하한을 정의해야 합니다.
 
 ---
 
-# 3. 1차 오라클 복잡도 (First-Order Oracle Complexity)
+## 2. 경사법의 반복 복잡도에 대한 하한 (Lower Bounds on the Iteration Complexity of Gradient Methods)
 
-* 최적화 문제 $\min_{x \in C} f(x)$를 풀 때, 알고리즘은 목적 함수 $f$의 전체 형태를 미리 알지 못합니다. 대신 특정 점 $x$에서의 정보만을 국소적으로 확인할 수 있는데, 이 정보를 제공하는 블랙박스를 **1차 오라클(First-order oracle)**이라고 부릅니다.
+### 2.1 오라클(Oracle)과 오라클 복잡도
 
-![Figure 11.1: 1차 오라클의 동작 구조를 나타낸 도식. 알고리즘이 탐색 지점 $x_t$를 쿼리(Query)로 전달하면, 블랙박스 형태의 오라클은 해당 지점에서의 목적 함수 값 $f(x_t)$와 1차 미분 정보인 그래디언트 $\nabla f(x_t)$ (또는 미분 불가능한 경우 서브그래디언트 $g_t \in \partial f(x_t)$)를 반환하는 상호작용 과정을 보여준다.](./images/oracle_info_diagram.png)
+위 질문을 정량적으로 다루기 위해, 알고리즘의 **1차 오라클 복잡도(first-order oracle complexity)** 라는 개념을 도입합니다.
 
-* 1차 오라클은 입력값 $x$에 대해 다음 두 가지를 반환합니다:
-  * 1. 함수 값: $f(x)$
-  * 2. 1차 정보: 그래디언트 $\nabla f(x)$ 또는 서브그래디언트 $g_t \in \partial f(x)$
+볼록 최소화 문제 $\min_{x \in C} f(x)$ 에 대한 **1차 오라클**이란, 점 $x \in C$ 를 입력으로 받아 다음을 반환하는 추상적인 장치입니다.
 
-* **오라클 복잡도(Oracle complexity)**란, 주어진 오차 범위 내의 최적해를 찾기 위해 알고리즘이 이 블랙박스 오라클을 **총 몇 번 호출해야 하는가**를 세는 척도입니다.
+* 함수값 $f(x)$,
+* 1차 정보(first-order information), 즉 그래디언트 $\nabla f(x)$ 또는 부분경사 $g_t \in \partial f(x)$.
 
-![Figure 11.2: 오라클 기반 알고리즘의 반복(Iteration) 과정. 알고리즘은 과거 방문했던 점들 $x_1, x_2, \dots, x_t$와 각 점들에서 오라클로부터 확보한 함수 값 $f(x_i)$ 및 그래디언트 $\nabla f(x_i)$들의 기록(History) 전체를 분석하여, 다음 탐색 지점인 $x_{t+1}$을 어디로 결정할지 계산하는 구조를 시각화하였다.](./images/algorithm_history_diagram.png)
+![Figure 11.1: 1차 오라클의 개념도. 점 $x_t$ 를 입력하면, 오라클은 함수값 $f(x_t)$ 와 함께 1차 정보인 그래디언트 $\nabla f(x_t)$(미분 가능한 경우) 또는 부분경사 $g_t \in \partial f(x_t)$(미분 불가능한 경우)를 반환합니다. 알고리즘이 함수에 대해 알 수 있는 정보는 오직 이 오라클을 통해서만 얻어진다고 가정하는 것이 핵심입니다.](./images/oracle_first_order.png)
 
-* 오라클 기반 알고리즘은 위 그림과 같이 과거의 탐색 기록과 확보한 1차 정보를 바탕으로 새로운 해 $x_{t+1}$을 선택해 나갑니다.
+이때 **오라클 복잡도**란, 알고리즘이 종료(terminate)하기까지 호출하는 오라클의 횟수를 셉니다. 오라클 기반 알고리즘(oracle-based algorithm)은 다음과 같이 도식화할 수 있습니다. 기본적으로 이 알고리즘은 **과거 반복점들과 그들의 1차 정보의 이력(history)을 바탕으로 다음 해를 선택**합니다.
+
+![Figure 11.2: 오라클 기반 알고리즘의 동작 방식. 알고리즘은 지금까지 방문한 점들 $x_1, x_2, \dots, x_t$, 그 함수값 $f(x_1), \dots, f(x_t)$, 그리고 그래디언트 $\nabla f(x_1), \dots, \nabla f(x_t)$ 라는 이력 전체를 입력으로 받아 다음 점 $x_{t+1}$ 을 산출합니다. 즉, 알고리즘의 자유도는 "지금까지 모은 1차 정보를 어떻게 조합하여 다음 점을 정하느냐"에 국한됩니다.](./images/oracle_based_algorithm.png)
+
+### 2.2 하한 정리들 (Nemirovski–Yudin)
+
+이제 1983년 Nemirovski와 Yudin이 제시한 하한 결과들을 소개합니다 [NY83] (Nesterov [Nes03], Bubeck [Bub15]도 참고). 다음의 **두 가지 가정**을 둡니다.
+
+* 초기점은 $x_1 = 0$ 이다.
+* $x_{t+1}$ 은 지금까지 얻은 부분경사들의 생성공간(span)에 속한다. 즉 $x_{t+1} \in \operatorname{span}\{g_1, \dots, g_t\}$, 단 $g_s \in \partial f(x_s)$.
+
+이 가정은 "알고리즘이 과거에 본 경사 방향들의 선형 결합 안에서만 움직인다"는 합리적인 제약이며, 우리가 아는 거의 모든 1차 방법이 이 조건을 만족합니다.
+
+::: {.callout-note title="Theorem 11.1 (Lipschitz 함수에 대한 하한)"}
+어떤 $L > 0$ 에 대해, 볼록이며 $L$-Lipschitz 연속인 함수 $f : \mathbb{R}^d \to \mathbb{R}$ 가 존재하여, $t \le d$ 인 임의의 오라클 기반 알고리즘이 생성한 반복점 $x_1, \dots, x_t$ 가 다음을 만족한다.
+$$
+\min_{1 \le s \le t} f(x_s) - \min_{x \in B_2(R)} f(x) \ge \frac{RL}{2(1 + \sqrt{t})}
+$$
+여기서 $B_2(R) = \{x \in \mathbb{R}^d : \|x\|_2 \le R\}$ 이고 $R > 0$ 이다.
+:::
+
+* 이 하한은 $\Omega(1/\sqrt{t})$ 형태입니다. 부분경사법의 상한 $O(1/\sqrt{T})$ 과 **차수가 정확히 일치**하므로, Lipschitz 함수에 대해서는 부분경사법이 이미 (차수의 관점에서) 최적입니다.
+
+::: {.callout-note title="Theorem 11.2 (Smooth 함수에 대한 하한)"}
+어떤 $\beta > 0$ 에 대해, $\ell_2$-노름에 대해 볼록이며 $\beta$-smooth인 함수 $f : \mathbb{R}^d \to \mathbb{R}$ 가 존재하여, $t \le (d-1)/2$ 인 임의의 오라클 기반 알고리즘이 생성한 반복점이 다음을 만족한다.
+$$
+\min_{1 \le s \le t} f(x_s) - \min_{x \in \mathbb{R}^d} f(x) \ge \frac{3\beta \|x_1 - x^*\|_2^2}{32(t+1)^2}
+$$
+:::
+
+* 이 하한은 $\Omega(1/t^2)$ 입니다. 그런데 우리가 아는 경사하강법의 상한은 $O(1/T)$ 에 불과합니다. **하한 $\Omega(1/T^2)$ 과 상한 $O(1/T)$ 사이에 간극(gap)이 존재**한다는 뜻이며, 바로 이 간극을 메우는 것이 다음 절에서 다룰 가속 경사법의 동기입니다.
+
+::: {.callout-note title="Theorem 11.3 (Smooth & Strongly convex 함수에 대한 하한)"}
+어떤 $\beta \ge \alpha > 0$ 에 대해, $\ell_2$-노름에 대해 $\beta$-smooth이고 $\alpha$-strongly convex인 함수 $f : \mathbb{R}^d \to \mathbb{R}$ 가 존재하여, $t \ge 1$ 인 임의의 오라클 기반 알고리즘이 생성한 $x_t$ 가 다음을 만족한다.
+$$
+f(x_t) - \min_{x \in \mathbb{R}^d} f(x) \ge \frac{\alpha}{2}\left(\frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}\right)^{2(t-1)} \|x_1 - x^*\|_2^2
+$$
+단 $\kappa = \beta/\alpha$ 는 조건수(condition number)이다.
+:::
+
+* 이 하한은 $\left(\frac{\sqrt{\kappa}-1}{\sqrt{\kappa}+1}\right)^{2(t-1)}$ 형태의 선형 수렴(linear convergence)이며, 비율(ratio)에 $\sqrt{\kappa}$ 가 등장한다는 점이 핵심입니다. 뒤에서 보겠지만 가속 경사법은 정확히 이 $\sqrt{\kappa}$ 의존성을 달성하여 일반 경사하강법($\kappa$ 의존)을 개선합니다.
+
+> 위 세 정리의 증명은 모두 Bubeck [Bub15]를 참고하시기 바랍니다.
 
 ---
 
-# 4. 반복 복잡도의 이론적 하한 (Lower Bounds)
+## 3. 가속 경사법 (Accelerated Gradient Method)
 
-* 과연 1차 정보만을 사용할 때 수학적으로 돌파할 수 없는 절대적인 한계선은 어디일까요? Nemirovski와 Yudin(1983)은 이 오라클 복잡도의 하한(Lower bound)을 증명했습니다. 
+### 3.1 모멘텀(momentum)의 아이디어
 
-* 이 정리를 전개하기 위해, 분석 대상이 되는 알고리즘은 초기점 $x_1 = 0$에서 시작하며, 다음 스텝 $x_{t+1}$은 **이전까지 얻은 모든 그래디언트들의 생성 공간(Span) 안에 존재**한다고 가정합니다:
-$$x_{t+1} \in \text{span}\{g_1, \dots, g_t\}$$
-  * 단, $g_s \in \partial f(x_s)$
+앞 절에서 우리는 smooth 함수에 대해 경사하강법의 수렴률($O(1/T)$)과 오라클 하한($\Omega(1/T^2)$) 사이에 간극이 있음을 확인했습니다. 이 간극을 닫아 **최적의 점근 수렴률(optimal asymptotic convergence rate)** 을 달성하는 알고리즘이 존재하며, 이는 Nesterov [Nes83, Nes04]가 제시한 **Nesterov의 가속 경사하강법(accelerated gradient descent)** 입니다.
 
-* 목적 함수의 성질에 따라 세 가지 핵심 정리로 나뉘어 하한이 제시됩니다.
+핵심 아이디어는 **모멘텀(momentum)** 의 도입입니다. 그래서 이 방법은 흔히 **모멘텀을 가진 경사하강법(gradient descent with momentum)** 이라고도 불립니다.
 
-## 4.1. Lipschitz 연속 볼록 함수에 대한 하한
+$\beta$-smooth 함수에 대한 표준 경사하강법은 주어진 점 $x_t$ 에서 다음 갱신을 따릅니다.
+$$
+x_{t+1} = x_t - \frac{1}{\beta}\nabla f(x_t)
+$$
 
-> **정리 11.1 (Convex & L-Lipschitz continuous)**
-> 
-> 어떤 상수 $L > 0$에 대해 $L$-Lipschitz 연속성을 만족하는 볼록 함수 $f:\mathbb{R}^d \rightarrow \mathbb{R}$가 존재하여, 오라클 기반 알고리즘으로 생성된 $t \le d$ 번의 반복 점 $x_1, \dots, x_t$들은 다음 부등식을 무조건 만족합니다.
-> 
-> $$\min_{1 \le s \le t} f(x_s) - \min_{x \in B_2(R)} f(x) \ge \frac{RL}{2(1+\sqrt{t})}$$
-> 
-> 여기서 $B_2(R) = \{x \in \mathbb{R}^d : \|x\|_2 \le R\}$이며 $R > 0$입니다.
+모멘텀의 발상은, $x_{t-1}$ 에서 $x_t$ 로 이동할 때 우리가 **이미 취했던 방향 $x_t - x_{t-1}$ 을 다음 갱신에 반영**하자는 것입니다. 그러면 $x_{t+1}$ 은 직전 점 $x_t$ 뿐 아니라, 그 이전 점 $x_{t-1}$ 에까지 의존하게 됩니다. 직관적으로는 "관성을 가지고 굴러가는 공"을 떠올리면 좋습니다.
 
-* **해석:** 아무리 알고리즘을 잘 설계해도, 단순히 Lipschitz 연속 조건만 있는 함수에 대해서는 $O(1/\sqrt{t})$의 속도 장벽을 깰 수 없습니다. 기존 서브경사 방법론이 이 하한을 정확히 달성하므로, 해당 조건에서는 이미 최적의 방법론임을 의미합니다.
+가중치 $\gamma_t > 0$ 에 대해, 먼저 모멘텀 방향으로 한 발 더 내딛은 점을 만듭니다.
+$$
+y_t = x_t + \gamma_t(x_t - x_{t-1})
+$$
 
-## 4.2. 평활한 볼록 함수에 대한 하한
+![Figure 11.3: 모멘텀을 가진 경사하강법의 기하학적 그림. 이전 점 $x_{t-1}$ 에서 현재 점 $x_t$ 로 향한 방향(모멘텀 방향)을 따라 $x_t$ 에서 조금 더 나아간 외삽점(extrapolation point) $y_t = x_t + \gamma_t(x_t - x_{t-1})$ 를 먼저 잡습니다. 그림에서 빨간 화살표는 그래디언트의 음의 방향 $-\nabla f(y_t)$ 를 나타내며, 일반 경사하강법이 $x_t$ 에서 $-\nabla f(x_t)$ 방향으로 $x_t - \frac{1}{\beta}\nabla f(x_t)$ 로 가는 것과 달리, 가속법은 외삽점 $y_t$ 에서 그래디언트 스텝을 밟아 $y_t - \frac{1}{\beta}\nabla f(y_t)$ 로 이동함을 보여줍니다.](./images/momentum_illustration.png)
 
-> **정리 11.2 (Convex & Smooth)**
-> 
-> 어떤 상수 $\beta > 0$에 대해 $\ell_2$-노름 기준 $\beta$-평활(smooth)한 특성을 갖는 볼록 함수 $f:\mathbb{R}^d \rightarrow \mathbb{R}$가 존재하여, 오라클 기반 알고리즘으로 생성된 $x_1, \dots, x_t$ (단, $t \le (d-1)/2$)는 다음을 만족합니다.
-> 
-> $$\min_{1 \le s \le t} f(x_s) - \min_{x \in \mathbb{R}^d} f(x) \ge \frac{3\beta\|x_1 - x^*\|_2^2}{32(t+1)^2}$$
+그런 다음, 외삽점 $y_t$ 에서 그래디언트 갱신을 적용해 다음 점을 얻습니다.
+$$
+x_{t+1} = y_t - \frac{1}{\beta}\nabla f(y_t)
+$$
 
-* **해석:** 평활한 볼록 함수의 경우, 이론적인 최상의 수렴 속도는 $O(1/t^2)$입니다. 그런데 우리가 앞서 확인했듯 일반적인 경사하강법은 $O(1/t)$의 속도를 냅니다. 이 정리로 인해 기존 경사하강법은 **최적이 아니며 개선의 여지가 있음**이 드러납니다. 이를 극복하여 하한을 달성하는 기법이 바로 "가속 경사하강법(Nesterov Momentum)"입니다.
+### 3.2 알고리즘
 
-## 4.3. 평활하고 강볼록한 함수에 대한 하한
+지금까지의 설명을 정리하면 다음 알고리즘이 됩니다.
 
-> **정리 11.3 (Smooth & Strongly Convex)**
-> 
-> 어떤 상수 $\beta \ge \alpha > 0$에 대해 $\beta$-평활하고 $\alpha$-강볼록(strongly convex)한 함수 $f:\mathbb{R}^d \rightarrow \mathbb{R}$가 존재하여, $t \ge 1$에서 오라클 기반 알고리즘으로 생성된 $x_t$는 다음을 만족합니다.
-> 
-> $$f(x_t) - \min_{x \in \mathbb{R}^d} f(x) \ge \frac{\alpha}{2}\left(\frac{\sqrt{\kappa}-1}{\sqrt{\kappa}+1}\right)^{2(t-1)}\|x_1 - x^*\|_2^2$$
-> 
-> 여기서 조건수 $\kappa = \beta/\alpha$ 입니다.
+::: {.callout-tip title="Algorithm 1: Nesterov의 가속 경사하강법"}
+1. $x_1 \in \operatorname{dom}(f)$ 로 초기화하고, $x_0 = x_1$ 로 둔다.
+2. $t = 1, \dots, T$ 에 대해 반복:
+   * $y_t = x_t + \gamma_t(x_t - x_{t-1})$  (단, 어떤 $\gamma_t > 0$).
+   * $x_{t+1} = y_t - \dfrac{1}{\beta}\nabla f(y_t)$.
+3. $x_{T+1}$ 을 반환한다.
+:::
 
-* **해석:** 강볼록 함수에서는 선형 수렴이 가능하지만, 그 수렴 비율(Rate)의 밑(Base)이 적어도 $\left(\frac{\sqrt{\kappa}-1}{\sqrt{\kappa}+1}\right)^2$ 이상이어야 한다는 절대적 한계를 보여줍니다.
+### 3.3 Smooth 함수에 대한 수렴 정리
+
+::: {.callout-note title="Theorem 11.4 (가속 경사법의 수렴, smooth 볼록)"}
+$f : \mathbb{R}^d \to \mathbb{R}$ 가 $\ell_2$-노름에서 $\beta$-smooth인 볼록 함수라 하자. 모멘텀 가중치를
+$$
+\gamma_t = \frac{t-2}{t+1}, \qquad t \ge 1
+$$
+로 두면,
+$$
+f(x_T) - f(x^*) \le \frac{2\beta \|x_1 - x^*\|_2^2}{T^2}
+$$
+가 성립한다. 단 $x^*$ 는 $\min_{x \in \mathbb{R}^d} f(x)$ 의 최적해이다.
+:::
+
+이 정리는 수렴률이 $O(1/T^2)$ 임을 말하며, 이는 **Theorem 11.2의 오라클 하한 $\Omega(1/T^2)$ 과 정확히 일치**합니다. 즉 차수의 관점에서 더 이상 개선할 수 없는 최적 방법입니다. $\epsilon$-오차까지 필요한 반복 수는 $O(1/\sqrt{\epsilon})$ 으로, 경사하강법의 $O(1/\epsilon)$ 에서 제곱근만큼 줄어듭니다.
+
+#### 증명 (Proof)
+
+증명의 전략은 **잘 설계된 보조 수열(potential sequence)을 두고, 그 양이 매 반복마다 단조롭게 줄어듦(telescoping)을 보이는 것**입니다. 단계별로 따라가 보겠습니다.
+
+**(1) 보조 수열의 정의.** $t \ge 0$ 에 대해
+$$
+\lambda_t = \frac{2}{t+1}
+$$
+로 두겠습니다. 그러면 다음 항등식이 성립합니다.
+$$
+\gamma_t = \frac{\lambda_t(1 - \lambda_{t-1})}{\lambda_{t-1}}.
+$$
+
+> **확인:** $\lambda_t = \frac{2}{t+1}$, $\lambda_{t-1} = \frac{2}{t}$ 이므로 $1 - \lambda_{t-1} = \frac{t-2}{t}$. 따라서 $\dfrac{\lambda_t(1-\lambda_{t-1})}{\lambda_{t-1}} = \dfrac{\frac{2}{t+1}\cdot\frac{t-2}{t}}{\frac{2}{t}} = \dfrac{t-2}{t+1} = \gamma_t$. ✓
+
+또한 $t \ge 0$ 에 대해 보조점 $v_{t+1}$ 을 정의합니다.
+$$
+v_{t+1} = x_t + \frac{1}{\lambda_t}(x_{t+1} - x_t) = \frac{1}{\lambda_t}x_{t+1} + \left(1 - \frac{1}{\lambda_t}\right)x_t.
+$$
+
+**(2) 모멘텀 항을 보조점으로 재표현.** 먼저 $v_t - x_t$ 를 계산하면,
+$$
+v_t - x_t = \left(\frac{1}{\lambda_{t-1}} - 1\right)(x_t - x_{t-1})
+$$
+이므로 $x_t - x_{t-1} = \left(\frac{1}{\lambda_{t-1}} - 1\right)^{-1}(v_t - x_t)$. 따라서
+$$
+\gamma_t(x_t - x_{t-1}) = \gamma_t\left(\frac{1}{\lambda_{t-1}} - 1\right)^{-1}(v_t - x_t) = \lambda_t(v_t - x_t),
+$$
+여기서 마지막 등호는 (1)의 항등식 $\gamma_t = \frac{\lambda_t(1-\lambda_{t-1})}{\lambda_{t-1}}$ 을 대입하면 얻어집니다. 이를 $y_t$ 의 정의에 넣으면 매우 깔끔한 표현이 나옵니다.
+$$
+y_t = x_t + \gamma_t(x_t - x_{t-1}) = x_t + \lambda_t(v_t - x_t) = (1 - \lambda_t)x_t + \lambda_t v_t.
+$$
+즉 **$y_t$ 는 $x_t$ 와 보조점 $v_t$ 의 볼록 결합(convex combination)** 입니다.
+
+**(3) Smoothness 부등식의 변형.** $f$ 가 $\beta$-smooth이므로 임의의 $z \in \mathbb{R}^d$ 에 대해 다음이 성립합니다 (descent lemma).
+$$
+\begin{aligned}
+f(x_{t+1}) &\le f(y_t) + \nabla f(y_t)^\top (x_{t+1} - y_t) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2 \\
+&= f(y_t) + \nabla f(y_t)^\top (z - y_t) + \beta(x_{t+1} - y_t)^\top(z - x_{t+1}) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2 \\
+&\le f(z) + \beta(x_{t+1} - y_t)^\top(z - x_{t+1}) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2.
+\end{aligned}
+$$
+
+> **첫 번째 등호의 비결:** 갱신식 $x_{t+1} = y_t - \frac{1}{\beta}\nabla f(y_t)$ 에서 $\nabla f(y_t) = -\beta(x_{t+1} - y_t)$ 입니다. 이를 이용해 $\nabla f(y_t)^\top(x_{t+1} - y_t)$ 항을 $\nabla f(y_t)^\top(z - y_t)$ 와 $\nabla f(y_t)^\top(x_{t+1} - z) = \beta(x_{t+1}-y_t)^\top(z - x_{t+1})$ 로 분해한 것입니다.
+> **두 번째 부등호:** 볼록성에 의해 $f(y_t) + \nabla f(y_t)^\top(z - y_t) \le f(z)$.
+
+이제 $z = x^*$ 와 $z = x_t$ 를 각각 대입합니다.
+$$
+\begin{aligned}
+f(x_{t+1}) - f(x^*) &\le \beta(x_{t+1} - y_t)^\top(x^* - x_{t+1}) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2, \\
+f(x_{t+1}) - f(x_t) &\le \beta(x_{t+1} - y_t)^\top(x_t - x_{t+1}) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2.
+\end{aligned}
+$$
+
+**(4) 두 부등식의 가중 결합.** 첫 부등식에 $\lambda_t$ 를, 둘째 부등식에 $(1-\lambda_t)$ 를 곱해 더합니다. 좌변은
+$$
+f(x_{t+1}) - f(x^*) - (1 - \lambda_t)\big(f(x_t) - f(x^*)\big)
+$$
+가 되고, 우변은 다음과 같이 완전제곱 형태로 정리됩니다.
+$$
+\begin{aligned}
+&\le \beta(x_{t+1} - y_t)^\top\big(\lambda_t x^* + (1-\lambda_t)x_t - x_{t+1}\big) + \frac{\beta}{2}\|x_{t+1} - y_t\|_2^2 \\
+&= \frac{\beta}{2}(x_{t+1} - y_t)^\top\big(2\lambda_t x^* + 2(1-\lambda_t)x_t - x_{t+1} - y_t\big) \\
+&= \frac{\beta}{2}\big\|y_t - (1-\lambda_t)x_t - \lambda_t x^*\big\|_2^2 - \frac{\beta}{2}\big\|x_{t+1} - (1-\lambda_t)x_t - \lambda_t x^*\big\|_2^2 \\
+&= \frac{\beta\lambda_t^2}{2}\|v_t - x^*\|_2^2 - \frac{\beta\lambda_t^2}{2}\|v_{t+1} - x^*\|_2^2.
+\end{aligned}
+$$
+
+> **세 번째 등호(완전제곱 항등식):** 임의의 벡터 $a, b, c$ 에 대해 $(a - b)^\top(2c - a - b) = \|b - c\|^2 - \|a - c\|^2$. 여기에 $a = x_{t+1}$, $b = y_t$, $c = (1-\lambda_t)x_t + \lambda_t x^*$ 를 대입한 것입니다.
+> **네 번째 등호:** (2)에서 $y_t - (1-\lambda_t)x_t - \lambda_t x^* = \lambda_t v_t - \lambda_t x^* = \lambda_t(v_t - x^*)$ 이고, 보조점 정의에서 $\lambda_t v_{t+1} = x_{t+1} - (1-\lambda_t)x_t$ 이므로 $x_{t+1} - (1-\lambda_t)x_t - \lambda_t x^* = \lambda_t(v_{t+1} - x^*)$ 입니다.
+
+**(5) Telescoping.** 위 부등식을 $\lambda_t^2$ 으로 나누어 정리하면
+$$
+\frac{1}{\lambda_t^2}\big(f(x_{t+1}) - f(x^*)\big) + \frac{\beta}{2}\|v_{t+1} - x^*\|_2^2 \le \frac{1 - \lambda_t}{\lambda_t^2}\big(f(x_t) - f(x^*)\big) + \frac{\beta}{2}\|v_t - x^*\|_2^2.
+$$
+핵심은 $\dfrac{1 - \lambda_t}{\lambda_t^2} \le \dfrac{1}{\lambda_{t-1}^2}$ 라는 사실입니다.
+
+> **확인:** $\frac{1-\lambda_t}{\lambda_t^2} = \frac{t-1}{t+1}\cdot\frac{(t+1)^2}{4} = \frac{(t-1)(t+1)}{4} = \frac{t^2 - 1}{4} \le \frac{t^2}{4} = \frac{1}{\lambda_{t-1}^2}$. ✓
+
+따라서 위 부등식의 우변을 $\frac{1}{\lambda_{t-1}^2}(f(x_t) - f(x^*)) + \frac{\beta}{2}\|v_t - x^*\|^2$ 으로 상한하면, 동일한 형태의 양 $\Phi_t := \frac{1}{\lambda_{t-1}^2}(f(x_t) - f(x^*)) + \frac{\beta}{2}\|v_t - x^*\|^2$ 이 매 반복마다 감소함을 알 수 있고, 이를 $t=1$ 까지 차례로 펼치면
+$$
+\frac{1}{\lambda_t^2}\big(f(x_{t+1}) - f(x^*)\big) + \frac{\beta}{2}\|v_{t+1} - x^*\|_2^2 \;\le\; \cdots \;\le\; \frac{1 - \lambda_1}{\lambda_1^2}\big(f(x_1) - f(x^*)\big) + \frac{\beta}{2}\|v_1 - x^*\|_2^2.
+$$
+여기서 $\lambda_1 = \frac{2}{2} = 1$ 이므로 $1 - \lambda_1 = 0$ 이고, $x_0 = x_1$ 이므로 $v_1 = x_1$ 입니다. 따라서 우변은 깔끔하게
+$$
+\frac{\beta}{2}\|x_1 - x^*\|_2^2
+$$
+하나만 남습니다.
+
+**(6) 결론.** 비음수 항 $\frac{\beta}{2}\|v_{t+1} - x^*\|^2$ 을 버리면
+$$
+f(x_{t+1}) - f(x^*) \le \frac{\beta\lambda_t^2}{2}\|x_1 - x^*\|_2^2 = \frac{\beta}{2}\cdot\frac{4}{(t+1)^2}\|x_1 - x^*\|_2^2 = \frac{2\beta\|x_1 - x^*\|_2^2}{(t+1)^2}.
+$$
+이것이 곧 $f(x_T) - f(x^*) \le \dfrac{2\beta\|x_1 - x^*\|_2^2}{T^2}$ 이며, 증명이 완료됩니다. $\blacksquare$
+
+### 3.4 Smooth & Strongly convex 함수에 대한 수렴
+
+::: {.callout-note title="Theorem 11.5 (가속 경사법, smooth & strongly convex)"}
+$f : \mathbb{R}^d \to \mathbb{R}$ 가 $\ell_2$-노름에서 $\beta$-smooth이고 $\alpha$-strongly convex인 볼록 함수라 하자. $\kappa = \beta/\alpha$ 에 대해 모멘텀 가중치를
+$$
+\gamma_t = \frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}
+$$
+로 두면,
+$$
+f(x_T) - f(x^*) \le \frac{\alpha + \beta}{2}\left(\frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}\right)^{(T-1)/2}\|x_1 - x^*\|_2^2
+$$
+가 성립한다. 단 $x^*$ 는 $\min_{x \in \mathbb{R}^d} f(x)$ 의 최적해이다.
+:::
+
+* 일반 경사하강법의 선형 수렴 비율이 조건수 $\kappa$ 에 의존하는 반면, 가속법은 **$\sqrt{\kappa}$ 에 의존**합니다. 조건수가 큰 ($\kappa \gg 1$) 악조건 문제에서 이 차이는 매우 큽니다.
+* 이 비율은 Theorem 11.3의 하한이 보여준 $\frac{\sqrt{\kappa}-1}{\sqrt{\kappa}+1}$ 형태와 일치하므로, 강한 볼록 함수에 대해서도 가속법이 최적의 의존성을 달성함을 의미합니다.
+
+---
+
+## 4. 투영이 필요 없는 방법 (Projection-free Method)
+
+### 4.1 동기: 투영 경사하강법의 두 가지 문제
+
+투영 경사하강법(projected gradient descent)은 smooth 함수를 $O(1/T)$ 의 수렴률로 최소화합니다. 그러나 여기에는 두 가지 현실적인 문제가 있습니다.
+
+1. **실행 가능 집합 $C$ 로의 투영(projection) 단계가 비쌀 수 있다.** 투영은 본질적으로 그 자체가 하나의 최적화 문제를 푸는 것과 같습니다. $C$ 의 구조에 따라 이는 어려울 수 있으며, 심지어 $C$ 가 다면체(polyhedron)인 경우에도 투영은 (이차계획법을 푸는) 값비싼 절차가 됩니다.
+
+2. **smoothness를 $\ell_2$-노름으로 정의했다.** 경사하강법의 분석에는 $\ell_2$-노름 smoothness가 본질적으로 필요한 부분이 있습니다. 그런데 어떤 함수가 다른 노름(예: $\ell_1$)에서 smooth하더라도 $\ell_2$-노름으로 환산하면 smoothness 파라미터가 차원만큼 폭발할 수 있습니다.
+
+두 번째 문제를 다음 부등식이 잘 보여줍니다.
+$$
+\|\nabla f(x) - \nabla f(y)\|_2 \le \sqrt{d}\,\|\nabla f(x) - \nabla f(y)\|_\infty \le \sqrt{d}\,\beta\|x - y\|_1 \le d\beta\|x - y\|_2.
+$$
+
+* 이 부등식의 함의는 이렇습니다. **어떤 함수가 $\ell_1$-노름에서 아주 작은 smoothness 파라미터 $\beta$ 로 smooth하더라도, $\ell_2$-노름으로 환산한 smoothness 파라미터는 차원 $d$ 만큼 부풀어 오를 수 있다**는 것입니다. 그 결과 우리가 원하던 차원에 무관한(dimension-free) 성질을 잃게 됩니다.
+
+### 4.2 LASSO의 제약 최적화 형식 (Constrained Optimization Formulation of LASSO)
+
+이 문제의식을 구체적인 예로 살펴봅니다. $n$ 개의 데이터 $(x_1, y_1), \dots, (x_n, y_n)$ 이 주어졌을 때 LASSO의 다음 형식을 떠올려 봅시다.
+$$
+\min_\beta \frac{1}{n}\|y - X\beta\|_2^2 + \lambda\|\beta\|_1
+$$
+여기서
+
+* $y = (y_1, \dots, y_n)^\top$ 이고, $X$ 의 각 행은 $x_1^\top, \dots, x_n^\top$ 이며,
+* 이차항 $\dfrac{1}{n}\sum_{i=1}^n (y_i - \beta^\top x_i)^2 = \dfrac{1}{n}\|y - X\beta\|_2^2$ 는 회귀계수 $\beta$ 의 평균제곱오차(MSE)입니다.
+
+위 형식은 **LASSO의 라그랑지안 형식(Lagrangian form)** 입니다. 이에 대응하는 **제약 형식(constrained form)** 은 다음과 같습니다.
+$$
+\begin{aligned}
+\text{minimize} \quad & \frac{1}{n}\|y - X\beta\|_2^2 \\
+\text{subject to} \quad & \|\beta\|_1 \le t
+\end{aligned}
+$$
+여기서 $t$ 는 정규화의 강도를 결정하는 파라미터입니다. 따라서 이는 다음과 같은 제약 볼록 최적화 문제입니다.
+$$
+\min_{\beta \in C} \frac{1}{n}\|y - X\beta\|_2^2, \qquad C = \left\{\beta \in \mathbb{R}^d : \|\beta\|_1 \le t\right\}.
+$$
+
+* 여기서 $C$ 는 **다면체(polytope)** 입니다(이른바 $\ell_1$ 공/cross-polytope).
+* 이 문제에 투영 경사하강법을 적용할 수는 있지만, 다면체 $C$ 로의 투영은 **이차계획법(quadratic program)** 을 푸는 것에 해당합니다.
+* 반면, **다면체 $C$ 위에서 선형 함수를 최적화하는 문제는 선형계획법(linear program)** 이며, 이는 빠른 해법이 잘 알려져 있습니다. 바로 이 비대칭성이 다음 알고리즘의 출발점입니다.
+
+### 4.3 조건부 경사법: Frank-Wolfe 알고리즘 (Conditional Gradient Method)
+
+위의 문제의식에서 출발하여, 1956년 Frank와 Wolfe가 도입한 **조건부 경사법(conditional gradient method)** 을 살펴봅니다 [FW56]. 저자의 이름을 따 **Frank-Wolfe 알고리즘**이라고 부릅니다.
+
+::: {.callout-tip title="Algorithm 2: Frank-Wolfe 알고리즘"}
+1. $x_1 \in C$ 로 초기화한다.
+2. $t = 1, \dots, T-1$ 에 대해 반복:
+   * $v_t \in \arg\min_{v \in C} \nabla f(x_t)^\top v$ 를 구한다.
+   * $x_{t+1} = (1 - \lambda_t)x_t + \lambda_t v_t$ 로 갱신한다 (단 $0 < \lambda_t < 1$).
+3. $x_T$ 를 반환한다.
+:::
+
+이 방법의 핵심 요소는, **목적함수가 선형 함수인 부분문제**
+$$
+\min_{v \in C} \nabla f(x_t)^\top v
+$$
+를 풀어 방향 $v_t$ 를 계산하는 것입니다.
+
+* 특히 $C$ 가 다면체이면 이 부분문제는 **선형계획법**입니다. 이는 투영 경사하강법의 각 투영 단계가 (이차 목적함수를 갖는) 이차계획법이라는 것과 대조됩니다. 이런 이유로 조건부 경사법을 **"투영이 필요 없는(projection-free)"** 방법이라고 부릅니다.
+* 또 다른 차이는, 갱신에 사용하는 방향이 $-\nabla f$ 와 다를 수 있다는 점입니다.
+
+![Figure 11.4: Frank-Wolfe 갱신의 기하학적 그림. 실행 가능 집합 $C$(다면체) 안에서, 현재 점 $x_t$ 로부터 음의 그래디언트 방향 $-\nabla f(x_t)$ 를 따라 $C$ 안에서 갈 수 있는 데까지 최대한 멀리 간 지점이 선형 부분문제의 해 $v_t$ 이며, 대개 $C$ 의 꼭짓점(vertex)에 위치합니다. 다음 반복점 $x_{t+1}$ 은 현재 점 $x_t$ 와 이 $v_t$ 의 볼록 결합으로 얻어지므로, 선분 $\overline{x_t v_t}$ 위에 놓이게 됩니다. 즉 실제 이동 방향은 $-\nabla f(x_t)$ 자체가 아니라 $v_t - x_t$ 방향입니다.](./images/frank_wolfe_update.png)
+
+여기서 일반 노름에서의 smoothness를 정확히 정의해 둘 필요가 있습니다.
+
+::: {.callout-note title="Definition 11.6 (일반 노름에서의 $\beta$-smoothness)"}
+미분 가능한 함수 $f : \mathbb{R}^d \to \mathbb{R}$ 가 어떤 $\beta > 0$ 에 대해 노름 $\|\cdot\|$ 에서 $\beta$-smooth라 함은, 임의의 $x, y \in \mathbb{R}^d$ 에 대해
+$$
+\|\nabla f(x) - \nabla f(y)\|_* \le \beta\|x - y\|
+$$
+가 성립함을 뜻한다. 여기서 $\|\cdot\|_*$ 는 $\|\cdot\|$ 의 **쌍대 노름(dual norm)** 이다.
+:::
+
+> 그래디언트는 함수의 정의역이 아닌 쌍대 공간(dual space)에 사는 객체이므로, 그래디언트의 차이를 잴 때는 원래 노름이 아니라 쌍대 노름을 쓰는 것이 자연스럽습니다. $\ell_2$ 의 쌍대는 $\ell_2$ 자신이고, $\ell_1$ 의 쌍대는 $\ell_\infty$ 입니다.
+
+### 4.4 Frank-Wolfe의 수렴 정리
+
+다음 정리는 조건부 경사법이 **임의의 노름에서** smooth한 함수에 대해 $O(1/T)$ 의 수렴률을 가짐을 보입니다.
+
+::: {.callout-note title="Theorem 11.7 (Frank-Wolfe의 수렴)"}
+$f : \mathbb{R}^d \to \mathbb{R}$ 가 어떤 노름 $\|\cdot\|$ 에서 $\beta$-smooth인 볼록 함수라 하자. Frank-Wolfe 알고리즘에서 스텝을
+$$
+\lambda_t = \frac{2}{t+1}
+$$
+로 두고 생성한 반복점 수열을 $\{x_t : t = 1, \dots, T\}$ 라 하면, 임의의 $t \ge 2$ 에 대해
+$$
+f(x_t) - f(x^*) \le \frac{2\beta R^2}{t+1}
+$$
+가 성립한다. 단 $x^*$ 는 $\min_{x \in C} f(x)$ 의 최적해이고, $R = \sup_{x, y \in C}\|x - y\|$ 는 집합 $C$ 의 지름(diameter)이다.
+:::
+
+#### 증명 (Proof)
+
+**(1) 한 스텝 감소량의 상한.** smoothness와 갱신 규칙을 차례로 적용합니다.
+$$
+\begin{aligned}
+f(x_{t+1}) - f(x_t) &\le \nabla f(x_t)^\top(x_{t+1} - x_t) + \frac{\beta}{2}\|x_{t+1} - x_t\|^2 \\
+&= \lambda_t \nabla f(x_t)^\top(v_t - x_t) + \frac{\beta}{2}\|x_{t+1} - x_t\|^2 \\
+&\le \lambda_t \nabla f(x_t)^\top(x^* - x_t) + \frac{\beta}{2}\|x_{t+1} - x_t\|^2 \\
+&\le \lambda_t\big(f(x^*) - f(x_t)\big) + \frac{\beta}{2}\|x_{t+1} - x_t\|^2.
+\end{aligned}
+$$
+
+각 단계의 근거는 다음과 같습니다.
+
+* 첫 번째 부등호: $f$ 의 $\beta$-smoothness (descent lemma).
+* 첫 번째 등호: 갱신식 $x_{t+1} = (1-\lambda_t)x_t + \lambda_t v_t$, 즉 $x_{t+1} - x_t = \lambda_t(v_t - x_t)$.
+* 두 번째 부등호: $v_t = \arg\min_{v \in C}\nabla f(x_t)^\top v$ 의 정의에 의해 $\nabla f(x_t)^\top v_t \le \nabla f(x_t)^\top x^*$.
+* 마지막 부등호: $f$ 의 볼록성에 의해 $\nabla f(x_t)^\top(x^* - x_t) \le f(x^*) - f(x_t)$.
+
+**(2) 지름을 이용한 정리.** $\|x_{t+1} - x_t\| = \lambda_t\|v_t - x_t\| \le \lambda_t R$ 이므로,
+$$
+f(x_{t+1}) - f(x^*) \le (1 - \lambda_t)\big(f(x_t) - f(x^*)\big) + \frac{\beta\lambda_t^2 R^2}{2} = \frac{t-1}{t+1}\big(f(x_t) - f(x^*)\big) + \frac{2\beta R^2}{(t+1)^2}.
+$$
+
+**(3) 기저 단계 (base case).** $t = 1$ 일 때 $\lambda_1 = 1$ 이므로 $(1-\lambda_1) = 0$, 따라서
+$$
+f(x_2) - f(x^*) \le \frac{\beta R^2}{2} \le \frac{2\beta R^2}{3}.
+$$
+
+**(4) 귀납 단계 (induction).** 귀납 가정 $f(x_t) - f(x^*) \le \dfrac{2\beta R^2}{t+1}$ 을 (2)에 대입하면
+$$
+f(x_{t+1}) - f(x^*) \le \frac{t-1}{t+1}\cdot\frac{2\beta R^2}{t+1} + \frac{2\beta R^2}{(t+1)^2} = \frac{2(t-1) + 2}{(t+1)^2}\beta R^2 = \frac{t}{(t+1)^2}\cdot 2\beta R^2 \le \frac{2\beta R^2}{t+2}.
+$$
+마지막 부등호는 $t(t+2) \le (t+1)^2$, 즉 $t^2 + 2t \le t^2 + 2t + 1$ 이 항상 성립하기 때문입니다. 이로써 $f(x_{t+1}) - f(x^*) \le \dfrac{2\beta R^2}{(t+1)+1}$ 이 되어 귀납이 완성됩니다. $\blacksquare$
+
+> **노트:** 강의 노트 본문에는 이 마지막 단계가 $\le \frac{1}{t+2}\beta R^2$ 로 적혀 있으나, 정리 진술인 $\frac{2\beta R^2}{t+1}$ 과 정합되려면 분자에 $2$ 가 유지되어야 하며 ($\le \frac{2\beta R^2}{t+2}$), 위 유도가 올바른 형태입니다.
+
+### 4.5 $\ell_p$-제약 최적화 ($\ell_p$-constrained Optimization)
+
+다음 형태의 최적화 문제를 생각합니다.
+$$
+\begin{aligned}
+\text{minimize} \quad & f(x) \\
+\text{subject to} \quad & \|x\|_p \le b
+\end{aligned}
+$$
+여기서 $f : \mathbb{R}^d \to \mathbb{R}$ 는 볼록 함수이고 $\|\cdot\|_p$ 는 $p \ge 1$ 인 $\ell_p$-노름입니다. 이때 Frank-Wolfe의 갱신 단계는 다음을 푸는 것에 해당합니다.
+$$
+v_t \in \arg\min_{\|v\|_p \le b} \nabla f(x_t)^\top v = -b\cdot\arg\max_{\|v\|_p \le 1}\nabla f(x_t)^\top v = -b\cdot\partial\|\nabla f(x_t)\|_q
+$$
+여기서 $q$ 는 $\dfrac{1}{p} + \dfrac{1}{q} = 1$ 을 만족하는 켤레 지수(conjugate exponent)입니다. 즉 선형 부분문제의 해는 그래디언트의 쌍대 노름 $\|\nabla f(x_t)\|_q$ 의 부분미분(subdifferential)으로 명시적으로 주어집니다.
+
+**$p = 1$ 인 경우 ($q = \infty$):** 갱신 단계는
+$$
+v_t = -b\cdot\operatorname{sign}\!\big(\nabla_{i_t} f(x_t)\big)\,e_{i_t}, \qquad i_t \in \arg\max_{i \in [d]}|\nabla_i f(x_t)|
+$$
+가 됩니다. 여기서 $e_i$ 는 $i$ 번째 표준 기저 벡터입니다.
+
+* 즉 갱신은 **그래디언트의 절댓값이 가장 큰 좌표(coordinate) 방향으로 움직이는 것**에 해당합니다. 이것이 바로 **좌표 하강법(coordinate descent)** 의 핵심 아이디어입니다. 한 번에 한 좌표만 갱신하므로 매우 희소(sparse)한 갱신이 됩니다.
+
+**일반적인 $p \ge 1$ 의 경우:** 갱신은 각 좌표별로
+$$
+(v_t)_i = -\alpha\cdot\operatorname{sign}\!\big(\nabla_i f(x_t)\big)\,|\nabla_i f(x_t)|^{p-1}
+$$
+로 주어지며, 여기서 $\alpha$ 는 $\|v_t\|_q = b$ 가 되도록 하는 정규화 인자(normalization factor)입니다.
+
+* 즉 갱신은 **음의 그래디언트 방향을 따르되, 각 좌표별 이동량이 그 좌표의 그래디언트 크기에 의해 결정**됩니다. $p$ 가 클수록 큰 그래디언트 좌표에 더 집중하게 됩니다.
+
+### 4.6 저계수 행렬 완성 (Low-rank Matrix Completion)
+
+마지막으로 Frank-Wolfe가 빛을 발하는 대표적 응용을 살펴봅니다. 부분적으로만 관측된 행렬 $A \in \mathbb{R}^{n \times p}$ 가 있고, 관측되지 않은(missing) 항목은 $0$ 으로 채워져 있다고 합시다. 더 나아가, 관측된 0이 아닌 항목들조차 참값에 대한 잡음 섞인 관측이라고 가정합니다.
+
+이러한 행렬 $A$ 는 **영화 추천 시스템(movie rating system)** 에서 등장합니다. 이 경우 $A$ 의 행은 사용자(user), 열은 영화(movie)에 대응하여 $n$ 은 사용자 수, $p$ 는 영화 수가 됩니다. 합리적인 가정 하나는 "사용자의 영화 평점이 소수의 잠재 특성/기준에 의존한다"는 것입니다. 이를 모델링하는 한 가지 방법은 참 평점 행렬 $A^*$ 가 다음을 만족한다고 두는 것입니다.
+$$
+A \cong A^* = UV^\top
+$$
+여기서 $U$ 는 $n \times k$ 행렬, $V$ 는 $p \times k$ 행렬이며 $k < n, p$ 입니다. $A^* = UV^\top$ 라는 표현으로부터 **참 평점 행렬 $A^*$ 의 계수(rank)는 많아야 $k$** 임을 알 수 있습니다.
+
+그러면 참 행렬 $A^*$ 를 추정하기 위해 다음 문제를 풀고자 할 수 있습니다.
+$$
+\begin{aligned}
+\text{minimize} \quad & \frac{1}{2}\|A - X\|_F^2 \\
+\text{subject to} \quad & \operatorname{rank}(X) \le k
+\end{aligned}
+$$
+여기서 $\|\cdot\|_F$ 는 **프로베니우스 노름(Frobenius norm)** 으로, 벡터에 대한 $\ell_2$-노름을 행렬로 확장한 것입니다.
+
+* 그러나 저계수 제약 $\operatorname{rank}(X) \le k$ 은 **비볼록(non-convex)** 입니다. 따라서 이를 볼록 완화(convex relaxation)한 다음 문제를 대신 고려합니다.
+$$
+\begin{aligned}
+\text{minimize} \quad & \frac{1}{2}\|A - X\|_F^2 \\
+\text{subject to} \quad & \|X\|_{\mathrm{nuc}} \le k
+\end{aligned}
+\tag{11.1}
+$$
+여기서 $\|\cdot\|_{\mathrm{nuc}}$ 는 **핵 노름(nuclear norm)**, 즉 특이값들의 합입니다. 핵 노름은 계수 함수의 볼록 포락(convex envelope) 역할을 하므로 자연스러운 완화가 됩니다. (11.1)은 제약 집합이
+$$
+C = \left\{X \in \mathbb{R}^{n \times p} : \|X\|_{\mathrm{nuc}} \le k\right\}
+$$
+인 제약 볼록 최적화 문제입니다.
+
+**접근 1 — 투영 경사하강법.** 제약 집합 $C$ 로의 투영을 적용합니다. 그런데 $C$ 로의 투영은 $A$ 의 **특이값 분해(SVD)** 를 계산하는 것에 해당하며, 이는 큰 행렬에서 비용이 매우 큽니다.
+
+**접근 2 — Frank-Wolfe.** 현재 반복 행렬 $X_t$ 가 주어졌을 때, Frank-Wolfe의 갱신 단계는 다음 선형 부분문제를 고려합니다.
+$$
+V_t \in \arg\min\left\{\operatorname{Tr}\!\big((A - X_t)^\top V\big) : \|V\|_{\mathrm{nuc}} \le k\right\}.
+$$
+이 최소화 문제는 **$X_t - A$ 의 최상위(top) 좌·우 특이벡터(left and right singular vectors)를 계산하는 것**과 동치이며, 이를 위해 고전적인 **거듭제곱 방법(power method)** 을 적용할 수 있습니다.
+
+* 핵심은, 거듭제곱 방법은 전체 SVD를 계산하지 않고 오직 최상위 특이벡터 한 쌍만 구하면 되므로, **투영(접근 1)이 요구하는 전체 SVD보다 훨씬 빠르게 실행된다**는 점입니다. 바로 이 지점에서 Frank-Wolfe의 "투영이 필요 없는" 성질이 실질적인 계산 이득으로 이어집니다.
+
+---
+
+## 마치며
+
+이번 강의에서는 다음을 배웠습니다.
+
+* **하한(lower bound)** 을 통해 1차 방법의 근본적 한계를 규명했고, smooth 함수에서 경사하강법의 $O(1/T)$ 과 하한 $\Omega(1/T^2)$ 사이의 간극을 확인했습니다.
+* **Nesterov의 가속 경사법**이 모멘텀을 통해 이 간극을 닫아 $O(1/T^2)$ 의 최적 수렴률을 달성함을, 보조 수열을 이용한 telescoping 논증으로 증명했습니다. 강한 볼록 함수에서는 $\kappa$ 대신 $\sqrt{\kappa}$ 의존성을 얻습니다.
+* **Frank-Wolfe 알고리즘**은 투영(이차계획법)을 선형 부분문제로 대체하여, 다면체 제약, $\ell_p$ 제약, 핵 노름 제약(저계수 행렬 완성) 등에서 효율적인 "투영 없는" 해법을 제공함을 보았습니다.
+
+## 참고문헌
+
+* [Bub15] S. Bubeck. *Convex optimization: Algorithms and complexity.* Found. Trends Mach. Learn., 8(3–4):231–357, 2015.
+* [FW56] M. Frank and P. Wolfe. *An algorithm for quadratic programming.* Naval Research Logistics Quarterly, 3(1-2):95–110, 1956.
+* [Nes83] Y. Nesterov. *A method of solving a convex programming problem with convergence rate $O(1/k^2)$.* Soviet Mathematics Doklady, 27(2):372–376, 1983.
+* [Nes03] Y. Nesterov. *Introductory lectures on convex optimization: A basic course*, volume 87. Springer, 2003.
+* [Nes04] Y. Nesterov. *Introductory Lectures on Convex Optimization: A Basic Course.* Kluwer Academic Publishers, 2004.
+* [NY83] A. S. Nemirovski and D. B. Yudin. *Problem complexity and method efficiency in optimization.* 1983.

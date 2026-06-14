@@ -1,6 +1,6 @@
 ---
-title: "[Optimization] 6. Convex Optimization Beyond Linear Programming (Part 1)"
-description: "Quadratic Programming"
+title: "[Optimization] 6. Convex Optimization Beyond Linear Programming"
+description: "Convex Optimization Beyond Linear Programming"
 author: "유성현"
 date: "2026-03-23"
 categories: [Optimization]
@@ -13,147 +13,642 @@ format:
     theme: cosmo
 ---
 
-# 1. Introduction
+## 들어가며 (Introduction)
 
-* 이번 포스트에서는 선형 계획법(Linear Programming)을 넘어선 **볼록 계획법(Convex Programming)**의 다양한 형태를 살펴봅니다.
+지금까지 우리는 **선형계획법(Linear Programming, LP)**, 즉 선형 목적함수를 선형 부등식 제약 아래에서 최적화하는 문제를 다뤄 왔습니다. 그러나 현실의 많은 문제(포트폴리오 최적화, 서포트 벡터 머신, LASSO, 그래프 분할 등)는 선형성만으로는 표현되지 않습니다.
 
-* 해당 강의에서 다루는 확장된 볼록 계획법의 범주는 다음과 같습니다:
-  * **Quadratic programming (이차 계획법)** 
-  * Semidefinite programming (준정부호 계획법) 
-  * Conic programming (원뿔 계획법) 
-  * Second-order cone programming (이차 원뿔 계획법) 
+이번 강의에서는 LP를 **포함하는 더 큰 볼록 최적화의 계층 구조(hierarchy)**를 따라 올라갑니다. 핵심 메시지는 다음과 같습니다.
 
-* 이번 글에서는 가장 널리 쓰이는 형태 중 하나인 **이차 계획법(Quadratic Programming, QP)**의 정의와, 머신러닝 및 금융 공학에서 이것이 어떻게 활용되는지 3가지 핵심 예시를 통해 자세히 알아보겠습니다.
+* 이 모든 문제는 결국 하나의 통일된 틀인 **원뿔계획(Conic Programming)**으로 묶을 수 있습니다.
+* 그 안에서 LP $\subset$ SOCP $\subset$ SDP 라는 **포함 관계**가 성립합니다.
 
----
+구체적으로 다룰 주제는 다음과 같습니다.
 
-# 2. Quadratic Programming (이차 계획법)
-
-## 2.1. 기본 정의 (Standard Form)
-* 이차 계획법(QP)은 제약 조건이 선형이면서 목적 함수가 이차식인 최적화 문제를 의미합니다. QP의 표준 형태는 다음과 같이 정의됩니다.
-$$
-\begin{aligned}
-\text{minimize} \quad & \frac{1}{2}x^{\top}Qx + p^{\top}x \\
-\text{subject to} \quad & Ax \ge b
-\end{aligned}
-$$
-  * $x$: 최적화하고자 하는 결정 변수 벡터
-  * $Q$: 이차항의 계수를 나타내는 행렬
-  * $p$: 선형항의 계수를 나타내는 벡터
-  * $A, b$: 선형 부등식 제약조건을 구성하는 행렬 및 벡터
-
-## 2.2. 볼록성 조건 (Convexity Condition)
-* 이차 계획법이 **볼록 최적화 문제(Convex Optimization Problem)**가 되기 위한 핵심 조건은 바로 행렬 $Q$의 성질에 있습니다. 
-* **이차 계획법은 행렬 $Q$가 양의 준정부호(Positive Semidefinite, PSD)일 때만 볼록(convex)합니다.**
-
-* 행렬 $Q$가 PSD라는 것은 임의의 벡터 $x$에 대하여 $x^{\top}Qx \ge 0$이 성립함을 의미합니다. 이 조건이 충족되면 목적 함수가 아래로 볼록한 형태를 띠게 되어, 국소적 최솟값(Local minimum)이 곧 전역적 최솟값(Global minimum)이 되는 강력한 이점을 갖습니다.
+* 이차계획법 (Quadratic Programming, QP)
+* 반정부호계획법 (Semidefinite Programming, SDP)
+* 원뿔계획법 (Conic Programming)
+* 이차원뿔계획법 (Second-Order Cone Programming, SOCP)
 
 ---
 
-# 3. Application Examples
+# 2. 이차계획법 (Quadratic Programming)
 
-* 이차 계획법은 다양한 실제 문제에 적용될 수 있습니다. 여기서는 포트폴리오 최적화, 서포트 벡터 머신(SVM), LASSO 회귀라는 세 가지 구체적인 예시를 통해 선형 제약 및 이차 목적함수가 어떻게 도출되는지 단계별로 살펴보겠습니다.
+**이차계획(QP)**은 목적함수가 이차식(quadratic), 제약은 선형(linear)인 다음 형태의 최적화 문제입니다.
 
-## 3.1. Example: Portfolio Optimization (포트폴리오 최적화)
-
-* 금융 공학에서 자산의 배분 비율을 결정하는 포트폴리오 최적화 문제는 대표적인 QP 문제입니다. 기대 수익률을 최대화하면서 동시에 위험(분산)을 최소화하고자 하는 것이 핵심 목표입니다.
-
-### **초기 공식화 (Original Formulation):**
 $$
 \begin{aligned}
-\text{maximize} \quad & \mu^{\top}x - \gamma x^{\top}\Sigma x \\
-\text{subject to} \quad & 1^{\top}x = 1, \\
-& x \in \mathbb{R}_{+}^{n}
+\text{minimize} \quad & \tfrac{1}{2} x^{\top} Q x + p^{\top} x \\
+\text{subject to} \quad & A x \ge b
+\end{aligned} \tag{QP}
+$$
+
+* 여기서 핵심은 **볼록성(convexity)** 조건입니다.
+* QP는 행렬 $Q$가 **반정부호(positive semidefinite, PSD)**일 때, 그리고 오직 그때에만 볼록합니다.
+
+::: {.callout-note}
+### 왜 $Q \succeq 0$이 볼록성을 보장하는가
+이차형식 $\tfrac{1}{2}x^\top Q x$의 헤시안(Hessian)은 정확히 $Q$입니다. 다변수 함수가 볼록할 필요충분조건은 헤시안이 모든 점에서 PSD인 것이므로, $Q \succeq 0$이면 목적함수가 볼록하고, 제약 $Ax \ge b$는 볼록 다면체(convex polyhedron)를 정의하므로 전체 문제가 볼록 최적화가 됩니다.
+:::
+
+## 2.1 예시: 포트폴리오 최적화 (Portfolio Optimization)
+
+앞서 다뤘던 포트폴리오 최적화는 **기대수익은 키우고 위험(분산)은 줄이는** 다음 형태입니다.
+
+$$
+\begin{aligned}
+\text{maximize} \quad & \mu^{\top} x - \gamma\, x^{\top} \Sigma x \\
+\text{subject to} \quad & \mathbf{1}^{\top} x = 1, \\
+& x \in \mathbb{R}^{n}_{+}
 \end{aligned}
 $$
 
-* $x$: 각 자산에 대한 투자 비율 벡터 
-* $\mu$: 각 자산의 기대 수익률 벡터 
-* $\Sigma$: 자산 간의 공분산 행렬 (Covariance matrix) 
-* $\gamma$: 위험 회피 성향을 나타내는 파라미터 (단, $\gamma > 0$) 
-* $1^{\top}x = 1$: 전체 투자 비율의 합은 1 (100%)이어야 한다는 제약 
-* $x \in \mathbb{R}_{+}^{n}$: 공매도를 허용하지 않음 (투자 비율은 0 이상) 
+* $\mu$는 자산별 기대수익 벡터, $\Sigma$는 **공분산 행렬(covariance matrix)**로 항상 PSD입니다.
+* $\gamma > 0$는 위험 회피 정도를 조절하는 계수입니다.
+* $\mathbf{1}^\top x = 1$, $x \ge 0$은 "투자 비중의 합이 1이고 음의 비중(공매도)은 없다"는 제약입니다.
 
-### **QP 형태로의 변환 과정:**
-* 최대화(maximize) 문제는 목적 함수에 음수(-)를 취함으로써 동등한 최소화(minimize) 문제로 변환할 수 있습니다. 임의의 목적 함수 $f$와 실현 가능 집합 $C$에 대해 다음이 성립합니다.
-$$\max\{f(x): x \in C\} = -\min\{-f(x): x \in C\}$$
+이 문제는 **최대화** 문제이지만, 다음의 단순한 항등식을 이용하면 최소화 문제로 바꿀 수 있습니다.
 
-* 이를 적용하여 위 수식에 음수를 취해 최소화 문제로 변경하면 다음과 같은 최종 형태를 얻습니다:
+$$
+\max \{ f(x) : x \in C \} = - \min \{ -f(x) : x \in C \}.
+$$
+
+* 즉 목적함수의 부호를 뒤집고 전체에 음수를 붙이면 최대화와 최소화가 서로 변환됩니다.
+
+이를 적용하면 다음과 같이 정리됩니다.
 
 $$
 \begin{aligned}
-\text{minimize} \quad & \gamma x^{\top}\Sigma x - \mu^{\top}x \\
-\text{subject to} \quad & 1^{\top}x = 1 \\
+\text{minimize} \quad & \gamma\, x^{\top} \Sigma x - \mu^{\top} x \\
+\text{subject to} \quad & \mathbf{1}^{\top} x = 1, \\
 & x \ge 0
 \end{aligned}
 $$
 
-* 여기서 $\gamma > 0$이고 공분산 행렬 $\Sigma$는 본질적으로 양의 준정부호(Positive Semidefinite)이므로, 이 변환된 문제는 볼록 이차 계획법(Convex Quadratic Program)이 됩니다.
+* $\gamma > 0$이고 $\Sigma \succeq 0$이므로 이차항 $\gamma x^\top \Sigma x$는 볼록 이차함수이고, 제약은 모두 선형입니다.
+* 따라서 이 문제는 **볼록 QP**입니다.
 
-## 3.2. Example: Support Vector Machine (SVM)
+## 2.2 예시: 서포트 벡터 머신 (Support Vector Machine)
 
-* 머신러닝의 대표적인 분류 알고리즘인 서포트 벡터 머신(SVM) 역시 QP로 변환할 수 있습니다. SVM의 목적은 마진을 최대화(가중치 벡터의 크기를 최소화)하면서 데이터의 오분류(Hinge loss)를 최소화하는 것입니다.
+다음 예시는 **서포트 벡터 머신(SVM)**의 정식화입니다.
 
-### **초기 공식화:**
 $$
-\min_{w,b} \lambda ||w||_{2}^{2} + \frac{1}{n}\sum_{i=1}^{n}\max\{0, 1 - y_{i}(w^{\top}x_{i} - b)\}
+\min_{w, b} \;\; \lambda \lVert w \rVert_2^2 + \frac{1}{n} \sum_{i=1}^{n} \max\{0,\, 1 - y_i(w^{\top} x_i - b)\}.
 $$
 
-* 위 식에서 $||w||_{2}^{2} = w^{\top}w = w^{\top}Iw$ ($I$는 단위 행렬)로 표현되며, 이는 볼록한 이차 함수(convex quadratic function)입니다.
+* 첫 항 $\lambda \lVert w \rVert_2^2$는 마진(margin)을 키우기 위한 정규화 항이고, 둘째 항은 분류 오차에 대한 **힌지 손실(hinge loss)**입니다.
+* 여기서 $\lVert w \rVert_2^2 = w^\top w = w^\top I w$이며, 단위행렬 $I$는 PSD이므로 $\lVert w \rVert_2^2$는 **볼록 이차함수**입니다.
 
-### **보조 변수(Auxiliary Variables)를 이용한 선형화 변환:**
-* 목적 함수에 포함된 $\max$ 항은 미분 불가능하며 최적화를 어렵게 만듭니다. 이를 해결하기 위해 보조 변수 $t_i$를 도입하여 $\max$ 항을 대체할 수 있습니다.
+문제는 $\max\{0,\cdot\}$ 항이 미분 불가능하다는 점인데, **보조 변수(auxiliary variable)** $t_i$를 도입하면 매끄럽게 처리할 수 있습니다.
 
 $$
 \begin{aligned}
-\text{minimize} \quad & \lambda w^{\top}w + \frac{1}{n}\sum_{i=1}^{n}t_{i} \\
-\text{subject to} \quad & t_{i} \ge \max\{0, 1 - y_{i}(w^{\top}x_{i} - b)\} \quad \text{for } i=1,...,n
+\text{minimize} \quad & \lambda\, w^{\top} w + \frac{1}{n} \sum_{i=1}^{n} t_i \\
+\text{subject to} \quad & t_i \ge \max\{0,\, 1 - y_i(w^{\top} x_i - b)\} \quad \text{for } i = 1, \dots, n.
 \end{aligned}
 $$
 
-* 이 식은 다시 두 개의 선형 제약 조건으로 분리하여 쓸 수 있습니다. $\max$ 함수보다 크거나 같다는 것은 괄호 안의 두 값 모두보다 크거나 같다는 의미이기 때문입니다.
+* "$t_i$가 손실값 이상이고 우리가 $t_i$의 합을 최소화한다"면, 최적해에서 $t_i$는 정확히 손실값과 같아집니다.
 
-### **최종 QP 형태:**
+이제 $t_i \ge \max\{0, a\}$라는 제약은 $t_i \ge a$ **그리고** $t_i \ge 0$ 두 개의 선형 제약과 동치입니다. 이를 적용하면 다음과 같습니다.
+
 $$
 \begin{aligned}
-\text{minimize} \quad & \lambda w^{\top}w + \frac{1}{n}\sum_{i=1}^{n}t_{i} \\
-\text{subject to} \quad & t_{i} \ge 1 - y_{i}(w^{\top}x_{i} - b) \quad \text{for } i=1,...,n \\
-& t_{i} \ge 0 \quad \text{for } i=1,...,n
+\text{minimize} \quad & \lambda\, w^{\top} w + \frac{1}{n} \sum_{i=1}^{n} t_i \\
+\text{subject to} \quad & t_i \ge 1 - y_i(w^{\top} x_i - b) \quad \text{for } i = 1, \dots, n, \\
+& t_i \ge 0 \quad \text{for } i = 1, \dots, n.
 \end{aligned}
 $$
 
-* 이러한 과정을 통해, 복잡했던 원래의 SVM 수식은 **이차 형태의 목적 함수와 선형 제약 조건**을 가지는 완벽한 볼록 이차 계획법(Convex QP)으로 재구성되었습니다.
+* 목적함수는 볼록 이차식, 제약은 모두 선형이므로 SVM은 **볼록 QP**입니다.
 
-## 3.3. Example: LASSO (Least Absolute Shrinkage and Selection Operator)
+## 2.3 예시: LASSO
 
-* 선형 회귀에서 변수 선택과 정규화를 동시에 수행하는 LASSO는 L1-norm 페널티를 포함합니다.
+**LASSO**는 다음과 같이 정식화됩니다.
 
-### **초기 공식화:**
 $$
-\min_{\beta} \frac{1}{n}||y - X\beta||_{2}^{2} + \lambda||\beta||_{1}
-$$
-
-### **목적 함수의 전개 및 이차항 분석:**
-* 먼저 잔차 제곱합 부분(L2 loss)을 전개해 봅니다.
-$$
-||y - X\beta||_{2}^{2} = (y - X\beta)^{\top}(y - X\beta) = \beta^{\top}X^{\top}X\beta - 2y^{\top}X\beta + y^{\top}y
+\min_{\beta} \;\; \frac{1}{n} \lVert y - X\beta \rVert_2^2 + \lambda \lVert \beta \rVert_1.
 $$
 
-* 여기서 $\beta$에 대한 이차항의 계수 행렬은 $X^{\top}X$입니다. 임의의 벡터 $u$에 대하여 다음이 성립합니다.
-$$u^{\top}X^{\top}Xu = ||Xu||_{2}^{2} \ge 0$$
+먼저 잔차제곱항을 전개합니다.
 
-* 따라서 $X^{\top}X$는 양의 준정부호(Positive Semidefinite) 행렬임이 증명됩니다. 또한, 전개식에서 $y^{\top}y$는 $\beta$와 무관한 상수항이므로 최적화 과정에서 무시(생략)할 수 있습니다.
+$$
+\lVert y - X\beta \rVert_2^2 = (y - X\beta)^{\top}(y - X\beta) = \beta^{\top} X^{\top} X \beta - 2 y^{\top} X \beta + y^{\top} y.
+$$
 
-### **L1-norm의 선형 제약 조건 변환:**
-* SVM에서와 마찬가지로 $||\beta||_{1}$ 항 역시 최적화를 까다롭게 만듭니다. 우리는 보조 변수 집합 $s_i$와 전체 L1-norm의 합을 나타낼 보조 변수 $t$ 및 선형 제약 조건을 도입하여 이를 대체할 수 있습니다.
+* 여기서 $X^{\top}X$는 **PSD**입니다. 임의의 벡터 $u$에 대해
+$$
+u^{\top} X^{\top} X u = \lVert X u \rVert_2^2 \ge 0
+$$
+이 성립하기 때문입니다 (제곱 노름은 항상 비음수).
+* $y^\top y$는 $\beta$와 무관한 **상수항**이므로 목적함수에서 무시할 수 있습니다.
 
-### **최종 변환 공식:**
+다음으로 미분 불가능한 $\ell_1$ 항 $\lVert \beta \rVert_1 = \sum_i |\beta_i|$를 보조 변수 $s_i$로 대체합니다. 절댓값 $|\beta_i| \le s_i$는 $-s_i \le \beta_i \le s_i$라는 두 선형 부등식과 동치입니다. 따라서 문제는 다음과 동치입니다.
+
 $$
 \begin{aligned}
-\text{minimize} \quad & \frac{1}{n}\beta^{\top}X^{\top}X\beta - \frac{2}{n}y^{\top}X\beta + \lambda t \\
-\text{subject to} \quad & t \ge \sum_{i=1}^{d}s_{i}, \\
-& s_{i} \ge \beta_{i} \ge -s_{i} \quad \text{for } i=1,...,d
+\text{minimize} \quad & \frac{1}{n} \beta^{\top} X^{\top} X \beta - \frac{2}{n} y^{\top} X \beta + \lambda t \\
+\text{subject to} \quad & t \ge \sum_{i=1}^{d} s_i, \\
+& s_i \ge \beta_i \ge -s_i \quad \text{for } i = 1, \dots, d.
 \end{aligned}
 $$
 
-* 결과적으로 L1 정규화 항을 포함했던 LASSO 문제 역시 이차 계획법(Quadratic Program)의 형태로 재공식화될 수 있음을 확인했습니다.
+* 목적함수의 이차항은 $X^\top X \succeq 0$ 덕분에 볼록하고 제약은 선형이므로, **LASSO 역시 볼록 QP로 재정식화**됩니다.
+
+---
+
+# 3. 반정부호계획법 (Semidefinite Programming)
+
+## 3.1 동기: 최대 절단 문제 (Motivation: Max-Cut)
+
+반정부호계획(SDP)은 **어려운 조합 최적화 문제**를 다루는 강력한 도구를 제공합니다. 대표적 예시가 **최대 절단(max-cut) 문제**입니다.
+
+* 그래프 $G = (V, E)$가 주어졌을 때, 정점 집합 $V$를 두 그룹으로 나누어 **그룹을 가로지르는 간선의 수를 최대화**하는 문제입니다.
+* 분할 $(V_1, V_2)$는 $V_1 \cup V_2 = V$, $V_1 \cap V_2 = \emptyset$을 만족하는 두 집합이고, 가로지르는 간선의 집합은 $\{ uv \in E : u \in V_1, v \in V_2 \}$입니다.
+
+![Figure 6.1: 5개의 정점을 가진 그래프에서 정점들을 빨간색 집합과 검은색 집합으로 분할한 모습입니다. 굵게 강조된(초록색 띠로 둘러싸인) 간선들이 바로 두 집합을 가로지르는 절단 간선(crossing edge)에 해당하며, max-cut 문제는 이렇게 강조되는 간선의 개수를 최대로 만드는 분할을 찾는 것입니다.](./images/fig6_1_maxcut_partition.png)
+
+### 이산 최적화로의 정식화
+
+각 정점에 $\pm 1$ 라벨을 부여하는 변수 $x_i \in \{-1, 1\}$를 도입합니다. 같은 그룹이면 같은 부호, 다른 그룹이면 다른 부호를 가집니다.
+
+$$
+\begin{aligned}
+\text{maximize} \quad & \sum_{ij \in E} \frac{1 - x_i x_j}{2} \\
+\text{subject to} \quad & x_i \in \{-1, 1\} \quad \text{for } i \in V.
+\end{aligned}
+$$
+
+* 목적함수 항 $\frac{1 - x_i x_j}{2}$를 살펴봅시다.
+  * 두 정점이 **같은 그룹**이면 $x_i x_j = 1$이므로 항은 $0$.
+  * 두 정점이 **다른 그룹**이면 $x_i x_j = -1$이므로 항은 $1$.
+* 즉 이 합은 정확히 **절단 간선의 개수**를 셉니다.
+
+### 정수 제약의 이완(relaxation)
+
+실수 $x_i \in \mathbb{R}$에 대해 $x_i \in \{-1, 1\}$은 $x_i^2 = 1$과 동치입니다. 따라서 위 문제는 다음과 같습니다.
+
+$$
+\begin{aligned}
+\text{maximize} \quad & \sum_{ij \in E} \frac{1 - x_i x_j}{2} \\
+\text{subject to} \quad & x_i^2 = 1 \quad \text{for } i \in V.
+\end{aligned}
+$$
+
+이제 핵심 아이디어가 등장합니다. $d = |V|$라 하고, $(i, j)$ 성분이 $X_{ij} = x_i x_j$인 $d \times d$ 행렬 $X$를 생각합니다. 그러면
+
+$$
+X = x x^{\top}
+$$
+
+즉 벡터 $x$의 **외적(outer product)**입니다. 여기서 다음 사실이 중요합니다.
+
+> $X$가 $X = x x^{\top}$ 형태로 표현될 필요충분조건은, $X$가 **PSD이면서 동시에 $\operatorname{rank}(X) = 1$**인 것이다.
+
+이를 이용하면 max-cut을 행렬 변수 $X$에 대한 문제로 다시 쓸 수 있습니다.
+
+$$
+\begin{aligned}
+\text{maximize} \quad & \sum_{ij \in E} \frac{1 - X_{ij}}{2} \\
+\text{subject to} \quad & X_{ii} = 1 \quad \text{for } i \in V, \\
+& X \succeq 0, \\
+& \operatorname{rank}(X) = 1.
+\end{aligned}
+$$
+
+* $X_{ii} = x_i^2 = 1$ 제약이 원래의 $x_i^2 = 1$을 대체합니다.
+
+### SDP 이완 (SDP relaxation)
+
+여기서 문제가 되는 것은 $\operatorname{rank}(X) = 1$ 제약입니다. **랭크 제약은 비볼록(nonconvex)**이기 때문입니다. 그래서 흔히 쓰는 방법은 이 비볼록 제약을 **떼어내는(drop)** 것입니다.
+
+$$
+\begin{aligned}
+\text{maximize} \quad & \sum_{ij \in E} \frac{1 - X_{ij}}{2} \\
+\text{subject to} \quad & X_{ii} = 1 \quad \text{for } i \in V, \\
+& X \succeq 0.
+\end{aligned}
+$$
+
+* 이렇게 얻어진 문제를 max-cut의 **SDP 이완(SDP relaxation)**이라고 부릅니다.
+* 이완된 문제는 볼록이므로 효율적으로 풀 수 있고, 그 해는 원래 max-cut 문제의 좋은 근사를 제공합니다(유명한 Goemans–Williamson 알고리즘의 출발점입니다).
+
+## 3.2 일반형 (General Form)
+
+더 일반적으로, **반정부호계획(SDP)**은 다음 형태의 최적화 문제입니다. $C$와 $A_1, \dots, A_m$을 $d \times d$ 행렬이라 할 때,
+
+$$
+\begin{aligned}
+\text{minimize} \quad & \operatorname{tr}(C^{\top} X) \\
+\text{subject to} \quad & \operatorname{tr}(A_{\ell}^{\top} X) = b_{\ell} \quad \text{for } \ell = 1, \dots, m, \\
+& X \succeq 0
+\end{aligned} \tag{SDP}
+$$
+
+여기서 두 항은 다음과 같이 풀어집니다.
+
+$$
+\operatorname{tr}(C^{\top} X) = \sum_{i=1}^{d} \sum_{j=1}^{d} C_{ij} X_{ij}, \qquad \operatorname{tr}(A_{\ell}^{\top} X) = \sum_{i=1}^{d} \sum_{j=1}^{d} (A_{\ell})_{ij} X_{ij}.
+$$
+
+::: {.callout-tip}
+### LP와의 유비 (analogy)
+$\operatorname{tr}(C^\top X) = \sum_{i,j} C_{ij}X_{ij}$는 행렬 $C$와 $X$의 **프로베니우스 내적(Frobenius inner product)** $\langle C, X\rangle$입니다. 행렬 $X$를 $d^2$차원 벡터로 펼쳐서 본다면, 목적함수와 등식 제약은 모두 $X$에 대해 **선형(linear)**입니다. 따라서 (SDP)는 LP와 본질적으로 같은 꼴이되, 단지 "$x \ge 0$" 대신 "$X \succeq 0$"라는 더 풍부한 제약을 가진 것입니다.
+:::
+
+### SDP 쌍대 (SDP dual)
+
+LP에서 쌍대(dual)를 정의했던 것처럼, SDP에 대해서도 **SDP 쌍대**를 정의할 수 있습니다. (SDP)의 쌍대는 다음과 같습니다.
+
+$$
+\begin{aligned}
+\text{maximize} \quad & \sum_{\ell=1}^{m} b_{\ell} y_{\ell} \\
+\text{subject to} \quad & \sum_{\ell=1}^{m} y_{\ell} A_{\ell} \preceq C
+\end{aligned} \tag{dual-SDP}
+$$
+
+* 여기서 $\sum_{\ell=1}^{m} y_{\ell} A_{\ell} \preceq C$는 $C - \sum_{\ell=1}^{m} y_{\ell} A_{\ell}$가 **PSD**임을 의미합니다.
+* 어떤 최적화 문제가 (SDP) 또는 (dual-SDP) 중 하나의 형태로 표현되면, 그것을 **반정부호계획**이라 부릅니다.
+
+쌍대성(약쌍대성·강쌍대성)에 대한 일반론은 이후 강의에서 더 자세히 다룰 예정입니다. LP 쌍대를 유도하는 방법과 쌍대 정리들을 배웠던 것처럼, 이 개념은 더 넓은 볼록 최적화 문제군으로 확장됩니다.
+
+## 3.3 예시: 이차계획법을 SDP로 (Quadratic Programming as SDP)
+
+이제 (QP)가 사실은 SDP의 한 사례임을 보이겠습니다. 먼저 (QP)를 **에피그래프 형태(epigraph form)**로 다시 씁니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & t \\
+\text{subject to} \quad & A x \ge b, \\
+& x^{\top} Q x + 2 p^{\top} x \le 2t.
+\end{aligned}
+$$
+
+이 두 제약을 각각 PSD 행렬 조건으로 표현하는 것이 목표입니다.
+
+### (1) 선형 제약 $Ax \ge b$의 행렬 표현
+
+$Ax - b$는 벡터이고, $Ax \ge b$는 이 벡터의 모든 성분이 비음수라는 뜻입니다. $\operatorname{Diag}(Ax - b)$를 그 성분을 대각에 놓은 대각행렬이라 하면,
+
+$$
+Ax - b \ge 0 \quad \Longleftrightarrow \quad \operatorname{Diag}(Ax - b) \succeq 0.
+$$
+
+* 대각행렬이 PSD일 필요충분조건은 모든 대각 성분이 비음수인 것이므로 위 동치가 성립합니다.
+
+### (2) 이차 제약의 행렬 표현 — 두 보조정리
+
+먼저 PSD 행렬을 "제곱근 분해"할 수 있다는 보조정리가 필요합니다.
+
+::: {.callout-important}
+### Lemma 6.1
+임의의 PSD 행렬 $Q$에 대해, $Q = P^{\top} P$를 만족하는 행렬 $P$가 존재한다.
+:::
+
+**증명.** 대칭행렬에 대한 **고유값 분해(eigendecomposition)**에 의해 $Q$는
+
+$$
+Q = U \Lambda U^{\top}
+$$
+
+로 쓸 수 있습니다. 여기서 $U$는 직교(orthonormal) 행렬이고 $\Lambda$는 $Q$의 고유값을 대각 성분으로 가지는 대각행렬입니다. $Q$가 PSD이므로 모든 고유값이 비음수이고, 따라서 $\Lambda$의 대각 성분도 모두 비음수입니다. 그러면 각 대각 성분에 제곱근을 취해 $\Lambda^{1/2}$를 적절히 정의할 수 있습니다. $\Lambda^{1/2}$ 역시 대칭이므로 $\Lambda = (\Lambda^{1/2})^{\top} \Lambda^{1/2}$가 성립하고,
+
+$$
+Q = U \Lambda U^{\top} = U (\Lambda^{1/2})^{\top} \Lambda^{1/2} U^{\top} = (\Lambda^{1/2} U^{\top})^{\top} (\Lambda^{1/2} U^{\top}).
+$$
+
+따라서 $P = \Lambda^{1/2} U^{\top}$로 두면 $Q = P^{\top} P$입니다. $\quad\blacksquare$
+
+Lemma 6.1에 의해, 이차 제약 $x^{\top} Q x + 2 p^{\top} x \le 2t$는 어떤 행렬 $P$에 대해
+
+$$
+x^{\top} P^{\top} P x + 2 p^{\top} x \le 2t
+$$
+
+와 동치입니다. 다음으로, 노름 제약을 행렬 부등식으로 바꾸는 보조정리가 필요합니다.
+
+::: {.callout-important}
+### Lemma 6.2
+$y \in \mathbb{R}^d$라 하자. 그러면 $y^{\top} y \le s$는 다음과 동치이다.
+$$
+\begin{pmatrix} s & y^{\top} \\ y & I \end{pmatrix} \succeq 0
+$$
+여기서 $I$는 $d \times d$ 단위행렬이다.
+:::
+
+**증명.**
+
+**($\Leftarrow$)** 위 행렬이 PSD라 가정합니다. 특정 벡터 $(1, -y^\top)^\top$를 대입하면
+
+$$
+(1, -y^{\top}) \begin{pmatrix} s & y^{\top} \\ y & I \end{pmatrix} \begin{pmatrix} 1 \\ -y \end{pmatrix} = s - y^{\top} y \ge 0,
+$$
+
+이므로 $y^\top y \le s$를 얻습니다.
+
+**($\Rightarrow$)** 이제 $y^\top y \le s$를 가정하고 행렬이 PSD임을 보입니다. 임의의 $u \in \mathbb{R}$, $v \in \mathbb{R}^d$에 대해
+
+$$
+\begin{aligned}
+(u, v^{\top}) \begin{pmatrix} s & y^{\top} \\ y & I \end{pmatrix} \begin{pmatrix} u \\ v \end{pmatrix}
+&= u^2 s + 2 u y^{\top} v + v^{\top} v \\
+&\ge u^2 y^{\top} y + 2 u y^{\top} v + v^{\top} v \\
+&= (u y + v)^{\top} (u y + v) \\
+&\ge 0.
+\end{aligned}
+$$
+
+* 첫 번째 부등식은 $s \ge y^\top y$ 가정에서, 마지막 부등식은 임의의 벡터의 제곱 노름이 비음수라는 사실에서 나옵니다.
+
+따라서 행렬은 PSD입니다. $\quad\blacksquare$
+
+### (3) 두 보조정리의 결합
+
+Lemma 6.2를 $y = Px$, $s = 2t - 2p^\top x$에 적용하면(이때 $y^\top y = \lVert Px\rVert_2^2 = x^\top P^\top P x$), $x^{\top} P^{\top} P x + 2 p^{\top} x \le 2t$는 다음 행렬 부등식과 동치입니다.
+
+$$
+\begin{pmatrix} 2t - 2 p^{\top} x & (P x)^{\top} \\ P x & I \end{pmatrix} \succeq 0.
+$$
+
+### 최종 결과
+
+종합하면, (QP)는 다음 SDP와 동치임이 증명되었습니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & t \\
+\text{subject to} \quad & \operatorname{Diag}(A x - b) \succeq 0, \\
+& \begin{pmatrix} 2t - 2 p^{\top} x & (P x)^{\top} \\ P x & I \end{pmatrix} \succeq 0.
+\end{aligned}
+$$
+
+* 두 PSD 제약은 하나의 블록 대각 행렬에 대한 PSD 제약으로 합칠 수 있으므로, 이는 (dual-SDP) 형태의 SDP 사례가 됩니다. 즉 **모든 (볼록) QP는 SDP로 표현될 수 있습니다.**
+
+---
+
+# 4. 원뿔계획법 (Conic Programming)
+
+이제 LP, QP, SDP를 모두 포괄하는 통일된 틀인 **원뿔계획(Conic Programming)**을 소개합니다. 출발점은 LP를 다시 들여다보는 것입니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & c^{\top} x \\
+\text{subject to} \quad & A x \ge b.
+\end{aligned} \tag{LP}
+$$
+
+* $A$의 행을 $a_1^{\top}, \dots, a_n^{\top}$, $b$의 성분을 $b_1, \dots, b_n$이라 하면, $Ax \ge b$는 $a_1^{\top} x \ge b_1, \dots, a_n^{\top} x \ge b_n$이라는 선형 부등식들의 집합입니다.
+* 부등호 "$\ge$"는 두 열벡터 $Ax$와 $b$를 **좌표별로(coordinatewise)** 비교합니다.
+
+### 비음 사분면(nonnegative orthant)으로 다시 쓰기
+
+$Ax \ge b$는 $Ax - b \ge 0$, 즉 열벡터 $Ax - b$의 모든 성분이 비음수라는 뜻입니다. **비음 사분면** $\mathbb{R}^n_+$를 모든 좌표가 비음수인 벡터들의 집합이라 하면, 이는 $Ax - b \in \mathbb{R}^n_+$과 동치입니다. 따라서 LP는 다음과 같이 표현됩니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & c^{\top} x \\
+\text{subject to} \quad & A x - b \in \mathbb{R}^n_+.
+\end{aligned}
+$$
+
+### 비음 사분면 $\mathbb{R}^n_+$의 성질
+
+핵심은 제약을 정의하는 집합 $\mathbb{R}^n_+$이 어떤 좋은 구조를 가지느냐입니다. $\mathbb{R}^n_+$은 다음 네 가지 성질을 만족합니다.
+
+1. **볼록 원뿔(convex cone)**이다. (임의의 비음수 스칼라배와 합에 대해 닫혀 있음)
+2. **뾰족하다(pointed):** $v \in \mathbb{R}^n_+$이고 $-v \in \mathbb{R}^n_+$이면 반드시 $v = 0$이다.
+3. **닫혀 있다(closed):** $\mathbb{R}^n_+$ 안의 임의의 수렴하는 수열 $\{v^n\}_{n \in \mathbb{N}}$의 극한 $\lim_{n \to \infty} v^n$도 $\mathbb{R}^n_+$에 속한다.
+4. **공집합이 아닌 내부(nonempty interior)를 가진다.** 어떤 벡터 $v$가 집합 $K$의 내부점(interior point)이라는 것은, $v$ 주위에 $K$에 완전히 포함되는 열린 공(open ball)이 존재한다는 뜻이다. 모든 내부점의 집합을 내부 $\operatorname{int}(K)$라 한다. $\mathbb{R}^n_+$의 내부는 양의 사분면 $\mathbb{R}^n_{++}$이다.
+
+> 요약하면, **$\mathbb{R}^n_+$은 공집합이 아닌 내부를 가지는, 뾰족하고 닫힌 볼록 원뿔**입니다.
+
+### 다른 원뿔들 (other cones)
+
+이러한 성질을 만족하는 닫힌 볼록 원뿔은 $\mathbb{R}^n_+$ 외에도 존재합니다.
+
+* **로렌츠 원뿔(Lorentz cone)**
+$$
+\{ (x_1, \dots, x_{n-1}, x_n)^{\top} \in \mathbb{R}^n : \lVert (x_1, \dots, x_{n-1})^{\top} \rVert_2 \le x_n \}.
+$$
+  * **이차원뿔(second-order cone)**, **아이스크림 원뿔(ice-cream cone)**, **$\ell_2$-노름 원뿔**이라는 다른 이름으로도 불립니다.
+  * 그 내부는 부등호를 엄격하게 바꾼 형태입니다:
+$$
+\{ (x_1, \dots, x_{n-1}, x_n)^{\top} \in \mathbb{R}^n : \lVert (x_1, \dots, x_{n-1})^{\top} \rVert_2 < x_n \}.
+$$
+
+* **반정부호 원뿔(positive semidefinite cone)**
+$$
+\{ S \in \mathbb{S}^d : x^{\top} S x \ge 0 \text{ for all } x \in \mathbb{R}^d \}.
+$$
+  * 즉 모든 PSD 대칭행렬들의 집합입니다. 그 내부는 모든 **양의 정부호(positive definite)** 행렬들의 집합인 양의 정부호 원뿔입니다.
+
+### 원뿔계획의 정의
+
+**원뿔계획(Conic Program, CP)**은 공집합이 아닌 내부를 가지는, 뾰족하고 닫힌 볼록 원뿔 $K$로 정의되는 다음 문제입니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & c^{\top} x \\
+\text{subject to} \quad & A x - b \in K.
+\end{aligned} \tag{CP}
+$$
+
+* $K = \mathbb{R}^n_+$일 때 (CP)는 다시 LP가 됩니다.
+* 벡터가 $\mathbb{R}^n_+$에 속함을 "$\ge$"로 나타냈듯이, 벡터가 일반 원뿔 $K$에 속함은 "$\ge_K$"로 표기합니다. 즉 $Ax - b \in K \Leftrightarrow Ax - b \ge_K 0 \Leftrightarrow Ax \ge_K b$입니다.
+
+::: {.callout-note}
+### Example 6.3
+* $K$가 **이차원뿔**이면, (CP)는 **이차원뿔계획(SOCP)**이라 부른다.
+* $K$가 **반정부호 원뿔**이면, (CP)는 **반정부호계획(SDP)**이다.
+:::
+
+---
+
+# 5. 이차원뿔계획법 (Second-Order Cone Programming)
+
+**이차원뿔계획(SOCP)**은 다음 형태의 최적화 문제입니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & f^{\top} x \\
+\text{subject to} \quad & \lVert A_i x + b_i \rVert_2 \le c_i^{\top} x + d_i \quad \text{for } i = 1, \dots, m, \\
+& E x = g.
+\end{aligned} \tag{SOCP}
+$$
+
+* 각 제약 $\lVert A_i x + b_i \rVert_2 \le c_i^{\top} x + d_i$는 정확히 "벡터 $(A_i x + b_i,\ c_i^\top x + d_i)$가 로렌츠 원뿔에 속한다"는 조건이며, 이것이 SOCP라는 이름의 유래입니다.
+
+::: {.callout-tip}
+### Exercise 6.4
+(SOCP)가 원뿔계획임을 증명하시오.
+*(힌트: 각 이차원뿔 제약을 로렌츠 원뿔 $K$에 대한 멤버십 $\,\cdot \in K$로 표현하고, 여러 원뿔의 직곱(Cartesian product) 역시 닫힌 볼록 원뿔임을 이용합니다.)*
+:::
+
+## 5.1 예시: 확률 제약 선형계획 (Chance-Constrained Linear Programming)
+
+다음의 **확률 제약 프로그램(Chance-Constrained Program, CCP)**을 생각합니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & c^{\top} x \\
+\text{subject to} \quad & \mathbb{P}\left( a^{\top} x \le b \right) \ge 1 - \epsilon
+\end{aligned} \tag{CCP}
+$$
+
+* 여기서 제약 벡터 $a$는 **확률변수(random)**입니다.
+* 목표는 제약 $a^\top x \le b$가 **적어도 확률 $1 - \epsilon$로** 성립하는 해 $x$를 찾는 것입니다.
+
+### 포트폴리오 예시
+
+포트폴리오 최적화를 CCP로 정식화할 수 있습니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & p^{\top} x \\
+\text{subject to} \quad & \mathbb{P}\left( r^{\top} x \ge 1 + \alpha \right) \ge 1 - \epsilon, \\
+& \mathbf{1}^{\top} x = 1
+\end{aligned}
+$$
+
+* $p_i$는 자산 $i \in [d]$의 단가, $r_i$는 자산 $i$의 **확률적 수익률**입니다.
+* 즉 "확률 $1 - \epsilon$ 이상으로 수익률이 $1 + \alpha$ 이상이 되도록 하면서, 포트폴리오 단가를 최소화"하는 문제입니다.
+
+### 가우시안 가정하의 SOCP 재정식화
+
+계수 벡터 $a$가 평균 $\bar{a}$, 공분산 $\Sigma$인 **다변량 가우시안 분포**를 따른다고 하면, CCP를 SOCP로 변환할 수 있습니다.
+
+$u = a^{\top} x$로 두면, $u$는 다음을 만족하는 확률변수입니다.
+
+* 평균: $\bar{u} = \bar{a}^{\top} x$
+* 분산: $\sigma^2 = x^{\top} \Sigma x$
+
+($a$가 가우시안이면 그 선형결합 $a^\top x$도 가우시안임을 이용합니다.) 그러면 $\mathbb{P}(a^{\top} x \le b) \ge 1 - \epsilon$은 다음과 같이 **표준화(standardization)**할 수 있습니다.
+
+$$
+\mathbb{P}\left( \frac{u - \bar{u}}{\sigma} \le \frac{b - \bar{u}}{\sigma} \right) \ge 1 - \epsilon. \tag{6.1}
+$$
+
+여기서 $\dfrac{u - \bar{u}}{\sigma}$는 평균 $0$, 분산 $1$의 **표준정규분포**를 따르며, 그 누적분포함수(CDF)는 $\Phi$입니다.
+
+$$
+\Phi(z) = \frac{1}{\sqrt{2\pi}} \int_{-\infty}^{z} e^{-t^2/2} \, dt.
+$$
+
+따라서 (6.1)은 다음과 동치입니다.
+
+$$
+\Phi\left( \frac{b - \bar{u}}{\sigma} \right) \ge 1 - \epsilon.
+$$
+
+$\Phi$는 단조증가 함수이므로 역함수 $\Phi^{-1}$을 적용하면, 다음과 동치입니다.
+
+$$
+\frac{b - \bar{u}}{\sigma} = \frac{b - \bar{a}^{\top} x}{\lVert \Sigma^{1/2} x \rVert_2} \ge \Phi^{-1}(1 - \epsilon).
+$$
+
+* 여기서 $\sigma = \sqrt{x^\top \Sigma x} = \lVert \Sigma^{1/2} x \rVert_2$를 사용했습니다.
+
+양변에 $\lVert \Sigma^{1/2} x \rVert_2 \ge 0$를 곱하고 정리하면, (CCP)는 결국 다음과 동치입니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & c^{\top} x \\
+\text{subject to} \quad & \bar{a}^{\top} x + \Phi^{-1}(1 - \epsilon) \lVert \Sigma^{1/2} x \rVert_2 \le b.
+\end{aligned}
+$$
+
+* 제약이 정확히 $\lVert \Sigma^{1/2} x \rVert_2 \le \dfrac{b - \bar{a}^\top x}{\Phi^{-1}(1-\epsilon)}$ 꼴의 **이차원뿔 제약**이므로, 가우시안 가정하의 확률 제약 LP는 **SOCP**가 됩니다.
+
+## 5.2 예시: 볼록 이차계획을 SOCP로 (Convex Quadratic Programming as SOCP)
+
+볼록 QP는 다음과 같이 에피그래프 형태로 쓸 수 있습니다.
+
+$$
+\begin{aligned}
+\text{minimize} \quad & t \\
+\text{subject to} \quad & t \ge \tfrac{1}{2} x^{\top} Q x + p^{\top} x.
+\end{aligned}
+$$
+
+여기서 제약 $t \ge \tfrac{1}{2} x^{\top} Q x + p^{\top} x$를 이차원뿔 제약으로 바꿀 수 있습니다. Lemma 6.1에 의해 PSD 행렬 $Q$는 $Q = P^{\top} P$로 분해되므로, 위 제약은 다음과 동치입니다.
+
+$$
+x^{\top} P^{\top} P x \le 2t - 2 p^{\top} x.
+$$
+
+* 좌변은 $\lVert P x \rVert_2^2$와 같습니다.
+
+이제 우변에 대해 다음 **대수 항등식**을 관찰합니다.
+
+$$
+2t - 2 p^{\top} x = (t - p^{\top} x + 1/2)^2 - (t - p^{\top} x - 1/2)^2.
+$$
+
+::: {.callout-note}
+### 항등식 확인
+$(A + B)^2 - (A - B)^2 = 4AB$입니다. $A = t - p^\top x$, $B = 1/2$로 두면 $4 \cdot (t - p^\top x) \cdot \tfrac{1}{2} = 2(t - p^\top x) = 2t - 2p^\top x$이므로 성립합니다.
+:::
+
+이를 대입하면 $\lVert P x \rVert_2^2 \le 2t - 2p^\top x$는
+
+$$
+\lVert P x \rVert_2^2 + (t - p^{\top} x - 1/2)^2 \le (t - p^{\top} x + 1/2)^2
+$$
+
+와 동치이고, 다시 다음과 동치입니다.
+
+$$
+\left\lVert \begin{pmatrix} P x \\ t - p^{\top} x - 1/2 \end{pmatrix} \right\rVert_2 \le t - p^{\top} x + 1/2.
+$$
+
+* (양변이 비음수일 때 $\lVert u \rVert_2^2 + a^2 \le b^2 \Leftrightarrow \lVert (u, a) \rVert_2 \le b$임을 이용했습니다.)
+* 이것은 정확히 **이차원뿔 제약**이므로, **볼록 QP는 SOCP**입니다.
+
+## 5.3 SDP로의 환원 (Reduction to Semidefinite Programming)
+
+마지막으로, **SOCP가 SDP의 한 사례**임을 보입니다. 이를 위해 다음 보조정리가 필요합니다.
+
+::: {.callout-important}
+### Lemma 6.5
+$y \in \mathbb{R}^d$라 하자. 그러면 $\lVert y \rVert_2 \le s$는 다음과 동치이다.
+$$
+\begin{pmatrix} s & y^{\top} \\ y & s \cdot I \end{pmatrix} \succeq 0
+$$
+:::
+
+**증명.**
+
+**($\Leftarrow$)** 위 행렬이 PSD라 가정합니다. 특정 벡터 $(\lVert y \rVert_2, -y^\top)^\top$를 대입하면
+
+$$
+(\lVert y \rVert_2, -y^{\top}) \begin{pmatrix} s & y^{\top} \\ y & s \cdot I \end{pmatrix} \begin{pmatrix} \lVert y \rVert_2 \\ -y \end{pmatrix} = 2(s \lVert y \rVert_2^2 - y^{\top} y \lVert y \rVert_2) \ge 0,
+$$
+
+이고 $y^\top y = \lVert y \rVert_2^2$이므로 우변은 $2\lVert y\rVert_2^2 (s - \lVert y\rVert_2) \ge 0$가 됩니다. 따라서 $s \ge \lVert y \rVert_2$를 얻습니다.
+
+**($\Rightarrow$)** 이제 $s \ge \lVert y \rVert_2$를 가정하고 행렬이 PSD임을 보입니다. 임의의 $u \in \mathbb{R}$, $v \in \mathbb{R}^d$에 대해
+
+$$
+\begin{aligned}
+(u, v^{\top}) \begin{pmatrix} s & y^{\top} \\ y & s \cdot I \end{pmatrix} \begin{pmatrix} u \\ v \end{pmatrix}
+&= u^2 s + 2 u y^{\top} v + s v^{\top} v \\
+&\ge \lVert y \rVert_2 (u^2 + \lVert v \rVert_2^2) + 2 u y^{\top} v \\
+&\ge \lVert y \rVert_2 (u^2 + \lVert v \rVert_2^2) - 2 |u| \cdot \lVert y \rVert_2 \cdot \lVert v \rVert_2 \\
+&\ge 0.
+\end{aligned}
+$$
+
+* 첫 번째 부등식은 가정 $s \ge \lVert y \rVert_2$에서 나옵니다.
+* 두 번째와 세 번째 부등식은 **코시–슈바르츠 부등식(Cauchy–Schwarz inequality)** $|y^\top v| \le \lVert y \rVert_2 \lVert v \rVert_2$에서 나옵니다.
+* 마지막 식은 $\lVert y \rVert_2 (\lvert u \rvert - \lVert v \rVert_2)^2 \ge 0$로 정리되어 항상 비음수입니다.
+
+따라서 행렬은 PSD입니다. $\quad\blacksquare$
+
+### 결론
+
+Lemma 6.5에 의해, **임의의 이차원뿔 제약은 SDP 제약(PSD 행렬 조건)으로 표현될 수 있습니다.** 따라서 SOCP는 SDP의 특수한 경우이며, 우리는 다음의 포함 관계를 얻습니다.
+
+$$
+\text{LP} \;\subset\; \text{(convex) QP} \;\subset\; \text{SOCP} \;\subset\; \text{SDP}.
+$$
+
+이 계층 구조는 볼록 최적화를 통일적으로 바라보는 강력한 관점을 제공하며, 더 일반적인 문제일수록 더 풍부한 원뿔 $K$를 사용한다는 직관으로 요약됩니다.

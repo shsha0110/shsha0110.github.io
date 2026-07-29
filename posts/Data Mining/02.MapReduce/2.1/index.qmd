@@ -1,8 +1,7 @@
 ---
-title: "[Data Mining] 2. MapReduce (Part 1)"
+title: "[Data Mining] 02. MapReduce (Part 1)"
 description: "Distributed Computing for Data Mining"
 author: "유성현"
-date: "2026-03-05"
 categories: [Data Mining]
 format:
   html:
@@ -12,19 +11,19 @@ format:
     math: true
 ---
 
-# 1. Introduction: The Need for Distributed Computing
+## 1. Introduction: The Need for Distributed Computing
 
 * 현대 데이터 마이닝과 머신러닝에서 다루는 데이터의 규모는 단일 머신(Single Machine)의 처리 능력을 넘어선 지 오래입니다. 우리가 다루는 문제는 더 이상 단순한 스프레드시트 수준이 아니며, 거대한 그래프와 행렬 연산을 포함합니다.
 
 * 강의에서는 대규모 연산이 필요한 대표적인 두 가지 예시를 제시합니다.
 
-## 1.1. Web Ranking (PageRank)
+### 1.1. Web Ranking (PageRank)
 * 웹 페이지의 중요도를 산정하는 **PageRank** 알고리즘은 웹을 거대한 그래프로, 링크를 행렬로 표현합니다.
   * **규모:** 수십억(Billions) 개의 웹 페이지(차원).
   * **연산:** $M \times v$ 형태의 **반복적인 행렬-벡터 곱(Iterated matrix-vector multiplication)** 수행.
 * 단일 메모리에 적재조차 불가능한 희소 행렬(Sparse Matrix)을 반복적으로 연산해야 합니다.
 
-## 1.2. Social Network Analysis
+### 1.2. Social Network Analysis
 * 소셜 네트워크에서 친구를 추천하거나 특정 패턴을 탐색하는 문제 역시 거대한 그래프를 다룹니다.
   * **규모:** 수억(Hundreds of millions) 명의 노드(사용자)와 수십억 개의 엣지(친구 관계).
   * **복잡성:** 단순 저장이 아니라 그래프 상에서의 탐색과 연산이 필요합니다.
@@ -35,11 +34,11 @@ format:
 
 ---
 
-# 2. Physical Architecture of Large-Scale Computing
+## 2. Physical Architecture of Large-Scale Computing
 
 * 대규모 연산을 위한 물리적 인프라는 어떻게 구성될까요? 핵심은 "고가의 장비"가 아닌 "다수의 저렴한 장비"를 묶는 것입니다.
 
-## 2.1. Node, Rack, and Switch
+### 2.1. Node, Rack, and Switch
 * 일반적인 데이터 센터의 계층 구조는 다음과 같습니다.
   * 1.  **Compute Node**: CPU, 메모리, 디스크를 가진 개별 서버입니다. (일반적인 데스크탑 수준의 사양일 수 있음)
   * 2.  **Rack**: 여러 개의 노드(보통 8~64개)를 물리적으로 묶은 단위입니다. 같은 랙에 있는 노드들은 **Gigabit Ethernet**으로 연결되어 있어 통신 속도가 비교적 빠릅니다.
@@ -47,11 +46,11 @@ format:
 
 ---
 
-# 3. The Challenge: Machine Failures
+## 3. The Challenge: Machine Failures
 
 * 수천 대의 머신을 사용하면 필연적으로 **"장애(Failure)"** 문제가 발생합니다. 분산 시스템 설계에서 장애는 예외적인 상황이 아니라 **일상적인(Norm)** 상황으로 간주해야 합니다.
 
-## 3.1. Statistical View on Failures
+### 3.1. Statistical View on Failures
 * 서버의 신뢰성을 확률적으로 접근해 봅시다.
   * 가정: 서버 한 대의 평균 수명(Mean Time To Failure)은 약 3년이라고 가정합니다.
       $$3 \text{ years} \approx 1,000 \text{ days}$$
@@ -66,7 +65,7 @@ $$\text{Expected Failures per Day} = 1,000,000 \times \frac{1}{1000} = 1,000$$
 * **매일 
 * 1,000대의 머신이 고장** 나는 상황이 벌어집니다.
 
-## 3.2. Types of Failures
+### 3.2. Types of Failures
 * 장애의 유형은 크게 두 가지로 나뉩니다.
   * 1.  **Single Node Failure**: 디스크 고장, 메인보드 불량 등 개별 서버의 문제.
   * 2.  **Rack Failure**: 랙 전체의 전원 공급 장치나 랙 스위치(Switch) 고장으로 인해, 해당 랙에 속한 수십 대의 노드가 동시에 오프라인 되는 경우.
@@ -75,16 +74,16 @@ $$\text{Expected Failures per Day} = 1,000,000 \times \frac{1}{1000} = 1,000$$
 
 ---
 
-# 4. Storage Infrastructure: Distributed File System (DFS)
+## 4. Storage Infrastructure: Distributed File System (DFS)
 
 * 위의 장애 문제를 해결하고 대용량 데이터를 처리하기 위해 등장한 것이 **분산 파일 시스템(Distributed File System, DFS)**입니다. 대표적으로 Google File System (GFS)와 이를 오픈소스로 구현한 **Hadoop Distributed File System (HDFS)**가 있습니다.
 
-## 4.1. Usage Patterns
+### 4.1. Usage Patterns
 * DFS는 일반적인 PC의 파일 시스템과는 다른 사용 패턴을 가정합니다.
   * **Huge Files**: 수백 GB에서 TB 단위의 거대한 파일들을 다룹니다.
   * **Access Pattern**: 데이터는 주로 **읽기(Reads)**와 **추가(Appends)**가 빈번하며, 기존 내용을 수정(Update in place)하는 경우는 드뭅니다.
 
-## 4.2. Architecture: Chunks and Replication
+### 4.2. Architecture: Chunks and Replication
 * DFS는 데이터를 안정적으로 저장하기 위해 파일을 잘게 쪼개고 복제합니다.
   * 1.  **Chunk Nodes (Data Nodes)**
       * 거대한 파일을 **Chunk**라는 단위(일반적으로 16MB ~ 64MB)로 분할하여 저장합니다.
@@ -97,14 +96,14 @@ $$\text{Expected Failures per Day} = 1,000,000 \times \frac{1}{1000} = 1,000$$
 
 ---
 
-# 5. Distributed Computation Paradigm
+## 5. Distributed Computation Paradigm
 
 * 데이터를 분산 저장(DFS)했다면, 이제 그 데이터를 가지고 연산을 수행해야 합니다.
 
-## 5.1. The Bottleneck: Network
+### 5.1. The Bottleneck: Network
 * 전통적인 방식처럼 데이터를 연산 장치로 가져오는 것은 불가능합니다. 수 페타바이트(PB)의 데이터를 네트워크를 통해 이동시키는 것은 시간이 너무 오래 걸리기 때문입니다.
 
-## 5.2. Solution: "Bring Computation to Data"
+### 5.2. Solution: "Bring Computation to Data"
 * MapReduce와 같은 프레임워크의 핵심 아이디어는 발상의 전환입니다.
 
 > **"데이터를 이동시키지 말고, 코드를 데이터가 있는 곳으로 이동시키자."**
@@ -115,7 +114,7 @@ $$\text{Expected Failures per Day} = 1,000,000 \times \frac{1}{1000} = 1,000$$
 
 ---
 
-# 6. Computing Cluster Workflow
+## 6. Computing Cluster Workflow
 
 * 실제 클러스터 환경에서 작업(Job)이 처리되는 과정은 다음과 같습니다.
 

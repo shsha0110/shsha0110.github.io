@@ -2,7 +2,6 @@
 title: "[Deep Learning] 18. Deep Generative Models 2"
 description: "Variational Autoencoders"
 author: "유성현"
-date: "2026-05-06"
 categories: [Deep Learning]
 format:
   html:
@@ -10,18 +9,17 @@ format:
     number-sections: false
     code-fold: show
     math: true
-    theme: cosmo
 ---
 
-# 1. 들어가며 (Introduction)
+## 1. 들어가며 (Introduction)
 
 * 이번 포스트에서는 딥러닝 기반 생성 모델의 핵심 축을 담당하는 **변분 오토인코더(Variational Autoencoders, VAE)**에 대해 다룹니다. 이 개념을 정확히 이해하기 위해서는 먼저 잠재 변수(Latent Variable)를 활용하는 생성 모델의 목적과 기존 최대 우도 추정(Maximum Likelihood Estimation) 방식이 직면하는 수학적 한계를 파악해야 합니다. 
 
 * 본 문서는 강의 자료의 전반부를 바탕으로 생성 모델의 기초부터 VAE의 도입 배경까지의 논리적 흐름을 상세히 짚어보겠습니다.
 
-# 2. 생성 모델과 잠재 변수 (Latent-Variable Generative Models)
+## 2. 생성 모델과 잠재 변수 (Latent-Variable Generative Models)
 
-## 2.1. 생성 모델의 기본 목적
+### 2.1. 생성 모델의 기본 목적
 * 생성 모델(Generative model)의 근본적인 목적은 주어진 데이터 분포에 확률을 할당하고, 학습된 분포로부터 **새로운 샘플을 생성(generate)**하는 것입니다. 
 
 * 일반적으로 주어진 데이터 $x^{(1)},...,x^{(N)}\sim p_{data}(x)$ 에 대하여, 모델 파라미터 $\theta$ 를 학습하기 위해 **최대 우도(Maximum likelihood) 목적 함수**를 사용합니다. 최적화 문제는 다음과 같이 정의됩니다:
@@ -30,14 +28,14 @@ $$\max_{\theta}\sum_{i=1}^{N}\log p_{\theta}(x^{(i)})$$
 
 * 즉, 관측된 데이터가 모델 분포 하에서 등장할 로그 확률의 합을 최대화하는 파라미터 $\theta$ 를 찾는 과정입니다.
 
-## 2.2. 잠재 변수(Latent Variable)의 도입
+### 2.2. 잠재 변수(Latent Variable)의 도입
 * 하지만 고차원의 복잡한 데이터(예: 이미지, 음성)의 분포를 직접 모델링하는 것은 매우 어렵습니다. 이를 해결하기 위해 **잠재 변수 생성 모델(Latent-variable generative models)**은 숨겨진 변수(Hidden variable) $z$ 를 도입합니다. 
 
 * 이러한 모델에서는 데이터가 다음과 같은 2단계의 확률적 계층 구조를 통해 생성된다고 가정합니다:
   * 1. 사전에 정의된 분포에서 잠재 변수를 샘플링합니다: $z\sim p(z)$ 
   * 2. 샘플링된 잠재 변수를 조건으로 하여 데이터를 생성합니다: $x\sim p_{\theta}(x|z)$ 
 
-# 3. 잠재 변수 생성 과정 (Generative Process)
+## 3. 잠재 변수 생성 과정 (Generative Process)
 
 * 잠재 변수 생성 모델의 구조를 조금 더 구체적으로 살펴보겠습니다.
 
@@ -53,11 +51,11 @@ $$\max_{\theta}\sum_{i=1}^{N}\log p_{\theta}(x^{(i)})$$
   * **이진 데이터 (Binary data):** 베르누이 분포를 가정하며, 신경망이 성공 확률을 예측합니다.
     $$p_{\theta}(x|z)=\text{Bernoulli}(\pi_{\theta}(z))$$
 
-# 4. 최대 우도 학습의 난제 (The Intractability Problem)
+## 4. 최대 우도 학습의 난제 (The Intractability Problem)
 
 * 잠재 변수를 도입함으로써 모델의 표현력은 크게 향상되었지만, 학습 과정에서 치명적인 수학적 난제에 부딪히게 됩니다. 
 
-## 4.1. 다루기 힘든 주변 우도 (Intractable Marginal Likelihood)
+### 4.1. 다루기 힘든 주변 우도 (Intractable Marginal Likelihood)
 * 우리의 최종 목표는 여전히 관측 데이터의 **주변 우도(Marginal likelihood)**인 $\log p_{\theta}(x)$ 를 최대화하는 것입니다. 
 
 * 하지만 모델이 잠재 변수 $z$ 를 통해 $x$ 를 정의하고 있으므로, 우도를 구하기 위해서는 가능한 모든 $z$ 에 대해 적분을 수행해야 합니다:
@@ -66,7 +64,7 @@ $$p_{\theta}(x)=\int p_{\theta}(x,z)dz=\int p(z)p_{\theta}(x|z)dz$$
 
 * 문제는 $p_{\theta}(x|z)$ 가 비선형 신경망(Nonlinear neural network)으로 매개변수화되어 있다는 점입니다. 가우시안 분포 $p(z)$ 가 복잡한 비선형 함수를 통과하면서 결과 분포는 더 이상 닫힌 형태(Closed-form)의 수식으로 적분할 수 없게 됩니다. 이를 해석적으로 다룰 수 없으므로(Analytically intractable), 직접적인 최대 우도 최적화는 매우 어렵습니다.
 
-## 4.2. 다루기 힘든 사후 분포 (Intractable Posterior)
+### 4.2. 다루기 힘든 사후 분포 (Intractable Posterior)
 * 적분이 불가능하다면, 대안으로 베이즈 정리(Bayes' rule)를 사용하여 사후 분포(Posterior)를 구하는 접근을 생각해볼 수 있습니다.
 
 $$p_{\theta}(z|x)=\frac{p_{\theta}(x|z)p(z)}{p_{\theta}(x)}$$
@@ -77,7 +75,7 @@ $$p_{\theta}(z|x)=\frac{p_{\theta}(x|z)p(z)}{p_{\theta}(x)}$$
   * 이러한 문제를 우회하기 위해 변분 오토인코더(VAE)는 다루기 힘든 실제 사후 분포 $p_{\theta}(z|x)$ 를 근사(Approximate)할 수 있는 해석 가능한 분포 $q_{\phi}(z|x)$ 를 도입합니다.
   $$q_{\phi}(z|x)\approx p_{\theta}(z|x)$$
 
-# 5. 기존 오토인코더와의 차별점 (Why not Vanilla Autoencoder?)
+## 5. 기존 오토인코더와의 차별점 (Why not Vanilla Autoencoder?)
 
 * 그렇다면 이미 존재하는 바닐라 오토인코더(Vanilla Autoencoder)를 생성 모델로 사용하지 못하는 이유는 무엇일까요? 
 
@@ -95,11 +93,11 @@ $$p_{\theta}(z|x)=\frac{p_{\theta}(x|z)p(z)}{p_{\theta}(x)}$$
 
 ---
 
-# 1. 들어가며 (Introduction)
+## 1. 들어가며 (Introduction)
 
 * 이전 포스트에서는 잠재 변수 생성 모델이 직면하는 수학적 난제, 즉 사후 분포(Posterior) 추론이 불가능하다는 문제(Intractable posterior)를 확인했습니다. 이번 글에서는 변분 오토인코더(Variational Autoencoder, VAE)가 이 문제를 해결하기 위해 도입한 **확률적 인코더(Probabilistic Encoder)**와 **디코더(Decoder)**의 구조를 살펴봅니다. 
 
-# 2. VAE의 핵심 구조: 확률적 인코더와 디코더
+## 2. VAE의 핵심 구조: 확률적 인코더와 디코더
 
 * VAE는 크게 두 가지 주요 네트워크로 구성됩니다. 
   * **인코더 (Encoder):** 인식 또는 추론 네트워크(Recognition / Inference network)라고도 불리며, 입력 데이터를 바탕으로 잠재 공간의 분포를 추론합니다.
@@ -109,11 +107,11 @@ $$p_{\theta}(z|x)=\frac{p_{\theta}(x|z)p(z)}{p_{\theta}(x)}$$
 
 * 인코더 모델인 $q_{\phi}(z|x)$는 주어진 입력 $x$로부터 잠재 변수 $z$를 추론(infer)하며, 모델의 정규화를 위해 이 잠재 분포는 사전 분포(Prior)인 표준 정규 분포 $p(z)=\mathcal{N}(0,I)$에 근사하도록(close to) 유도됩니다. 이후 샘플링된 $z$는 디코더 $p_{\theta}(x|z)$를 거쳐 복원된 $\hat{x}$ 혹은 $x$에 대한 확률 분포로 변환됩니다.
 
-# 3. 네트워크의 매개변수화 (Parameterization)
+## 3. 네트워크의 매개변수화 (Parameterization)
 
 * VAE가 신경망을 통해 확률 분포를 다루기 위해서는 각 네트워크가 분포의 파라미터를 출력하도록 설계해야 합니다.
 
-## 3.1. 인코더의 매개변수화 (Encoder Parameterization)
+### 3.1. 인코더의 매개변수화 (Encoder Parameterization)
   
 * 인코더의 핵심 역할은 앞서 해석적으로 구할 수 없었던(intractable) 실제 사후 분포 $p_{\theta}(z|x)$를 근사하는 분포 $q_{\phi}(z|x)$를 제공하는 것입니다. 
 
@@ -130,7 +128,7 @@ $$q_{\phi}(z|x) = \mathcal{N}(\mu_{\phi}(x), \text{diag}(\sigma_{\phi}^{2}(x)))$
 
 * 분산 $\sigma^2$ 대신에 로그 분산 $\log \sigma^2_{\phi}(x)$를 출력하는 이유는, 신경망의 출력값은 음수를 포함한 실수 전체 범위를 가지지만, 분산은 항상 양수여야 하기 때문입니다. 로그를 취함으로써 신경망의 출력 형태와 분산의 수학적 조건을 자연스럽게 맞출 수 있습니다.
 
-## 3.2. 디코더의 매개변수화 (Decoder Parameterization)
+### 3.2. 디코더의 매개변수화 (Decoder Parameterization)
 
 * 디코더는 주어진 잠재 변수 $z$에 대해 데이터의 우도(Likelihood) 분포인 $p_{\theta}(x|z)$를 정의합니다. 다루고자 하는 데이터의 종류에 따라 디코더의 출력 분포 형태가 달라집니다.
   * **연속형 데이터 (Continuous data의 경우):** 디코더 신경망 $\mu_{\theta}(z)$가 평균을 출력하는 정규 분포를 사용합니다.
@@ -138,14 +136,14 @@ $$q_{\phi}(z|x) = \mathcal{N}(\mu_{\phi}(x), \text{diag}(\sigma_{\phi}^{2}(x)))$
   * **이진 데이터 (Binary data의 경우):** 디코더 신경망 $\pi_{\theta}(z)$가 성공 확률을 출력하는 베르누이 분포를 사용합니다.
     $$p_{\theta}(x|z) = \text{Bernoulli}(\pi_{\theta}(z))$$ 
 
-###  학습 시 주요 구현 포인트 (Important Implementation Point)
+####  학습 시 주요 구현 포인트 (Important Implementation Point)
 * 강의 자료에 따르면 매우 중요한 구현 디테일이 존재합니다. 모델을 학습(Training)할 때, 우리는 보통 디코더로부터 새로운 샘플 $\hat{x}$를 직접 추출(sample)할 필요가 없습니다. 대신, 실제 관측된 데이터 $x$가 디코더가 예측한 분포 $p_{\theta}(x|z)$ 하에서 가질 **로그 우도(log-likelihood)**를 수학적으로 계산하여 목적 함수에 활용하게 됩니다.
 
-# 4. 파이프라인 비교: 학습(Training) vs 생성(Generation)
+## 4. 파이프라인 비교: 학습(Training) vs 생성(Generation)
 
 * VAE는 학습할 때와 학습이 끝난 후 새로운 데이터를 생성할 때 모델의 활용 구조가 완전히 달라집니다.
 
-## 4.1. 모델 학습 파이프라인 (Training Path)
+### 4.1. 모델 학습 파이프라인 (Training Path)
 
 ![Figure: VAE의 모델 학습 경로. 입력 데이터 $x$가 인코더 $q_{\phi}(z|x)$를 통과하여 잠재 변수 $z$를 추론하고, 이 $z$가 다시 디코더 $p_{\theta}(x|z)$에 들어가 데이터의 분포를 추정합니다. 원본 입력 $x$와 모델이 추정한 분포의 관계를 통해 최종적으로 모델을 최적화하는 ELBO 손실 함수(ELBO loss)가 점선 화살표의 피드백 루프를 통해 계산됩니다.](./images/vae_training_path.png)
 
@@ -154,7 +152,7 @@ $$q_{\phi}(z|x) = \mathcal{N}(\mu_{\phi}(x), \text{diag}(\sigma_{\phi}^{2}(x)))$
   * 2. $z$를 디코더 $p_{\theta}(x|z)$에 통과시켜 출력 분포를 구합니다.
   * 3. 이 구조 안에서 입력 $x$와 우도 간의 관계를 측정하여 **ELBO(Evidence Lower Bound) 손실 함수**를 계산하고, 모델 파라미터 $\phi$와 $\theta$를 최적화합니다.
 
-## 4.2. 데이터 생성 파이프라인 (Generation Path)
+### 4.2. 데이터 생성 파이프라인 (Generation Path)
 
 ![Figure: VAE의 데이터 생성 경로. 생성 시에는 인코더가 생략됩니다. 대신 다루기 쉬운 사전 분포 $p(z)=\mathcal{N}(0, I)$에서 잠재 변수 $z$를 무작위로 샘플링한 후, 디코더 $p_{\theta}(x|z)$를 거쳐 분포의 평균이나 샘플링을 통해 최종적으로 전혀 새로운 데이터 샘플(new $x$)을 생성합니다.](./images/vae_generation_path.png)
 
@@ -165,7 +163,7 @@ $$q_{\phi}(z|x) = \mathcal{N}(\mu_{\phi}(x), \text{diag}(\sigma_{\phi}^{2}(x)))$
 
 ---
 
-# 1. 들어가며: 목표와 한계 (Goal and Intractability)
+## 1. 들어가며: 목표와 한계 (Goal and Intractability)
 
 * 우리의 궁극적인 목표는 주어진 데이터 $x$에 대해 모델이 할당하는 로그 우도(Log-likelihood)인 $\log p_{\theta}(x)$를 최대화하는 파라미터 $\theta$를 찾는 것입니다. 
 
@@ -174,11 +172,11 @@ $$q_{\phi}(z|x) = \mathcal{N}(\mu_{\phi}(x), \text{diag}(\sigma_{\phi}^{2}(x)))$
 * 이 하한선을 **ELBO (Evidence Lower Bound)**라고 부르며, 다음과 같은 부등식이 성립합니다.
 $$\log p_{\theta}(x) \ge \mathcal{L}_{ELBO}(x;\theta,\phi)$$
 
-# 2. ELBO의 수학적 도출 (ELBO Derivation)
+## 2. ELBO의 수학적 도출 (ELBO Derivation)
 
 * 도출 과정은 주변 우도의 정의에서 출발하여 기댓값(Expectation) 형태로 변환한 뒤, 부등식을 적용하는 순서로 진행됩니다.
 
-## 2.1. 인코더 분포 $q_{\phi}(z|x)$의 삽입
+### 2.1. 인코더 분포 $q_{\phi}(z|x)$의 삽입
 * 먼저 주변 우도 식에 인코더가 추론하는 근사 사후 분포 $q_{\phi}(z|x)$를 삽입합니다. 분모와 분자에 동일한 값을 곱하여 식을 변형합니다.
 
 $$\log p_{\theta}(x) = \log \int p_{\theta}(x,z)dz$$ 
@@ -188,7 +186,7 @@ $$\log p_{\theta}(x) = \log \int q_{\phi}(z|x) \frac{p_{\theta}(x,z)}{q_{\phi}(z
 
 $$\log p_{\theta}(x) = \log \mathbb{E}_{z \sim q_{\phi}(z|x)} \left[ \frac{p_{\theta}(x,z)}{q_{\phi}(z|x)} \right]$$ 
 
-## 2.2. 옌센 부등식(Jensen's Inequality)의 적용
+### 2.2. 옌센 부등식(Jensen's Inequality)의 적용
 * 이제 로그(log) 함수의 특성을 이용합니다. 로그 함수는 위로 볼록한(Concave) 함수이므로, 옌센 부등식에 의해 $\log \mathbb{E}[Y] \ge \mathbb{E}[\log Y]$가 성립합니다. 이 성질을 방금 구한 식에 적용하면 로그와 기댓값의 위치가 바뀌면서 부등호가 생성됩니다.
 
 $$\log p_{\theta}(x) \ge \mathbb{E}_{q_{\phi}(z|x)} \left[ \log \frac{p_{\theta}(x,z)}{q_{\phi}(z|x)} \right]$$ 
@@ -196,7 +194,7 @@ $$\log p_{\theta}(x) \ge \mathbb{E}_{q_{\phi}(z|x)} \left[ \log \frac{p_{\theta}
 * 바로 이 우변이 우리가 찾던 **ELBO**의 정의입니다.
 $$\mathcal{L}_{ELBO}(x;\theta,\phi) = \mathbb{E}_{q_{\phi}(z|x)} \left[ \log \frac{p_{\theta}(x,z)}{q_{\phi}(z|x)} \right]$$ 
 
-## 2.3. 결합 확률(Joint) 전개 및 분리
+### 2.3. 결합 확률(Joint) 전개 및 분리
 * ELBO의 의미를 명확히 하기 위해 결합 확률 법칙 $p_{\theta}(x,z) = p_{\theta}(x|z)p(z)$를 사용하여 수식을 전개합니다.
 
 $$\mathcal{L}_{ELBO}(x;\theta,\phi) = \mathbb{E}_{q_{\phi}(z|x)} \left[ \log \frac{p_{\theta}(x|z)p(z)}{q_{\phi}(z|x)} \right]$$ 
@@ -211,7 +209,7 @@ $$\mathcal{L}_{ELBO}(x;\theta,\phi) = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}
 
 ---
 
-# 3. ELBO의 직관적 해석 (ELBO Intuition)
+## 3. ELBO의 직관적 해석 (ELBO Intuition)
 
 * 수학적으로 도출된 두 항은 VAE가 학습 과정에서 어떤 역할을 하는지 명확한 직관을 제공합니다.
 
@@ -222,7 +220,7 @@ $$\mathcal{L}_{ELBO}(x;\theta,\phi) = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}
    * **의미:** 인코더가 예측한 잠재 분포 $q_{\phi}(z|x)$가 사전에 정의한 단순한 분포 $p(z)$(보통 표준 정규 분포 $\mathcal{N}(0, I)$)와 최대한 가까워지도록 강제합니다. 
    * **역할:** 이 정규화 과정을 거쳐야만, 생성(Generation) 단계에서 우리가 단순한 분포 $p(z)$에서 무작위로 $z$를 샘플링했을 때 유의미한 데이터를 만들어낼 수 있는 연속적인 잠재 공간(sampleable latent space)이 형성됩니다.
 
-# 4. ELBO 간극 항등식 (ELBO Gap Identity)
+## 4. ELBO 간극 항등식 (ELBO Gap Identity)
 
 * ELBO가 왜 '하한선(Lower Bound)'이 되는지 베이즈 정리를 통해 다른 각도에서 증명할 수도 있습니다. 
 * 실제 로그 우도 $\log p_{\theta}(x)$는 ELBO와 **사후 분포 근사 간극(Posterior approximation gap)**의 합으로 완벽히 분해됩니다.
@@ -234,7 +232,7 @@ $$\log p_{\theta}(x) \ge \mathcal{L}_{ELBO}(x;\theta,\phi)$$
 
 * 이 항등식이 시사하는 바는 매우 큽니다. 모델이 **ELBO를 최대화(Maximizing)**한다는 것은 단지 데이터의 로그 우도를 높이는 것뿐만 아니라, 간접적으로 근사 사후 분포 $q_{\phi}(z|x)$를 실제 다루기 힘든 사후 분포 $p_{\theta}(z|x)$에 가깝게 밀어붙이는(pushes toward) 역할까지 동시에 수행함을 의미합니다.
 
-# 5. 최적화 및 실제 구현 (Equivalent Optimization Problem)
+## 5. 최적화 및 실제 구현 (Equivalent Optimization Problem)
 
 * 전체 데이터셋 $N$개에 대해 모델을 학습할 때의 목표는 ELBO를 최대화하는 파라미터 $\theta, \phi$를 찾는 것입니다.
 
@@ -250,14 +248,14 @@ $$\min_{\theta,\phi} \sum_{i=1}^{N} \left[ - \mathbb{E}_{q_{\phi}(z|x^{(i)})}[\l
 
 ---
 
-# 1. 들어가며 (Introduction)
+## 1. 들어가며 (Introduction)
 
 * 이전 포스트에서 우리는 VAE가 최대화하고자 하는 목적 함수인 ELBO를 다음과 같이 두 개의 항으로 유도했습니다.
 $$\mathcal{L}_{ELBO}(x;\theta,\phi) = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)] - KL(q_{\phi}(z|x) || p(z))$$
 
 * 모델을 학습시키기 위해서는 이 수식을 코드로 구현하여 기울기(Gradient)를 계산해야 합니다. 즉, 목적 함수가 딥러닝 프레임워크에서 처리될 수 있는 **계산 가능한 형태(Computable form)**여야 합니다. 이번 장에서는 이 두 항, 즉 'KL 발산 항(KL term)'과 '복원 항(Reconstruction term)'을 어떻게 구체적으로 계산하는지 알아봅니다.
 
-# 2. KL 발산 항의 계산 (Computing the KL term)
+## 2. KL 발산 항의 계산 (Computing the KL term)
 
 * ELBO의 두 번째 부분인 KL 발산 항은 인코더가 추정한 근사 사후 분포 $q_{\phi}(z|x)$와 사전 분포 $p(z)$ 간의 차이를 측정합니다.
 
@@ -274,7 +272,7 @@ $$KL(q_{\phi}(z|x) || p(z)) = \frac{1}{2} \sum_{j=1}^{k} \left( \mu_{j}^{2} + \s
 * **구현 상의 이점:**
   * 이 수식은 인코더 신경망의 출력값들로만 구성되어 있으므로, 인코더 출력에 대해 완벽하게 미분 가능합니다(Differentiable with respect to encoder outputs). 또한, 앞서 다루었듯 분산은 항상 양수여야 하므로, 실제 구현 시에는 신경망이 $\log \sigma^{2}$를 직접 출력하도록 하여 수식의 $\log \sigma^{2}$ 부분에 바로 대입하는 방식을 취합니다.
 
-# 3. 복원 항의 계산 (Computing the Reconstruction Term)
+## 3. 복원 항의 계산 (Computing the Reconstruction Term)
 
 * ELBO의 첫 번째 부분인 복원 항은 다음과 같은 기댓값 형태를 띱니다:
 $$\mathbb{E}_{z \sim q_{\phi}(z|x)}[\log p_{\theta}(x|z)]$$ 
@@ -290,11 +288,11 @@ $$\mathbb{E}_{q_{\phi}}[\log p_{\theta}(x|z)] \approx \frac{1}{L} \sum_{l=1}^{L}
 
 ![Figure: VAE 목적 함수의 두 축. 닫힌 형태로 계산되는 KL 발산(KL Divergence)과, 몬테카를로 샘플링을 통해 경험적으로 추정되는 복원 로그 우도(Reconstruction Log-Likelihood)의 관계를 수식의 형태로 시각화하였습니다.](./images/vae_objective_computation.png)
 
-# 4. 디코더 확률 분포와 손실 함수 매핑 (Gaussian vs Bernoulli)
+## 4. 디코더 확률 분포와 손실 함수 매핑 (Gaussian vs Bernoulli)
 
 * 복원 항 추정식에 포함된 $\log p_{\theta}(x|z)$를 최적화하기 위해서는 디코더가 어떤 형태의 확률 분포를 출력하느냐에 따라 우리가 흔히 아는 손실 함수(Loss function)로 치환됩니다. 
 
-## 4.1. 가우시안 디코더와 MSE Loss
+### 4.1. 가우시안 디코더와 MSE Loss
 * 연속형 데이터(Continuous data, 예: 일반적인 이미지 픽셀)에 대해 가우시안 디코더를 사용한다고 가정해 봅시다.
 $$p_{\theta}(x|z) = \mathcal{N}(\mu_{\theta}(z), \sigma_x^2 I)$$ 
 
@@ -306,18 +304,18 @@ $$-\log p_{\theta}(x|z) \propto ||x - \mu_{\theta}(z)||_2^2$$
 
 * 즉, 가우시안 디코더를 가정하고 로그 우도를 최대화하는 것은 원본 데이터 $x$와 디코더가 예측한 평균 $\mu_{\theta}(z)$ 사이의 **유클리디안 거리 제곱(Squared reconstruction error)을 최소화하는 것**과 정확히 수학적으로 동일합니다. 따라서 이 경우 **MSE(Mean Squared Error) 유사 손실**을 사용하게 됩니다.
 
-## 4.2. 베르누이 디코더와 BCE Loss
+### 4.2. 베르누이 디코더와 BCE Loss
 * 반면, 이진 데이터(Binary data, 흑백 이미지 등)를 다룰 때 베르누이 디코더를 사용하면 어떻게 될까요? 베르누이 분포의 로그 우도 수식을 전개하면, 이는 놀랍게도 분류 문제에서 널리 쓰이는 **이진 교차 엔트로피(Binary Cross-Entropy, BCE)** 수식과 완전히 일치하게 됩니다. 
 
 * 결론적으로, 디코더의 우도 함수(Likelihood) 설정이 곧 모델이 사용할 복원 손실 함수(Reconstruction loss)를 결정짓게 됩니다.
 
 ---
 
-# 1. 들어가며 (Introduction)
+## 1. 들어가며 (Introduction)
 
 * 앞선 포스트에서 우리는 VAE의 목적 함수인 ELBO를 계산 가능한 형태로 변환했습니다. 목적 함수 중 '복원 항(Reconstruction term)'을 몬테카를로 방식을 통해 추정하기 위해서는, 인코더가 만들어낸 확률 분포에서 잠재 변수 $z$를 무작위로 추출(Sampling)하는 과정이 반드시 필요합니다. 하지만 바로 이 지점에서 신경망 학습의 가장 큰 난관이 발생합니다.
 
-# 2. 문제 제기: 샘플링 연산의 한계 (Why do we need reparameterization?)
+## 2. 문제 제기: 샘플링 연산의 한계 (Why do we need reparameterization?)
 
 * VAE의 복원 항을 계산하는 과정은 $z \sim q_{\phi}(z|x)$라는 샘플링에 직접적으로 의존합니다. 인코더 네트워크가 입력 $x$를 받아 분포를 정의하지만, 이 분포 $q_{\phi}(z|x)$는 인코더의 파라미터 $\phi$에 의해 결정됩니다.
 
@@ -327,7 +325,7 @@ $$-\log p_{\theta}(x|z) \propto ||x - \mu_{\theta}(z)||_2^2$$
 
 * 일반적인 딥러닝 학습에서는 손실(loss) 값을 계산한 뒤, 미분의 연쇄 법칙(Chain Rule)을 통해 그래디언트가 디코더를 거쳐 인코더까지 전달되어야 파라미터를 업데이트할 수 있습니다. 하지만 샘플링 노드가 중간에 끼어 있으면, 그래디언트의 흐름이 막혀버려 인코더 파라미터 $\phi$를 학습시킬 방법이 사라집니다.
 
-# 3. 핵심 아이디어: 재매개변수화 트릭 (The Reparameterization Trick)
+## 3. 핵심 아이디어: 재매개변수화 트릭 (The Reparameterization Trick)
 
 * 이 문제를 해결하기 위해 도입된 것이 바로 **재매개변수화 트릭(Reparameterization trick)**입니다.
 
@@ -345,7 +343,7 @@ $$z = \mu_{\phi}(x) + \sigma_{\phi}(x) \odot \epsilon$$
 
 * 이 트릭의 가장 중요한 수학적 통찰(Key idea)은, **무작위성(Randomness)을 인코더의 파라미터 $\phi$와 전혀 무관한 외부 변수 $\epsilon$으로 분리하여 이동시켰다는 점**입니다.
 
-# 4. 역전파 흐름의 변화 (Backpropagation through sampling)
+## 4. 역전파 흐름의 변화 (Backpropagation through sampling)
 
 * 재매개변수화 트릭을 적용하면 계산 그래프(Computational Graph)의 구조가 근본적으로 바뀝니다.
 
@@ -354,7 +352,7 @@ $$z = \mu_{\phi}(x) + \sigma_{\phi}(x) \odot \epsilon$$
 * **재매개변수화 이전 (Without reparameterization):** 앞서 보았듯, 단순한 샘플링 과정은 역전파를 차단(sampling blocks gradient)합니다.
 * **재매개변수화 이후 (With reparameterization):** 이제 $z$를 계산하는 과정은 덧셈과 곱셈이라는 확정적(Deterministic)이고 선형적인 연산으로 구성됩니다. 따라서 파라미터 $\phi$에서부터 최종 손실(loss)까지 단절 없이 이어지는 **미분 가능한 경로(differentiable path)**가 확보됩니다. 확률적 변동성은 오직 미분할 필요가 없는 $\epsilon$ 노드에만 갇혀 있게 됩니다.
 
-# 5. 재매개변수화된 목적 함수 (Reparameterized reconstruction term)
+## 5. 재매개변수화된 목적 함수 (Reparameterized reconstruction term)
 
 * 이 트릭을 바탕으로 복원 항(Reconstruction term)의 수식이 어떻게 달라지는지 확인해 보겠습니다.
 
@@ -370,11 +368,11 @@ $$z = \mu_{\phi}(x) + \sigma_{\phi}(x) \odot \epsilon$$
 
 ---
 
-# 1. 들어가며 (Introduction)
+## 1. 들어가며 (Introduction)
 
 * 지금까지의 과정을 통해 우리는 VAE를 학습시키기 위한 모든 이론적 도구를 갖추었습니다. 이번 글에서는 개별 데이터 포인트에 대한 최종 목적 함수를 정의하고, 인코더와 디코더가 하나의 파이프라인으로 연결되어 오차 역전파(Backpropagation)를 통해 어떻게 공동 학습(Joint training)을 수행하는지 살펴봅니다.
 
-# 2. 최종 목적 함수: Negative ELBO Loss
+## 2. 최종 목적 함수: Negative ELBO Loss
 
 * 단일 데이터 포인트 $x$에 대하여 모델이 최대화해야 하는 ELBO(Evidence Lower Bound)는 다음과 같이 복원 항과 KL 정규화 항으로 정의됩니다.
 
@@ -386,7 +384,7 @@ $$\mathcal{J}(x;\theta,\phi) = - \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)
 
 * 이 손실 함수를 최소화하는 것이 곧 우도(Likelihood)의 하한선을 최대화하는 것과 수학적으로 완벽히 동일합니다.
 
-# 3. VAE 전체 학습 아키텍처 (VAE Training Diagram)
+## 3. VAE 전체 학습 아키텍처 (VAE Training Diagram)
 
 * 앞서 정의한 수식이 실제 신경망 아키텍처에서 어떻게 데이터 흐름으로 구현되는지 도식을 통해 확인해 보겠습니다.
 
@@ -401,7 +399,7 @@ $$\mathcal{J}(x;\theta,\phi) = - \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)
   * 6. 디코더의 출력과 원본 데이터 $x$를 비교하여 **복원 항(Reconstruction term)** $-\log p_{\theta}(x|z)$를 계산합니다.
   * 7. KL 항과 복원 항을 더하여 최종 **Negative ELBO loss**를 산출하고, 이를 바탕으로 역전파를 수행합니다.
 
-# 4. 실전 알고리즘 구현 (VAE Training Algorithm)
+## 4. 실전 알고리즘 구현 (VAE Training Algorithm)
 
 * 도식으로 살펴본 흐름을 실제 코드 레벨의 의사코드(Pseudocode)로 정리하면 다음과 같습니다.
 
@@ -437,7 +435,7 @@ for x in minibatches:
 * ** 수치적 안정성을 위한 핵심 팁 (Common implementation detail):**
   * 인코더 네트워크가 분산 $\sigma^2$ 자체를 출력하지 않고 `logvar` (즉, $\log \sigma^2$)를 출력하도록 설계하는 것은 수치적 안정성(Numerical stability)을 높이기 위한 매우 일반적이고 중요한 기법입니다. 분산은 항상 양수여야 하므로 신경망의 제약 없는 실수 출력에 맞추기 위해 로그 형태를 학습하게 됩니다.
 
-# 5. 각 네트워크의 역할 요약 (What each network learns)
+## 5. 각 네트워크의 역할 요약 (What each network learns)
 
 * 학습이 성공적으로 진행됨에 따라, VAE를 구성하는 두 네트워크는 각자의 명확한 역할을 학습하게 됩니다.
 
@@ -451,11 +449,11 @@ for x in minibatches:
 
 ---
 
-# 1. 들어가며 (Introduction)
+## 1. 들어가며 (Introduction)
 
 * 지금까지의 포스트를 통해 우리는 VAE가 ELBO를 최대화하며 인코더와 디코더를 공동 학습(Joint training)하는 과정을 살펴보았습니다. 그렇다면 학습이 모두 끝난 후, 이 모델은 어떻게 활용될까요? 이번 포스트에서는 VAE의 강력한 두 가지 기능인 **무조건부 생성(Unconditional Generation)**과 **표현 학습(Representation Learning)을 통한 추론(Inference)**에 대해 다루어 보겠습니다.
 
-# 2. 학습 후 데이터 생성 (Generation after training)
+## 2. 학습 후 데이터 생성 (Generation after training)
 
 * 학습이 성공적으로 완료되었다면, VAE는 더 이상 원본 데이터 $x$에 의존하지 않고도 완전히 새로운 데이터를 만들어낼 수 있습니다. 
 
@@ -471,7 +469,7 @@ for x in minibatches:
 
 * **시각화를 위한 팁:** 생성된 이미지를 시각화(Visualization)할 때에는, 디코더 분포에서 무작위로 샘플링을 진행하기보다는 디코더가 예측한 평균(mean) 값을 직접 사용하는 경우가 많습니다. 즉, $x = \mu_{\theta}(z)$ 를 최종 결과물로 활용하여 노이즈가 적은 선명한 샘플을 얻습니다.
 
-# 3. 복원과 표현 학습 (Reconstruction and Representation Learning)
+## 3. 복원과 표현 학습 (Reconstruction and Representation Learning)
 
 * VAE는 단순히 새로운 이미지를 찍어내는 '생성기' 역할만 하는 것이 아닙니다. 훌륭한 **특징 추출기(Feature extractor)**로서도 기능합니다.
 
@@ -479,31 +477,31 @@ for x in minibatches:
   * **생성 모델 (A generator):** 앞서 살펴본 바와 같이 $z \sim p(z)$에서 샘플링 후 디코딩을 수행합니다.
   * **추론 모델 (An inference model):** 입력 $x$를 잠재 표현(latent representation)으로 인코딩합니다.
 
-## 3.1. 원본 데이터 복원 (Reconstruction)
+### 3.1. 원본 데이터 복원 (Reconstruction)
 * 이미지를 입력받아 이를 다시 재구성하는 복원 과정의 흐름은 다음과 같습니다:
 $$x \rightarrow q_{\phi}(z|x) \rightarrow z \rightarrow p_{\theta}(x|z)$$ 
 
-## 3.2. 표현 학습 (Representation Learning)
+### 3.2. 표현 학습 (Representation Learning)
 * 만약 이미지 분류나 클러스터링과 같은 후속 작업(Downstream task)을 수행하고 싶다면, 디코더를 제외하고 **인코더만 활용하여 표현 학습(Representation learning)을 수행**할 수 있습니다.
 $$x \rightarrow q_{\phi}(z|x)$$ 
 
 * 이때 특징(Feature) 벡터로는 인코더가 출력한 평균 벡터 $\mu_{\phi}(x)$를 직접 사용하거나, 분포 $q_{\phi}(z|x)$로부터 샘플링한 값들을 활용할 수 있습니다.
 
-# 4. 잠재 공간의 탐색과 해석 (Latent-Space Traversal)
+## 4. 잠재 공간의 탐색과 해석 (Latent-Space Traversal)
 
 * VAE가 생성해내는 잠재 공간(Latent Space)의 가장 큰 매력은 그 공간이 **연속적(Continuous)**이고 **의미론적으로 해석 가능(Interpretable)**하다는 점입니다.
 
-## 4.1. 잠재 방향 탐색 (Latent Traversal)
+### 4.1. 잠재 방향 탐색 (Latent Traversal)
 * 잠재 변수 $z$가 저차원(low-dimensional)일 경우, 우리는 잠재 좌표(latent coordinates)를 조금씩 변화시켜가며 디코더의 결과를 시각화할 수 있습니다. 잠재 공간에서 좌표를 부드럽게(smoothly) 이동시키면, 생성되는 샘플 이미지 역시 확 바뀌지 않고 부드러운 형태적 변화를 보입니다. 이를 **잠재 방향 탐색(Latent Traversal)**이라고 부릅니다.
 
-## 4.2. 해석 가능한 차원 (Interpretable Latent Directions)
+### 4.2. 해석 가능한 차원 (Interpretable Latent Directions)
 * 이 탐색 과정은 모델이 데이터에 대해 무엇을 학습했는지 정성적으로(qualitatively) 검사하는 아주 좋은 방법입니다. 종종 잠재 공간의 서로 다른 차원(dimensions)들은 이미지의 의미 있는 변화 요인(meaningful factors of variation, 예: 얼굴의 각도, 피부색, 웃음의 정도 등)을 각각 포착해냅니다. 
 
 * 우리가 앞서 수학적으로 유도했던 **대각 사전 분포(Diagonal prior, $\mathcal{N}(0, I)$)**는 잠재 차원들이 서로 독립적(independent)이 되도록 권장(encourages)하기 때문입니다. (물론 항상 완벽한 독립성이 보장되는 것은 아닙니다.)
 
 ---
 
-# 5. 요약: 무엇이 VAE를 "생성 모델"로 만드는가? (What makes VAEs generative?)
+## 5. 요약: 무엇이 VAE를 "생성 모델"로 만드는가? (What makes VAEs generative?)
 
 * 이번 슬라이드의 핵심을 관통하는 마지막 질문입니다. 일반적인 오토인코더와 달리, VAE가 훌륭한 생성 모델로 작동할 수 있는 근본적인 이유는 다음 4가지 수학적 설계 덕분입니다.
   * 1. **디코더의 우도 정의:** 디코더가 단순히 결정론적 값을 내뱉는 것이 아니라, 조건부 확률 분포(Likelihood) $p_{\theta}(x|z)$를 정의합니다.
@@ -513,11 +511,11 @@ $$x \rightarrow q_{\phi}(z|x)$$
 
 ---
 
-# 1. 들어가며 (Introduction)
+## 1. 들어가며 (Introduction)
 
 * 지금까지 우리는 변분 오토인코더(VAE)가 다루기 힘든 적분 문제를 ELBO로 우회하고, 재매개변수화 트릭을 통해 미분 가능한 생성 모델로 거듭나는 과정을 심도 있게 다루었습니다. 하지만 세상에 완벽한 모델은 없듯이, VAE 역시 특유의 구조적 한계를 가지고 있습니다. 이번 포스트에서는 VAE의 한계점과 그 발전 방향을 알아보고, 전체 시리즈를 갈무리하겠습니다.
 
-# 2. VAE의 대표적 한계점: 흐릿한 샘플 (Common Limitation: Blurry Samples)
+## 2. VAE의 대표적 한계점: 흐릿한 샘플 (Common Limitation: Blurry Samples)
 
 * VAE가 생성한 이미지들을 살펴보면, GAN(Generative Adversarial Networks)이나 최신 디퓨전 모델(Diffusion models)이 생성한 결과물에 비해 이미지가 전반적으로 매끄럽지만 다소 흐릿하다(smooth but blurry)는 특징을 발견할 수 있습니다.
 
@@ -527,13 +525,13 @@ $$x \rightarrow q_{\phi}(z|x)$$
 
 ![Figure: VAE가 생성한 흐릿한 샘플의 예시. 픽셀별 오차를 최소화하려는 우도 기반 학습의 특성상, 모델이 불확실한 픽셀에 대해 가능한 여러 색상의 평균값을 예측하여 결과적으로 경계가 모호해지는 현상을 시각적으로 보여줍니다.](./images/vae_blurry_limitation.png)
 
-## 2.1. 그럼에도 VAE가 여전히 가치 있는 이유
+### 2.1. 그럼에도 VAE가 여전히 가치 있는 이유
 * 생성 품질의 한계에도 불구하고 VAE는 다음과 같은 강력한 장점 덕분에 머신러닝 분야에서 매우 귀중한 모델로 평가받습니다:
   * 1. 경험적이거나 휴리스틱한 방식이 아닌, **수학적으로 원칙 있는 확률적 목적 함수(principled probabilistic objective)**를 가집니다.
   * 2. 데이터를 잠재 공간으로 보낼 수 있는 **추론 모델(inference model) $q_{\phi}(z|x)$**을 기본적으로 제공합니다.
   * 3. 분류, 군집화 등 다양한 다운스트림 작업에 활용할 수 있는 **유용한 잠재 표현(useful latent representations)**을 효과적으로 학습합니다.
 
-# 3. VAE의 확장 모델들 (Extensions)
+## 3. VAE의 확장 모델들 (Extensions)
 
 * VAE의 구조적 유연성 덕분에 한계를 극복하기 위한 수많은 확장 연구가 진행되어 왔습니다.
 
@@ -551,11 +549,11 @@ $$x \rightarrow q_{\phi}(z|x)$$
 
 ---
 
-# 1. 들어가며 (Introduction)
+## 1. 들어가며 (Introduction)
 
 * VAE 학습 알고리즘의 우아함은 복잡한 적분 문제를 미분 가능한 형태의 손실 함수로 깔끔하게 치환해 냈다는 데 있습니다. 그 중심에는 인코더의 사후 분포와 사전 분포 간의 차이를 계산하는 KL 발산(KL Divergence) 항이 있습니다. 이번 부록에서는 강의의 백업(Backup) 슬라이드에 담긴 수학적 세부 사항을 바탕으로, 임의의 두 가우시안 분포 간의 KL 발산으로부터 VAE 전용 KL 수식이 도출되는 과정을 증명합니다. 아울러 $\beta$-VAE를 통해 잠재 공간의 정규화 강도를 조절하는 메커니즘을 살펴보겠습니다.
 
-# 2. 일반적인 다변량 정규 분포의 KL 발산 (Full Gaussian KL)
+## 2. 일반적인 다변량 정규 분포의 KL 발산 (Full Gaussian KL)
 
 * 먼저, $k$차원 공간에 존재하는 임의의 두 다변량 정규 분포 $p_0$와 $p_1$을 다음과 같이 정의해 봅시다.
   * **분포 0:** $p_{0} = \mathcal{N}(\mu_{0},\Sigma_{0})$ 
@@ -571,7 +569,7 @@ $$KL(p_{0}||p_{1}) = \frac{1}{2} \left( \text{Tr}(\Sigma_{1}^{-1}\Sigma_{0}) + (
   * 3.  **$- k$:** 공간의 차원 수 $k$에 대한 보정 항입니다.
   * 4.  **$\log\frac{\det \Sigma_{1}}{\det \Sigma_{0}}$:** 두 분포의 부피(행렬식, Determinant) 비율을 나타냅니다.
 
-# 3. VAE를 위한 KL 발산 유도 (Derivation for VAEs)
+## 3. VAE를 위한 KL 발산 유도 (Derivation for VAEs)
 
 * 이제 이 무시무시한 공식을 VAE의 상황에 맞게 대입하여 식을 단순화해 보겠습니다. VAE에서는 $p_0$를 인코더의 근사 사후 분포 $q_{\phi}(z|x)$로, $p_1$을 사전 분포 $p(z)$로 설정합니다.
 
@@ -590,7 +588,7 @@ $$KL(q_{\phi}(z|x)||p(z)) = \frac{1}{2} \sum_{j=1}^{k} \left( \sigma_{j}^{2} + \
 
 * 복잡한 행렬 연산이 대각 행렬과 표준 정규 분포라는 영리한 가정 덕분에, 신경망의 출력값만으로 단순 덧셈과 곱셈으로 계산할 수 있는 최적의 형태로 변환된 것입니다.
 
-# 4. 표현의 얽힘 풀기: $\beta$-VAE (Disentanglement with $\beta$-VAE)
+## 4. 표현의 얽힘 풀기: $\beta$-VAE (Disentanglement with $\beta$-VAE)
 
 * 본편의 확장 모델 섹션에서 잠시 언급했던 $\beta$-VAE(B-VAE)의 구체적인 목적 함수에 대해 살펴보겠습니다.
 

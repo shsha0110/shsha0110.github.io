@@ -1,0 +1,682 @@
+---
+title: "[Causal Inference] 18. Causal Discovery"
+description: "Causal Discovery"
+author: "유성현"
+categories: [Causal Inference]
+format:
+  html:
+    toc: true
+    number-sections: false
+    code-fold: show
+    math: true
+---
+
+## 들어가며: 인과 발견이란 무엇인가? (Introduction)
+
+지금까지의 인과추론(Causal Inference) 강의에서는 **인과 그래프 $G$가 이미 주어졌다고 가정**하고, 그 위에서 개입 분포 $P_x(y)$를 식별하는 문제를 다루었습니다. 즉, "구조는 알고 있으니 효과를 계산하자"는 관점이었습니다.
+
+이번 강의의 **인과 발견(Causal Discovery)**, 또는 **구조 학습(Structure Learning)**은 그 정반대 방향의 질문을 던집니다.
+
+* **인과추론:** 알려진 $U$가 인과 다이어그램 $G$를 유도하고, $do(x)$ 개입 하의 $P_x(y)$를 구한다.
+* **인과 발견:** 관측 분포 $P(V)$($do(\emptyset)$, 즉 개입이 없는 상태)만 손에 쥐고서, 그 데이터를 만들어낸 **그래프 $G$ 자체를 거꾸로 추정**한다.
+
+![Figure: 인과성 연구의 두 갈래를 대비한 도식입니다. 두 경우 모두 알 수 없는(unknown) 메커니즘 $U$가 인과 다이어그램 $G$를 유도(induces)하지만, 인과추론은 개입 $do(x)$ 하의 $P_x(y)$를 묻는 반면(오른쪽 화살표), 인과 발견은 개입이 없는 관측 분포 $P(V)$($do(\emptyset)$)만으로 그래프 $G$를 역으로 추론하려 한다는 점에서 출발점과 목표가 정반대임을 보여줍니다.](./images/research_themes.png)
+
+### 닭이 울면 해가 뜬다? (Rooster → Sun?)
+
+직관적인 예시로 시작해 봅니다. 매일 아침 닭이 울고 곧이어 해가 뜬다는 관측 데이터(닭 울음 $0/1$, 일출 $0/1$)가 쌓였다고 합시다. 데이터의 상관관계만 보면 "닭 → 해"라는 화살표를 그리고 싶어집니다. 인과 발견의 핵심 난제가 바로 여기 있습니다. **관측 데이터의 통계적 패턴만으로 화살표의 방향을 결정하는 것은 본질적으로 어렵다**는 것입니다.
+
+### 구조 학습의 정의 (Structure Learning)
+
+문제를 형식적으로 정의하면 다음과 같습니다.
+
+* **INPUT:** 분포 $P(V)$로부터 독립적으로 샘플링되었다고 가정하는 데이터셋
+* **OUTPUT:** 우리가 데이터에 대해 알아낸 사실들과 **일관된(consistent) 그래프들의 집합** (이상적으로는 참 그래프 $G$를 포함)
+
+여기서 출력이 하나의 그래프가 아니라 **그래프들의 집합**이라는 점에 주목해야 합니다. 또한 이 문제에는 정답 레이블이 없으므로, 인과 발견은 본질적으로 **비지도 학습(unsupervised learning)** 문제입니다.
+
+### DAG 모델과 세 가지 정의 (DAG Models)
+
+이 강의 전체에서 우리는 **DAG(Directed Acyclic Graph) 모델**에 집중합니다.
+
+* 변수 집합 $V$의 인과 구조란, 각 노드가 $V$의 서로 다른 원소에 대응하고 각 방향 간선이 변수들 간의 **직접적 함수 관계**를 나타내는 방향 비순환 그래프입니다.
+* 여기서 DAG 모델은 **마르코프 모델(Markovian model)**에 대응합니다. 이는 곧 **인과 충분성(Causal Sufficiency)**, 즉 *측정된 변수들 사이에 측정되지 않은 교란 변수(unmeasured confounder)가 없다*는 강한 가정을 깔고 있음을 의미합니다.
+
+하나의 DAG 모델은 동등한 **세 가지 정의**로 기술될 수 있습니다. 예시 그래프 $A \to B,\ A \to C,\ B \to D,\ C \to D,\ D \to E$를 기준으로 보겠습니다.
+
+* **인수분해 (Factorization):**
+$$P(A,B,C,D,E) = P(E|D)\,P(D|B,C)\,P(C|A)\,P(B|A)\,P(A)$$
+* **국소 마르코프 성질 (Local Markov property):** 각 변수는 부모가 주어지면 비후손과 독립입니다.
+$$(C \perp\!\!\!\perp B \mid A),\quad (D \perp\!\!\!\perp A \mid B,C),\quad (E \perp\!\!\!\perp A,B,C \mid D)$$
+* **전역 마르코프 성질 (Global Markov property):** 임의의 $A,B,C$에 대해, $G$에서 $A$가 $C$가 주어졌을 때 $B$와 **d-분리**되면, $P(V)$에서 $(A \perp\!\!\!\perp B \mid C)$가 성립합니다.
+
+![Figure: DAG 모델의 세 가지 등가 정의를 하나의 예시 그래프 위에서 보여주는 슬라이드입니다. 노드 $A$가 $B,C$의 부모이고 $B,C$가 $D$의 부모, $D$가 $E$의 부모인 구조에서, 인수분해·국소 마르코프·전역 마르코프가 모두 동일한 독립성 집합을 함의함을 시각화하여, 이후 d-분리와 조건부 독립의 다리를 놓는 출발점이 됩니다.](./images/dag_three_definitions.png)
+
+### 데이터로부터 DAG를 어떻게 학습하는가?
+
+전역 마르코프 성질은 **한쪽 방향의 함의(one-way implication)**일 뿐입니다.
+
+$$\text{$G$에서의 모든 d-분리} \;\Longrightarrow\; P(V)\text{에서의 조건부 독립(CI)}$$
+
+대우를 취하면 $P(V)$의 조건부 종속은 $G$의 d-연결을 함의합니다. 문제는 이 화살표가 **단방향**이라는 데 있습니다.
+
+* **최소성(Minimality)의 필요성:** 완전 연결 그래프(모든 쌍에 간선이 있는 그래프)는 어떤 $P(V)$와도 전역 마르코프 성질을 만족시킵니다(독립성 제약을 하나도 강제하지 않으므로). 따라서 단순히 마르코프 성질만으로는 의미 있는 구조를 골라낼 수 없으며, 함의의 방향을 역전시킬 추가 가정이 필요합니다.
+
+* **충실성(Faithfulness):** 이 역방향을 보장하는 핵심 가정입니다. 임의의 $A,B,C$에 대해,
+$$A \text{가 $G$에서 $C$ 주어졌을 때 $B$와 d-분리} \;\Longleftrightarrow\; A \perp\!\!\!\perp B \mid C \text{ in } P(V)$$
+즉 **그래프의 분리 구조와 분포의 독립 구조가 정확히 일치**한다는 가정입니다.
+
+#### 충실성 가정에 대한 논의 (Assumptions — Faithfulness)
+
+* 충실성은 $G$에 따라 인수분해되는 $P(V)$가 *추가로* 만족할 수도 있는 성질로 생각하면 됩니다.
+* 대부분의 $P(V)$는 충실합니다. 충실하지 않은(unfaithful) 분포들은 **측도 0(measure zero)의 집합**을 이루기 때문입니다.
+* 그러나 주의할 점이 있습니다.
+  * **유한 표본**에서는 충실하지 않은 분포와 *거의* 충실하지 않은(nearly unfaithful) 분포를 구별하기 어렵고, 후자는 훨씬 많이 존재합니다. (데이터가 CI를 말할 때, 그것이 진짜 d-분리인지 아니면 우연히 거의 상쇄된 것인지 알기 어렵습니다.)
+  * 자연은 분포를 무작위로 고르지 않습니다. 항상성(homeostasis)처럼 진화적 이유로 일부러 충실하지 않은 상황을 만들어낼 수 있습니다.
+* **실무적 결론:** 주어진 문제에 대해 충실성이 합리적인 가정인지 정당화하는 과정이 필요합니다.
+
+#### 충실성 위반의 예시 (Violation of Faithfulness)
+
+대표적인 비충실 분포의 예입니다. 다음 SEM을 생각해 봅시다.
+
+$$X \leftarrow \varepsilon_1,\qquad Z \leftarrow X + \varepsilon_Z,\qquad Y \leftarrow X - Z + \varepsilon_Y$$
+
+그래프상으로 $X \to Z$, $X \to Y$, $Z \to Y$ (계수는 각각 $1, 1, -1$)이므로 $X$와 $Y$는 공집합으로 **d-분리되지 않습니다**. 그런데 대입하여 풀어보면,
+
+$$X = \varepsilon_1,\qquad Z = \varepsilon_1 + \varepsilon_Z,\qquad Y = -\varepsilon_Z + \varepsilon_Y$$
+
+이므로 $Y$는 $\varepsilon_Z$와 $\varepsilon_Y$만으로 표현됩니다. 따라서 $X = \varepsilon_1$과 $Y$는 **통계적으로 독립**입니다. 직접 경로($X \to Y$, 계수 $+1$)와 간접 경로($X \to Z \to Y$, 계수 $1 \times (-1) = -1$)의 효과가 정확히 상쇄되어, 그래프는 종속을 말하는데 분포는 독립을 말하는 충실성 위반이 발생한 것입니다.
+
+---
+
+## 1. 제약 기반 구조 학습 (Constraint-Based Structure Learning)
+
+가장 고전적인 접근입니다. 핵심 아이디어는 단순합니다.
+
+* 데이터에서 성립하는 **제약(즉, 조건부 독립 CI)**들을 찾는다.
+* 이 제약과 모순되는 그래프들을 **배제**한다.
+* 남은 것을 반환한다.
+
+### 1.1 DAG는 어떤 제약을 부호화하는가?
+
+$W \to X,\ W \to Y,\ X \to Z,\ Y \to Z$ 형태의 그래프(즉 $W$가 $X,Y$의 공통 원인, $Z$가 $X,Y$의 공통 결과인 충돌자)를 예로 들어 $X$와 $Y$ 사이에 어떤 제약이 강제되는지 살펴봅니다.
+
+1. $X \perp\!\!\!\perp Y \mid W$ — **이 그래프가 강제하는 유일한 (조건부 독립) 제약**입니다.
+2. $X \not\perp\!\!\!\perp Y$ — 조건을 걸지 않으면 공통 원인 $W$를 통해 종속됩니다.
+3. $X \not\perp\!\!\!\perp Y \mid W,Z$ — 충돌자 $Z$를 조건에 넣으면(열어버리면) 다시 종속됩니다.
+4. $X \not\perp\!\!\!\perp Y \mid Z$ — 마찬가지로 충돌자만 조건에 넣어도 종속입니다.
+
+핵심 통찰은 **데이터가 이 독립성들을 정확히 가지고 있어야만 해당 그래프가 시스템에 대한 유효한 후보가 된다**는 점입니다.
+
+### 1.2 충실성으로 함의 역전시키기
+
+앞서 d-분리 $\Rightarrow$ CI는 보았습니다. 이제 충실성을 도입하면 그 역방향을 쓸 수 있습니다.
+
+$$\text{d-separation in } G \;\Longleftarrow\; \text{CIs in } P$$
+
+* 아직 어떤 CI도 모르는 상태에서 시스템에 대한 최선의 추측은 **무방향 완전 그래프**입니다.
+  * *완전(complete):* 모든 쌍에 간선이 있음
+  * *무방향(undirected):* 아직 방향을 모름
+
+이제 발견한 CI들을 하나씩 적용하며 이 완전 그래프를 깎아 나갑니다.
+
+#### 인접성 (Adjacency)
+
+> 어떤 $A, B \in V$에 대해 $S \subseteq V \setminus \{A,B\}$가 존재하여 $A \perp\!\!\!\perp B \mid S$이면, $A$와 $B$는 간선을 공유하지 않습니다.
+
+이를 통해 간선을 제거해 나가면, 인접 관계만을 표현하는 **골격(skeleton)**을 얻습니다.
+
+![Figure: 왼쪽은 참 모델(True Model, $W$가 $X,Y$의 부모이고 $Z$가 $X,Y$의 자식인 다이아몬드 구조), 오른쪽은 현재 최선의 추측(Current Best Guess)인 무방향 완전 그래프입니다. $X \perp\!\!\!\perp Y \mid W$라는 발견된 독립성으로 $X$–$Y$ 간선을, $W \perp\!\!\!\perp Z \mid X,Y$로 $W$–$Z$ 간선을 제거하여 골격을 복원하는 과정을 단계별로 보여줍니다. 캡션의 핵심은 "분리집합에 무엇이 들어갔는가"가 이후 방향 결정의 단서가 된다는 것입니다.](./images/what_can_we_extract.png)
+
+#### 방향 결정 (Orientation) — 충돌자 규칙
+
+골격을 얻은 뒤에는 **충돌자(collider)**를 이용해 일부 화살표 방향을 복원합니다.
+
+> 비인접 쌍 $A, B$를 분리하는 집합 $S$가 있고, $A - C - B$ 경로의 중간 노드 $C$가 그 분리집합 $S$에 **들어있지 않다면**, $A \to C \leftarrow B$로 방향을 정한다.
+
+관련 용어를 정리하면 다음과 같습니다.
+
+* **비차폐 삼중쌍 (unshielded triple):** $A - B - C$ (단, $A,C$ 비인접)
+* **비차폐 충돌자 (unshielded collider):** $A \to B \leftarrow C$ (= **v-구조 v-structure**)
+* **비차폐 비충돌자 (unshielded non-collider):** 예: $A \to B \to C$
+
+예를 들어 $X \perp\!\!\!\perp Y \mid W$에서 분리집합이 $Z$를 **포함하지 않는다**는 사실은, $X - Z - Y$ 경로에서 $x \to z \to y$, $x \leftarrow z \to y$, $x \leftarrow z \leftarrow y$ 세 가지 비충돌자 방향을 모두 **배제**하고 $X \to Z \leftarrow Y$ 충돌자만 남깁니다.
+
+### 1.3 동치류 (An Equivalence Class)
+
+방향을 모두 정할 수는 없습니다. 동일한 독립성 집합을 만들어내는 서로 다른 DAG들이 존재하기 때문입니다. 이들을 묶은 것이 동치류입니다.
+
+* 이런 그래프들을 **관측적으로 동치(observationally equivalent)** 또는 **마르코프 동치(Markov equivalent)**라 부릅니다. 국소 마르코프 성질이 동일한 독립성을 주기 때문입니다.
+* **마르코프 동치류(Markov equivalence class):** 서로 마르코프 동치인 DAG들의 집합
+
+이를 정확히 특징짓는 정리가 있습니다.
+
+> **정리 (Verma and Pearl).** 두 개의 서로 다른 DAG $G_1, G_2$가 동일한 통계적 DAG 모델을 표현할 필요충분조건은, 둘이 **골격(skeleton)**과 **비차폐 충돌자(unshielded collider, 즉 $A,B$가 비인접인 $A \to C \leftarrow B$)**를 공유하는 것이다.
+
+* 한 동치류에 속한 모든 DAG는 무방향 간선과 방향 간선이 섞인 단일 **혼합 그래프(mixed graph)**, 즉 **패턴(pattern)** 또는 **CPDAG(Completed Partially Directed Acyclic Graph)**로 표현됩니다.
+
+![Figure: Eberhardt(2017)에서 가져온, 잠재 변수가 없는 세 변수($x,y,z$) DAG 전체를 마르코프 동치류로 분할한 표입니다. 같은 칸에 묶인 그래프들은 동일한 (조건부) 독립 구조를 공유합니다. 예컨대 체인 $x\to y\to z$, $x\leftarrow y\to z$, $x\leftarrow y\leftarrow z$는 모두 $x\perp\!\!\!\perp z\mid y$를 함의하여 한 동치류를 이루지만, v-구조 $x\to y\leftarrow z$는 충돌자가 달라 별도의 동치류로 분리됩니다. 이 그림은 "골격과 v-구조가 같으면 같은 동치류"라는 Verma–Pearl 정리를 시각적으로 확인시켜 줍니다.](./images/eberhardt_equivalence_class.png)
+
+### 1.4 PC 알고리즘 (Peter Spirtes and Clark Glymour)
+
+이름은 두 창시자 **P**eter Spirtes와 **C**lark Glymour의 머리글자에서 왔습니다.
+
+#### 기본 아이디어
+
+1. 두 정점이 인접하지 않으면, 이들을 분리하는 분리집합(separator)이 존재한다.
+2. 비차폐 충돌자 $X \to Z \leftarrow Y$라면, 그 분리집합은 $Z$를 **포함하지 않아야** 한다.
+
+#### 알고리즘 전체
+
+$n$개의 정점을 가진 무방향 완전 그래프 $G$에서 시작합니다.
+
+**(1) 골격 학습.** $i = 0, 1, \dots, n-2$에 대해,
+* $G$의 모든 인접 쌍 $A, B$에 대해,
+  * 만약 $\exists S\ (A \perp\!\!\!\perp B \mid S)$가 존재하여
+    $$|S| = i,\qquad S \subset \mathrm{adj}_G(A) \cup \mathrm{adj}_G(B) \setminus \{A, B\}$$
+    를 만족하면, 간선 $A - B$를 제거하고 $S$를 $\mathrm{sepset}[\{A,B\}]$에 기록합니다.
+
+  > 조건집합의 크기 $i$를 0부터 점차 키워가며, **인접 노드들 중에서만** 분리집합 후보를 찾는다는 점이 계산량을 줄이는 핵심입니다.
+
+**(2) v-구조 방향 결정.** $A - C - B$이면서 $A, B$가 비인접인 모든 경우에 대해,
+* 만약 $C \notin \mathrm{sepset}[\{A,B\}]$이면, $A \to C \leftarrow B$로 방향을 정합니다.
+
+**(3) 나머지 방향 전파.** 결과로 얻은 부분 방향 그래프(패턴)에서, 다음 두 조건을 지키며 가능한 한 많은 무방향 간선의 방향을 정합니다.
+* (2)에서 발견되었어야 할 **새로운 v-구조를 만들지 않는다.**
+* **방향 순환(directed cycle)을 만들지 않는다.**
+
+마지막 (3)단계를 체계화한 것이 다음의 Meek's Rules입니다.
+
+### 1.5 간선 방향 규칙 (Meek's Rules)
+
+새로운 v-구조와 순환을 만들지 않으면서 최대한 많은 간선을 정향하는 네 가지 규칙입니다.
+
+* **Rule 1.** $a \to b$가 있고 $a$와 $c$가 비인접이면, $b - c$를 $b \to c$로 정한다.
+  * *직관:* 만약 $b \leftarrow c$로 정하면 $a \to b \leftarrow c$라는 새 v-구조가 생기는데, $a,c$가 비인접이므로 이는 (2)단계에서 이미 발견되었어야 합니다. 발견되지 않았으니 모순, 따라서 $b \to c$.
+
+* **Rule 2.** $a \to c \to b$라는 사슬이 있으면, $a - b$를 $a \to b$로 정한다.
+  * *직관:* $a \leftarrow b$로 정하면 $a \to c \to b \to a$ 순환이 생기므로 금지됩니다.
+
+* **Rule 3.** $a - c \to b$와 $a - d \to b$라는 두 사슬이 있고 $c, d$가 비인접이면, $a - b$를 $a \to b$로 정한다.
+
+* **Rule 4.** $a - c \to d$와 $c \to d \to b$라는 두 사슬이 있고 $c, b$가 비인접이며 $a, d$가 인접이면, $a - b$를 $a \to b$로 정한다.
+
+![Figure: Meek의 네 규칙을 각각 도식으로 보여주는 슬라이드들입니다. Rule 1은 기존 화살표 $a\to b$가 새 v-구조 생성을 막아 $b\to c$를 강제하는 모습을, Rule 2는 사슬 $a\to c\to b$가 순환 방지를 위해 $a\to b$를 강제하는 모습을, Rule 3·4는 두 개의 사슬과 비인접 조건이 결합해 무방향 간선을 한 방향으로 고정하는 더 복잡한 패턴을 화살표로 시각화합니다. 이 규칙들을 수렴할 때까지 반복 적용하면 PC 알고리즘의 최종 출력인 CPDAG를 얻습니다.](./images/meeks_rules.png)
+
+### 1.6 PC의 확장들 (Extensions of PC)
+
+#### Conservative PC (Ramsey, Spirtes, Zhang 2006)
+
+충실성을 두 부분으로 분해합니다: **인접성 충실성(Adjacency faithfulness) + 방향 충실성(Orientation faithfulness)**.
+
+* **인접성 충실성:** 인접하다면, 어떤 분리집합도 존재하지 않는다.
+* **방향 충실성:**
+  * $X \to Z \leftarrow Y$가 비차폐 충돌자를 이루면, $Z$를 포함하는 $V \setminus \{X,Y\}$의 모든 부분집합에 대해 $X$와 $Y$는 종속이다.
+  * 그렇지 않으면, $Z$를 포함하는 모든 분리집합에 대해 분리된다.
+
+* **알고리즘적 함의:** $X$의 잠재 부모 부분집합과 $Y$의 잠재 부모 부분집합을 모두 검사합니다.
+  * $X,Y$를 독립으로 만드는 그런 집합 *어디에도* $Z$가 없으면 → 충돌자
+  * 그런 *모든* 집합에 $Z$가 있으면 → 비충돌자
+  * 그 외에는 해당 삼중쌍을 **"비충실(unfaithful)"**로 표시 (방향 충실성 위반에 강건)
+
+![Figure: Conservative PC의 전형적 출력 예시입니다. 비충실한 비차폐 삼중쌍이 발견되면 알고리즘이 밑줄(그림에서는 교차선처럼 보임) 표시로 이를 명시하여, 무리하게 방향을 강제하는 대신 불확실성을 보존합니다. 오른쪽 그래프는 차원(변수 수)이 늘어남에 따라 경과 시간(초)이 증가하는 계산 비용 곡선을 함께 제시합니다.](./images/conservative_pc.png)
+
+#### Order-Independency (Colombo and Maathuis 2014)
+
+* **관찰:** PC 알고리즘은 가능한 분리집합을 열거하며 CI를 검정하고, 분리집합을 찾는 즉시 간선을 제거합니다. 그런데 그 CI 검정이 **거짓 음성(false negative)**이라면? 변수 순서에 따라 결과가 달라지는 불안정성이 생깁니다.
+* **해법 1:** 무작위 변수 순서 + 결과 평균화
+* **해법 2:** 간선을 즉시 제거하지 말고, **같은 크기의 조건집합에 대한 반복이 끝난 후에만** 제거 (PC-stable)
+* Conservative PC가 너무 제한적이라는 문제 때문에 **다수결 규칙(majority-rule)**도 도입됩니다.
+
+![Figure: 변수 순서 변경에 따른 PC의 불안정성을 보여주는 두 그래프입니다. (a) 추정된 골격에 등장하는 간선들이 변수 순서(세로축, 25개의 무작위 순서)에 따라 들쭉날쭉하게 달라지는 모습을, (b) 동일한 25개 순서에 대응하는 ROC 곡선(거짓 양성 대 참 양성)이 넓게 퍼지는 모습을 통해, 즉시 간선 제거 방식이 결과를 순서 의존적으로 만든다는 점을 정량적으로 드러냅니다.](./images/order_independency.png)
+
+#### Fast Causal Inference (FCI)
+
+* **인과 충분성을 가정하지 않을 때**(즉 잠재 교란 변수를 허용할 때) 사용하는 알고리즘입니다.
+* 출력은 DAG나 CPDAG가 아니라 **PAG(Partial Ancestral Graph)**이며, 간선 끝에 화살촉($\to$)뿐 아니라 원(circle, $\circ$)이라는 미결정 표시가 등장하여 "잠재 교란자의 가능성"까지 표현합니다.
+
+![Figure: FCI 알고리즘이 출력하는 PAG에서 각 간선 표기가 의미하는 바를 설명하는 슬라이드입니다. 화살촉($\to$), 원($\circ$), 무방향 등 간선 양끝의 마크 조합이 직접 원인·잠재 교란·미결정 관계를 어떻게 부호화하는지를 정리하여, 잠재 변수가 존재할 때 인과 발견의 출력이 어떻게 확장되는지 보여줍니다.](./images/fci_pag.png)
+
+### 1.7 제약 기반 학습 요약
+
+* 조건부 독립 제약은 기저 그래프 구조에 대한 **부분적 정보**를 추출하게 해 줍니다.
+* PC 알고리즘이 **조건부 독립 신탁(CI oracle)**(모든 검정이 정확)에 접근할 수 있다고 가정하면, PC 알고리즘은 **완전(complete)**합니다.
+* 실제로 조건부 독립 검정을 어떻게 하는가? — 선형 모델의 부분 상관(partial correlation), Fisher의 정확 검정, **커널 기반 CI 검정(kernel-based CI test)**, 모델 기반 CI 검정 등.
+
+---
+
+## 2. 점수 기반 접근 (Score-based Approaches)
+
+제약 기반이 "CI를 검정해 후보를 깎아내는" 방식이라면, 점수 기반은 **구조 전체에 점수를 매기고 그 점수를 최적화**하는 방식입니다.
+
+* **점수(Score):** 구조가 데이터에 얼마나 잘 맞는지(fit) + 구조가 얼마나 단순한지(simplicity)를 함께 평가
+* 이 점수를 최대화(또는 최소화)하는 구조를 **탐색**
+
+### 2.1 왜 가능한가? (Why Is It Possible?)
+
+참 구조를 기준으로 두 가지 오류를 생각해 봅니다.
+
+* **간선을 추가(Adding an arc):** 적합해야 할 파라미터 수가 늘어나고, 인과·도메인 구조에 대한 잘못된 가정을 도입합니다.
+* **간선을 누락(Missing an arc):** 파라미터를 아무리 정확히 적합해도 보상되지 않으며, 역시 인과·도메인 구조를 놓칩니다.
+
+즉, 데이터 적합도와 단순성을 동시에 따지면 참 구조 근처에서 점수가 최적이 되도록 설계할 수 있습니다.
+
+### 2.2 점수 기반 학습의 직관
+
+* 참 그래프가 $A \to B \to C$(왼쪽), 제안 그래프가 $A \to B \leftarrow C$(오른쪽)라고 합시다.
+* 참 그래프에서는 $A \perp\!\!\!\perp C$이지만 $A \not\perp\!\!\!\perp C \mid B$.
+* 제안 그래프에서는 $A \not\perp\!\!\!\perp C$이지만 $A \perp\!\!\!\perp C \mid B$.
+* 데이터에서는 ($A \perp\!\!\!\perp C$, $A \not\perp\!\!\!\perp C \mid B$)가 관측될 것이므로 → **제안 그래프는 데이터에 잘 맞지 않습니다.**
+* 그렇다면 데이터 적합도를 어떻게 정량화할까요? → **(로그) 가능도 함수(log-likelihood)**.
+
+### 2.3 DAG 모델의 로그 가능도
+
+DAG 인수분해를 다시 떠올립니다.
+
+$$P(V) = \prod_{V_i \in V} P(V_i \mid \mathrm{Pa}_G(V_i))$$
+
+각 $V_i$에 대해 모델 $P_{\theta_i}(V_i \mid \mathrm{Pa}_G(V_i))$를 가정하면, 데이터셋 $D$와 $\theta = \{\theta_i \mid V_i \in V\}$에 대한 로그 가능도는
+
+$$\ell(\theta; D) = \sum_{j=1}^{n} \sum_{i=1}^{k} \log P_{\theta_i}\!\left(v_i^{\,j} \mid \mathrm{pa}_G(V_i)^{\,j}\right)$$
+
+* 합이 변수별로 분리되므로, 각 $\theta_i$를 $P(V_i \mid \mathrm{Pa}_G(V_i))$에 관여하는 데이터 부분만으로 **따로 적합**할 수 있습니다.
+* 이런 성질을 **분해 가능한 가능도(decomposable likelihood)**라 부릅니다. 점수 기반 탐색의 효율성의 근간입니다.
+
+### 2.4 가능도를 점수로 쓸 때의 문제
+
+예시 ($A \to B \to C$ 대 더 조밀한 $A \to B$, $C \to B$, $C \to A$)의 두 로그 가능도를 비교해 봅니다.
+
+$$\ell_{\text{left}}(\theta; D) = \sum_{j=1}^{n} \log P_{\theta_A}(a^j) + \log P_{\theta_B}(b^j \mid a^j, c^j) + \log P_{\theta_C}(c^j)$$
+
+$$\ell_{\text{right}}(\varphi; D) = \sum_{j=1}^{n} \log P_{\varphi_A}(a^j \mid b^j, c^j) + \log P_{\varphi_B}(b^j \mid c^j) + \log P_{\varphi_C}(c^j)$$
+
+어느 쪽이 더 잘 맞을까요? **항상 오른쪽($\ell_{\text{right}}$)입니다.** 이유는 모델 집합의 포함 관계에 있습니다.
+
+$$\text{left: } \{P(A,B,C) \mid A \perp\!\!\!\perp C\} \quad\text{vs.}\quad \text{right: } \{P(A,B,C)\}$$
+
+왼쪽 모델은 오른쪽의 **부분 모델(submodel)**이므로, 데이터를 결코 더 잘 맞출 수 없습니다.
+
+#### 가능도와 과적합 (Likelihood and Overfitting)
+
+* 가능도만으로 점수를 매기면, 최고 점수 모델은 **항상 완전 그래프**입니다. (ML의 과적합)
+* 참 그래프가 희소(sparse)하다면, 완전 그래프는 파라미터가 너무 많습니다. 데이터엔 잘 맞지만 문제의 참 구조를 포착하지 못합니다.
+* **해법:** 적합도는 보상하되 **파라미터 과다는 벌점(penalty)**으로 다스린다.
+
+### 2.5 BIC 점수 (Bayesian Information Criterion)
+
+벌점화된 점수의 대표격이 BIC입니다. DAG와 그 모든 마르코프 인자에 대한 파라미터화에 다음 수를 부여합니다.
+
+$$\mathrm{BIC} = -2 \cdot \ell(\theta; D) + m \cdot \log(n)$$
+
+* $m$: 파라미터의 수, $n$: 표본 수
+* **낮은 점수**의 모델을 선호합니다. (첫 항은 적합도, 둘째 항 $m\log n$은 복잡도 벌점)
+* 그래프 구조에 대한 일종의 **정규화(regularization)**로 볼 수 있습니다.
+
+### 2.6 점수 기반 탐색과 GES
+
+* **소박한 탐색(Naive Search):** 모든 DAG를 나열하고 각각 BIC를 계산해 최선을 고른다. → DAG는 기하급수적으로 많고, 가능도도 종종 계산 불가능. **비현실적.**
+* **국소 탐색(Local Search):** 상태 공간을 모든 DAG로 두고, 임의의 DAG에서 임의의 DAG로 도달 가능한 '국소 이동(local moves)'을 정의해, 다항 횟수의 이동으로 최선 상태를 찾는 영리한 알고리즘.
+* **GES(Greedy Equivalence Search):** 상태와 국소 이동을 **DAG가 아니라 동치류(equivalence class) 위에서** 정의합니다.
+
+#### GES 알고리즘 (Greedy Equivalence Search)
+
+* **시작:** 간선이 없는 그래프.
+* **추가 단계(Addition phase):** 점수 향상이 없을 때까지 반복.
+  * 현재 동치류에 간선 하나를 추가했을 때 가장 좋은 새 동치류를 고른다.
+  * *주의:* 동치류에 간선을 추가하면, 시작 DAG에 따라 서로 다른 동치류로 이동합니다. 예: $\{A \to B\ \ C,\ A \leftarrow B\ \ C\}$에 $B \leftarrow C$를 추가하면 $\{A \to B \leftarrow C\}$로 가거나 $\{A \leftarrow B \leftarrow C;\ A \leftarrow B \to C;\ A \to B \to C\}$로 이동합니다.
+* **제거 단계(Removal phase):** 점수 향상이 없을 때까지 반복.
+  * 현재 동치류에서 간선 하나를 제거했을 때 가장 좋은 새 동치류를 고른다.
+* **반환:** 현재 동치류.
+
+#### GES의 완전성
+
+> **정리 (Chickering, 2002).** 충실성 하에서, 그리고 $n \to \infty$의 극한에서 GES는 참 동치류를 정확히 식별한다.
+
+탐욕적(greedy) 절차임에도 극한에서 정답을 보장한다는 점이 놀라운 결과입니다.
+
+### 2.7 최신 연구: NOTEARS (Zheng et al. 2018)
+
+조합 최적화였던 구조 학습을, 블랙박스 **연속 최적화**로 바꾼 획기적 연구입니다. 가우시안 잡음을 반드시 요구하지 않는 선형 SEM을 학습합니다.
+
+데이터 행렬 $X \in \mathbb{R}^{n \times d}$와 구조 계수 $W \in \mathbb{R}^{d \times d}$에 대해,
+
+$$\min_{W \in \mathbb{R}^{d \times d}} \ \frac{1}{2n} \|X - XW\|_F^2 + \lambda \|W\|_1 \quad \text{subject to} \quad \mathrm{tr}\!\left(e^{W \circ W}\right) - d = 0$$
+
+여기서 $\|\cdot\|_F$는 프로베니우스 노름, $\circ$는 원소별(Hadamard) 곱, $\|W\|_1$은 희소성을 유도하는 $\ell_1$ 벌점입니다. 핵심은 **비순환성 제약을 매끄러운 등식 제약으로 바꾼** 부분입니다.
+
+#### 왜 $\mathrm{tr}(e^{W \circ W}) - d = 0$이 DAG 조건인가?
+
+* $B$를 이진 인접 행렬이라 하면 $B^0 = I$이고, $B^k$의 $(i,i)$ 원소는 $i$에서 출발해 $i$로 돌아오는 길이 $k$ 보행(walk)의 수를 셉니다.
+* 행렬 지수는 테일러 급수로 정의됩니다.
+$$e^{B} = \sum_{k=0}^{\infty} \frac{B^k}{k!}$$
+* 대각합 $\mathrm{tr}$를 취하면 모든 정점에 대한 (가중) 순환 수를 셉니다. 길이 $0$ 순환($\mathrm{tr}(B^0)=\mathrm{tr}(I)=d$) 때문에 기저값이 $d$입니다.
+* 따라서 $\mathrm{tr}(e^{B}) = d$일 필요충분조건은 **$B$가 DAG**라는 것입니다(0이 아닌 길이의 순환이 하나도 없음).
+* $W \circ W$는 부호와 무관한 가중 인접 정보를 주므로, $\mathrm{tr}(e^{W \circ W})$는 가중 순환을 세고 이를 $d$와 같게 강제하면 비순환성이 보장됩니다.
+
+![Figure: NOTEARS의 비순환성 제약을 시각화한 행렬 히트맵입니다. 표제는 "Non-combinatorial Optimization via Trace Exponential and Augmented Lagrangian"으로, 가중치 행렬 $W$를 연속 공간에서 최적화하면서 $\mathrm{tr}(e^{W\circ W})-d=0$이라는 매끄러운 제약으로 순환을 억제하는 모습을 보여 줍니다. 조합적 탐색 없이 경사 기반 최적화만으로 DAG를 학습할 수 있게 된 전환점을 상징합니다.](./images/notears.png)
+
+### 2.8 점수 기반 접근 요약
+
+* BIC와 GES의 보장은 **대표본(large sample) 결과**입니다. 유한 데이터에서는 달라질 수 있습니다.
+* 점수를 다항 시간에 평가할 수 없으면 국소 탐색도 여전히 비현실적입니다.
+* 각 $P_{\theta_i}(V_i \mid \mathrm{Pa}_G(V_i))$ 모델을 잘못 설정하면 결과가 어긋납니다.
+* 역시 **은닉 변수가 없다**(DAG 모델)고 가정했습니다.
+
+---
+
+## 3. 모수적 접근 (Parametric Approaches)
+
+앞의 두 접근은 모두 **동치류**까지만 식별합니다($A \to B$와 $A \leftarrow B$를 구별하지 못함). 모수적 접근은 함수 형태나 잡음 분포에 **추가 가정**을 두어, 두 변수 사이의 화살표 **방향까지** 식별하는 것을 목표로 합니다.
+
+### 핵심 질문: 언제 $x \to y$로 방향을 정할 수 있는가?
+
+산점도만 봐서는 $x \to y$인지 $x \leftarrow y$인지 알 수 없어 보입니다. 그러나 데이터에 비대칭(asymmetry)이 숨어 있다면 이야기가 달라집니다.
+
+![Figure: 동일한 두 변수 $X_1, X_2$를 여러 생성 메커니즘에 대해 그린 6개의 산점도 모음입니다. 어떤 패널은 선형적이고 대칭적인 구름 형태(방향 식별이 어려움)를, 다른 패널은 한 방향으로는 잡음이 균질하지만 반대 방향으로는 부채꼴로 퍼지는 비대칭(heteroscedastic) 형태를 보입니다. 이 비대칭이 바로 "원인 → 결과" 방향에서는 잔차가 입력과 독립이지만 반대 방향에서는 그렇지 않다는 사실의 시각적 증거이며, 모수적 인과 발견이 방향을 식별하는 단서가 됩니다.](./images/anm_scatter.png)
+
+### 3.1 비선형 함수 (Nonlinear Function)
+
+#### 가산 잡음 모델 (The Additive Noise Model, ANM)
+
+모형의 출발점은 다음과 같습니다.
+
+$$y = f_y(x) + u_y \qquad \text{and} \qquad x \perp\!\!\!\perp u_y$$
+
+즉 결과는 원인의 (가능하면 비선형) 함수에 **가산적으로** 독립 잡음이 더해진 형태이며, 원인은 잡음과 독립입니다.
+
+#### 핵심 아이디어 (The Idea)
+
+기저 분포가 ANM이라는 것을 안다면, 두 가설을 비교해 방향을 가릴 수 있습니다.
+
+* **가설 1:** $y = f_y(x) + u_y$, $x \perp\!\!\!\perp u_y$ → 그래프상 $x \to y$
+* **가설 2:** $x = f_x(y) + u_x$, $y \perp\!\!\!\perp u_x$ → 그래프상 $x \leftarrow y$
+
+일반적으로 두 방향 모두에서 가산 잡음 + 독립성이 성립하기는 어렵기 때문에, 한쪽만 성립하면 그쪽으로 방향을 정할 수 있습니다.
+
+#### 두 가지 주요 방법
+
+$y = f(x) + u_y$에서, 우리가 다룰 두 방법은 각각 다음을 가정합니다.
+
+1. $f(x)$가 **비선형(non-linear)** [Hoyer et al. 2009]
+2. $f(x)$는 **선형**이지만 $u_y$가 **비가우시안(non-Gaussian)** [Shimizu et al. 2006]
+
+#### 핵심 절차 (The Core Idea)
+
+데이터 $(x_i, y_i)$가 주어졌을 때:
+
+1. **양방향으로 함수를 적합합니다.** 즉 $\hat{y} = \hat{f}_y(x)$와 $\hat{x} = \hat{f}_x(y)$가 되도록 최적 적합 함수 $\hat{f}_x, \hat{f}_y$를 (어떤 ML 알고리즘으로든) 찾습니다.
+2. **잔차(residual)**를 정의합니다(잡음 $u$의 추정치에 해당).
+$$\hat{\varepsilon}_x = x - \hat{f}_x(y), \qquad \hat{\varepsilon}_y = y - \hat{f}_y(x)$$
+3. $\hat{\varepsilon}_x \perp\!\!\!\perp Y$인지 또는 $\hat{\varepsilon}_y \perp\!\!\!\perp X$인지 **독립성을 검정**합니다. 독립이 성립하는 방향이 인과 방향입니다.
+
+![Figure: 비선형 ANM에서 양방향 적합과 잔차 독립성 검정을 보여주는 그림입니다. 참 방향($x\to y$)으로 회귀하면 잔차 $\hat\varepsilon_y$가 입력 $x$ 전 구간에서 균질하게 흩어져 독립인 반면, 반대 방향($y\to x$)으로 회귀하면 잔차가 입력값에 따라 구조적 패턴(종속)을 남깁니다. 이 잔차–입력 독립성의 비대칭이 인과 방향을 가르는 결정적 신호임을 시각적으로 드러냅니다.](./images/anm_residuals.png)
+
+#### 확장: 후-비선형 인과 모델 (Post-nonlinear Causal Model)
+
+$X_1 \to X_2$이고 $f_2$가 가역(invertible)이라고 가정하면,
+
+$$x_2 = f_2\big(f_1(x_1) + e_2\big)$$
+
+이로부터 잡음을 역산할 수 있습니다.
+
+$$e_2 = f_2^{-1}(x_2) - f_1(x_1)$$
+
+가설 하에서 우리는 함수 $\ell_1, \ell_2$를 찾아 $\hat{e}_2 = \ell_2(x_2) - \ell_1(x_1)$이 $x_1$과 **독립**이 되도록 추정할 수 있습니다. 이는 제약된 비선형 ICA 문제이며, 다음 상호정보량을 최소화하여 달성됩니다.
+
+$$I(x_1, \hat{e}_2) = -\mathbb{E}\log p_{\hat{e}_2}(\hat{e}_2) - \mathbb{E}\log \ell_2'(x_2) + H(x_1) - H(x_1, x_2)$$
+
+(마지막 두 항 $H(x_1)$, $H(x_1,x_2)$는 $\ell_1, \ell_2$와 무관하므로 최적화에서 무시됩니다. — Zhang and Hyvärinen 2009)
+
+#### (보론) 이변량 ANM의 식별 가능성
+
+> 이변량 모형 $X_i := N_i$, $X_j := f_j(X_i) + N_j$ (단 $\{i,j\}=\{1,2\}$)가 ANM에 따라 생성될 때, 만약 삼중쌍 $(f_j, p_{N_i}, p_{N_j})$가 $f_j'(x_i)\,g''\!\big(x_j - f_j(x_i)\big) \neq 0$인 **모든** $x_i, x_j$ 쌍에 대해 다음 미분방정식을 **풀지 않는다면**, 그 SEM은 식별 가능한(identifiable) 이변량 ANM이다.
+
+$$k''' = k''\left(-\frac{g''' f'}{g''} + \frac{f''}{f'}\right) - 2\,g'' f'' f' + g' f''' + \frac{g'\,g'''\,f''\,f'}{g''} - \frac{g'\,(f'')^2}{f'}$$
+
+여기서 $f := f_j$, $k := \log p_{N_i}$, $g := \log p_{N_j}$입니다(가독성을 위해 $g,k,f$의 인자 $x_j - f_j(x_i),\ x_i,\ x_i$는 생략). 직관적으로, **이 ODE를 만족하는 특수한 조합(예: 선형 $f$ + 가우시안 잡음)에서만 양방향이 동시에 ANM이 되어 식별이 불가능**해지고, 그 외 대부분의 경우에는 한 방향만 성립하여 방향이 식별됩니다. — Montagna et al. (2023, CLeaR)
+
+### 3.2 선형·비가우시안 잡음 (Linear and Non-Gaussian Noise)
+
+#### Cramér 분해 정리
+
+* 두 독립 실수값 확률변수의 **합이 가우시안이면, 두 가수(summand)도 모두 가우시안**이어야 한다.
+* 귀납적으로, 임의의 유한 개 독립 실수값 변수의 합이 가우시안이면 모든 가수가 가우시안이다.
+* 이는 중심극한정리(CLT)를 **보완**합니다. CLT에 따르면 독립 변수들의 합은 (적절한 조건 하에) 가우시안에 가까워지지만, 모든 가수가 가우시안이 아닌 한 **정확히** 가우시안이 될 수는 없습니다. → 비가우시안성이 방향 식별의 열쇠가 됩니다.
+
+#### LiNGAM (Linear Non-Gaussian Acyclic Model)
+
+$$y = ax + u_y$$
+
+오차가 비가우시안이라고 가정합니다. 시스템을 풀어 쓰면
+
+$$x = u_x, \qquad y = ax + u_y$$
+
+이고, 행렬 형태로는
+
+$$\begin{bmatrix} x \\ y \end{bmatrix} = \begin{bmatrix} 1 & 0 \\ a & 1 \end{bmatrix} \begin{bmatrix} u_x \\ u_y \end{bmatrix}$$
+
+즉 관측 $(x,y)$는 독립인 비가우시안 원천 $(u_x, u_y)$의 **선형 혼합(linear mixture)**입니다.
+
+#### 비결 — ICA (Independent Component Analysis)
+
+> 통계적으로 독립인 비가우시안 원천 $s_1, \dots, s_n$이 있고, 우리는 이들의 혼합 $x = As$만 관측한다고 합시다. $x$만 보고 $A$와 $s$를 어떻게 복원할까요?
+
+* CLT를 떠올리면, $s_1 + s_2 + \cdots$는 극한에서 가우시안에 가까워집니다. 즉 $x = a s_1 + b s_2$는 $s_1$이나 $s_2$ 각각보다 **"더 가우시안처럼 보입니다."**
+* 따라서 **ICA는 시스템의 "비가우시안성을 최대화"하는 방향(벡터)을 찾아** 독립 성분을 복원합니다.
+
+#### 여기에 ICA를 어떻게 적용하는가?
+
+$$\begin{bmatrix} x \\ y \end{bmatrix} = \begin{bmatrix} 1 & 0 \\ a & 1 \end{bmatrix} \begin{bmatrix} u_x \\ u_y \end{bmatrix}$$
+
+$(x,y)$에 ICA를 돌려서 **혼합 행렬의 $0$ 위치를 찾으면** 됩니다. 위 삼각 구조에서 $(1,2)$ 원소가 $0$이라는 사실이 $x \to y$ 방향(즉 $y$가 $x$의 함수)을 알려줍니다.
+
+#### LiNGAM 일반형 (Shimizu, 2006)
+
+(순서가 매겨진) 변수 $X = \{X_1, \dots, X_d\}$에 대한 인접 가중 행렬을 $B$라 하면,
+
+$$x_i = \sum_{j < i} b_{ij} x_j + e_i$$
+
+행렬 형태로는
+
+$$x = Bx + e = (I - B)^{-1} e$$
+
+$W = I - B$로 두면, ICA는 (순서·스케일·부호의 비결정성 때문에) 다음을 줍니다.
+
+$$W_{\text{ICA}} = PDW$$
+
+여기서 $P$는 순열(permutation), $D$는 대각(diagonal) 행렬입니다. 일반 ICA에서는 이 비결정성을 제거할 수 없지만, **LiNGAM의 비순환 구조 덕분에** $B$를 유일하게 추정해 낼 수 있습니다.
+
+#### LiNGAM 발견 알고리즘
+
+1. $x = Bx + e$이므로 $e = (I-B)x \triangleq Wx$. 여기서 $e$는 독립 성분입니다.
+2. 데이터에 ICA를 적용: $W_{\text{ICA}} = \mathrm{ICA}(X)$.
+3. $W_{\text{ICA}}$를 **순열·재척도(rescale)**하여 대각이 $1$이 되도록 만듭니다. (선형 SEM의 자기 계수는 1)
+4. $W = \mathrm{normalize}\big(\mathrm{row\text{-}permute}(W_{\text{ICA}})\big)$로 정리하고, $B = I - W$로 계수 행렬을 복원합니다. 통계적으로 $0$과 구별되지 않는 계수의 간선은 제거합니다.
+
+![Figure: LiNGAM 추정 과정에서 ICA가 출력한 원시 행렬 $W_{\text{ICA}}$가 순열·재척도를 거쳐 하삼각(또는 정렬된) 구조로 정리되는 모습을 보여주는 행렬 도식입니다. (a)는 순서·스케일이 뒤섞인 ICA 원시 출력, 이후 단계는 대각을 1로 맞추고 0에 가까운 계수를 제거하여 비순환 인과 순서를 복원하는 과정으로, 비가우시안성이 어떻게 방향 비결정성을 깨뜨리는지를 시각화합니다.](./images/lingam_ica.png)
+
+#### 모수적 접근 요약
+
+가산 잡음 모델 $y = f(x) + u_Y$에서 $f$가 비선형이거나 $u_Y$가 비가우시안이라고 가정하면, 인과 화살표의 **방향**을 찾을 수 있습니다. 단, 잠재 교란이 없음, 즉 $X \perp\!\!\!\perp U_Y$를 가정합니다.
+
+### 3.3 최적화 기반 알고리즘으로의 일반화
+
+많은 모수적 방법은 다음의 일반적 최적화 틀로 통합됩니다.
+
+$$\min_{f} \ L(f) \quad \text{subject to} \quad G(f) \in \text{DAG}, \qquad \text{where} \quad L(f) = \frac{1}{n}\sum_{j=1}^{d} \ell\big(x_j,\, f_j(X)\big)$$
+
+기존 논문들의 전형적 전개 방식은 다음과 같습니다.
+
+1. 특정 모델을 가정한다.
+2. 그 특정 모델에 대해 식별 가능성을 증명한다.
+3. 그 특정 모델 학습을 위한 전용 알고리즘을 개발한다.
+
+#### 점수 매칭을 통한 인과 발견 (Score-Matching, Montagna et al. 2023)
+
+가산 비선형 모델 $X_i = f_i(\mathrm{PA}_i) + N_i$를 고려합니다.
+
+* **관찰:** 말단 노드(leaf, sink)를 식별할 수 있으면, 그래프에서 말단을 재귀적으로 제거하며 **인과 순서(causal order)**를 구성할 수 있습니다. 인과 순서를 알면 구조를 정제·복원할 수 있습니다. (선행 연구: Mooij et al. 2009, RESIT by Peters et al. 2014)
+
+* **핵심 결과:** $X$가 ANM에 따라 생성되고 $X_i \in X$일 때,
+$$X_i \text{ is a leaf.} \iff \mathbb{E}\!\left[\big(h^*(R_i) - s_i(X)\big)^2\right] = 0$$
+
+* **($\Rightarrow$ 방향) 증명 스케치:**
+  1. 점수 함수 $s(X) = \nabla \log p(X)$, $s_i(X)$는 그 한 성분.
+  2. 말단 노드에 대해서는 $s_l(X) = \partial_{N_l} \log p(N_l)$로 단순화됩니다.
+  3. $X_l$을 나머지 변수 $X_{-i}$로 적합한 함수 $q^*$에 대해 잔차 $R_l := X_l - q^*(X_{-i})$를 정의하면, 말단에서는 $R_l = N_l$.
+  4. (2)에 의해 $N_l = R_l$을 $s_l(X)$로 보내는 함수가 존재합니다.
+* **($\Leftarrow$ 방향):** 말단이 아닌 노드에서는 $N_j$만으로 $s_j(X)$를 추정하기에 정보가 부족합니다.
+
+---
+
+## 4. 시계열 인과 발견 (Time-Series)
+
+마지막으로, 시간이라는 추가 차원이 있는 경우를 다룹니다.
+
+![Figure: Runge et al.의 동기 부여 그림으로, 지구 시스템(Earth system)과 같은 복잡계에서 얻은 대규모 다변량 시계열 데이터(패널 A)로부터 그 배후의 인과 네트워크(패널 B)를 추정하는 문제를 보여줍니다. 유한한 시계열에서 알고리즘은 통계 검정의 민감도(거짓 양성과 거짓 음성 사이의 절충)와 검정력(표본 수·유의수준·변수 수에 의존)을 균형 잡아야 한다는 시계열 인과 발견의 본질적 도전을 시각화합니다.](./images/runge_timeseries.png)
+
+### 4.1 시계열 데이터의 특성
+
+* 다변량 시계열은 많은 생물학·과학 탐구의 데이터 원천입니다. (예: 유전체학의 mRNA 발현 시계열, 신경심리학의 BOLD 신호)
+* **기회(Opportunity) — 시간적 선행성(Temporal Precedence):** 원인은 결과에 시간적으로 선행해야 한다는 사실을 활용합니다.
+* **도전(Challenge):** 데이터 획득률(샘플링 속도)이 느릴 수 있음, 비정상성(non-stationarity, 인과 구조 자체가 진화), 측정되지 않은 교란, 시간적으로 집계된 데이터, 원 과정에서는 시차가 있던 영향이 표면적으로는 동시적으로 보이는 문제 등.
+
+### 4.2 기본 아이디어와 알고리즘 지형
+
+* **기본 아이디어:** i.i.d.를 가정하거나, 시차 효과(lagged effect)의 수를 추정·가정한다(벡터 자기회귀의 표준 절차). 변수들을 시간축으로 펼쳐(unroll) $X^i_{t-\tau} \to \cdots \to X^i_t$ 형태의 격자 그래프로 본다.
+
+![Figure: 다변량 시계열을 시간축으로 펼친 격자(unrolled) 그래프입니다. 세 변수 $X^1, X^2, X^3$ 각각이 시점 $t-\tau$부터 $t$까지 노드로 늘어서 있고, 변수 간·시점 간 화살표가 시차 인과 효과를 나타냅니다. 이렇게 시간을 명시적 차원으로 펼치면 "원인은 결과에 선행한다"는 제약이 그래프의 방향을 자연스럽게 강제하여, 정적 그래프보다 방향 식별이 쉬워진다는 점을 보여줍니다.](./images/lag_based_unrolled.png)
+
+시계열용 대표 알고리즘과 그 계보는 다음과 같습니다.
+
+* **Granger 인과성** — 제약 기반(constraint-based)
+* **PCMCI** — PC를 확장
+* **TiMINo** — 함수적 인과 모델 + 독립 잡음 아이디어를 확장
+* **DYNOTEARS** — NOTEARS를 확장
+
+### 4.3 Granger 인과성
+
+> 한 시계열이 다른 시계열에 대해 Granger 인과적이라는 것은, 전자의 정보를 *제외한* 모든 가용 정보만 쓸 때보다 **전자의 정보까지 포함해 후자를 더 잘 예측**할 수 있다는 뜻입니다.
+
+* **정의(Granger 비인과성):** $V = \{X, Y\} \cup Z$에 대해, 모든 $t \in \mathbb{Z}$에서
+$$Y_{t+1} \perp\!\!\!\perp X^t \mid Y^t, Z^t$$
+이면 $X$는 $Y$에 대해 **Granger 비인과적**이라 하고($X^t = \{X_1, \dots, X_t\}$), 그렇지 않으면 $X$가 $Y$를 Granger 인과한다고 합니다.
+* Granger는 이를 **'$X$는 $Y$의 일견(prima facie) 원인'**이라 표현하여, Granger 인과성이 어디까지나 *잠재적* 원인일 뿐임을 강조했습니다.
+
+#### 예시
+
+엘니뇨(N)가 브리티시 컬럼비아 기온(B)을 2개월 시차로 '유발'하는 경우, 다음을 서로 다른 $\tau$에 대해 검정하여 연결을 탐지합니다.
+
+$$\text{Test } \ B_t \perp\!\!\!\perp N_{t-\tau} \mid B_{t-1},\ N_{t-1} \setminus \{N_{t-\tau}\} \quad \text{for different } \tau\text{'s}$$
+
+#### VAR 모델을 통한 정식화
+
+경험적 응용은 보통 **벡터 자기회귀(VAR)** 틀에 한정됩니다. $p$차 VAR("VAR($p$)")은
+
+$$X_t = c + A_1 X_{t-1} + A_2 X_{t-2} + \cdots + A_p X_{t-p} + e_t$$
+
+* **단변량:** $\displaystyle X_t = \sum_{u=1}^{\infty} A_u X_{t-u} + \varepsilon_t$
+* **다변량:** $\displaystyle X_{j,t} = \sum_{u=1}^{\infty} \sum_{k=1}^{d} A_{jk,u}\, X_{k,t-u} + \varepsilon_{j,t}$
+
+그러면 $X_{j,t}$가 $X_{i,t-1}$에 의존하지 않을 필요충분조건은 **모든 시차 $u > 0$에 대해 $A_{ji,u} = 0$**입니다.
+
+* **대안적 특징화(MSE 기반):** 전체 과거 $X^{t-1}$로 예측할 때와, $X_i$를 제외한 과거 $X^{t-1}_{-i}$로 예측할 때의 평균제곱오차를 비교합니다. $X_i$가 $X_j$를 Granger 인과하지 않을 필요충분조건은
+$$\mathrm{var}\big(X_{j,t} \mid X^{t-1}\big) = \mathrm{var}\big(X_{j,t} \mid X^{t-1}_{-i}\big)$$
+* **주의:** Granger 인과성은 **시간적 집계나 부분 샘플링(subsampling)에 매우 민감**한 것으로 알려져 있습니다.
+
+### 4.4 PCMCI
+
+* **동기:** Granger 인과성처럼 **전체 조건화(full conditioning)**를 쓰는 것은 바람직하지 않습니다(불필요한 변수까지 조건에 넣어 검정력이 떨어짐). PCMCI는 CI 검정의 조건집합 선택을 최적화하여, **탐지력을 높이면서 동시에 잘 보정된(well-calibrated) 검정**을 유지합니다.
+* **설정:** 인과 충분성·충실성·마르코프 조건, **동시적(contemporaneous) 링크 없음**, 데이터는 선형·비선형 모두 가능.
+
+PCMCI는 이름 그대로 **PC$_1$ 단계 + MCI(Momentary CI) 단계**로 구성됩니다.
+
+* **PC$_1$ 단계:** PC-stable 알고리즘으로 추정 부모 집합 $\widehat{\mathrm{Pa}}(X_t^j)$를 얻습니다(완전 검정은 아님).
+  1. 인접성만을 위한 PC 알고리즘의 변형입니다.
+  2. 크기 $k$의 가능한 모든 분리집합을 검정하는 대신, **크기 $k$의 단일 조건집합**(가장 강하게 상관된 $k$개 변수)만 시도합니다.
+  3. 함의: 이 단계 후에도 일부 거짓 부모(spurious parent)가 남을 수 있습니다.
+
+* **MCI 단계:** 다음을 검정합니다.
+$$X_t^j \perp\!\!\!\perp X_{t-\tau}^i \ \Big|\ \widehat{\mathrm{Pa}}(X_t^j) \setminus \{X_{t-\tau}^i\},\ \widehat{\mathrm{Pa}}(X_{t-\tau}^i)$$
+  이론적으로는 부모의 상위집합 $\widehat{\mathrm{Pa}}(X_t^j)$만으로 충분하지만, **원인 후보 $X_{t-\tau}^i$의 부모까지 추가로 조건화**하면 거짓 발견율(FDR)을 더 잘 통제할 수 있습니다.
+
+### 4.5 독립 잡음을 갖는 시계열 모델 (TiMINo)
+
+* **핵심 아이디어:** 잡음이 IID라고 두고, **잡음들을 독립으로 만드는 함수를 적합**합니다.
+
+> **TiMINo (정의).** 시계열 $X_t = (X_t^i)_{i \in V}$가 다음을 만족하는 $p > 0$과, 각 $i \in V$에 대한 집합 $\mathrm{Pa}_i^0 \subseteq X^{V \setminus \{i\}}$, $\mathrm{Pa}_i^k \subseteq X^V$가 존재하면 TiMINo를 만족한다($\forall t$):
+> $$X_t^i = f_i\Big( \big(\mathrm{Pa}_i^p\big)_{t-p},\ \dots,\ \big(\mathrm{Pa}_i^1\big)_{t-1},\ \big(\mathrm{Pa}_i^0\big)_{t},\ N_t^i \Big)$$
+> 단 $N_t^i$는 $i$와 $t$에 걸쳐 결합 독립(jointly independent)이고, 각 $i$에 대해 $N_t^i$는 $t$에 대해 동일 분포(identically distributed).
+
+> **TiMINo 정리(단순화).** $X_t$가 TiMINo로 표현되고 다음 중 하나가 성립하면 전체 시간 그래프(full time graph)를 복원할 수 있다.
+> 1. 함수들이 **식별 가능한 함수 클래스**에서 왔다.
+> 2. 각 성분이 시간 구조를 가진다($\mathrm{Pa}(X_t^i)$가 적어도 하나의 $X_{t-k}^i$를 포함).
+
+#### TiMINo 알고리즘
+
+* **입력:** $d$차원 시계열 표본 $(X_1, \dots, X_T)$, 최대 차수 $p$. $S := (1, \dots, d)$.
+* **반복:**
+  * $S$의 각 $k$에 대해: $X_{t-p:t-1}^k$와 $i \in S \setminus \{k\}$의 $X_{t-p:t}^i$를 써서 $X_t^k$에 대해 TiMINo를 적합하고, 잔차가 $X^i$($i \in S$)와 독립인지 검정.
+  * 의존성이 가장 약한(weakest dependence) $k^*$를 고른다.
+  * $S := S \setminus \{k^*\}$; $\mathrm{pa}(k^*) := S$.
+* (길이가 1이 될 때까지 반복) 마지막으로 각 $k$에 대해 독립 잔차를 얻는 데 불필요한 부모를 모두 제거.
+* **출력:** $\mathrm{pa}(1), \dots, \mathrm{pa}(d)$.
+
+> 가장 약한 의존성을 갖는 변수를 **말단(sink)으로 보고 먼저 떼어낸다**는 점이 다소 직관에 반하지만, 이것이 역순으로 인과 순서를 구성하는 방식입니다.
+
+* **논의:** 저자들은 VAR, 일반화 가산 모델(GAM), 가우시안 과정(GP)을 고려했습니다. 선형 모델에서는 **TS-LiNGAM이 TiMINo의 특수 경우**입니다.
+
+### 4.6 DYNOTEARS
+
+* **핵심 아이디어:** 시차 데이터를 포함시켜 NOTEARS를 시계열로 일반화합니다. 비순환성은 **동시적(contemporaneous) 관계에만** 강제합니다.
+
+구조적 VAR(SVAR)로, $Y_1, \dots, Y_p$를 $X$의 시차 버전이라 하면
+
+$$X = XW + Y_1 A_1 + \cdots + Y_p A_p + Z$$
+
+목적은 $W$가 비순환이라는 제약 하에 $\ell(W, A)$를 최소화하는 것입니다.
+
+$$\ell(W, A) = \frac{1}{2n}\|X - XW - YA\|_F^2$$
+
+희소성 벌점을 더하면
+
+$$\min_{W, A} f(W, A) \quad \text{s.t. } W \text{ is acyclic}, \qquad f(W, A) = \ell(W, A) + \lambda_W \|W\|_1 + \lambda_A \|A\|_1$$
+
+그리고 NOTEARS와 동일하게 **증강 라그랑지안(augmented Lagrangian)**으로 비순환 제약을 흡수합니다.
+
+$$\min_{W, A} F(W, A), \qquad F(W, A) = f(W, A) + \frac{\rho}{2}\, h(W)^2 + \alpha\, h(W)$$
+
+여기서 $h(W) = \mathrm{tr}\big(e^{W \circ W}\big) - d$입니다. 즉 $W$(동시적 구조)에만 DAG 제약이 걸리고, 시차 행렬 $A_1, \dots, A_p$는 자유롭게 둡니다(시간 선행성이 이미 방향을 보장하므로).
+
+---
+
+## 마무리: 인과 발견 정리 (Summary)
+
+네 가지 패러다임을 한눈에 정리합니다.
+
+* **제약 기반(Constraint-Based):** PC 알고리즘이 가장 대중적이지만 변형이 많습니다. 잘못된 CI 검정을 피하기 위한 여러 휴리스틱이 제안되어 있습니다.
+* **점수 기반(Score-Based):** 표본 크기가 상대적으로 작을 때 제약 기반보다 잘 작동하는 경향이 있습니다.
+* **혼합(Hybrid):** 두 접근을 결합한 알고리즘도 존재합니다(예: MMHC, 역시 휴리스틱 동반).
+* **모수적(Parametric):** 제약·점수 기반의 알려진 한계(동치류까지만 식별) 때문에, 구조를 추론할 수 있는 모수적 가정을 찾는 연구가 활발합니다.
+* **다루지 않은 주제:** 순환 그래프(Cyclic Graph), 다중 데이터 원천 결합(관측 + 개입 데이터 활용) 등.
+
+---
+
+## 참고문헌 (References)
+
+* **[1]** A. Gretton, O. Bousquet, A. Smola, B. Schölkopf. *Measuring Statistical Dependence with Hilbert-Schmidt Norms.* Algorithmic Learning Theory, vol. 3734, pp. 63–77, Springer, 2005.
+* **[2]** P. O. Hoyer, D. Janzing, J. M. Mooij, J. Peters, B. Schölkopf. *Nonlinear causal discovery with additive noise models.* NeurIPS 21, pp. 689–696, 2009.
+* **[3]** A. Hyvärinen, E. Oja. *Independent component analysis: Algorithms and applications.* Neural Networks, 13(4):411–430, 2000.
+* **[4]** A. Jaber, J. Zhang, E. Bareinboim. *Causal Identification under Markov Equivalence.* 2018.
+* **[5]** D. Janzing, B. Schölkopf. *Causal inference using the algorithmic Markov condition.* arXiv:0804.3678, 2008.
+* **[6]** D. Janzing et al. *Information-geometric approach to inferring causal directions.* Artificial Intelligence, 182–183:1–31, 2012.
+* **[7]** R. Jiao, N. Lin, Z. Hu, D. A. Bennett, L. Jin, M. Xiong. *Bivariate Causal Discovery and Its Applications to Gene Expression and Imaging Data Analysis.* Frontiers in Genetics, 9, 2018.
+* **[8]** J. M. Mooij, J. Peters, D. Janzing, J. Zscheischler, B. Schölkopf. *Distinguishing Cause from Effect Using Observational Data: Methods and Benchmarks.*
+* **[9]** J. Pearl. *Causality: Models, Reasoning and Inference.* Cambridge University Press, 2000.
+* **[10]** J. Pearl, T. S. Verma. *A theory of inferred causation.* Studies in Logic and the Foundations of Mathematics, vol. 134, pp. 789–811, Elsevier, 1995.
+* **[11]** S. Shimizu, P. O. Hoyer, A. Hyvärinen, A. Kerminen. *A Linear Non-Gaussian Acyclic Model for Causal Discovery.* 2006.
+* **[12]** P. Spirtes, C. N. Glymour, R. Scheines et al. *Causation, Prediction, and Search.* MIT Press, 1993.
+* **[13]** J. Zhang. *A Characterization of Markov Equivalence Classes for Directed Acyclic Graphs with Latent Variables.* 2007.
+* **[14]** J. Zhang. *On the completeness of orientation rules for causal discovery in the presence of latent confounders and selection bias.* Artificial Intelligence, 172(16–17):1873–1896, 2008.
+* **[15]** K. Zhang, A. Hyvärinen. *On the Identifiability of the Post-Nonlinear Causal Model.* 2009.
+* (추가 인용) F. Eberhardt. *Introduction to the Foundations of Causal Discovery.* IJDSA, 2017. · X. Zheng et al. *DAGs with NO TEARS.* 2018. · F. Montagna et al. *Causal Discovery with Score Matching on Additive Models with Arbitrary Noise.* CLeaR, 2023. · J. Runge et al. *Detecting and quantifying causal associations in large nonlinear time series datasets.* Science Advances.

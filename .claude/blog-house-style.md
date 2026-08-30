@@ -36,7 +36,7 @@ format:
 **A-2. `categories` 규칙**
 
 - **첫 번째 값 = 대분류.** 아래 목록에서 고르며, 저장 디렉토리와 일치해야 한다.
-  `Causal Inference` · `Machine Learning` · `Deep Learning` · `Data Mining` · `Optimization` · `Convex Optimization`
+  `Causal Inference` · `Machine Learning` · `Deep Learning` · `Data Mining` · `Optimization` · `Convex Optimization` · `Algorithms`
 - **두 번째부터 = 성격 태그(선택).** `Paper Review` · `What If`
 - 예: `[Data Mining]`, `[Causal Inference, Paper Review]`, `[Causal Inference, What If]`
 - 새 대분류를 임의로 만들지 않는다. 필요하면 확인 질문한다. 카테고리는 블로그 목록 필터를 구성하므로 하나만 늘어도 사이드바가 달라진다.
@@ -60,13 +60,15 @@ format:
 
 | 유형 | 경로 |
 |:---|:---|
-| 강의 (일반) | `posts/<과목명>/<NN>.<Topic-Kebab-Case>/<NN>.1/index.qmd` |
-| 강의 (Causal) | `posts/Causal/lecture/<NN>.<Topic-Kebab-Case>/<NN>.1/index.qmd` |
+| 강의 (일반) | `posts/<과목명>/<NN>.<Topic-Kebab-Case>/<N>.1/index.qmd` |
+| 강의 (Causal) | `posts/Causal/lecture/<NN>.<Topic-Kebab-Case>/<N>.1/index.qmd` |
 | 논문 | `posts/Causal/paper/<논문 원제 전체>/index.qmd` |
 | 책 | `posts/Causal/book/<책 이름>/<NN>.<장 제목>/index.qmd` |
 
 - **기존 디렉토리가 이미 있으면 그 명명 방식을 그대로 따른다.** 새 중간 계층을 임의로 만들지 않는다. (`posts/Machine Learing`처럼 오타가 있는 디렉토리도 그대로 쓴다 — 이미 게시된 URL이 거기 걸려 있다.)
-- 강의 유형의 말단 `<NN>.1` 계층은 유지한다. 사이드바 자동 목록이 이 계층을 기준으로 구성된다.
+- 강의 유형의 말단 `<N>.1` 계층은 유지한다. 사이드바 자동 목록이 이 계층을 기준으로 구성된다.
+- **상위 디렉토리는 2자리 패딩(`05.Adjustment-Criterion`), 말단은 패딩 없음(`5.1`)으로 서로 다르다.** 두 자리 회차에서는 차이가 드러나지 않아 한 자리 회차(`01.Introduction/1.1`)에서만 갈리므로 특히 주의한다. 저장소 70개 포스트 중 60개가 이 형태다.
+- **예외: `posts/Machine Learing`** 시리즈는 전 회차가 `01.1`~`09.1`처럼 말단까지 패딩되어 있다. 이미 게시된 URL이므로 **그대로 두고**, 그 시리즈에 회차를 추가할 때만 위의 "기존 디렉토리 명명 방식을 그대로 따른다" 규칙에 따라 패딩을 유지한다.
 - 이미지는 항상 `index.qmd`와 **같은 디렉토리**의 `images/` 하위에 둔다.
 - **기존 포스트를 정비할 때는 경로를 바꾸지 않는다.** 이미 게시된 URL이 깨진다.
 

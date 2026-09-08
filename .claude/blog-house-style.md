@@ -36,7 +36,7 @@ format:
 **A-2. `categories` 규칙**
 
 - **첫 번째 값 = 대분류.** 아래 목록에서 고르며, 저장 디렉토리와 일치해야 한다.
-  `Causal Inference` · `Machine Learning` · `Deep Learning` · `Data Mining` · `Optimization` · `Convex Optimization` · `Algorithms` · `System Programming` · `Deep Reinforcement Learning` · `Social Network Analysis`
+  `Causal Inference` · `Machine Learning` · `Deep Learning` · `Data Mining` · `Optimization` · `Convex Optimization` · `Algorithms` · `System Programming` · `Deep Reinforcement Learning`
 - **두 번째부터 = 성격 태그(선택).** `Paper Review` · `What If`
 - 예: `[Data Mining]`, `[Causal Inference, Paper Review]`, `[Causal Inference, What If]`
 - 새 대분류를 임의로 만들지 않는다. 필요하면 확인 질문한다. 카테고리는 블로그 목록 필터를 구성하므로 하나만 늘어도 사이드바가 달라진다.

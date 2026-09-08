@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Support Vector Machines">
+<meta name="description" content="예측의 확신도를 함수적 마진과 기하학적 마진으로 수식화하고, 비볼록 제약을 스케일 불변성으로 걷어내 SVM을 이차 계획 문제로 바꾸는 과정을 따라갑니다.">
 
 <title>[Machine Learning] 05. Support Vector Machines – shsha0110.github.io</title>
 <style>
@@ -154,7 +154,7 @@ window.Quarto = {
       <h1 class="title">[Machine Learning] 05. Support Vector Machines</h1>
                   <div>
         <div class="description">
-          Support Vector Machines
+          예측의 확신도를 함수적 마진과 기하학적 마진으로 수식화하고, 비볼록 제약을 스케일 불변성으로 걷어내 SVM을 이차 계획 문제로 바꾸는 과정을 따라갑니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -1286,7 +1286,7 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../../../../../posts/Archive/Deep Learning/26.Neural-Network-Prunning-and-LLM-Compression/26.1/index.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">[Deep Learning] 26. Neural Network Pruning and LLM Compression</span></a>
+ <span class="menu-text">[Deep Learning] 26. Neural Network Quantization and LLM Compression</span></a>
   </div>
 </li>
       </ul>
@@ -2893,7 +2893,8 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#introduction-서포트-벡터-머신svm의-개요" id="toc-introduction-서포트-벡터-머신svm의-개요" class="nav-link active" data-scroll-target="#introduction-서포트-벡터-머신svm의-개요">1. Introduction: 서포트 벡터 머신(SVM)의 개요</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
+  <li><a href="#introduction-서포트-벡터-머신svm의-개요" id="toc-introduction-서포트-벡터-머신svm의-개요" class="nav-link" data-scroll-target="#introduction-서포트-벡터-머신svm의-개요">1. Introduction: 서포트 벡터 머신(SVM)의 개요</a></li>
   <li><a href="#margins-마진에-대한-직관" id="toc-margins-마진에-대한-직관" class="nav-link" data-scroll-target="#margins-마진에-대한-직관">2. Margins: 마진에 대한 직관</a>
   <ul class="collapse">
   <li><a href="#분류의-자신감confidence" id="toc-분류의-자신감confidence" class="nav-link" data-scroll-target="#분류의-자신감confidence">2.1. 분류의 “자신감(Confidence)”</a></li>
@@ -2908,6 +2909,7 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#최적화-문제의-변환-convex-transformation" id="toc-최적화-문제의-변환-convex-transformation" class="nav-link" data-scroll-target="#최적화-문제의-변환-convex-transformation">5.1. 최적화 문제의 변환 (Convex Transformation)</a></li>
   </ul></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2918,6 +2920,19 @@ window.Quarto = {
 
 
 
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 · 인공지능대학원(IPAI) <strong>박재식(Jaesik Park)</strong> 교수님의 <em>Introduction to Machine Learning</em> (4190.428) 강의 자료(5강 <em>Support Vector Machines, Part 1</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 원 강의 자료는 MIT 6.036(2019 Fall)과 Stanford CS229(2023–2024 Summer)의 강의 노트를 상당 부분 차용하고 있습니다. SVM은 두 회차에 걸쳐 다루며, 라그랑주 쌍대성 · 커널 적용 · SMO 알고리즘은 6강에서 이어집니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“’맞히는 것’과 ’확신을 갖고 맞히는 것’은 다릅니다. SVM은 후자를 거리로 수식화하고, 그 최소 거리를 최대화합니다.”</strong></p>
+<p>로지스틱 회귀는 <span class="math inline">\(\theta^\top x\)</span>의 부호만 보고 분류하지만, 그 값의 <strong>크기</strong>는 예측에 대한 확신의 정도를 담고 있습니다. 이 확신을 <span class="math inline">\(\hat{\gamma}^{(i)} = y^{(i)}(w^\top x^{(i)} + b)\)</span>로 적은 것이 <strong>함수적 마진</strong>입니다.</p>
+<p>그런데 함수적 마진에는 결함이 있습니다. <span class="math inline">\((w,b)\)</span>를 두 배로 키우면 결정 경계도 예측도 그대로인데 마진 값만 두 배가 됩니다. 즉 최대화 대상으로 삼기에 부적합합니다. 이를 <span class="math inline">\(\|w\|\)</span>로 나눠 실제 유클리드 거리로 만든 것이 <strong>기하학적 마진</strong> <span class="math inline">\(\gamma^{(i)}\)</span>이며, 이 양은 스케일 불변입니다.</p>
+<p>목표는 “가장 가까운 점까지의 기하학적 거리”를 최대화하는 것인데, 소박하게 적으면 <span class="math inline">\(\|w\|=1\)</span>이라는 <strong>비볼록</strong> 제약이 끼어듭니다. 여기서 반전이 일어납니다 — 바로 그 스케일 불변성을 이용해 <span class="math inline">\(\hat{\gamma}=1\)</span>로 스케일을 <strong>고정해 버리면</strong> 제약이 사라지고, 문제는 <span class="math inline">\(\min \frac{1}{2}\|w\|^2\)</span>라는 매끈한 이차 계획(QP) 문제가 됩니다.</p>
+<p>즉 이번 강의의 핵심은 SVM의 목적함수가 하늘에서 떨어진 것이 아니라, “확신을 최대화하라”는 요구에서 두 번의 정직한 변형을 거쳐 <strong>유도된</strong> 것임을 보이는 데 있습니다.</p>
+</blockquote>
+</section>
 <section id="introduction-서포트-벡터-머신svm의-개요" class="level2">
 <h2 class="anchored" data-anchor-id="introduction-서포트-벡터-머신svm의-개요">1. Introduction: 서포트 벡터 머신(SVM)의 개요</h2>
 <ul>
@@ -3001,7 +3016,19 @@ window.Quarto = {
 <ul>
 <li>주어진 훈련 예제 <span class="math inline">\((x^{(i)}, y^{(i)})\)</span>에 대한 파라미터 <span class="math inline">\((w, b)\)</span>의 <strong>함수적 마진(Functional margin)</strong> <span class="math inline">\(\hat{\gamma}^{(i)}\)</span>는 다음과 같이 정의됩니다:</li>
 </ul>
-<p><span class="math display">\[\hat{\gamma}^{(i)} = y^{(i)}(w^\top x^{(i)} + b)\]</span></p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>정의 (함수적 마진, Functional Margin)
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>훈련 예제 <span class="math inline">\((x^{(i)}, y^{(i)})\)</span>에 대한 파라미터 <span class="math inline">\((w,b)\)</span>의 함수적 마진은 <span class="math display">\[\hat{\gamma}^{(i)} = y^{(i)}(w^\top x^{(i)} + b)\]</span> 이며, 데이터셋 전체의 함수적 마진은 개별 마진의 최솟값 <span class="math inline">\(\hat{\gamma} = \min_{i=1,\dots,n} \hat{\gamma}^{(i)}\)</span>로 정의한다.</p>
+</div>
+</div>
 <ul>
 <li><p>함수적 마진이 크다는 것은 우리의 예측이 올바르고 그 확신도 크다는 것을 의미합니다.</p>
 <ul>
@@ -3041,6 +3068,19 @@ window.Quarto = {
 <li><p>위 도출은 <span class="math inline">\(y^{(i)}=1\)</span>일 때를 가정한 것입니다. 만약 <span class="math inline">\(y^{(i)}=-1\)</span>인 경우 거리는 양수여야 하므로 앞에 음수 기호가 붙어야 합니다. 이를 <span class="math inline">\(y^{(i)}\)</span>를 곱해줌으로써 모든 훈련 예제 <span class="math inline">\((x^{(i)}, y^{(i)})\)</span>에 대해 일반화된 <strong>기하학적 마진</strong> 공식을 얻게 됩니다:</p></li>
 </ul>
 <p><span class="math display">\[\gamma^{(i)} = y^{(i)} \left( \left(\frac{w}{||w||}\right)^\top x^{(i)} + \frac{b}{||w||} \right)\]</span></p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>정의 (기하학적 마진, Geometric Margin)
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>훈련 예제 <span class="math inline">\((x^{(i)}, y^{(i)})\)</span>에 대한 <span class="math inline">\((w,b)\)</span>의 기하학적 마진은 <span class="math display">\[\gamma^{(i)} = y^{(i)}\left(\left(\frac{w}{\|w\|}\right)^\top x^{(i)} + \frac{b}{\|w\|}\right)\]</span> 이며, 이는 그 점에서 결정 경계까지의 <strong>부호 있는 유클리드 거리</strong>다. 데이터셋 전체의 기하학적 마진 역시 개별 값의 최솟값으로 정의한다.</p>
+</div>
+</div>
 <ul>
 <li><strong>기하학적 마진의 중요한 특징</strong>
 <ul>
@@ -3073,10 +3113,112 @@ window.Quarto = {
 <ul>
 <li>이 형태가 바로 SVM 최적 마진 분류기의 표준형(Primal form)입니다. 이 식은 볼록 목적 함수(Convex objective function)와 선형 제약 조건(Linear constraints)을 가지는 전형적인 <strong>이차 계획법(Quadratic Programming, QP)</strong> 문제로 변환되었으며, 널리 사용되는 상용 QP Solver를 통해 글로벌 최적해(Global optimum)를 매우 효율적이고 안정적으로 찾아낼 수 있습니다.</li>
 </ul>
-
-
-
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span><span class="math inline">\(\hat{\gamma} = 1\)</span>은 가정이 아니라 정규화입니다
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>“함수적 마진이 1이 되도록 두자”는 대목은 데이터에 대한 추가 가정처럼 보이기 쉽지만, 그렇지 않습니다. <span class="math inline">\((w,b)\)</span>와 <span class="math inline">\((cw, cb)\)</span>는 <strong>같은 결정 경계</strong>를 나타내므로, 이 스케일 자유도는 애초에 문제에 있던 잉여입니다. <span class="math inline">\(\hat{\gamma}=1\)</span>은 그 잉여를 한 점으로 고정해 표현을 유일하게 만드는 절차일 뿐이고, 따라서 해집합은 조금도 좁아지지 않습니다. 만약 기하학적 마진이 스케일 불변이 아니었다면 이 조작은 허용되지 않았을 것입니다 — §4.2가 §5.1의 전제인 이유가 여기 있습니다.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>다음 회차로 넘기는 질문
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>지금의 표준형은 QP 솔버에 넣으면 풀리지만, 두 가지가 아직 남아 있습니다. 첫째, 데이터가 선형 분리 불가능하면 제약을 만족하는 <span class="math inline">\((w,b)\)</span>가 아예 없습니다. 둘째, 이 형태에서는 4강의 커널 트릭을 적용할 자리가 보이지 않습니다 — 식에 <span class="math inline">\(x^{(i)}\)</span>가 내적이 아닌 형태로 들어 있기 때문입니다. 두 문제 모두 <strong>라그랑주 쌍대 문제</strong>로 옮겨 가면 한꺼번에 풀립니다. 그것이 6강의 내용입니다.</p>
+</div>
+</div>
+<hr>
 </section>
+</section>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 관찰</strong></td>
+<td style="text-align: left;">로지스틱 회귀에서 <span class="math inline">\(\theta^\top x\)</span>의 부호는 예측을, 크기는 확신을 담는다</td>
+<td style="text-align: left;">§2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 목표 재설정</strong></td>
+<td style="text-align: left;">좋은 적합이란 맞히는 것이 아니라 <strong>여유 있게</strong> 맞히는 것이다 (A &gt; B &gt; C)</td>
+<td style="text-align: left;">§2.1, Figure</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 표기 정리</strong></td>
+<td style="text-align: left;"><span class="math inline">\(y \in \{-1,1\}\)</span>, <span class="math inline">\(\theta \to (w, b)\)</span>, 확률 추정 없이 직접 <span class="math inline">\(\pm1\)</span>을 예측한다</td>
+<td style="text-align: left;">§3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 1차 수식화</strong></td>
+<td style="text-align: left;">확신을 <span class="math inline">\(\hat{\gamma}^{(i)} = y^{(i)}(w^\top x^{(i)}+b)\)</span>로 적는다 (함수적 마진)</td>
+<td style="text-align: left;">§4.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 결함 발견</strong></td>
+<td style="text-align: left;"><span class="math inline">\((w,b) \to (2w,2b)\)</span>면 예측은 그대로인데 마진만 2배 — 최대화 대상이 될 수 없다</td>
+<td style="text-align: left;">§4.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 2차 수식화</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\|w\|\)</span>로 나눠 실제 거리로 만든다 (기하학적 마진) — 스케일 불변</td>
+<td style="text-align: left;">§4.2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 소박한 최적화</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\max \gamma\)</span> s.t. <span class="math inline">\(y^{(i)}(w^\top x^{(i)}+b) \ge \gamma\)</span>, <span class="math inline">\(\|w\|=1\)</span></td>
+<td style="text-align: left;">§5</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 장애물</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\|w\|=1\)</span>은 구면 제약이라 비볼록이다</td>
+<td style="text-align: left;">§5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ 1차 변형</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\gamma = \hat{\gamma}/\|w\|\)</span>로 치환해 제약을 목적함수로 흡수한다</td>
+<td style="text-align: left;">§5.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ 2차 변형</strong></td>
+<td style="text-align: left;">스케일 불변성을 이용해 <span class="math inline">\(\hat{\gamma}=1\)</span>로 고정한다 (해집합 불변)</td>
+<td style="text-align: left;">§5.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑪ 최종형</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\min_{w,b} \frac{1}{2}\|w\|^2\)</span> s.t. <span class="math inline">\(y^{(i)}(w^\top x^{(i)}+b) \ge 1\)</span> — 볼록 QP</td>
+<td style="text-align: left;">§5.1</td>
+</tr>
+</tbody>
+</table>
+
+
+
 </section>
 
 </main> <!-- /main -->

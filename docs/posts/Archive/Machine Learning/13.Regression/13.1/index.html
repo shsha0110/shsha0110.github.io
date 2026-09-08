@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Regression">
+<meta name="description" content="제곱 오차 최소화가 최소제곱 닫힌 해로 떨어지는 과정과, 그 해가 무너지는 두 지점(비가역·과적합)을 릿지 회귀가 어떻게 동시에 막는지 따라갑니다.">
 
 <title>[Machine Learning] 13. Regression – shsha0110.github.io</title>
 <style>
@@ -154,7 +154,7 @@ window.Quarto = {
       <h1 class="title">[Machine Learning] 13. Regression</h1>
                   <div>
         <div class="description">
-          Regression
+          제곱 오차 최소화가 최소제곱 닫힌 해로 떨어지는 과정과, 그 해가 무너지는 두 지점(비가역·과적합)을 릿지 회귀가 어떻게 동시에 막는지 따라갑니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -1286,7 +1286,7 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../../../../../posts/Archive/Deep Learning/26.Neural-Network-Prunning-and-LLM-Compression/26.1/index.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">[Deep Learning] 26. Neural Network Pruning and LLM Compression</span></a>
+ <span class="menu-text">[Deep Learning] 26. Neural Network Quantization and LLM Compression</span></a>
   </div>
 </li>
       </ul>
@@ -2893,7 +2893,8 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#introduction-회귀-분석regression의-목적" id="toc-introduction-회귀-분석regression의-목적" class="nav-link active" data-scroll-target="#introduction-회귀-분석regression의-목적">1. Introduction: 회귀 분석(Regression)의 목적</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
+  <li><a href="#introduction-회귀-분석regression의-목적" id="toc-introduction-회귀-분석regression의-목적" class="nav-link" data-scroll-target="#introduction-회귀-분석regression의-목적">1. Introduction: 회귀 분석(Regression)의 목적</a></li>
   <li><a href="#모델링과-손실-함수-loss-function" id="toc-모델링과-손실-함수-loss-function" class="nav-link" data-scroll-target="#모델링과-손실-함수-loss-function">2. 모델링과 손실 함수 (Loss Function)</a>
   <ul class="collapse">
   <li><a href="#제곱-오차-squared-error" id="toc-제곱-오차-squared-error" class="nav-link" data-scroll-target="#제곱-오차-squared-error">2.1. 제곱 오차 (Squared Error)</a></li>
@@ -2912,6 +2913,7 @@ window.Quarto = {
   </ul></li>
   <li><a href="#오차의-근원-구조적-오차와-추정-오차" id="toc-오차의-근원-구조적-오차와-추정-오차" class="nav-link" data-scroll-target="#오차의-근원-구조적-오차와-추정-오차">5. 오차의 근원: 구조적 오차와 추정 오차</a></li>
   <li><a href="#경사-하강법-gradient-descent을-통한-최적화" id="toc-경사-하강법-gradient-descent을-통한-최적화" class="nav-link" data-scroll-target="#경사-하강법-gradient-descent을-통한-최적화">6. 경사 하강법 (Gradient Descent)을 통한 최적화</a></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2922,6 +2924,20 @@ window.Quarto = {
 
 
 
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 · 인공지능대학원(IPAI) <strong>박재식(Jaesik Park)</strong> 교수님의 <em>Introduction to Machine Learning</em> (4190.428) 강의 자료(13강 <em>Regression</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 원 강의 자료는 MIT 6.036(2019 Fall)과 Stanford CS229(2023–2024 Summer)의 강의 노트를 상당 부분 차용하고 있습니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“회귀는 이 과목에서 유일하게 ‘반복하지 않고 한 번에’ 풀리는 문제입니다. 그리고 그 닫힌 해가 무너지는 두 지점이 곧 정규화가 필요한 이유입니다.”</strong></p>
+<p>출력이 범주가 아니라 실수일 때, 예측의 품질을 재는 자연스러운 척도는 <strong>제곱 오차</strong>입니다. 이 선택은 임의적이지 않습니다 — 참 함수에 가우시안 잡음이 더해졌다고 가정하면 최대우도추정이 정확히 제곱합 최소화로 귀결되기 때문입니다.</p>
+<p>선형 가설 <span class="math inline">\(h(x) = \theta^\top x + \theta_0\)</span>를 놓고 MSE를 최소화하면, 놀랍게도 <strong>닫힌 해</strong>가 나옵니다. 목적 함수를 행렬로 벡터화하고 <span class="math inline">\(\nabla_\theta J = \frac{2}{n}W^\top(W\theta - T) = 0\)</span>을 풀면 <span class="math inline">\(\theta = (W^\top W)^{-1}W^\top T\)</span> — 이것이 <strong>최소제곱법(OLS)</strong>입니다. 경사 하강법도, 반복도 필요 없습니다.</p>
+<p>그런데 이 공식에는 두 개의 균열이 있습니다. 데이터에 중복이나 완전한 선형 종속이 있으면 <span class="math inline">\(W^\top W\)</span>가 <strong>특이 행렬</strong>이 되어 역행렬이 없고, 설령 있어도 훈련 데이터에 <strong>과적합</strong>할 수 있습니다.</p>
+<p><strong>릿지 회귀</strong>는 목적 함수에 <span class="math inline">\(\lambda\|\theta\|^2\)</span> 하나를 더해 두 문제를 동시에 해결합니다. 해는 <span class="math inline">\(\theta_{ridge} = (W^\top W + n\lambda I)^{-1}W^\top T\)</span>가 되고, 대각선에 더해진 양수 <span class="math inline">\(n\lambda\)</span>가 <strong>특이성을 원천적으로 없애면서</strong> 동시에 계수를 0 쪽으로 눌러 과적합을 막습니다. <span class="math inline">\(\lambda\)</span>를 키우면 구조적 오차는 늘고 추정 오차는 줄어드는 — 7강의 편향-분산 트레이드오프가 여기서 하나의 손잡이로 나타납니다.</p>
+<p>마지막으로, 닫힌 해가 있어도 <span class="math inline">\(d \times d\)</span> 역행렬이 <span class="math inline">\(O(d^3)\)</span>이라 고차원에서는 쓸 수 없습니다. 다행히 두 목적 함수 모두 <strong>볼록</strong>이므로 경사 하강법이 전역 최적해를 보장합니다.</p>
+</blockquote>
+</section>
 <section id="introduction-회귀-분석regression의-목적" class="level2">
 <h2 class="anchored" data-anchor-id="introduction-회귀-분석regression의-목적">1. Introduction: 회귀 분석(Regression)의 목적</h2>
 <ul>
@@ -3009,6 +3025,22 @@ window.Quarto = {
 <li><strong>최적해 도출:</strong> 미분값을 0으로 설정합니다. <span class="math display">\[ \frac{2}{n} W^\top (W\theta - T) = 0 \]</span> <span class="math display">\[ W^\top W \theta - W^\top T = 0 \]</span> <span class="math display">\[ W^\top W \theta = W^\top T \]</span> <span class="math display">\[ \theta = (W^\top W)^{-1} W^\top T \]</span></li>
 </ol></li>
 </ul></li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>정리 (최소제곱해, Ordinary Least Squares)
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>증강된 설계 행렬 <span class="math inline">\(W \in \mathbb{R}^{n \times d}\)</span>와 타겟 벡터 <span class="math inline">\(T \in \mathbb{R}^{n \times 1}\)</span>에 대해, 평균 제곱 오차 <span class="math inline">\(J(\theta) = \frac{1}{n}(W\theta - T)^\top(W\theta - T)\)</span>를 최소화하는 <span class="math inline">\(\theta\)</span>는 <span class="math inline">\(W^\top W\)</span>가 가역일 때 다음과 같이 유일하게 주어진다.</p>
+<p><span class="math display">\[\theta^* = (W^\top W)^{-1}W^\top T\]</span></p>
+</div>
+</div>
+<ul>
 <li>이로써 데이터를 통해 평균 제곱 오차를 최소화하는 <span class="math inline">\(\theta\)</span> 차원의 식을 직접(directly) 도출해냈습니다. 식의 차원을 검증해보면, <span class="math inline">\((d \times d)\)</span> 역행렬과 <span class="math inline">\((d \times n)\)</span> 행렬, 그리고 <span class="math inline">\((n \times 1)\)</span> 행렬의 곱이므로 최종 <span class="math inline">\(\theta\)</span>는 <span class="math inline">\((d \times 1)\)</span> 차원을 가지며 완벽히 일치합니다.</li>
 </ul>
 </section>
@@ -3026,12 +3058,29 @@ window.Quarto = {
 <ul>
 <li>만약 데이터셋에 완전히 동일한 포인트가 중복되어 있거나(예: <span class="math inline">\(x^{(1)} = x^{(2)} = (1, 2)^\top\)</span>), 변수들 간에 완벽한 선형 종속성(다중공선성)이 있다면 행렬 <span class="math inline">\((W^\top W)\)</span>는 특이 행렬(singular matrix)이 되어 역행렬을 구할 수 없습니다.</li>
 </ul></li>
+</ul></li>
+</ul>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Study Question: 같은 점이 두 번 들어 있으면 실제로 어떻게 되나요?
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><span class="math inline">\(x^{(1)} = x^{(2)} = (1,2)^\top\)</span>인 데이터만 있다고 해 봅시다. 그러면</p>
+<p><span class="math display">\[W = \begin{bmatrix} 1 &amp; 2 \\ 1 &amp; 2 \end{bmatrix}, \qquad W^\top W = \begin{bmatrix} 2 &amp; 4 \\ 4 &amp; 8 \end{bmatrix}\]</span></p>
+<p>이고 <span class="math inline">\(\det(W^\top W) = 2\cdot8 - 4\cdot4 = 0\)</span>이므로 <strong>역행렬이 존재하지 않습니다.</strong> 기하학적으로는, 두 점이 같은 자리에 있어 직선의 기울기를 하나로 결정할 정보가 애초에 없기 때문입니다. 데이터가 부족해서가 아니라 <strong>정보가 중복되어</strong> 해가 유일하지 않은 것이며, 이것이 다음 절의 릿지 회귀가 대각선을 들어 올려 해결하는 바로 그 문제입니다.</p>
+</div>
+</div>
+<ul>
 <li><ol start="2" type="1">
 <li><strong>과적합 (Overfitting):</strong></li>
 </ol>
 <ul>
 <li>OLS 목적 함수는 “주어진 학습 데이터”에 최대한 완벽하게 끼워 맞추는 데에만 집중합니다. 마진 극대화(Margin maximization) 논의에서 살펴보았듯, 가설이 훈련 데이터에 너무 과도하게 집착하지 않도록 제한하는 규칙화(Regularization) 메커니즘이 필요합니다.</li>
-</ul></li>
 </ul></li>
 </ul>
 </section>
@@ -3055,8 +3104,20 @@ window.Quarto = {
 <li><p>양변에 <span class="math inline">\(n\)</span>을 곱해줍니다. <span class="math display">\[ W^\top W \theta + n\lambda\theta = W^\top T \]</span></p></li>
 <li><p>행렬 형태로 묶어줍니다 (이때 스칼라 <span class="math inline">\(\lambda\)</span>를 행렬식에 맞추기 위해 항등 행렬 <span class="math inline">\(I\)</span>를 곱합니다). <span class="math display">\[ (W^\top W + n\lambda I)\theta = W^\top T \]</span></p></li>
 <li><p>최종적으로 양변의 역행렬을 취합니다. <span class="math display">\[ \theta_{ridge} = (W^\top W + n\lambda I)^{-1} W^\top T \]</span></p></li>
-<li><p>이 수식의 핵심은 <strong><span class="math inline">\(\lambda &gt; 0\)</span>일 때, <span class="math inline">\((W^\top W + n\lambda I)\)</span> 행렬이 항상 가역적(invertible)이 된다</strong>는 점입니다. 대각 성분에 양수 <span class="math inline">\(n\lambda\)</span>가 더해지면서 행렬의 특이성이 해소됩니다.</p></li>
 </ul>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>정규화 항 하나가 두 문제를 동시에 해결합니다
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><span class="math inline">\(\lambda &gt; 0\)</span>이면 <span class="math inline">\((W^\top W + n\lambda I)\)</span>는 <strong>항상 가역</strong>입니다. <span class="math inline">\(W^\top W\)</span>는 양의 준정부호이므로 고윳값이 모두 0 이상인데, 여기에 <span class="math inline">\(n\lambda\)</span>를 더하면 모든 고윳값이 <span class="math inline">\(n\lambda\)</span> 이상으로 밀려 올라가 0이 될 수 없기 때문입니다. 즉 §4.1에서 본 <strong>비가역 문제가 원천적으로 사라집니다.</strong> 동시에 같은 항이 <span class="math inline">\(\|\theta\|\)</span>를 억눌러 <strong>과적합</strong>도 막습니다. 서로 달라 보이던 두 문제가 하나의 손잡이 <span class="math inline">\(\lambda\)</span>로 통제된다는 것이 릿지 회귀의 우아함입니다.</p>
+</div>
+</div>
 </section>
 </section>
 <section id="오차의-근원-구조적-오차와-추정-오차" class="level2">
@@ -3092,8 +3153,114 @@ window.Quarto = {
 <li><p>릿지 회귀의 목적 함수와 그 그래디언트는 다음과 같이 정의됩니다. <span class="math display">\[ J_{ridge}(\theta, \theta_0) = \frac{1}{n} \sum_{i=1}^n \left( \theta^\top x^{(i)} + \theta_0 - y^{(i)} \right)^2 + \lambda ||\theta||^2 \]</span></p></li>
 <li><p><span class="math inline">\(\theta\)</span>에 대한 편미분 (가중치 업데이트용): <span class="math display">\[ \nabla_\theta J = \frac{2}{n} \sum_{i=1}^n \left( \theta^\top x^{(i)} + \theta_0 - y^{(i)} \right)x^{(i)} + 2\lambda\theta \]</span></p></li>
 <li><p><span class="math inline">\(\theta_0\)</span>에 대한 편미분 (편향 업데이트용): <span class="math display">\[ \frac{\partial J}{\partial \theta_0} = \frac{2}{n} \sum_{i=1}^n \left( \theta^\top x^{(i)} + \theta_0 - y^{(i)} \right) \]</span></p></li>
-<li><p>가장 다행인 점은, OLS와 릿지 회귀의 목적 함수가 모두 <strong>볼록 함수(Convex function)</strong>라는 사실입니다. 볼록 함수는 오직 단 하나의 전역 최솟값(global minimum)만을 가집니다. 따라서 충분히 작은 학습률(step size)을 사용한다면, 경사하강법은 반드시 최적해로 수렴(Gradient Descent Convergence Theorem)한다는 강력한 수학적 보장을 받습니다.</p></li>
+<li><p>가장 다행인 점은, OLS와 릿지 회귀의 목적 함수가 모두 <strong>볼록 함수(Convex function)</strong>라는 사실입니다. 볼록 함수는 오직 단 하나의 전역 최솟값(global minimum)만을 가집니다. 따라서 충분히 작은 학습률(step size)을 사용한다면, 경사하강법은 반드시 최적해로 수렴(Gradient Descent Convergence Theorem)한다는 강력한 수학적 보장을 받습니다. 11강에서 본 “비볼록이면 초기값에 따라 도달점이 달라진다”는 걱정이 여기서는 필요 없다는 뜻입니다.</p></li>
 </ul>
+<hr>
+</section>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 문제 설정</strong></td>
+<td style="text-align: left;">출력이 범주가 아니라 실수인 지도학습 — <span class="math inline">\(h : \mathbb{R}^d \to \mathbb{R}\)</span></td>
+<td style="text-align: left;">§1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 척도 선택</strong></td>
+<td style="text-align: left;">제곱 오차 <span class="math inline">\((guess - actual)^2\)</span> — 대칭적 페널티</td>
+<td style="text-align: left;">§2.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 척도의 근거</strong></td>
+<td style="text-align: left;">가우시안 잡음 가정 하의 최대우도추정이 곧 제곱합 최소화다</td>
+<td style="text-align: left;">§2.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 가설 클래스</strong></td>
+<td style="text-align: left;"><span class="math inline">\(h(x) = \theta^\top x + \theta_0\)</span> — <span class="math inline">\(\phi(x)\)</span>를 앞에 붙이면 비선형도 포섭한다</td>
+<td style="text-align: left;">§2.2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 최적화 문제</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\theta^*, \theta_0^* = \arg\min J(\theta,\theta_0)\)</span>, <span class="math inline">\(J\)</span>는 MSE</td>
+<td style="text-align: left;">§3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 단순화</strong></td>
+<td style="text-align: left;">입력에 1을 덧붙여 <span class="math inline">\(\theta_0\)</span>를 <span class="math inline">\(\theta\)</span>에 흡수시킨다</td>
+<td style="text-align: left;">§3.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 벡터화</strong></td>
+<td style="text-align: left;"><span class="math inline">\(J(\theta) = \frac{1}{n}(W\theta - T)^\top(W\theta - T)\)</span></td>
+<td style="text-align: left;">§3.2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 닫힌 해</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\nabla_\theta J = 0\)</span>을 풀면 <span class="math inline">\(\theta = (W^\top W)^{-1}W^\top T\)</span> (OLS)</td>
+<td style="text-align: left;">§3.2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ 균열 1</strong></td>
+<td style="text-align: left;">중복 · 다중공선성이면 <span class="math inline">\(W^\top W\)</span>가 특이 행렬이라 역행렬이 없다</td>
+<td style="text-align: left;">§4.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ 균열 2</strong></td>
+<td style="text-align: left;">데이터에만 맞추는 목적 함수는 과적합을 막지 못한다</td>
+<td style="text-align: left;">§4.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑪ 처방</strong></td>
+<td style="text-align: left;"><span class="math inline">\(J_{ridge} = J + \lambda\|\theta\|^2\)</span> — 단 <span class="math inline">\(\theta_0\)</span>는 벌점 대상에서 제외</td>
+<td style="text-align: left;">§4.2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑫ 새 닫힌 해</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\theta_{ridge} = (W^\top W + n\lambda I)^{-1}W^\top T\)</span></td>
+<td style="text-align: left;">§4.3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑬ 효과</strong></td>
+<td style="text-align: left;">대각선에 <span class="math inline">\(n\lambda\)</span>가 더해져 항상 가역이 되고, 동시에 계수가 0으로 눌린다</td>
+<td style="text-align: left;">§4.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑭ 오차의 두 근원</strong></td>
+<td style="text-align: left;">가설 클래스의 한계(구조적 오차) vs 데이터 부족(추정 오차)</td>
+<td style="text-align: left;">§5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑮ <span class="math inline">\(\lambda\)</span>의 의미</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\lambda\)</span>↑ → 구조적 오차↑ · 추정 오차↓ (7강 편향-분산의 손잡이)</td>
+<td style="text-align: left;">§5</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑯ 현실적 한계</strong></td>
+<td style="text-align: left;"><span class="math inline">\(O(d^3)\)</span>의 역행렬 연산 때문에 고차원에서는 닫힌 해를 못 쓴다</td>
+<td style="text-align: left;">§6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑰ 대안</strong></td>
+<td style="text-align: left;">두 목적 함수 모두 볼록이므로 경사 하강법이 전역해를 보장한다</td>
+<td style="text-align: left;">§6</td>
+</tr>
+</tbody>
+</table>
 
 
 

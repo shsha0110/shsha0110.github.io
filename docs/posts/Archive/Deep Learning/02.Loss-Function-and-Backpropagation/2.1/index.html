@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Loss Function and Backpropagation">
+<meta name="description" content="입력을 점수로, 점수를 손실로 바꾸는 과정을 정의부터 세우고, 그 손실을 파라미터로 미분하기 위한 계산 그래프와 역전파의 국소 규칙을 끝까지 따라갑니다.">
 
 <title>[Deep Learning] 02. Loss Function and Backpropagation – shsha0110.github.io</title>
 <style>
@@ -189,7 +189,7 @@ window.Quarto = {
       <h1 class="title">[Deep Learning] 02. Loss Function and Backpropagation</h1>
                   <div>
         <div class="description">
-          Loss Function and Backpropagation
+          입력을 점수로, 점수를 손실로 바꾸는 과정을 정의부터 세우고, 그 손실을 파라미터로 미분하기 위한 계산 그래프와 역전파의 국소 규칙을 끝까지 따라갑니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -2928,7 +2928,7 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#들어가며-overview" id="toc-들어가며-overview" class="nav-link active" data-scroll-target="#들어가며-overview">들어가며 (Overview)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
   <li><a href="#분류-classification" id="toc-분류-classification" class="nav-link" data-scroll-target="#분류-classification">1. 분류 (Classification)</a>
   <ul class="collapse">
   <li><a href="#분류-문제의-정의" id="toc-분류-문제의-정의" class="nav-link" data-scroll-target="#분류-문제의-정의">1.1 분류 문제의 정의</a></li>
@@ -2968,7 +2968,7 @@ window.Quarto = {
   <li><a href="#모듈화된-forwardbackward-api" id="toc-모듈화된-forwardbackward-api" class="nav-link" data-scroll-target="#모듈화된-forwardbackward-api">4.10 모듈화된 forward/backward API</a></li>
   <li><a href="#실제-pytorch-레이어들" id="toc-실제-pytorch-레이어들" class="nav-link" data-scroll-target="#실제-pytorch-레이어들">4.11 실제 PyTorch 레이어들</a></li>
   </ul></li>
-  <li><a href="#마치며-summary" id="toc-마치며-summary" class="nav-link" data-scroll-target="#마치며-summary">마치며 (Summary)</a></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2979,17 +2979,15 @@ window.Quarto = {
 
 
 
-<section id="들어가며-overview" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며-overview">들어가며 (Overview)</h2>
-<p>지난 시간에는 강의 운영 방식과 딥러닝에 대한 소개, 그리고 최적화의 큰 그림을 살펴보았습니다. 이번 강의에서는 <strong>신경망 학습의 가장 기본적인 골격</strong>을 구성하는 다음 네 가지 주제를 다룹니다.</p>
-<ul>
-<li><strong>Classification (분류):</strong> 우리가 풀고자 하는 문제의 정의와 그 어려움</li>
-<li><strong>Score functions (점수 함수):</strong> 입력을 클래스별 점수로 매핑하는 함수</li>
-<li><strong>Loss functions (손실 함수):</strong> 그 점수가 얼마나 좋은지 정량화하는 함수</li>
-<li><strong>Computational graphs (계산 그래프):</strong> 손실을 파라미터에 대해 미분하기 위한 추상화 도구</li>
-</ul>
-<p>큰 흐름은 다음과 같습니다. 먼저 <strong>입력 <span class="math inline">\(x\)</span>를 점수 <span class="math inline">\(s\)</span>로 바꾸는 함수</strong>를 정의하고, 그 점수가 정답과 얼마나 어긋나는지를 <strong>손실 함수</strong>로 측정합니다. 그리고 이 손실을 줄이는 방향으로 파라미터를 갱신하기 위해, 손실을 파라미터로 미분해야 하는데 이때 사용하는 핵심 알고리즘이 바로 <strong>역전파(backpropagation)</strong>입니다. 본 강의의 전반부는 “무엇을 최소화할 것인가(손실)”를, 후반부는 “어떻게 그 미분을 계산할 것인가(계산 그래프)”를 다룬다고 보시면 됩니다.</p>
-<hr>
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 강의 자료(2강 <em>Loss function and backpropagation</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 원본 슬라이드의 여러 예시 그림은 Stanford cs231n(Fei-Fei Li, Justin Johnson, Serena Yeung)의 자료에서 차용된 것임이 강의 자료에 명시되어 있습니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“입력을 점수로 바꾸고, 그 점수가 정답과 얼마나 어긋나는지 측정한 뒤, 계산 그래프 위에서 그 손실을 파라미터로 미분합니다.”</strong></p>
+<p>1강이 “학습이란 결국 최적화”라는 큰 그림을 세웠다면, 2강은 그 최적화가 실제로 무엇을 대상으로 이루어지는지를 채워 넣습니다. 전반부는 <strong>무엇을 최소화할 것인가</strong>를 다룹니다. 입력 <span class="math inline">\(x\)</span> 를 클래스별 점수 <span class="math inline">\(s = f_\theta(x)\)</span> 로 보내는 <strong>점수 함수</strong>를 정의하고, 그 점수가 정답과 얼마나 어긋나는지를 <strong>손실 함수</strong>로 수치화합니다. 이때 마진을 요구하는 힌지 손실과 확률적 확신도를 요구하는 로지스틱 손실이 서로 다른 것을 벌한다는 점, 그리고 손실이 0인 <span class="math inline">\(W\)</span> 가 유일하지 않다는 사실이 <strong>정규화</strong>를 불러온다는 점이 핵심입니다. 후반부는 <strong>그 미분을 어떻게 계산할 것인가</strong>를 다룹니다. 복잡한 합성 함수를 DAG로 표현하는 <strong>계산 그래프</strong>를 도입하면, 각 노드는 “국소 그래디언트 × 상류 그래디언트”라는 한 줄짜리 규칙만 알면 되고, 이 국소성이 바로 현대 자동 미분 프레임워크의 forward/backward API로 이어집니다.</p>
+</blockquote>
 </section>
 <section id="분류-classification" class="level2">
 <h2 class="anchored" data-anchor-id="분류-classification">1. 분류 (Classification)</h2>
@@ -2998,7 +2996,7 @@ window.Quarto = {
 <p>분류란, 미리 주어진 <strong>이산적인 레이블 집합(discrete labels)</strong> 예를 들어 <span class="math inline">\(\{\text{dog}, \text{cat}, \text{truck}, \text{plane}, \dots\}\)</span> 가운데 입력에 가장 알맞은 하나를 선택하는 문제입니다. 예컨대 고양이 사진을 입력으로 받으면 출력으로 “cat”이라는 레이블을 내놓아야 합니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/classification_cat.png" class="img-fluid figure-img"></p>
+<p><img src="./images/cat_classification_example.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 고양이 이미지가 분류기에 입력되면 사전에 정의된 이산 레이블 집합 {dog, cat, truck, plane, …} 중 하나인 ’cat’으로 매핑되는 과정을 화살표로 도식화한 그림입니다. 분류기의 역할이 ’연속적인 픽셀 입력 → 이산적인 카테고리 출력’임을 직관적으로 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3014,7 +3012,7 @@ window.Quarto = {
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/semantic_gap.png" class="img-fluid figure-img"></p>
+<p><img src="./images/pixel_grid_representation.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 좌측의 고양이 사진에서 일부 영역을 확대하면, 우측에 보이듯 컴퓨터에게는 단지 0~255 사이의 숫자들이 빼곡히 들어찬 행렬로 보인다는 점을 강조한 그림입니다. “What the computer sees”라는 캡션은 픽셀 배열과 의미적 레이블 사이의 의미 격차를 시각적으로 부각합니다.</figcaption>
 </figure>
 </div>
@@ -3030,7 +3028,7 @@ window.Quarto = {
 <p>이 외에도 조명 변화, 시점 변화, 크기 변화 등 수많은 요인이 존재합니다. 분류기는 이런 <strong>클래스 내 변동(intra-class variation)</strong>에도 강건해야 합니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/other_challenges.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure03_other_challenges.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 낙엽 속에 웅크린 고양이(배경 혼잡), 풀숲에 일부가 가려진 고양이(가림), 소파에 늘어진 자세의 고양이(변형) 세 장의 사진을 나란히 배치하여, 동일한 ‘cat’ 클래스 안에서도 픽셀 수준의 모습이 극단적으로 달라질 수 있음을 보여주는 그림입니다.</figcaption>
 </figure>
 </div>
@@ -3046,19 +3044,19 @@ window.Quarto = {
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/mnist.png" class="img-fluid figure-img"></p>
+<p><img src="./images/mnist_grid.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: MNIST 데이터셋의 샘플 격자 이미지로, 0부터 9까지의 손글씨 숫자가 사람마다 서로 다른 필체로 작성된 모습을 보여줍니다. 동일 숫자라도 형태 변동이 크다는 점에서 분류의 난점을 함께 시사합니다.</figcaption>
 </figure>
 </div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/cifar10.png" class="img-fluid figure-img"></p>
+<p><img src="./images/cifar10_samples.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: CIFAR-10 데이터셋을 airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck의 10개 클래스별로 행을 나누어 예시 이미지를 배치한 그림입니다. 32×32의 저해상도임에도 다양한 객체가 포함되어 있음을 확인할 수 있습니다.</figcaption>
 </figure>
 </div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/imagenet.png" class="img-fluid figure-img"></p>
+<p><img src="./images/imagenet_collage.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: ImageNet 데이터셋에 포함된 방대한 이미지들이 모여 ‘IMAGENET’ 글자 형태의 모자이크를 이루는 그림으로, 1,000개 클래스·약 120만 장 규모의 대규모 데이터셋임을 시각적으로 강조합니다.</figcaption>
 </figure>
 </div>
@@ -3071,13 +3069,13 @@ window.Quarto = {
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/progress_cifar10.png" class="img-fluid figure-img"></p>
+<p><img src="./images/cifar10_accuracy_trend.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 가로축 연도(2013~2021), 세로축 Top-1 정확도(%)인 산점도·꺾은선 그래프입니다. 청록색 선이 각 시점의 최고 성능 모델(Models with highest Percentage correct)을 잇고, 회색 점들은 그 외 모델들입니다. MCDNN에서 ViT-H/14까지 성능이 단조롭게 상승해 100%에 수렴하는 추세를 나타냅니다.</figcaption>
 </figure>
 </div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/progress_imagenet.png" class="img-fluid figure-img"></p>
+<p><img src="./images/imagenet_accuracy_trend.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 가로축 연도(2011~2022), 세로축 Top-5 정확도(%)인 그래프입니다. SIFT+FVs(약 74%)에서 AlexNet, ResNet-152, FixResNeXt, Florence-CoSwin-H로 이어지며 정확도가 99% 이상까지 도달하는 모습을 청록색 선으로 보여줍니다. 이는 본문의 ‘사람 5.1% vs 기계 1% 오류율’ 비교를 뒷받침하는 시각 자료입니다.</figcaption>
 </figure>
 </div>
@@ -3119,7 +3117,7 @@ s = f_\theta(x) = (s_1, \dots, s_C)
 </blockquote>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/score_function_cway.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure09_score_function_cway.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 32×32×3(총 3072개) 픽셀 배열이 함수 블록 f(x; W, b)로 들어가 C개의 클래스 점수로 나오는 데이터 흐름을 박스와 화살표로 표현한 그림입니다. 블록 아래에서 파라미터 W, b가 주입되며, 수식 f(x,W)=Wx+b의 각 항 차원(C×1, C×3072, 3072×1, C×1)이 함께 표기되어 있습니다.</figcaption>
 </figure>
 </div>
@@ -3138,7 +3136,7 @@ s_{\text{cat}} = (0.2)(56) + (-0.5)(231) + (0.1)(24) + (2.0)(2) + 1.1 = -96.8
 <p>같은 방식으로 <span class="math inline">\(s_{\text{dog}} = 437.9\)</span>, <span class="math inline">\(s_{\text{ship}} = 61.95\)</span>를 얻습니다. 즉 이 <span class="math inline">\(W\)</span>로는 입력 고양이 이미지를 <strong>dog로 잘못 분류</strong>하게 됩니다(가장 높은 점수가 dog). 좋은 <span class="math inline">\(W\)</span>라면 cat 점수가 가장 높아야 합니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/score_function_3way.png" class="img-fluid figure-img"></p>
+<p><img src="./images/linear_classifier_calc_example.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 입력 이미지의 4개 픽셀(56, 231, 24, 2)을 열벡터로 펼치고, 3×4 가중치 행렬 W와 곱한 뒤 편향 b(1.1, 3.2, -1.2)를 더해 Cat=-96.8, Dog=437.9, Ship=61.95의 점수를 얻는 과정을 색상 블록으로 시각화한 그림입니다. 행렬 곱이 곧 클래스별 점수 산출임을 수치 예시로 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3150,7 +3148,7 @@ s_{\text{cat}} = (0.2)(56) + (-0.5)(231) + (0.1)(24) + (2.0)(2) + 1.1 = -96.8
 <p>선형 분류기의 각 클래스 가중치 <span class="math inline">\(W_{j,:}\)</span>를 다시 이미지 형태로 펼쳐 보면, 그 클래스의 <strong>평균적 외형(템플릿)</strong>처럼 보입니다. CIFAR-10에서 학습된 가중치를 시각화하면, 예를 들어 “ship” 가중치는 배경이 파란색(물·하늘)을 띠고, “horse” 가중치는 머리가 양쪽에 달린 듯한 형상을 보입니다. 이는 선형 분류기가 한 클래스당 <strong>하나의 템플릿</strong>만 학습할 수 있다는 한계도 동시에 드러냅니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/interpret_weights.png" class="img-fluid figure-img"></p>
+<p><img src="./images/visual_interpretation_weights.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: CIFAR-10에서 학습된 가중치 W의 각 행을 이미지로 복원한 10개의 흐릿한 템플릿(plane, car, bird, cat, deer, dog, frog, horse, ship, truck)을 보여주는 그림입니다. 각 템플릿은 해당 클래스 이미지들의 평균적 색·형태를 닮아, 선형 분류기가 클래스당 단일 템플릿을 학습함을 시사합니다.</figcaption>
 </figure>
 </div>
@@ -3160,7 +3158,7 @@ s_{\text{cat}} = (0.2)(56) + (-0.5)(231) + (0.1)(24) + (2.0)(2) + 1.1 = -96.8
 <p>또 다른 관점은 <strong>고차원 픽셀 공간 속 결정 경계(decision boundary)</strong>로 보는 것입니다. 각 클래스의 가중치 벡터는 그 클래스 점수가 0이 되는 초평면(hyperplane)을 정의하며, 가중치 벡터 방향으로 갈수록 해당 클래스 점수가 커집니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/interpret_geometric.png" class="img-fluid figure-img"></p>
+<p><img src="./images/geometric_interpretation.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 2차원으로 단순화한 픽셀 공간에서 airplane·car·deer 분류기 각각이 직선(초평면)으로 표현되고, 화살표 방향으로 갈수록 해당 클래스 점수가 증가함을 나타낸 그림입니다. 각 클래스 이미지가 자신의 분류기 방향 쪽에 분포하며, 선형 분류가 공간을 직선으로 가르는 작업임을 기하학적으로 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3176,7 +3174,7 @@ s_{\text{cat}} = (0.2)(56) + (-0.5)(231) + (0.1)(24) + (2.0)(2) + 1.1 = -96.8
 <p>이 질문에 정량적으로 답하기 위한 도구가 바로 다음 장의 <strong>손실 함수</strong>입니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/scores_10way.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure13_scores_10way.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 고양이·자동차·개구리 세 이미지에 대해 10개 클래스(airplane~truck)의 점수를 표로 나열한 그림입니다. 정답에 해당하는 점수가 굵게 표시되어 있으나(예: 자동차의 automobile=6.04), 고양이 이미지처럼 dog 점수가 cat 점수보다 높은 사례도 있어 ’W가 좋은지 나쁜지’를 측정할 손실 함수의 필요성을 제기합니다.</figcaption>
 </figure>
 </div>
@@ -3235,7 +3233,7 @@ x \xrightarrow{\;\text{score function } f_\theta\;} s \xrightarrow{\;\text{loss 
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/hinge_loss.png" class="img-fluid figure-img"></p>
+<p><img src="./images/hinge_loss_graph.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 가로축이 오답 점수 s_j, 세로축이 hinge 값인 그래프입니다. s_j가 s_{y_i}(정답 점수)보다 충분히 작은 구간에서는 손실이 0이다가, s_j가 s_{y_i}-1 지점을 넘어서면 기울기 1로 선형 증가하는 꺾인 직선 형태를 보입니다. 마진을 만족하는 한 손실이 0이 되는 hinge 손실의 ‘평평한 바닥’ 성질을 나타냅니다.</figcaption>
 </figure>
 </div>
@@ -3261,7 +3259,7 @@ P(Y = k \mid X = x_i) = \frac{e^{s_k}}{\sum_j e^{s_j}}
 </blockquote>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/logistic_loss.png" class="img-fluid figure-img"></p>
+<p><img src="./images/logistic_loss_graph.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 가로축이 정답 클래스 점수 s_{y_i}, 세로축이 손실 ℓ_i인 그래프입니다. s_{y_i}가 작을수록(정답에 낮은 점수를 줄수록) 손실이 크게 증가하고, s_{y_i}가 커질수록 손실이 0에 점근하지만 결코 정확히 0에 도달하지는 않는 매끄러운 감소 곡선을 보입니다. 로지스틱 손실이 ’확신의 정도’에 계속 반응함을 시각화합니다.</figcaption>
 </figure>
 </div>
@@ -3323,19 +3321,19 @@ f(x_i, W)_j - f(x_i, W)_{y_i} + 1 \leq 0 \;\Longleftrightarrow\; f(x_i, W)_j - f
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/reg_data.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure16_reg_data.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: x-y 평면에 다섯 개의 초록색 데이터 점만 표시된 그림으로, 아직 어떤 모델도 적합하기 전의 ‘주어진 학습 데이터’ 상태를 나타냅니다.</figcaption>
 </figure>
 </div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/reg_two_models.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure17_reg_two_models.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 동일한 데이터 점들에 대해 두 모델을 겹쳐 그린 그림입니다. 초록색 곡선 f₁은 모든 점을 정확히 통과하지만 위아래로 크게 진동하는 복잡한 형태이고, 빨간색 직선 f₂는 점들을 부드럽게 가로지르는 단순한 형태입니다. 동일 데이터를 설명하는 모델 복잡도의 두 극단을 대비시킵니다.</figcaption>
 </figure>
 </div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/reg_test_data.png" class="img-fluid figure-img"></p>
+<p><img src="./images/overfitting_example.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 앞 그림에 분홍색(회색) 테스트 데이터 점들을 추가한 그림입니다. 복잡한 곡선 f₁은 학습 점은 통과하나 테스트 점에서 크게 벗어나는 반면, 단순한 직선 f₂는 테스트 점 근처를 잘 지나갑니다. 과적합된 모델이 일반화에 실패함을 시각적으로 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3402,7 +3400,7 @@ x_v = f_v\big(\{x_u \mid u \in \text{pred}(v)\}\big)
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/computational_graph.png" class="img-fluid figure-img"></p>
+<p><img src="./images/computation_graph_full_pipeline.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 왼쪽의 입력 x_i와 파라미터 W가 곱셈(*) 노드로 모여 점수 s(scores)를 만들고, 이 점수가 hinge loss 노드를 거쳐, 다시 W로부터 계산된 정규화 R(W)와 덧셈(+) 노드에서 합쳐져 최종 손실 L이 되는 흐름을 도식화한 계산 그래프입니다. 상단 박스에 f=Wx_i(파란 테두리)와 L_i 힌지 손실 식(빨간 테두리), 하단에 R(W)(초록 테두리)가 표기되어 각 노드의 역할을 명시합니다.</figcaption>
 </figure>
 </div>
@@ -3445,7 +3443,7 @@ f = qz \;\Rightarrow\; \frac{\partial f}{\partial q} = z,\quad \frac{\partial f}
 <p>여기서 <strong>upstream gradient(상류 그래디언트)</strong>는 출력 쪽에서 흘러 들어온 <span class="math inline">\(\partial f / \partial q\)</span>이고, <strong>local gradient(국소 그래디언트)</strong>는 해당 노드 자체의 미분 <span class="math inline">\(\partial q / \partial x\)</span>입니다. 둘의 곱이 입력으로 전달할 그래디언트가 됩니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/backprop_example.png" class="img-fluid figure-img"></p>
+<p><img src="./images/backprop_simple_example.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: x=-2, y=5가 덧셈(+) 노드로 들어가 q=3을 만들고, q와 z=-4가 곱셈(*) 노드로 들어가 f=-12를 만드는 순전파를 검은 화살표로, 그 아래 빨간 숫자로 역전파 그래디언트(∂f/∂z=3, ∂f/∂q=-4, ∂f/∂y=-4, ∂f/∂x=-4)를 표기한 그림입니다. 순전파 값(빨강)과 역전파 그래디언트(파랑)가 같은 엣지 위에 병기되어 chain rule의 적용을 한눈에 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3466,7 +3464,7 @@ f = qz \;\Rightarrow\; \frac{\partial f}{\partial q} = z,\quad \frac{\partial f}
 <p>이것이 역전파의 <strong>모듈성(modularity)</strong>의 핵심입니다. 각 노드는 전체 네트워크 구조를 몰라도, “내 국소 미분”과 “위에서 받은 상류 그래디언트”만 알면 “아래로 보낼 하류 그래디언트”를 계산할 수 있습니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/node_local_gradient.png" class="img-fluid figure-img"></p>
+<p><img src="./images/backprop_local_gradient.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 함수 노드 f를 큰 원으로 표현하고, 입력 x·y가 파란 화살표로 들어와 출력 z가 나가는 순전파, 그리고 출력 쪽에서 상류 그래디언트 ∂L/∂z가 빨간 화살표로 되돌아 들어오는 역전파를 함께 표시한 그림입니다. 노드 안에는 국소 그래디언트 ∂z/∂x, ∂z/∂y가, 입력 엣지에는 하류 그래디언트 ∂L/∂x=(∂L/∂z)(∂z/∂x), ∂L/∂y=(∂L/∂z)(∂z/∂y)가 표기되어 ‘local × upstream = downstream’ 규칙을 시각화합니다.</figcaption>
 </figure>
 </div>
@@ -3540,7 +3538,7 @@ f(x) = \frac{1}{x} \;\Rightarrow\; \frac{df}{dx} = -\frac{1}{x^2}, \qquad f_c(x)
 <p>이는 위에서 네 노드를 일일이 통과시켜 얻은 그래디언트 0.2와 정확히 일치합니다. 이렇게 <strong>여러 노드를 의미 있는 단위로 묶으면(modularize)</strong> 계산이 훨씬 간결해집니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/sigmoid_example.png" class="img-fluid figure-img"></p>
+<p><img src="./images/sigmoid_backprop.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: w0·x0, w1·x1을 각각 곱한 뒤 w2와 함께 더하고, ×(-1)→exp→+1→1/x를 통과해 0.73을 출력하는 시그모이드 회로의 전체 순전파(검은 화살표, 파란 값)와 역전파(빨간 값)를 한 장에 담은 그림입니다. ×(-1)~1/x 네 노드를 파란 박스로 묶어 ’sigmoid gate’로 표시하고, 화살표로 (0.73)*(1-0.73)=0.2임을 강조하여, 게이트 단위로 묶은 국소 미분이 노드별 역전파 결과와 일치함을 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3557,7 +3555,7 @@ f(x) = \frac{1}{x} \;\Rightarrow\; \frac{df}{dx} = -\frac{1}{x^2}, \qquad f_c(x)
 <p>직관적으로, <span class="math inline">\(x\)</span>를 조금 흔들면 그 변화가 <span class="math inline">\(q_1\)</span>을 통한 경로와 <span class="math inline">\(q_2\)</span>를 통한 경로 모두로 출력에 영향을 미치므로, 두 영향을 합한 것이 총 그래디언트가 됩니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/gradients_branch.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure23_gradients_branch.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 입력 노드 x에서 두 갈래(q₁, q₂)로 분기되어 각각 다른 후속 노드로 이어지는 순전파(파란 화살표)와, 역전파 시 ∂f/∂q₁과 ∂f/∂q₂가 거꾸로 흘러 x 지점에서 빨간 ‘+’ 기호로 합쳐지는 모습을 도식화한 그림입니다. 분기점에서 그래디언트가 합산된다는 chain rule의 합 공식을 시각화합니다.</figcaption>
 </figure>
 </div>
@@ -3571,7 +3569,7 @@ f(x) = \frac{1}{x} \;\Rightarrow\; \frac{df}{dx} = -\frac{1}{x^2}, \qquad f_c(x)
 <p>여기서 <span class="math inline">\(\dfrac{\partial z}{\partial x}\)</span>가 야코비 행렬입니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/vectorized_node.png" class="img-fluid figure-img"></p>
+<p><img src="./images/vectorized_backprop.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 4.4의 단일 노드 그림을 벡터 버전으로 확장한 도식으로, x·y·z가 이제 벡터임을 명시합니다. 노드 안의 국소 그래디언트 ∂z/∂x가 ‘z의 각 원소를 x의 각 원소로 미분한’ 야코비 행렬임을 화살표 주석으로 설명하고, 하류 그래디언트 ∂L/∂x=(∂L/∂z)(∂z/∂x)가 행렬-벡터 곱으로 일반화됨을 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3630,7 +3628,7 @@ q = Wx = \begin{bmatrix} (0.1)(0.2) + (0.5)(0.4) \\ (-0.3)(0.2) + (0.8)(0.4) \en
 </blockquote>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/vectorized_example.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure25_vectorized_example.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: W=[[0.1,0.5],[-0.3,0.8]], x=[0.2,0.4]가 곱셈(*) 노드를 거쳐 q=[0.22,0.26]가 되고, L2 노드에서 f=0.116이 되는 순전파(초록 박스)와, 출력 그래디언트 1.00에서 시작해 ∇_q f=[0.44,0.52], ∇_W f=[[0.088,0.176],[0.104,0.208]], ∇_x f=[-0.112,0.636]로 거꾸로 흐르는 역전파(빨간 박스)를 함께 표시한 그림입니다. 우측에 ∇_q f=2q, ∇_W f=2q·xᵀ, ∇_x f=2Wᵀ·q 공식이 단계별로 병기되어 벡터 역전파의 전 과정을 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3675,7 +3673,7 @@ q = Wx = \begin{bmatrix} (0.1)(0.2) + (0.5)(0.4) \\ (-0.3)(0.2) + (0.8)(0.4) \en
 <p>이 forward/backward 인터페이스만 지키면, 각 노드를 독립적으로 구현하고 자유롭게 조합해도 전체 네트워크의 역전파가 자동으로 동작합니다. 이것이 <strong>자동 미분(autograd)</strong>의 본질입니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/forward_backward_api.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure27_forward_backward_api.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 입력 x, y가 곱셈(*) 노드를 거쳐 z를 출력하는 작은 그래프와, 그 옆에 PyTorch의 Multiply 클래스 코드를 나란히 둔 그림입니다. 코드의 forward에서 ‘ctx.save_for_backward로 값을 저장’, backward의 인자 grad_z가 ‘upstream gradient’, grad_x/grad_y 계산이 ’상류와 국소 그래디언트의 곱’임을 화살표 주석으로 연결해, 모듈화된 forward/backward API의 작동 원리를 설명합니다.</figcaption>
 </figure>
 </div>
@@ -3685,23 +3683,82 @@ q = Wx = \begin{bmatrix} (0.1)(0.2) + (0.5)(0.4) \\ (-0.3)(0.2) + (0.8)(0.4) \en
 <p>이러한 forward/backward 모듈은 실제 PyTorch 소스 코드에서 수많은 레이어 구현 파일로 존재합니다. 예를 들어 <code>AbsCriterion</code>, <code>BCECriterion</code>, <code>ClassNLLCriterion</code>, <code>Sigmoid</code>, <code>Tanh</code>, <code>LeakyReLU</code>, <code>SpatialConvolutionMM</code>, <code>SpatialMaxPooling</code> 등, 우리가 사용하는 거의 모든 연산이 각각의 forward/backward 규칙을 가진 모듈로 구현되어 있습니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/pytorch_layers.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure28_pytorch_layers.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: PyTorch 깃허브 저장소의 pytorch/aten/src/THNN/generic 디렉터리 파일 목록 스크린샷입니다. AbsCriterion.c, Sigmoid.c, Tanh.c, LeakyReLU.c, SpatialConvolutionMM.c 등 다양한 손실·활성화·합성곱 레이어가 개별 소스 파일로 정리되어 있어, 강의에서 배운 forward/backward 모듈 추상화가 실제 프레임워크 구현으로 이어짐을 보여줍니다.</figcaption>
 </figure>
 </div>
 <hr>
 </section>
 </section>
-<section id="마치며-summary" class="level2">
-<h2 class="anchored" data-anchor-id="마치며-summary">마치며 (Summary)</h2>
-<p>이번 강의를 한 문장으로 요약하면, <strong>“입력을 점수로 바꾸고(score function), 그 점수가 정답과 얼마나 어긋나는지 측정한 뒤(loss function), 그 손실을 파라미터로 미분하기 위해 계산 그래프 위에서 역전파를 수행한다”</strong>는 것입니다.</p>
-<p>핵심 정리:</p>
-<ul>
-<li><strong>점수 함수</strong>는 입력을 클래스별 점수 벡터로 매핑하며, 선형 분류기 <span class="math inline">\(f = Wx + b\)</span>가 가장 기본적인 형태입니다.</li>
-<li><strong>손실 함수</strong>로는 마진을 중시하는 <strong>힌지 손실</strong>과 확신도를 중시하는 <strong>로지스틱 손실</strong>이 있고, 해의 모호성을 해소하고 일반화를 돕기 위해 <strong>정규화</strong>를 더합니다.</li>
-<li><strong>계산 그래프</strong>는 복잡한 함수를 단순 노드의 합성으로 표현하며, 각 노드는 “<strong>국소 그래디언트 × 상류 그래디언트</strong>”라는 단순한 규칙만으로 역전파를 수행합니다.</li>
-<li>덧셈(분배), 곱셈(스왑), 복사(가산), 최댓값(라우팅)의 <strong>그래디언트 흐름 패턴</strong>과 <strong>forward/backward API</strong> 모듈화는 현대 자동 미분 프레임워크의 토대입니다.</li>
-</ul>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 문제와 난점</strong></td>
+<td style="text-align: left;">분류는 연속적인 픽셀 배열을 이산 레이블로 보내는 문제이며, 의미적 간극 · 배경 혼잡 · 가림 · 변형이 이를 어렵게 만든다</td>
+<td style="text-align: left;">의미적 간극(semantic gap)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 점수 함수</strong></td>
+<td style="text-align: left;">파라미터화된 함수 <span class="math inline">\(f_\theta : \mathcal{X} \to \mathbb{R}^C\)</span> 가 입력을 클래스별 점수 벡터로 보낸다. 가장 단순한 형태는 <span class="math inline">\(f(x; W, b) = Wx + b\)</span> 다</td>
+<td style="text-align: left;">점수 함수의 정의</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 선형 분류기의 해석</strong></td>
+<td style="text-align: left;"><span class="math inline">\(W\)</span> 의 각 행은 해당 클래스의 템플릿이며, 기하학적으로는 픽셀 공간을 가르는 초평면이다</td>
+<td style="text-align: left;">템플릿 · 초평면 관점</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 좋고 나쁨의 정량화</strong></td>
+<td style="text-align: left;">점수만으로는 <span class="math inline">\(W\)</span> 의 품질을 말할 수 없으므로, 손실 <span class="math inline">\(d : \mathbb{R}^C \times \mathcal{Y} \to \mathbb{R}\)</span> 을 도입해 “비용”을 수치화한다</td>
+<td style="text-align: left;">손실 함수의 정의</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 두 손실의 차이</strong></td>
+<td style="text-align: left;">힌지 손실 <span class="math inline">\(\sum_{j \neq y_i} \max(0, s_j - s_{y_i} + 1)\)</span> 은 마진 1을 확보하면 더 벌하지 않고, 로지스틱 손실 <span class="math inline">\(-\log \frac{e^{s_{y_i}}}{\sum_j e^{s_j}}\)</span> 은 확신도를 끝까지 요구한다</td>
+<td style="text-align: left;">점수 섭동 시의 반응 차이</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 해의 비유일성</strong></td>
+<td style="text-align: left;">손실을 0으로 만드는 <span class="math inline">\(W\)</span> 는 유일하지 않다 — <span class="math inline">\(\lambda W\,(\lambda &gt; 1)\)</span> 도 여전히 0이다</td>
+<td style="text-align: left;">유일성(Uniqueness) 논의</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 정규화의 도입</strong></td>
+<td style="text-align: left;">그래서 <span class="math inline">\(\ell(W) = \frac{1}{n}\sum_i \ell_i(W) + \lambda R(W)\)</span> 로 모델 복잡도를 벌해, 데이터의 잡음까지 맞추는 것을 막는다</td>
+<td style="text-align: left;">데이터 손실 + 정규화 항</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 미분의 추상화</strong></td>
+<td style="text-align: left;">손실을 파라미터로 미분해야 하는데, 복잡한 합성 함수를 DAG인 계산 그래프로 표현하면 문제가 국소화된다</td>
+<td style="text-align: left;">계산 그래프의 정의</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ 역전파의 국소 규칙</strong></td>
+<td style="text-align: left;">각 노드는 상류 그래디언트에 자신의 국소 그래디언트를 곱해 하류로 넘기기만 하면 된다. 분기점에서는 되돌아온 그래디언트를 더한다</td>
+<td style="text-align: left;">연쇄 법칙 <span class="math inline">\(\frac{\partial f}{\partial x} = \sum_i \frac{\partial f}{\partial q_i}\frac{\partial q_i}{\partial x}\)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ 벡터화와 모듈화</strong></td>
+<td style="text-align: left;">벡터 입력에서는 국소 그래디언트가 야코비 행렬이 되며, 이 국소성이 forward/backward API로 모듈화되어 실제 PyTorch 레이어 구현이 된다</td>
+<td style="text-align: left;">게이트별 흐름 패턴 · PyTorch 레이어</td>
+</tr>
+</tbody>
+</table>
 
 
 

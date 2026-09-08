@@ -61,11 +61,13 @@ format:
 | 유형 | 경로 |
 |:---|:---|
 | 강의 (일반) | `posts/<과목명>/<NN>.<Topic-Kebab-Case>/<N>.1/index.qmd` |
+| 강의 (종료된 과목) | `posts/Archive/<과목명>/<NN>.<Topic-Kebab-Case>/<N>.1/index.qmd` |
 | 강의 (Causal) | `posts/Causal/lecture/<NN>.<Topic-Kebab-Case>/<N>.1/index.qmd` |
 | 논문 | `posts/Causal/paper/<논문 원제 전체>/index.qmd` |
 | 책 | `posts/Causal/book/<책 이름>/<NN>.<장 제목>/index.qmd` |
 
 - **기존 디렉토리가 이미 있으면 그 명명 방식을 그대로 따른다.** 새 중간 계층을 임의로 만들지 않는다. (`posts/Machine Learing`처럼 오타가 있는 디렉토리도 그대로 쓴다 — 이미 게시된 URL이 거기 걸려 있다.)
+- **종료된 과목은 `posts/Archive/` 아래에 둔다.** 현재 `Data Mining` · `Deep Learning` · `Optimization` 세 과목이 여기 있다. 진행 중인 과목은 `posts/` 바로 아래에 두고, 종강 후 옮긴다. `categories` 값은 아카이브 여부와 무관하게 과목명 그대로다 — `Archive`는 카테고리가 아니라 디렉토리 계층이다.
 - 강의 유형의 말단 `<N>.1` 계층은 유지한다. 사이드바 자동 목록이 이 계층을 기준으로 구성된다.
 - **상위 디렉토리는 2자리 패딩(`05.Adjustment-Criterion`), 말단은 패딩 없음(`5.1`)으로 서로 다르다.** 두 자리 회차에서는 차이가 드러나지 않아 한 자리 회차(`01.Introduction/1.1`)에서만 갈리므로 특히 주의한다. 저장소 70개 포스트 중 60개가 이 형태다.
 - **예외: `posts/Machine Learing`** 시리즈는 전 회차가 `01.1`~`09.1`처럼 말단까지 패딩되어 있다. 이미 게시된 URL이므로 **그대로 두고**, 그 시리즈에 회차를 추가할 때만 위의 "기존 디렉토리 명명 방식을 그대로 따른다" 규칙에 따라 패딩을 유지한다.

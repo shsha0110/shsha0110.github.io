@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Transformers">
+<meta name="description" content="어텐션이 순서를 모르고, 깊은 층에서 분포가 폭주하며, 기울기가 소실된다 — RoPE·RMSNorm·잔차 연결이 이 세 문제에 각각 어떻게 답하는지 구현으로 확인합니다.">
 
 <title>[Deep Learning] 09. Transformers – shsha0110.github.io</title>
 <style>
@@ -189,7 +189,7 @@ window.Quarto = {
       <h1 class="title">[Deep Learning] 09. Transformers</h1>
                   <div>
         <div class="description">
-          Transformers
+          어텐션이 순서를 모르고, 깊은 층에서 분포가 폭주하며, 기울기가 소실된다 — RoPE·RMSNorm·잔차 연결이 이 세 문제에 각각 어떻게 답하는지 구현으로 확인합니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -2928,27 +2928,11 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#들어가며-overview" id="toc-들어가며-overview" class="nav-link active" data-scroll-target="#들어가며-overview">들어가며 (Overview)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
   <li><a href="#위치-인코딩-positional-encoding" id="toc-위치-인코딩-positional-encoding" class="nav-link" data-scroll-target="#위치-인코딩-positional-encoding">1. 위치 인코딩 (Positional Encoding)</a>
   <ul class="collapse">
-  <li><a href="#왜-필요할까요-motivation" id="toc-왜-필요할까요-motivation" class="nav-link" data-scroll-target="#왜-필요할까요-motivation">1.1 왜 필요할까요? (Motivation)</a>
-  <ul class="collapse">
-  <li><a href="#절대-위치-인코딩-absolute-positional-encoding" id="toc-절대-위치-인코딩-absolute-positional-encoding" class="nav-link" data-scroll-target="#절대-위치-인코딩-absolute-positional-encoding">1.1.1 절대 위치 인코딩 (Absolute Positional Encoding)</a></li>
-  </ul></li>
-  <li><a href="#회전-위치-인코딩-rotary-positional-encoding-rope" id="toc-회전-위치-인코딩-rotary-positional-encoding-rope" class="nav-link" data-scroll-target="#회전-위치-인코딩-rotary-positional-encoding-rope">1.2 회전 위치 인코딩 (Rotary Positional Encoding, RoPE)</a>
-  <ul class="collapse">
-  <li><a href="#기본-발상" id="toc-기본-발상" class="nav-link" data-scroll-target="#기본-발상">1.2.1 기본 발상</a></li>
-  <li><a href="#왜-회전이-상대-위치만-남기는가-수식-유도" id="toc-왜-회전이-상대-위치만-남기는가-수식-유도" class="nav-link" data-scroll-target="#왜-회전이-상대-위치만-남기는가-수식-유도">1.2.2 왜 회전이 상대 위치만 남기는가 (수식 유도)</a></li>
-  <li><a href="#다중-주파수-회전-multiple-2d-rotations" id="toc-다중-주파수-회전-multiple-2d-rotations" class="nav-link" data-scroll-target="#다중-주파수-회전-multiple-2d-rotations">1.2.3 다중 주파수 회전 (Multiple 2D Rotations)</a></li>
-  <li><a href="#회전-행렬의-cossin-계산-구현" id="toc-회전-행렬의-cossin-계산-구현" class="nav-link" data-scroll-target="#회전-행렬의-cossin-계산-구현">1.2.4 회전 행렬의 cos/sin 계산 구현</a></li>
-  <li><a href="#회전-연산-적용-구현" id="toc-회전-연산-적용-구현" class="nav-link" data-scroll-target="#회전-연산-적용-구현">1.2.5 회전 연산 적용 구현</a></li>
-  <li><a href="#텐서-차원-확인" id="toc-텐서-차원-확인" class="nav-link" data-scroll-target="#텐서-차원-확인">1.2.6 텐서 차원 확인</a></li>
-  <li><a href="#회전-주파수의-시각화" id="toc-회전-주파수의-시각화" class="nav-link" data-scroll-target="#회전-주파수의-시각화">1.2.7 회전 주파수의 시각화</a></li>
-  <li><a href="#저주파와-고주파의-의미" id="toc-저주파와-고주파의-의미" class="nav-link" data-scroll-target="#저주파와-고주파의-의미">1.2.8 저주파와 고주파의 의미</a></li>
-  <li><a href="#어텐션-패턴으로-본-위치-편향" id="toc-어텐션-패턴으로-본-위치-편향" class="nav-link" data-scroll-target="#어텐션-패턴으로-본-위치-편향">1.2.9 어텐션 패턴으로 본 위치 편향</a></li>
-  <li><a href="#어텐션-모듈에-rope-삽입" id="toc-어텐션-모듈에-rope-삽입" class="nav-link" data-scroll-target="#어텐션-모듈에-rope-삽입">1.2.10 어텐션 모듈에 RoPE 삽입</a></li>
-  <li><a href="#입출력-차원-확인" id="toc-입출력-차원-확인" class="nav-link" data-scroll-target="#입출력-차원-확인">1.2.11 입출력 차원 확인</a></li>
-  </ul></li>
+  <li><a href="#왜-필요할까요-motivation" id="toc-왜-필요할까요-motivation" class="nav-link" data-scroll-target="#왜-필요할까요-motivation">1.1 왜 필요할까요? (Motivation)</a></li>
+  <li><a href="#회전-위치-인코딩-rotary-positional-encoding-rope" id="toc-회전-위치-인코딩-rotary-positional-encoding-rope" class="nav-link" data-scroll-target="#회전-위치-인코딩-rotary-positional-encoding-rope">1.2 회전 위치 인코딩 (Rotary Positional Encoding, RoPE)</a></li>
   </ul></li>
   <li><a href="#정규화-normalization" id="toc-정규화-normalization" class="nav-link" data-scroll-target="#정규화-normalization">2. 정규화 (Normalization)</a>
   <ul class="collapse">
@@ -2968,22 +2952,15 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#완전한-transformer-모델" id="toc-완전한-transformer-모델" class="nav-link" data-scroll-target="#완전한-transformer-모델">4.1 완전한 Transformer 모델</a></li>
   <li><a href="#입출력-차원-확인-3" id="toc-입출력-차원-확인-3" class="nav-link" data-scroll-target="#입출력-차원-확인-3">4.2 입출력 차원 확인</a></li>
-  <li><a href="#손실-계산-loss-calculation" id="toc-손실-계산-loss-calculation" class="nav-link" data-scroll-target="#손실-계산-loss-calculation">4.3 손실 계산 (Loss Calculation)</a>
-  <ul class="collapse">
-  <li><a href="#다음-토큰-예측과-교차-엔트로피" id="toc-다음-토큰-예측과-교차-엔트로피" class="nav-link" data-scroll-target="#다음-토큰-예측과-교차-엔트로피">4.3.1 다음 토큰 예측과 교차 엔트로피</a></li>
-  <li><a href="#구현-1" id="toc-구현-1" class="nav-link" data-scroll-target="#구현-1">4.3.2 구현</a></li>
-  <li><a href="#손실을-포함한-transformer" id="toc-손실을-포함한-transformer" class="nav-link" data-scroll-target="#손실을-포함한-transformer">4.3.3 손실을 포함한 Transformer</a></li>
-  <li><a href="#pytorch-인덱싱으로-보는-gather-연산" id="toc-pytorch-인덱싱으로-보는-gather-연산" class="nav-link" data-scroll-target="#pytorch-인덱싱으로-보는-gather-연산">4.3.4 PyTorch 인덱싱으로 보는 gather 연산</a></li>
-  <li><a href="#손실-계산-확인" id="toc-손실-계산-확인" class="nav-link" data-scroll-target="#손실-계산-확인">4.3.5 손실 계산 확인</a></li>
-  </ul></li>
+  <li><a href="#손실-계산-loss-calculation" id="toc-손실-계산-loss-calculation" class="nav-link" data-scroll-target="#손실-계산-loss-calculation">4.3 손실 계산 (Loss Calculation)</a></li>
   </ul></li>
   <li><a href="#부록-dropout-additional-material" id="toc-부록-dropout-additional-material" class="nav-link" data-scroll-target="#부록-dropout-additional-material">부록: Dropout (Additional Material)</a>
   <ul class="collapse">
   <li><a href="#a.1-정의와-동기" id="toc-a.1-정의와-동기" class="nav-link" data-scroll-target="#a.1-정의와-동기">A.1 정의와 동기</a></li>
   <li><a href="#a.2-구현-inverted-dropout" id="toc-a.2-구현-inverted-dropout" class="nav-link" data-scroll-target="#a.2-구현-inverted-dropout">A.2 구현 (Inverted Dropout)</a></li>
   <li><a href="#a.3-dropout-효과-검증" id="toc-a.3-dropout-효과-검증" class="nav-link" data-scroll-target="#a.3-dropout-효과-검증">A.3 Dropout 효과 검증</a></li>
-  <li><a href="#마치며-summary" id="toc-마치며-summary" class="nav-link" data-scroll-target="#마치며-summary">마치며 (Summary)</a></li>
   </ul></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2994,23 +2971,17 @@ window.Quarto = {
 
 
 
-<section id="들어가며-overview" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며-overview">들어가며 (Overview)</h2>
-<p>지난 강의들에서 우리는 어텐션(Attention)과 피드포워드(FeedForward) 같은 트랜스포머의 핵심 빌딩 블록을 살펴보았습니다. 그러나 이 모듈들을 단순히 쌓는 것만으로는 실제로 동작하는 언어 모델을 만들 수 없습니다. 다음과 같은 현실적인 문제들이 남아 있기 때문입니다.</p>
-<ul>
-<li>어텐션은 <strong>순서를 인식하지 못합니다</strong>. 토큰의 위치 정보를 어떻게 주입할 것인가?</li>
-<li>레이어를 깊게 쌓으면 <strong>특징(feature)의 분포가 폭주하거나 소실</strong>됩니다. 어떻게 안정화할 것인가?</li>
-<li>깊은 네트워크는 <strong>기울기 소실(vanishing gradient)</strong> 때문에 학습이 어렵습니다. 어떻게 학습을 용이하게 만들 것인가?</li>
-</ul>
-<p>이번 강의의 목표(<strong>Goal</strong>)는 이 질문들에 답하는 트랜스포머의 부가 기법들을 살펴보고, 모든 모듈을 하나로 합쳐 <strong>완전한 Transformer 순전파(forward pass)</strong> 를 직접 구현하는 것입니다.</p>
-<p><strong>Outline</strong></p>
-<ol type="1">
-<li>위치 인코딩 (Positional Encoding)</li>
-<li>정규화 (Normalization)</li>
-<li>Skip-connection (잔차 학습)</li>
-<li>전체 조립 (Putting all together)</li>
-</ol>
-<p>본 포스트의 코드는 NumPy 스타일의 직접 구현 위에 PyTorch 텐서 연산을 얹은 교육용 구현입니다. 먼저 환경을 준비합니다.</p>
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 9강 실습 세션(<em>Important techniques for deep neural networks</em>)의 노트북을 바탕으로, 코드와 그 배경이 되는 논리를 함께 따라갈 수 있도록 재구성한 것입니다. 본문의 코드는 PyTorch 텐서 연산 위에 올린 교육용 직접 구현입니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“트랜스포머를 완성하는 세 기법은 각각 하나의 결함에 대한 답입니다 — 순서를 모른다, 분포가 폭주한다, 기울기가 끊긴다.”</strong></p>
+<p>8강에서 어텐션과 피드포워드라는 두 벽돌을 만들었지만, 그것만으로는 작동하는 모델이 되지 않습니다. 세 가지 구멍이 남아 있기 때문입니다. 첫째, 어텐션은 순열 등변적이라 <strong>토큰의 순서를 인식하지 못합니다.</strong> 절대 위치를 더하는 대신 쿼리와 키를 위치에 비례한 각도로 <strong>회전</strong>시키면(RoPE), 두 벡터의 내적이 자연스럽게 <strong>상대 위치</strong>에만 의존하게 됩니다. 둘째, 층을 깊게 쌓으면 특징의 <strong>분포가 폭주하거나 소실</strong>됩니다. 제곱평균제곱근으로 스케일을 표준화하는 <strong>RMSNorm</strong> 은 입력 스케일이 어떻든 출력 분포의 폭을 거의 일정하게 되돌립니다. 셋째, 깊은 네트워크는 <strong>기울기 소실</strong>로 학습이 어렵습니다. <span class="math inline">\(f(x) + x\)</span> 형태의 <strong>잔차 연결</strong>은 기울기가 우회할 수 있는 항등 경로를 열어 손실 지형 자체를 매끄럽게 만듭니다. 마지막으로 이 셋을 합쳐 토큰 임베딩부터 다음 토큰 예측 손실까지 흐르는 완전한 트랜스포머를 조립하고, 부록에서 Dropout을 다룹니다.</p>
+</blockquote>
+<blockquote class="blockquote">
+<p><strong>실습 환경.</strong> 아래 설정 위에서 이후의 코드가 순서대로 실행됩니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> torch</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
@@ -3019,12 +2990,12 @@ window.Quarto = {
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> os</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>DEVICE <span class="op">=</span> <span class="st">"cpu"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<hr>
+</blockquote>
 </section>
-<section id="위치-인코딩-positional-encoding" class="level1">
-<h1>1. 위치 인코딩 (Positional Encoding)</h1>
-<section id="왜-필요할까요-motivation" class="level2">
-<h2 class="anchored" data-anchor-id="왜-필요할까요-motivation">1.1 왜 필요할까요? (Motivation)</h2>
+<section id="위치-인코딩-positional-encoding" class="level2">
+<h2 class="anchored" data-anchor-id="위치-인코딩-positional-encoding">1. 위치 인코딩 (Positional Encoding)</h2>
+<section id="왜-필요할까요-motivation" class="level3">
+<h3 class="anchored" data-anchor-id="왜-필요할까요-motivation">1.1 왜 필요할까요? (Motivation)</h3>
 <p>어텐션은 <strong>순열 등변(permutation-equivariant)</strong> 연산입니다. 이는 MLP(완전 연결 레이어)에도 동일하게 해당됩니다. 순열 등변이란, 입력 토큰들의 순서를 바꾸면 출력도 정확히 같은 방식으로 순서가 바뀔 뿐, 그 이상의 정보 변화가 없다는 뜻입니다.</p>
 <ul>
 <li>직관적으로 표현하면, 어텐션 연산은 입력을 <strong>순서 없는 집합(set)</strong> 처럼 취급합니다.</li>
@@ -3037,8 +3008,8 @@ window.Quarto = {
 </ol>
 <p>위치 정보가 전혀 없는 비인과(non-causal) 모델은 두 경우에 대해 <strong>완전히 동일한 출력</strong>을 내놓습니다. 어텐션 입장에서 두 입력은 단지 같은 토큰의 집합이기 때문입니다. 이는 명백히 잘못된 동작입니다.</p>
 <p>따라서 우리는 각 토큰의 특징 임베딩에 <strong>위치 정보(positional information)</strong> 를 명시적으로 주입해야 합니다.</p>
-<section id="절대-위치-인코딩-absolute-positional-encoding" class="level3">
-<h3 class="anchored" data-anchor-id="절대-위치-인코딩-absolute-positional-encoding">1.1.1 절대 위치 인코딩 (Absolute Positional Encoding)</h3>
+<section id="절대-위치-인코딩-absolute-positional-encoding" class="level4">
+<h4 class="anchored" data-anchor-id="절대-위치-인코딩-absolute-positional-encoding">1.1.1 절대 위치 인코딩 (Absolute Positional Encoding)</h4>
 <p>가장 단순한 접근은 <strong>절대 위치 인덱스를 특징으로 인코딩</strong>하는 것입니다.</p>
 <ul>
 <li>위치 <span class="math inline">\(m\)</span> 에 있는 은닉 특징 <span class="math inline">\(h\)</span> 에 대해, 위치를 인코딩한 벡터를 이어 붙입니다.</li>
@@ -3060,11 +3031,11 @@ h \rightarrow \text{concat}\bigl(h,\ \text{encode}(m)\bigr).
 <p>이 문제를 해결하기 위해 제안된 것이 바로 <strong>회전 위치 인코딩(Rotary Positional Encoding, RoPE)</strong> 입니다.</p>
 </section>
 </section>
-<section id="회전-위치-인코딩-rotary-positional-encoding-rope" class="level2">
-<h2 class="anchored" data-anchor-id="회전-위치-인코딩-rotary-positional-encoding-rope">1.2 회전 위치 인코딩 (Rotary Positional Encoding, RoPE)</h2>
+<section id="회전-위치-인코딩-rotary-positional-encoding-rope" class="level3">
+<h3 class="anchored" data-anchor-id="회전-위치-인코딩-rotary-positional-encoding-rope">1.2 회전 위치 인코딩 (Rotary Positional Encoding, RoPE)</h3>
 <p>RoPE의 핵심 아이디어는 위치 정보를 <strong>쿼리/키 특징을 회전(rotate)</strong> 시켜 주입하되, <strong>회전 각도를 위치 인덱스에 비례</strong>하도록 만드는 것입니다.</p>
-<section id="기본-발상" class="level3">
-<h3 class="anchored" data-anchor-id="기본-발상">1.2.1 기본 발상</h3>
+<section id="기본-발상" class="level4">
+<h4 class="anchored" data-anchor-id="기본-발상">1.2.1 기본 발상</h4>
 <ul>
 <li>위치 <span class="math inline">\(n\)</span> 의 쿼리 <span class="math inline">\(q\)</span> 와 위치 <span class="math inline">\(m\)</span> 의 키 <span class="math inline">\(k\)</span> 에 대해, RoPE는 각각을 <span class="math inline">\(\text{rotate}(q, n)\)</span>, <span class="math inline">\(\text{rotate}(k, m)\)</span> 으로 변환합니다. 여기서 <span class="math inline">\(\text{rotate}(q, n)\)</span> 은 벡터 <span class="math inline">\(q\)</span> 를 위치 <span class="math inline">\(n\)</span> 에 비례하는 각도만큼 회전시키는 연산을 의미합니다.</li>
 <li>어텐션 점수는 회전된 두 벡터의 <strong>내적</strong>으로 계산됩니다.</li>
@@ -3086,8 +3057,8 @@ h \rightarrow \text{concat}\bigl(h,\ \text{encode}(m)\bigr).
 </figure>
 </div>
 </section>
-<section id="왜-회전이-상대-위치만-남기는가-수식-유도" class="level3">
-<h3 class="anchored" data-anchor-id="왜-회전이-상대-위치만-남기는가-수식-유도">1.2.2 왜 회전이 상대 위치만 남기는가 (수식 유도)</h3>
+<section id="왜-회전이-상대-위치만-남기는가-수식-유도" class="level4">
+<h4 class="anchored" data-anchor-id="왜-회전이-상대-위치만-남기는가-수식-유도">1.2.2 왜 회전이 상대 위치만 남기는가 (수식 유도)</h4>
 <p>2차원 평면에서의 회전 행렬을 떠올려 봅시다. 각도 <span class="math inline">\(\phi\)</span> 만큼의 회전은 다음 직교 행렬로 표현됩니다.</p>
 <p><span class="math display">\[
 R(\phi) = \begin{pmatrix} \cos\phi &amp; -\sin\phi \\ \sin\phi &amp; \cos\phi \end{pmatrix}.
@@ -3110,8 +3081,8 @@ q^\top R(n\theta)^\top R(m\theta)\, k
 \]</span></p>
 <p>결과식은 <strong>오직 위치 차이 <span class="math inline">\(m-n\)</span> 에만 의존</strong>합니다. 따라서 두 위치를 동시에 <span class="math inline">\(t\)</span> 만큼 이동시켜도 <span class="math inline">\((m+t) - (n+t) = m-n\)</span> 이 불변이므로, 앞서 언급한 이동 불변성이 자동으로 성립합니다.</p>
 </section>
-<section id="다중-주파수-회전-multiple-2d-rotations" class="level3">
-<h3 class="anchored" data-anchor-id="다중-주파수-회전-multiple-2d-rotations">1.2.3 다중 주파수 회전 (Multiple 2D Rotations)</h3>
+<section id="다중-주파수-회전-multiple-2d-rotations" class="level4">
+<h4 class="anchored" data-anchor-id="다중-주파수-회전-multiple-2d-rotations">1.2.3 다중 주파수 회전 (Multiple 2D Rotations)</h4>
 <p>실제 특징 벡터의 차원 <span class="math inline">\(d\)</span> 는 2보다 훨씬 큽니다. RoPE는 <strong>서로 다른 주파수를 가진 여러 개의 2D 회전</strong>을 특징에 동시에 적용합니다.</p>
 <ul>
 <li>특징 차원 <span class="math inline">\(d\)</span> 가 주어지면, RoPE는 각 특징을 <strong>2차원씩 묶어</strong> 총 <span class="math inline">\(d' = d/2\)</span> 개의 2D 쌍으로 나눕니다.</li>
@@ -3128,8 +3099,8 @@ q^\top R(n\theta)^\top R(m\theta)\, k
 <p><strong>보충: <span class="math inline">\(i\)</span> 가 커질수록 주파수는 작아집니다.</strong> <span class="math inline">\(\text{base} &gt; 1\)</span> 이고 지수 <span class="math inline">\(-i/d'\)</span> 가 음수이므로, <span class="math inline">\(i=0\)</span> 일 때 <span class="math inline">\(\theta_0 = 1\)</span> 로 가장 빠르게 회전하고(고주파), <span class="math inline">\(i = d'-1\)</span> 에 가까워질수록 <span class="math inline">\(\theta_i \to \text{base}^{-1}\)</span> 에 가까워져 매우 느리게 회전합니다(저주파). 이 다중 스케일 구조가 RoPE의 표현력의 원천입니다.</p>
 </blockquote>
 </section>
-<section id="회전-행렬의-cossin-계산-구현" class="level3">
-<h3 class="anchored" data-anchor-id="회전-행렬의-cossin-계산-구현">1.2.4 회전 행렬의 cos/sin 계산 구현</h3>
+<section id="회전-행렬의-cossin-계산-구현" class="level4">
+<h4 class="anchored" data-anchor-id="회전-행렬의-cossin-계산-구현">1.2.4 회전 행렬의 cos/sin 계산 구현</h4>
 <p>먼저 각 위치/차원에 대한 회전 각도의 코사인·사인 값을 계산하는 클래스를 구현합니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> RotaryEmbedding():</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
@@ -3172,8 +3143,8 @@ q^\top R(n\theta)^\top R(m\theta)\, k
 <li><code>__call__</code>: 위치 인덱스 벡터(shape <code>(bsz, seq, 1)</code>)와 주파수 벡터(shape <code>(bsz, 1, d')</code>)의 외적(행렬곱)을 통해 모든 (위치 <span class="math inline">\(m\)</span>, 차원 <span class="math inline">\(i\)</span>) 조합의 각도 <span class="math inline">\(m\theta_i\)</span> 를 한 번에 계산합니다. 그 후 코사인·사인을 취합니다. 결과 <code>cos[..., m, i]</code> 는 <span class="math inline">\(\cos(m\theta_i)\)</span>, <code>sin[..., m, i]</code> 는 <span class="math inline">\(\sin(m\theta_i)\)</span> 가 됩니다.</li>
 </ul>
 </section>
-<section id="회전-연산-적용-구현" class="level3">
-<h3 class="anchored" data-anchor-id="회전-연산-적용-구현">1.2.5 회전 연산 적용 구현</h3>
+<section id="회전-연산-적용-구현" class="level4">
+<h4 class="anchored" data-anchor-id="회전-연산-적용-구현">1.2.5 회전 연산 적용 구현</h4>
 <p>이제 미리 계산한 cos/sin을 이용해 쿼리·키를 실제로 회전시킵니다. 2D 회전 공식을 각 2차원 쌍에 적용합니다.</p>
 <p><span class="math display">\[
 \begin{pmatrix} q'_{2i} \\ q'_{2i+1} \end{pmatrix}
@@ -3222,8 +3193,8 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 <p><strong>보충(인덱싱 관례):</strong> 여기서는 인접한 두 성분 <span class="math inline">\((x_{2i}, x_{2i+1})\)</span> 을 한 쌍으로 묶는 <strong>interleaved(교차)</strong> 방식입니다. 일부 구현(예: HuggingFace)은 전반부와 후반부를 묶는 <strong>half-split</strong> 방식을 쓰는데, 둘은 차원 순열을 통해 동치이며 학습 결과에는 본질적 차이가 없습니다.</p>
 </blockquote>
 </section>
-<section id="텐서-차원-확인" class="level3">
-<h3 class="anchored" data-anchor-id="텐서-차원-확인">1.2.6 텐서 차원 확인</h3>
+<section id="텐서-차원-확인" class="level4">
+<h4 class="anchored" data-anchor-id="텐서-차원-확인">1.2.6 텐서 차원 확인</h4>
 <p>구현이 올바른 모양을 내는지 확인해 봅시다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>head_dim <span class="op">=</span> <span class="dv">64</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>rope <span class="op">=</span> RotaryEmbedding(head_dim)</span>
@@ -3243,8 +3214,8 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 <span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"q (after rotate) :"</span>, q_rotate.shape) <span class="co"># (1, 8, 128, 64)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>회전은 <strong>모양을 보존</strong>하는 연산임을 확인할 수 있습니다. cos/sin은 차원이 절반(<span class="math inline">\(d/2 = 32\)</span>)이고, 회전 전후 <span class="math inline">\(q\)</span> 의 shape은 동일합니다.</p>
 </section>
-<section id="회전-주파수의-시각화" class="level3">
-<h3 class="anchored" data-anchor-id="회전-주파수의-시각화">1.2.7 회전 주파수의 시각화</h3>
+<section id="회전-주파수의-시각화" class="level4">
+<h4 class="anchored" data-anchor-id="회전-주파수의-시각화">1.2.7 회전 주파수의 시각화</h4>
 <p>각 차원 쌍이 위치에 따라 얼마나 빠르게 회전하는지를 시각화합니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">3</span>))</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>plt.subplot(<span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">1</span>)</span>
@@ -3274,8 +3245,8 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 </figure>
 </div>
 </section>
-<section id="저주파와-고주파의-의미" class="level3">
-<h3 class="anchored" data-anchor-id="저주파와-고주파의-의미">1.2.8 저주파와 고주파의 의미</h3>
+<section id="저주파와-고주파의-의미" class="level4">
+<h4 class="anchored" data-anchor-id="저주파와-고주파의-의미">1.2.8 저주파와 고주파의 의미</h4>
 <p>RoPE에서 저주파와 고주파는 각각 무엇을 의미할까요?</p>
 <ul>
 <li><strong>저주파(예: head 31):</strong> 위치 회전의 영향이 미미하여, 어텐션이 위치보다 <strong>의미 정보(semantic information)</strong> 에 더 집중하게 합니다.</li>
@@ -3283,8 +3254,8 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 </ul>
 <p>즉 RoPE는 한 벡터 안에서 의미 중심 채널과 위치 중심 채널을 <strong>동시에</strong> 마련해 두는 셈입니다.</p>
 </section>
-<section id="어텐션-패턴으로-본-위치-편향" class="level3">
-<h3 class="anchored" data-anchor-id="어텐션-패턴으로-본-위치-편향">1.2.9 어텐션 패턴으로 본 위치 편향</h3>
+<section id="어텐션-패턴으로-본-위치-편향" class="level4">
+<h4 class="anchored" data-anchor-id="어텐션-패턴으로-본-위치-편향">1.2.9 어텐션 패턴으로 본 위치 편향</h4>
 <p>각 차원의 주파수가 어텐션 점수에 어떤 편향을 만드는지 직접 관찰해 봅시다. 쿼리·키를 모두 동일한 벡터로 두면, 어텐션 점수의 차이는 <strong>순수하게 위치 회전에서만</strong> 비롯됩니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> seaborn <span class="im">as</span> sns</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> model <span class="im">import</span> get_attn_score</span>
@@ -3316,8 +3287,8 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 </div>
 <p>위 어텐션 패턴에서 보듯, RoPE는 어텐션 과정에 <strong>다양한 위치 편향을 주입</strong>합니다. 이제 이 RoPE를 어텐션 모듈에 직접 삽입해 봅시다.</p>
 </section>
-<section id="어텐션-모듈에-rope-삽입" class="level3">
-<h3 class="anchored" data-anchor-id="어텐션-모듈에-rope-삽입">1.2.10 어텐션 모듈에 RoPE 삽입</h3>
+<section id="어텐션-모듈에-rope-삽입" class="level4">
+<h4 class="anchored" data-anchor-id="어텐션-모듈에-rope-삽입">1.2.10 어텐션 모듈에 RoPE 삽입</h4>
 <p>기존 멀티헤드 어텐션에서 달라지는 부분은 단 한 곳, 점수 계산 직전에 쿼리·키를 회전시키는 것입니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> model <span class="im">import</span> softmax, Linear</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -3374,8 +3345,8 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 <li><strong>RoPE는 값(value)에는 적용하지 않습니다.</strong> 위치 정보는 어텐션 점수(쿼리·키 내적)를 통해서만 주입하면 충분하기 때문입니다.</li>
 </ul>
 </section>
-<section id="입출력-차원-확인" class="level3">
-<h3 class="anchored" data-anchor-id="입출력-차원-확인">1.2.11 입출력 차원 확인</h3>
+<section id="입출력-차원-확인" class="level4">
+<h4 class="anchored" data-anchor-id="입출력-차원-확인">1.2.11 입출력 차원 확인</h4>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>batch_size, seqlen, dim <span class="op">=</span> <span class="dv">2</span>, <span class="dv">10</span>, <span class="dv">64</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>n_head, head_dim <span class="op">=</span> <span class="dv">8</span>, dim <span class="op">//</span> <span class="dv">8</span></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -3397,10 +3368,10 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 </section>
 </section>
 </section>
-<section id="정규화-normalization" class="level1">
-<h1>2. 정규화 (Normalization)</h1>
-<section id="왜-필요할까요" class="level2">
-<h2 class="anchored" data-anchor-id="왜-필요할까요">2.1 왜 필요할까요?</h2>
+<section id="정규화-normalization" class="level2">
+<h2 class="anchored" data-anchor-id="정규화-normalization">2. 정규화 (Normalization)</h2>
+<section id="왜-필요할까요" class="level3">
+<h3 class="anchored" data-anchor-id="왜-필요할까요">2.1 왜 필요할까요?</h3>
 <p>레이어를 많이 쌓을 때 발생하는 문제를 정리하면 다음과 같습니다.</p>
 <ul>
 <li>다수의 레이어를 쌓으면, 신경망 특징의 분포가 레이어를 거치며 다양한 변환을 겪어 <strong>마지막 레이어에서는 크게 달라질 수 있습니다.</strong></li>
@@ -3418,8 +3389,8 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 </ul>
 <p>본 강의에서는 LLaMA가 채택한 <strong>제곱평균제곱근 정규화(Root Mean Square Normalization, RMSNorm)</strong> 를 구현합니다.</p>
 </section>
-<section id="rmsnorm의-정의" class="level2">
-<h2 class="anchored" data-anchor-id="rmsnorm의-정의">2.2 RMSNorm의 정의</h2>
+<section id="rmsnorm의-정의" class="level3">
+<h3 class="anchored" data-anchor-id="rmsnorm의-정의">2.2 RMSNorm의 정의</h3>
 <p>특징 벡터 <span class="math inline">\(x \in \mathbb{R}^d\)</span> 가 주어졌을 때, 강의 슬라이드는 RMSNorm을 다음과 같이 표기합니다.</p>
 <p><span class="math display">\[
 \text{RMSnorm}(x) = \frac{x}{\sqrt{\sum_i x_i^2}}.
@@ -3433,8 +3404,8 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 <li><strong>LayerNorm과의 차이:</strong> LayerNorm은 평균을 빼서 중심화(re-centering)한 뒤 표준편차로 나누지만, <strong>RMSNorm은 평균 제거 없이 스케일만 정규화</strong>합니다(re-scaling only). 평균 제거 연산을 생략해 계산이 더 가볍고, 실제로도 성능 저하가 거의 없다는 것이 알려져 있습니다.</li>
 </ul>
 </section>
-<section id="구현" class="level2">
-<h2 class="anchored" data-anchor-id="구현">2.3 구현</h2>
+<section id="구현" class="level3">
+<h3 class="anchored" data-anchor-id="구현">2.3 구현</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> RMSNorm():</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, eps<span class="op">=</span><span class="fl">1e-6</span>):</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.eps <span class="op">=</span> eps  <span class="co"># 수치 안정성을 위한 작은 상수</span></span>
@@ -3459,8 +3430,8 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 <p><strong>보충:</strong> 실제 LLaMA 구현은 여기에 학습 가능한 <strong>이득(gain) 파라미터</strong> <span class="math inline">\(g \in \mathbb{R}^d\)</span> 를 곱해 <span class="math inline">\(\text{RMSnorm}(x) \odot g\)</span> 형태로 사용합니다. 본 교육용 구현은 이 학습 파라미터를 생략한 단순화 버전입니다.</p>
 </blockquote>
 </section>
-<section id="입출력-차원-확인-1" class="level2">
-<h2 class="anchored" data-anchor-id="입출력-차원-확인-1">2.4 입출력 차원 확인</h2>
+<section id="입출력-차원-확인-1" class="level3">
+<h3 class="anchored" data-anchor-id="입출력-차원-확인-1">2.4 입출력 차원 확인</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>batch_size, seqlen, dim <span class="op">=</span> <span class="dv">2</span>, <span class="dv">10</span>, <span class="dv">64</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>head_dim <span class="op">=</span> dim</span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -3473,8 +3444,8 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 <span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"output size   :"</span>, y.shape)   <span class="co"># (2, 10, 64)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>정규화 역시 모양을 보존하는 연산입니다.</p>
 </section>
-<section id="정규화-전후-분포-비교" class="level2">
-<h2 class="anchored" data-anchor-id="정규화-전후-분포-비교">2.5 정규화 전후 분포 비교</h2>
+<section id="정규화-전후-분포-비교" class="level3">
+<h3 class="anchored" data-anchor-id="정규화-전후-분포-비교">2.5 정규화 전후 분포 비교</h3>
 <p>서로 다른 스케일(<span class="math inline">\(p = 0.1\)</span>, <span class="math inline">\(p = 0.6\)</span>)의 입력에 대해 정규화 전후 분포를 비교합니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> histogram(x, y):</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    x_flat <span class="op">=</span> x.flatten().numpy()</span>
@@ -3509,10 +3480,10 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 <hr>
 </section>
 </section>
-<section id="skip-connection-잔차-학습-residual-learning" class="level1">
-<h1>3. Skip-connection: 잔차 학습 (Residual Learning)</h1>
-<section id="정의와-동기" class="level2">
-<h2 class="anchored" data-anchor-id="정의와-동기">3.1 정의와 동기</h2>
+<section id="skip-connection-잔차-학습-residual-learning" class="level2">
+<h2 class="anchored" data-anchor-id="skip-connection-잔차-학습-residual-learning">3. Skip-connection: 잔차 학습 (Residual Learning)</h2>
+<section id="정의와-동기" class="level3">
+<h3 class="anchored" data-anchor-id="정의와-동기">3.1 정의와 동기</h3>
 <p>입력 <span class="math inline">\(x\)</span> 와 함수 <span class="math inline">\(f\)</span> 가 주어졌을 때, skip-connection은 다음과 같이 동작합니다.</p>
 <p><span class="math display">\[
 \text{output} = f(x) + x.
@@ -3532,8 +3503,8 @@ q'_{2i+1} = \sin(m\theta_i)\, q_{2i} + \cos(m\theta_i)\, q_{2i+1}.
 </figure>
 </div>
 </section>
-<section id="transformer-레이어블록-구현" class="level2">
-<h2 class="anchored" data-anchor-id="transformer-레이어블록-구현">3.2 Transformer 레이어(블록) 구현</h2>
+<section id="transformer-레이어블록-구현" class="level3">
+<h3 class="anchored" data-anchor-id="transformer-레이어블록-구현">3.2 Transformer 레이어(블록) 구현</h3>
 <p>트랜스포머 블록은 어텐션과 피드포워드 각각을 잔차 연결로 감쌉니다. 본 구현은 정규화를 서브레이어 <strong>입력 쪽에 적용</strong>하는 <strong>Pre-Norm</strong> 구조를 따릅니다. 입력 <span class="math inline">\(x\)</span> 에 대한 계산은 다음과 같습니다.</p>
 <p><span class="math display">\[
 h = \text{Attention}\bigl(\text{norm}(x)\bigr) + x,
@@ -3579,8 +3550,8 @@ h = \text{Attention}\bigl(\text{norm}(x)\bigr) + x,
 <p><strong>보충(Pre-Norm vs Post-Norm):</strong> 원조 트랜스포머는 잔차 합 <strong>이후</strong> 정규화를 적용하는 Post-Norm(<span class="math inline">\(\text{norm}(f(x)+x)\)</span>)이었으나, 현대 LLM(LLaMA 등)은 본 구현처럼 서브레이어 <strong>입력</strong>에 정규화를 적용하는 Pre-Norm을 선호합니다. Pre-Norm은 잔차 경로에 정규화가 끼지 않아 기울기가 더 안정적으로 흐르며, 학습률 워밍업 없이도 깊은 모델을 안정적으로 학습할 수 있습니다.</p>
 </blockquote>
 </section>
-<section id="입출력-차원-확인-2" class="level2">
-<h2 class="anchored" data-anchor-id="입출력-차원-확인-2">3.3 입출력 차원 확인</h2>
+<section id="입출력-차원-확인-2" class="level3">
+<h3 class="anchored" data-anchor-id="입출력-차원-확인-2">3.3 입출력 차원 확인</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>batch_size, seqlen, dim <span class="op">=</span> <span class="dv">2</span>, <span class="dv">10</span>, <span class="dv">64</span></span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>n_head <span class="op">=</span> <span class="dv">8</span></span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -3600,10 +3571,10 @@ h = \text{Attention}\bigl(\text{norm}(x)\bigr) + x,
 <hr>
 </section>
 </section>
-<section id="전체-조립-putting-all-together" class="level1">
-<h1>4. 전체 조립 (Putting all together)</h1>
-<section id="완전한-transformer-모델" class="level2">
-<h2 class="anchored" data-anchor-id="완전한-transformer-모델">4.1 완전한 Transformer 모델</h2>
+<section id="전체-조립-putting-all-together" class="level2">
+<h2 class="anchored" data-anchor-id="전체-조립-putting-all-together">4. 전체 조립 (Putting all together)</h2>
+<section id="완전한-transformer-모델" class="level3">
+<h3 class="anchored" data-anchor-id="완전한-transformer-모델">4.1 완전한 Transformer 모델</h3>
 <p>이제 모든 모듈을 합쳐 완전한 Transformer를 만듭니다. 이 모델은 토큰 시퀀스를 입력받아 각 위치의 특징을 반환하는 사상입니다.</p>
 <p><span class="math display">\[
 V^{b \times n} \to \mathbb{R}^{b \times n \times d}.
@@ -3675,8 +3646,8 @@ V^{b \times n} \to \mathbb{R}^{b \times n \times d}.
 <li><code>self.output</code>: 최종 특징을 어휘 크기 <span class="math inline">\(|V|\)</span> 의 로짓으로 사상합니다. 이 로짓이 다음 토큰 예측의 근거가 됩니다.</li>
 </ul>
 </section>
-<section id="입출력-차원-확인-3" class="level2">
-<h2 class="anchored" data-anchor-id="입출력-차원-확인-3">4.2 입출력 차원 확인</h2>
+<section id="입출력-차원-확인-3" class="level3">
+<h3 class="anchored" data-anchor-id="입출력-차원-확인-3">4.2 입출력 차원 확인</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>batch_size, seqlen <span class="op">=</span> <span class="dv">2</span>, <span class="dv">10</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>vocab_size <span class="op">=</span> <span class="dv">64000</span></span>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>n_layers, dim, n_head <span class="op">=</span> <span class="dv">6</span>, <span class="dv">64</span>, <span class="dv">8</span></span>
@@ -3691,10 +3662,10 @@ V^{b \times n} \to \mathbb{R}^{b \times n \times d}.
 <span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"output size   :"</span>, y.shape)      <span class="co"># (2, 10, 64000)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>입력은 정수 토큰 <code>(batch, seq)</code>, 출력은 각 위치마다 어휘 전체에 대한 로짓 <code>(batch, seq, vocab_size)</code> 입니다.</p>
 </section>
-<section id="손실-계산-loss-calculation" class="level2">
-<h2 class="anchored" data-anchor-id="손실-계산-loss-calculation">4.3 손실 계산 (Loss Calculation)</h2>
-<section id="다음-토큰-예측과-교차-엔트로피" class="level3">
-<h3 class="anchored" data-anchor-id="다음-토큰-예측과-교차-엔트로피">4.3.1 다음 토큰 예측과 교차 엔트로피</h3>
+<section id="손실-계산-loss-calculation" class="level3">
+<h3 class="anchored" data-anchor-id="손실-계산-loss-calculation">4.3 손실 계산 (Loss Calculation)</h3>
+<section id="다음-토큰-예측과-교차-엔트로피" class="level4">
+<h4 class="anchored" data-anchor-id="다음-토큰-예측과-교차-엔트로피">4.3.1 다음 토큰 예측과 교차 엔트로피</h4>
 <p>입력 시퀀스 <span class="math inline">\(s\)</span> 가 주어지면, 우리는 Transformer가 이를 처리해 <strong>다음 토큰에 대한 로짓</strong>을 내놓도록 학습시킵니다. 손실은 <strong>정답 라벨(ground-truth label)</strong> 을 사용해 계산하는데, 라벨은 일반적으로 <strong>다음 토큰</strong>에 해당합니다.</p>
 <ul>
 <li>예: 입력 시퀀스 <code>[a, b, c]</code> 에 대해 라벨은 <code>[b, c, &lt;EOS&gt;]</code> 가 됩니다. 즉 각 위치는 “바로 다음에 올 토큰”을 예측하도록 학습됩니다.</li>
@@ -3715,8 +3686,8 @@ p = \text{softmax}(l) \in [0, 1]^{|V|}.
 <li>첫째 항 <span class="math inline">\(\log \sum_i \exp(l_i)\)</span> 는 <strong>log-sum-exp</strong> 라 불리며, 정규화 상수(분배 함수)의 로그에 해당합니다. 둘째 항 <span class="math inline">\(l_y\)</span> 는 정답 클래스의 로짓입니다. 즉 손실은 “전체 로짓 질량의 로그”에서 “정답 로짓”을 뺀 값으로, 정답 로짓이 다른 로짓들보다 클수록 작아집니다.</li>
 </ul>
 </section>
-<section id="구현-1" class="level3">
-<h3 class="anchored" data-anchor-id="구현-1">4.3.2 구현</h3>
+<section id="구현-1" class="level4">
+<h4 class="anchored" data-anchor-id="구현-1">4.3.2 구현</h4>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> cross_entropy_loss(logits, labels):</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="co">    교차 엔트로피 손실 계산 (토큰 평균).</span></span>
@@ -3743,8 +3714,8 @@ p = \text{softmax}(l) \in [0, 1]^{|V|}.
 <p><strong>TA 노트 (수치 안정성):</strong> 위 구현은 <code>torch.exp(logits)</code> 를 직접 계산하므로, 로짓이 큰 양수일 때 <strong>오버플로</strong> 위험이 있습니다. 실무에서는 <strong>log-sum-exp 트릭</strong> 을 사용합니다. 각 행의 최댓값 <span class="math inline">\(M = \max_i l_i\)</span> 를 빼면 <span class="math display">\[\log\sum_i \exp(l_i) = M + \log\sum_i \exp(l_i - M)\]</span> 이 성립하여, 지수의 인자가 0 이하가 되어 안정적으로 계산됩니다. PyTorch의 <code>F.cross_entropy</code> 나 <code>torch.logsumexp</code> 는 내부적으로 이 보정을 수행합니다. 교육용 구현에서는 명료성을 위해 생략했습니다.</p>
 </blockquote>
 </section>
-<section id="손실을-포함한-transformer" class="level3">
-<h3 class="anchored" data-anchor-id="손실을-포함한-transformer">4.3.3 손실을 포함한 Transformer</h3>
+<section id="손실을-포함한-transformer" class="level4">
+<h4 class="anchored" data-anchor-id="손실을-포함한-transformer">4.3.3 손실을 포함한 Transformer</h4>
 <p>이제 <code>labels</code> 가 주어지면 손실을 함께 반환하도록 모델을 확장합니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Transformer():</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, n_layers, vocab_size, dim, n_head):</span>
@@ -3788,8 +3759,8 @@ p = \text{softmax}(l) \in [0, 1]^{|V|}.
 <span id="cb17-40"><a href="#cb17-40" aria-hidden="true" tabindex="-1"></a>        <span class="cf">else</span>:</span>
 <span id="cb17-41"><a href="#cb17-41" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> logits</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="pytorch-인덱싱으로-보는-gather-연산" class="level3">
-<h3 class="anchored" data-anchor-id="pytorch-인덱싱으로-보는-gather-연산">4.3.4 PyTorch 인덱싱으로 보는 gather 연산</h3>
+<section id="pytorch-인덱싱으로-보는-gather-연산" class="level4">
+<h4 class="anchored" data-anchor-id="pytorch-인덱싱으로-보는-gather-연산">4.3.4 PyTorch 인덱싱으로 보는 gather 연산</h4>
 <p>정답 로짓을 골라내는 핵심은 PyTorch의 고급 인덱싱(advanced indexing)입니다. 작은 예시로 직관을 잡아 봅시다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>logits <span class="op">=</span> torch.arange(<span class="dv">3</span><span class="op">*</span><span class="dv">4</span>).reshape(<span class="dv">3</span>, <span class="dv">4</span>)</span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>labels <span class="op">=</span> torch.tensor([<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">2</span>])</span>
@@ -3805,8 +3776,8 @@ p = \text{softmax}(l) \in [0, 1]^{|V|}.
 <li>두 인덱스 텐서가 <strong>원소별로 짝지어져</strong> <code>(0,1), (1,2), (2,2)</code> 위치의 값이 한 번에 추출됩니다. 즉 행마다 정답 라벨이 가리키는 로짓을 효율적으로 모읍니다. <code>logits</code> 가 <code>0..11</code> 로 채워져 있으므로 추출 결과는 <code>[1, 6, 10]</code> 이 됩니다.</li>
 </ul>
 </section>
-<section id="손실-계산-확인" class="level3">
-<h3 class="anchored" data-anchor-id="손실-계산-확인">4.3.5 손실 계산 확인</h3>
+<section id="손실-계산-확인" class="level4">
+<h4 class="anchored" data-anchor-id="손실-계산-확인">4.3.5 손실 계산 확인</h4>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>batch_size, seqlen <span class="op">=</span> <span class="dv">2</span>, <span class="dv">10</span></span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>vocab_size <span class="op">=</span> <span class="dv">64000</span></span>
 <span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>n_layers, dim, n_head <span class="op">=</span> <span class="dv">6</span>, <span class="dv">64</span>, <span class="dv">8</span></span>
@@ -3831,10 +3802,10 @@ p = \text{softmax}(l) \in [0, 1]^{|V|}.
 </section>
 </section>
 </section>
-<section id="부록-dropout-additional-material" class="level1">
-<h1>부록: Dropout (Additional Material)</h1>
-<section id="a.1-정의와-동기" class="level2">
-<h2 class="anchored" data-anchor-id="a.1-정의와-동기">A.1 정의와 동기</h2>
+<section id="부록-dropout-additional-material" class="level2">
+<h2 class="anchored" data-anchor-id="부록-dropout-additional-material">부록: Dropout (Additional Material)</h2>
+<section id="a.1-정의와-동기" class="level3">
+<h3 class="anchored" data-anchor-id="a.1-정의와-동기">A.1 정의와 동기</h3>
 <p><strong>Dropout</strong> 은 딥러닝에서 널리 쓰이는 정규화(regularization) 기법입니다.</p>
 <ul>
 <li>이 기법은 학습 중에 선형층의 <strong>특징 원소를 무작위로 0으로 만듭니다(erase).</strong></li>
@@ -3847,8 +3818,8 @@ p = \text{softmax}(l) \in [0, 1]^{|V|}.
 </figure>
 </div>
 </section>
-<section id="a.2-구현-inverted-dropout" class="level2">
-<h2 class="anchored" data-anchor-id="a.2-구현-inverted-dropout">A.2 구현 (Inverted Dropout)</h2>
+<section id="a.2-구현-inverted-dropout" class="level3">
+<h3 class="anchored" data-anchor-id="a.2-구현-inverted-dropout">A.2 구현 (Inverted Dropout)</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Dropout:</span>
 <span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, p<span class="op">=</span><span class="fl">0.0</span>, training<span class="op">=</span><span class="va">True</span>):</span>
 <span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.dropout_prob <span class="op">=</span> p</span>
@@ -3871,8 +3842,8 @@ p = \text{softmax}(l) \in [0, 1]^{|V|}.
 <p><strong>보충(기댓값 보존 유도):</strong> 원소 <span class="math inline">\(x_i\)</span> 에 대해 살아남을 확률은 <span class="math inline">\(1-p\)</span> 입니다. 보정 전 출력의 기댓값은 <span class="math display">\[\mathbb{E}[\text{drop}(x_i)] = (1-p)\cdot x_i + p \cdot 0 = (1-p)\,x_i\]</span> 이므로, <span class="math inline">\(1/(1-p)\)</span> 로 나누면 <span class="math display">\[\mathbb{E}\!\left[\frac{\text{drop}(x_i)}{1-p}\right] = x_i\]</span> 가 되어 기댓값이 원래 입력과 같아집니다. 이렇게 학습 시 미리 보정해 두면, <strong>추론 시에는 아무 보정 없이 전체 뉴런을 그대로 사용</strong>할 수 있다는 장점이 있습니다.</p>
 </blockquote>
 </section>
-<section id="a.3-dropout-효과-검증" class="level2">
-<h2 class="anchored" data-anchor-id="a.3-dropout-효과-검증">A.3 Dropout 효과 검증</h2>
+<section id="a.3-dropout-효과-검증" class="level3">
+<h3 class="anchored" data-anchor-id="a.3-dropout-효과-검증">A.3 Dropout 효과 검증</h3>
 <p>확률 <span class="math inline">\(p\)</span> 를 키울수록 실제로 0이 되는 원소 비율이 <span class="math inline">\(p\)</span> 에 비례하는지 확인합니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> test_dropout():</span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>    probs <span class="op">=</span> torch.linspace(<span class="dv">0</span>, <span class="fl">0.9</span>, <span class="dv">10</span>)</span>
@@ -3899,20 +3870,74 @@ p = \text{softmax}(l) \in [0, 1]^{|V|}.
 <p>설정한 dropout 확률과 실제 0의 비율이 거의 일치하는 것을 통해, 구현이 의도대로 동작함을 확인할 수 있습니다.</p>
 <hr>
 </section>
-<section id="마치며-summary" class="level2">
-<h2 class="anchored" data-anchor-id="마치며-summary">마치며 (Summary)</h2>
-<p>이번 강의에서 우리는 트랜스포머를 실제로 완성하는 데 필요한 네 가지 핵심 기법을 살펴보고 직접 구현했습니다.</p>
-<ul>
-<li><strong>위치 인코딩(RoPE):</strong> 쿼리·키를 위치에 비례한 각도로 회전시켜, 어텐션 점수가 <strong>상대 위치에만 의존</strong>하도록 만들었습니다. 다중 주파수 구조로 의미·위치 정보를 동시에 담습니다.</li>
-<li><strong>정규화(RMSNorm):</strong> 제곱평균제곱근으로 특징 스케일을 표준화하여, 깊은 네트워크에서 특징·기울기의 폭주/소실을 막았습니다.</li>
-<li><strong>Skip-connection:</strong> <span class="math inline">\(f(x)+x\)</span> 형태의 잔차 학습으로 기울기 흐름을 보장하고 손실 지형을 매끄럽게 만들었습니다.</li>
-<li><strong>전체 조립:</strong> 토큰 임베딩 → RoPE → 인과 마스크 → Pre-Norm 블록 반복 → 최종 정규화 → 어휘 로짓의 순전파를 완성하고, <strong>교차 엔트로피 손실</strong>까지 계산했습니다. 부록에서는 과적합을 막는 <strong>Dropout</strong> 도 다루었습니다.</li>
-</ul>
-<p>이로써 우리는 무작위 가중치에서 출발해 다음 토큰 예측 손실까지 흘려보낼 수 있는, 작동하는 미니 Transformer를 손수 구현하게 되었습니다.</p>
-
-
-
 </section>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 실습의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 남은 세 구멍</strong></td>
+<td style="text-align: left;">어텐션과 MLP만으로는 부족하다 — 순서를 모르고, 깊이 쌓으면 분포가 폭주하며, 기울기가 끊긴다</td>
+<td style="text-align: left;">8강 이후의 미해결 문제</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 절대 위치의 한계</strong></td>
+<td style="text-align: left;">위치 id를 그대로 더하는 방식은 학습 때 보지 못한 길이로 잘 일반화되지 않고, 위치 정보가 값에 섞여 버린다</td>
+<td style="text-align: left;">절대 위치 인코딩</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ RoPE의 아이디어</strong></td>
+<td style="text-align: left;">쿼리와 키를 위치 <span class="math inline">\(m\)</span> 에 비례한 각도로 <strong>회전</strong>시키면, 내적이 두 위치의 차 <span class="math inline">\(m - n\)</span> 에만 의존해 <strong>상대 위치</strong>가 자동으로 부호화된다</td>
+<td style="text-align: left;">회전 행렬의 내적 성질</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 차원별 주파수</strong></td>
+<td style="text-align: left;">헤드 차원마다 회전 속도가 다르게 설정되어, 낮은 차원은 빠르게 돌며 국소 관계를, 높은 차원은 느리게 돌며 장거리 관계를 담당한다</td>
+<td style="text-align: left;">회전 각도 · 어텐션 패턴 시각화</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 정규화의 필요</strong></td>
+<td style="text-align: left;">층을 지날수록 특징 분포의 스케일이 누적되어 폭주하거나 소실된다</td>
+<td style="text-align: left;">깊은 네트워크의 분포 이동</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ RMSNorm</strong></td>
+<td style="text-align: left;">평균을 빼지 않고 제곱평균제곱근으로만 나눈다. 입력 스케일 <span class="math inline">\(p\)</span> 를 <span class="math inline">\(0.1\)</span> 에서 <span class="math inline">\(0.6\)</span> 으로 바꿔도 출력 분포의 폭은 거의 그대로다</td>
+<td style="text-align: left;">정규화 전후 히스토그램</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 잔차 연결</strong></td>
+<td style="text-align: left;"><span class="math inline">\(f(x) + x\)</span> 는 기울기가 우회할 수 있는 항등 경로를 만든다. 손실 지형 비교에서 잔차 연결이 있을 때 표면이 눈에 띄게 매끄러워진다</td>
+<td style="text-align: left;">손실 지형 시각화</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 조립</strong></td>
+<td style="text-align: left;">토큰 임베딩 → RoPE → 인과 마스크 → Pre-Norm 블록 반복 → 최종 정규화 → 어휘 로짓 → 교차 엔트로피. 무작위 가중치에서 손실까지 끝까지 흐르는 모델이 완성된다</td>
+<td style="text-align: left;">전체 조립 · 손실 계산</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ 부록: Dropout</strong></td>
+<td style="text-align: left;">학습 시 뉴런을 확률 <span class="math inline">\(p\)</span> 로 끄고 <span class="math inline">\(1/(1-p)\)</span> 로 나누는 역 드롭아웃을 쓰면 테스트 시점을 그대로 둘 수 있다. 실측한 0의 비율이 <span class="math inline">\(p\)</span> 와 정확히 일치한다</td>
+<td style="text-align: left;">0 비율 검증</td>
+</tr>
+</tbody>
+</table>
+
+
+
 </section>
 
 </main> <!-- /main -->

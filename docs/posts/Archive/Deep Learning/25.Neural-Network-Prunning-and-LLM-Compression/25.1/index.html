@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Neural Network Pruning and LLM Compression">
+<meta name="description" content="무엇을 지울지 고르는 중요도 점수와, 지워도 되는 구조가 무엇인지를 함께 보는 문제로 가지치기를 정의하고, CNN의 폭·깊이 압축에서 LLM 가지치기까지 이어갑니다.">
 
 <title>[Deep Learning] 25. Neural Network Pruning and LLM Compression – shsha0110.github.io</title>
 <style>
@@ -154,7 +154,7 @@ window.Quarto = {
       <h1 class="title">[Deep Learning] 25. Neural Network Pruning and LLM Compression</h1>
                   <div>
         <div class="description">
-          Neural Network Pruning and LLM Compression
+          무엇을 지울지 고르는 중요도 점수와, 지워도 되는 구조가 무엇인지를 함께 보는 문제로 가지치기를 정의하고, CNN의 폭·깊이 압축에서 LLM 가지치기까지 이어갑니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -2893,7 +2893,7 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#들어가며-introduction" id="toc-들어가며-introduction" class="nav-link active" data-scroll-target="#들어가며-introduction">들어가며 (Introduction)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
   <li><a href="#가지치기의-기초-pruning-fundamentals" id="toc-가지치기의-기초-pruning-fundamentals" class="nav-link" data-scroll-target="#가지치기의-기초-pruning-fundamentals">1. 가지치기의 기초 (Pruning fundamentals)</a>
   <ul class="collapse">
   <li><a href="#신경망-가지치기란-무엇인가-what-is-neural-network-pruning" id="toc-신경망-가지치기란-무엇인가-what-is-neural-network-pruning" class="nav-link" data-scroll-target="#신경망-가지치기란-무엇인가-what-is-neural-network-pruning">1.1 신경망 가지치기란 무엇인가 (What is neural network pruning?)</a></li>
@@ -2955,6 +2955,7 @@ window.Quarto = {
   <li><a href="#강의-요약-lecture-summary" id="toc-강의-요약-lecture-summary" class="nav-link" data-scroll-target="#강의-요약-lecture-summary">6.4 강의 요약 (Lecture summary)</a></li>
   <li><a href="#최종-시사점-final-takeaway" id="toc-최종-시사점-final-takeaway" class="nav-link" data-scroll-target="#최종-시사점-final-takeaway">6.5 최종 시사점 (Final takeaway)</a></li>
   </ul></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2965,32 +2966,20 @@ window.Quarto = {
 
 
 
-<section id="들어가며-introduction" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며-introduction">들어가며 (Introduction)</h2>
-<p>이번 강의의 목표는 <strong>가지치기(Pruning)를 하나의 최적화 문제로 이해</strong>하는 것입니다. 즉, 핵심 질문은 다음과 같습니다.</p>
 <blockquote class="blockquote">
-<p>성능은 최대한 보존하면서, 배포 비용(deployment cost)을 줄이기 위해 어떤 구성 요소를 제거할 것인가?</p>
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 강의 자료(25강 <em>Neural Network Pruning and LLM Compression</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다.</p>
 </blockquote>
-<p>강의 전체를 관통하는 핵심 메시지는 다음 한 문장으로 요약됩니다.</p>
-<p><span class="math display">\[
-\text{파라미터 수 감소} \;\not\Rightarrow\; \text{추론 속도 향상}
-\]</span></p>
-<p>즉, <strong>단순히 파라미터를 줄이는 것만으로는 빨라지지 않습니다.</strong> 가지치기로 만들어진 구조(structure)가 <strong>하드웨어와 소프트웨어 스택에 맞아떨어질 때만</strong> 실제 가속이 일어납니다. 이 원칙을 머릿속에 두고 아래 내용을 따라가면 전체 흐름이 일관되게 이해됩니다.</p>
-<p>강의는 다음 순서로 진행됩니다.</p>
-<ul>
-<li><strong>가지치기의 기초 (Pruning fundamentals)</strong></li>
-<li><strong>고전적인 CNN 가지치기 (Classical CNN pruning)</strong></li>
-<li><strong>CNN 깊이 압축 (CNN depth compression)</strong></li>
-<li><strong>LayerMerge</strong></li>
-<li><strong>LLM 가지치기 (LLM pruning)</strong></li>
-<li><strong>비교 및 요약 (Comparison and summary)</strong></li>
-</ul>
-<hr>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“좋은 가지치기는 작은 가중치를 지우는 일이 아니라, 올바른 중요도 · 올바른 구조 · 올바른 제약을 함께 고르는 최적화 문제입니다.”</strong></p>
+<p>가지치기는 학습된 네트워크에서 파라미터나 구성 요소를 제거해 <span class="math inline">\(W \to M \odot W\)</span> 로 만드는 일입니다. 하지만 무엇을 지우느냐보다 <strong>어떤 단위로</strong> 지우느냐가 실제 이득을 좌우합니다. 개별 가중치를 지우는 <strong>비정형</strong> 가지치기는 압축률이 높지만 희소 패턴이 불규칙해 일반 하드웨어에서 가속되지 않고, 필터 · 채널 · 레이어처럼 통째로 지우는 <strong>정형</strong> 가지치기는 조밀한 작은 모델을 남겨 실제로 빨라집니다. 이 강의는 그 정형화를 세 축으로 밀고 나갑니다. <strong>폭</strong> — 채널을 지우면 인접 레이어의 입력까지 함께 지워야 한다는 커플링 문제가 따라옵니다. <strong>깊이</strong> — 활성화 함수가 없으면 연속된 두 합성곱은 하나로 병합될 수 있으므로, 어떤 활성화를 남길지 고르는 이산 선택 문제가 되고 동적 계획법으로 풀립니다(LayerMerge). 그리고 <strong>LLM</strong> — 재학습이 사실상 불가능하므로 사후 학습 방식이 필요하고, 가중치 크기만 보는 대신 활성값을 함께 보는 Wanda, 복원 오차를 푸는 SparseGPT, 하드웨어가 지원하는 2:4 준정형 희소성 등이 등장합니다.</p>
+</blockquote>
 </section>
-<section id="가지치기의-기초-pruning-fundamentals" class="level1">
-<h1>1. 가지치기의 기초 (Pruning fundamentals)</h1>
-<section id="신경망-가지치기란-무엇인가-what-is-neural-network-pruning" class="level2">
-<h2 class="anchored" data-anchor-id="신경망-가지치기란-무엇인가-what-is-neural-network-pruning">1.1 신경망 가지치기란 무엇인가 (What is neural network pruning?)</h2>
+<section id="가지치기의-기초-pruning-fundamentals" class="level2">
+<h2 class="anchored" data-anchor-id="가지치기의-기초-pruning-fundamentals">1. 가지치기의 기초 (Pruning fundamentals)</h2>
+<section id="신경망-가지치기란-무엇인가-what-is-neural-network-pruning" class="level3">
+<h3 class="anchored" data-anchor-id="신경망-가지치기란-무엇인가-what-is-neural-network-pruning">1.1 신경망 가지치기란 무엇인가 (What is neural network pruning?)</h3>
 <p><strong>가지치기(Pruning)</strong> 는 학습이 끝난 신경망에서 파라미터나 구성 요소를 제거하는 기법입니다. 수학적으로는 <strong>이진 마스크(binary mask)</strong> <span class="math inline">\(M\)</span> 을 곱하는 연산으로 정의됩니다.</p>
 <p><span class="math display">\[
 W \;\longrightarrow\; M \odot W,
@@ -3018,8 +3007,8 @@ W \;\longrightarrow\; M \odot W,
 </figure>
 </div>
 </section>
-<section id="압축-vs.-가속-compression-vs.-acceleration" class="level2">
-<h2 class="anchored" data-anchor-id="압축-vs.-가속-compression-vs.-acceleration">1.2 압축 vs.&nbsp;가속 (Compression vs.&nbsp;acceleration)</h2>
+<section id="압축-vs.-가속-compression-vs.-acceleration" class="level3">
+<h3 class="anchored" data-anchor-id="압축-vs.-가속-compression-vs.-acceleration">1.2 압축 vs.&nbsp;가속 (Compression vs.&nbsp;acceleration)</h3>
 <p>가지치기는 여러 종류의 배포 비용을 줄이는 것을 목표로 할 수 있습니다. 각 목표가 무엇을 줄이는지 구분하는 것이 중요합니다.</p>
 <table class="caption-top table">
 <thead>
@@ -3061,8 +3050,8 @@ W \;\longrightarrow\; M \odot W,
 \]</span></p>
 <p>즉, <strong>압축이 곧 가속을 의미하지는 않습니다.</strong> 이 점이 본 강의가 반복적으로 강조하는 핵심 통찰입니다.</p>
 </section>
-<section id="가지치기의-입도-granularity-of-pruning" class="level2">
-<h2 class="anchored" data-anchor-id="가지치기의-입도-granularity-of-pruning">1.3 가지치기의 입도 (Granularity of pruning)</h2>
+<section id="가지치기의-입도-granularity-of-pruning" class="level3">
+<h3 class="anchored" data-anchor-id="가지치기의-입도-granularity-of-pruning">1.3 가지치기의 입도 (Granularity of pruning)</h3>
 <p>제거하는 단위의 크기, 즉 <strong>입도(granularity)</strong> 에 따라 가지치기는 세 가지로 분류됩니다.</p>
 <table class="caption-top table">
 <colgroup>
@@ -3108,8 +3097,8 @@ W \;\longrightarrow\; M \odot W,
 <p><strong>배포 원칙(Deployment principle):</strong> 정형 가지치기는 덜 유연하지만, 기존 dense 커널로 가속하기 훨씬 수월합니다.</p>
 </blockquote>
 </section>
-<section id="비정형-vs.-정형-가지치기-시각화" class="level2">
-<h2 class="anchored" data-anchor-id="비정형-vs.-정형-가지치기-시각화">1.4 비정형 vs.&nbsp;정형 가지치기 시각화</h2>
+<section id="비정형-vs.-정형-가지치기-시각화" class="level3">
+<h3 class="anchored" data-anchor-id="비정형-vs.-정형-가지치기-시각화">1.4 비정형 vs.&nbsp;정형 가지치기 시각화</h3>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/unstructured_vs_structured.png" class="img-fluid figure-img"></p>
@@ -3117,8 +3106,8 @@ W \;\longrightarrow\; M \odot W,
 </figure>
 </div>
 </section>
-<section id="무엇을-제거할지-어떻게-결정하는가-importance-score" class="level2">
-<h2 class="anchored" data-anchor-id="무엇을-제거할지-어떻게-결정하는가-importance-score">1.5 무엇을 제거할지 어떻게 결정하는가 (Importance score)</h2>
+<section id="무엇을-제거할지-어떻게-결정하는가-importance-score" class="level3">
+<h3 class="anchored" data-anchor-id="무엇을-제거할지-어떻게-결정하는가-importance-score">1.5 무엇을 제거할지 어떻게 결정하는가 (Importance score)</h3>
 <p>대부분의 가지치기 기법은 <strong>중요도 점수(importance score)</strong> 를 정의하여, 점수가 낮은 구성 요소를 제거합니다.</p>
 <table class="caption-top table">
 <colgroup>
@@ -3163,8 +3152,8 @@ W \;\longrightarrow\; M \odot W,
 \text{학습/로드} \to \text{구성요소 점수화} \to \text{낮은 점수 제거} \to \text{미세조정(fine-tune)}
 \]</span></p>
 </section>
-<section id="일반화된-가지치기-목적함수-a-generic-pruning-objective" class="level2">
-<h2 class="anchored" data-anchor-id="일반화된-가지치기-목적함수-a-generic-pruning-objective">1.6 일반화된 가지치기 목적함수 (A generic pruning objective)</h2>
+<section id="일반화된-가지치기-목적함수-a-generic-pruning-objective" class="level3">
+<h3 class="anchored" data-anchor-id="일반화된-가지치기-목적함수-a-generic-pruning-objective">1.6 일반화된 가지치기 목적함수 (A generic pruning objective)</h3>
 <p>가지치기 가능한 구성 요소를 <span class="math inline">\(c\)</span> 로 인덱싱하고, 마스크 변수 <span class="math inline">\(m_c \in \{0, 1\}\)</span> 가 구성 요소 <span class="math inline">\(c\)</span> 의 유지 여부를 나타낸다고 합시다.</p>
 <ul>
 <li><span class="math inline">\(m_c = 1\)</span> : 구성 요소 <span class="math inline">\(c\)</span> 를 <strong>유지</strong></li>
@@ -3186,10 +3175,10 @@ W \;\longrightarrow\; M \odot W,
 <hr>
 </section>
 </section>
-<section id="고전적인-cnn-가지치기-classical-cnn-pruning" class="level1">
-<h1>2. 고전적인 CNN 가지치기 (Classical CNN pruning)</h1>
-<section id="비정형-가지치기-학습-가지치기-재학습" class="level2">
-<h2 class="anchored" data-anchor-id="비정형-가지치기-학습-가지치기-재학습">2.1 비정형 가지치기: 학습 → 가지치기 → 재학습</h2>
+<section id="고전적인-cnn-가지치기-classical-cnn-pruning" class="level2">
+<h2 class="anchored" data-anchor-id="고전적인-cnn-가지치기-classical-cnn-pruning">2. 고전적인 CNN 가지치기 (Classical CNN pruning)</h2>
+<section id="비정형-가지치기-학습-가지치기-재학습" class="level3">
+<h3 class="anchored" data-anchor-id="비정형-가지치기-학습-가지치기-재학습">2.1 비정형 가지치기: 학습 → 가지치기 → 재학습</h3>
 <p>Han et al.&nbsp;(NeurIPS 2015)은 <strong>크기(magnitude)</strong> 를 기준으로 개별 연결(connection)을 가지치기하는 방법을 제안했습니다. 절차는 세 단계로 이루어집니다.</p>
 <ol type="1">
 <li><strong>조밀한 네트워크 학습 (Train dense network)</strong></li>
@@ -3215,8 +3204,8 @@ M_i =
 </ul>
 <p>이는 1.2절에서 본 “compression ≠ acceleration” 원칙의 대표적인 사례입니다.</p>
 </section>
-<section id="정형-cnn-가지치기-필터-채널-가지치기" class="level2">
-<h2 class="anchored" data-anchor-id="정형-cnn-가지치기-필터-채널-가지치기">2.2 정형 CNN 가지치기: 필터 / 채널 가지치기</h2>
+<section id="정형-cnn-가지치기-필터-채널-가지치기" class="level3">
+<h3 class="anchored" data-anchor-id="정형-cnn-가지치기-필터-채널-가지치기">2.2 정형 CNN 가지치기: 필터 / 채널 가지치기</h3>
 <p>합성곱 레이어의 가중치는 다음 형태를 가집니다.</p>
 <p><span class="math display">\[
 W^{(l)} \in \mathbb{R}^{C_{\text{out}} \times C_{\text{in}} \times K \times K},
@@ -3236,8 +3225,8 @@ W^{(l)}_{c, :, :, :} \;\text{제거}.
 </blockquote>
 <p>이것이 비정형 가지치기와의 결정적 차이입니다. (Li et al., ICLR 2017)</p>
 </section>
-<section id="채널-가지치기는-인접-레이어에-영향을-준다-coupling" class="level2">
-<h2 class="anchored" data-anchor-id="채널-가지치기는-인접-레이어에-영향을-준다-coupling">2.3 채널 가지치기는 인접 레이어에 영향을 준다 (Coupling)</h2>
+<section id="채널-가지치기는-인접-레이어에-영향을-준다-coupling" class="level3">
+<h3 class="anchored" data-anchor-id="채널-가지치기는-인접-레이어에-영향을-준다-coupling">2.3 채널 가지치기는 인접 레이어에 영향을 준다 (Coupling)</h3>
 <p>채널 가지치기에서 반드시 주의할 점은, 레이어 <span class="math inline">\(l\)</span> 의 출력 채널 <span class="math inline">\(c\)</span> 를 제거하면 <strong>레이어 <span class="math inline">\(l+1\)</span> 의 대응하는 입력 채널도 함께 제거</strong>되어야 한다는 것입니다.</p>
 <ul>
 <li>채널 <span class="math inline">\(c\)</span> 를 만들어내는 <strong>생산자(producing) 필터</strong> (<span class="math inline">\(W^{(l)}\)</span> 의 일부)</li>
@@ -3254,8 +3243,8 @@ W^{(l)}_{c, :, :, :} \;\text{제거}.
 <p><strong>커플링(Coupling):</strong> 정형 가지치기는 종종 여러 텐서에 걸쳐 결합된 행, 열, 채널, 차원을 함께 제거해야 합니다.</p>
 </blockquote>
 </section>
-<section id="정확도효율성-트레이드오프-accuracyefficiency-trade-off" class="level2">
-<h2 class="anchored" data-anchor-id="정확도효율성-트레이드오프-accuracyefficiency-trade-off">2.4 정확도–효율성 트레이드오프 (Accuracy–efficiency trade-off)</h2>
+<section id="정확도효율성-트레이드오프-accuracyefficiency-trade-off" class="level3">
+<h3 class="anchored" data-anchor-id="정확도효율성-트레이드오프-accuracyefficiency-trade-off">2.4 정확도–효율성 트레이드오프 (Accuracy–efficiency trade-off)</h3>
 <p>가지치기는 본질적으로 <strong>파레토 트레이드오프(Pareto trade-off)</strong> 를 만듭니다.</p>
 <p><span class="math display">\[
 \text{더 높은 압축} \;\Longleftrightarrow\; \text{더 큰 정확도 하락}
@@ -3270,10 +3259,10 @@ W^{(l)}_{c, :, :, :} \;\text{제거}.
 <hr>
 </section>
 </section>
-<section id="cnn-깊이-압축-cnn-depth-compression" class="level1">
-<h1>3. CNN 깊이 압축 (CNN depth compression)</h1>
-<section id="또-다른-가지치기-대상-깊이-depth" class="level2">
-<h2 class="anchored" data-anchor-id="또-다른-가지치기-대상-깊이-depth">3.1 또 다른 가지치기 대상: 깊이 (Depth)</h2>
+<section id="cnn-깊이-압축-cnn-depth-compression" class="level2">
+<h2 class="anchored" data-anchor-id="cnn-깊이-압축-cnn-depth-compression">3. CNN 깊이 압축 (CNN depth compression)</h2>
+<section id="또-다른-가지치기-대상-깊이-depth" class="level3">
+<h3 class="anchored" data-anchor-id="또-다른-가지치기-대상-깊이-depth">3.1 또 다른 가지치기 대상: 깊이 (Depth)</h3>
 <p>지금까지의 채널 가지치기는 네트워크의 <strong>폭(width)</strong> 을 줄였습니다. 이번에는 <strong>깊이(depth)</strong>, 즉 순차적으로 수행되는 연산의 개수를 줄이는 접근을 봅니다.</p>
 <p><span class="math display">\[
 \text{폭 가지치기: } C \to C', \qquad \text{깊이 가지치기: } L \to L'.
@@ -3283,8 +3272,8 @@ W^{(l)}_{c, :, :, :} \;\text{제거}.
 </blockquote>
 <p>이는 현대 가속기에서 연산 자체보다 <strong>순차적 의존성과 메모리 이동</strong>이 병목인 경우가 많기 때문입니다.</p>
 </section>
-<section id="언제-합성곱-레이어를-병합할-수-있는가-when-can-layers-be-merged" class="level2">
-<h2 class="anchored" data-anchor-id="언제-합성곱-레이어를-병합할-수-있는가-when-can-layers-be-merged">3.2 언제 합성곱 레이어를 병합할 수 있는가? (When can layers be merged?)</h2>
+<section id="언제-합성곱-레이어를-병합할-수-있는가-when-can-layers-be-merged" class="level3">
+<h3 class="anchored" data-anchor-id="언제-합성곱-레이어를-병합할-수-있는가-when-can-layers-be-merged">3.2 언제 합성곱 레이어를 병합할 수 있는가? (When can layers be merged?)</h3>
 <p>핵심 아이디어는 <strong>두 선형 합성곱 사이에 비선형 활성화가 없으면 하나로 병합(merge)할 수 있다</strong> 는 것입니다.</p>
 <p><span class="math display">\[
 f_{\theta_2} \circ f_{\theta_1} = f_{\theta_2 * \theta_1},
@@ -3301,8 +3290,8 @@ K_{\text{merged}} = 2K - 1
 </figure>
 </div>
 </section>
-<section id="왜-활성화가-정확한-병합을-막는가-why-activations-block-merging" class="level2">
-<h2 class="anchored" data-anchor-id="왜-활성화가-정확한-병합을-막는가-why-activations-block-merging">3.3 왜 활성화가 정확한 병합을 막는가 (Why activations block merging)</h2>
+<section id="왜-활성화가-정확한-병합을-막는가-why-activations-block-merging" class="level3">
+<h3 class="anchored" data-anchor-id="왜-활성화가-정확한-병합을-막는가-why-activations-block-merging">3.3 왜 활성화가 정확한 병합을 막는가 (Why activations block merging)</h3>
 <p>합성곱은 <strong>선형(linear)</strong> 연산입니다.</p>
 <p><span class="math display">\[
 f_\theta(ax + by) = a f_\theta(x) + b f_\theta(y).
@@ -3320,8 +3309,8 @@ f_{\theta_2} \circ \sigma \circ f_{\theta_1}
 <p><strong>깊이 압축 아이디어:</strong> 선택된 활성화를 <strong>항등 함수(identity)로 대체</strong>한 뒤, 그렇게 만들어진 연속된 합성곱 레이어들을 <strong>추론 시점(inference time)에 병합</strong>합니다.</p>
 </blockquote>
 </section>
-<section id="깊이-압축-목적함수-depth-compression-objective" class="level2">
-<h2 class="anchored" data-anchor-id="깊이-압축-목적함수-depth-compression-objective">3.4 깊이 압축 목적함수 (Depth compression objective)</h2>
+<section id="깊이-압축-목적함수-depth-compression-objective" class="level3">
+<h3 class="anchored" data-anchor-id="깊이-압축-목적함수-depth-compression-objective">3.4 깊이 압축 목적함수 (Depth compression objective)</h3>
 <p><span class="math inline">\(A \subseteq [L-1]\)</span> 을 <strong>온전히 유지되는 활성화 레이어의 집합</strong>이라 합시다. 각 레이어 <span class="math inline">\(l\)</span> 에 대해 활성화는 다음과 같이 정의됩니다.</p>
 <p><span class="math display">\[
 \sigma^A_l =
@@ -3340,8 +3329,8 @@ f_A = \prod_{l=1}^{L} \sigma^A_l \circ f_{\theta_l}.
 \]</span></p>
 <p>즉 <strong>지연 예산 <span class="math inline">\(T_0\)</span> 이하에서 정확도를 최대화</strong>하는 활성화 집합 <span class="math inline">\(A\)</span> 를 찾는 문제입니다.</p>
 </section>
-<section id="대리-함수-블록-중요도와-블록-지연-surrogate" class="level2">
-<h2 class="anchored" data-anchor-id="대리-함수-블록-중요도와-블록-지연-surrogate">3.5 대리 함수: 블록 중요도와 블록 지연 (Surrogate)</h2>
+<section id="대리-함수-블록-중요도와-블록-지연-surrogate" class="level3">
+<h3 class="anchored" data-anchor-id="대리-함수-블록-중요도와-블록-지연-surrogate">3.5 대리 함수: 블록 중요도와 블록 지연 (Surrogate)</h3>
 <p><span class="math inline">\(A\)</span> 에 속한 활성화들이 유지되면, 네트워크는 활성화를 경계로 하는 여러 <strong>블록(block)</strong> 으로 분할됩니다. 레이어 <span class="math inline">\(i+1\)</span> 부터 <span class="math inline">\(j\)</span> 까지의 블록에 대해 다음을 정의합니다.</p>
 <ul>
 <li><span class="math inline">\(I[i, j]\)</span> : 내부 활성화를 항등으로 대체했을 때의 <strong>중요도(importance)</strong></li>
@@ -3358,8 +3347,8 @@ T(f_A) \approx \sum_{(i,j) \in \mathrm{blocks}(A)} T[i, j].
 <p><strong>문제의 환원(Reduction):</strong> 이 근사를 통해 가지치기 문제는 <strong>지연 제약 하의 분할 문제(latency-constrained segmentation problem)</strong> 로 바뀝니다. 분할 문제는 동적 계획법으로 효율적으로 풀 수 있습니다.</p>
 </blockquote>
 </section>
-<section id="동적-계획법-점화식-dynamic-programming-recurrence" class="level2">
-<h2 class="anchored" data-anchor-id="동적-계획법-점화식-dynamic-programming-recurrence">3.6 동적 계획법 점화식 (Dynamic programming recurrence)</h2>
+<section id="동적-계획법-점화식-dynamic-programming-recurrence" class="level3">
+<h3 class="anchored" data-anchor-id="동적-계획법-점화식-dynamic-programming-recurrence">3.6 동적 계획법 점화식 (Dynamic programming recurrence)</h3>
 <p>다음을 정의합니다.</p>
 <p><span class="math display">\[
 D[l, t] = \text{지연 예산 } t \text{ 하에서 레이어 } l \text{까지의 최대 중요도}.
@@ -3379,8 +3368,8 @@ D[l, t] = \max_{0 \leqslant l' &lt; l} \Bigl( D[l', \, t - T[l', l]] + I[l', l] 
 </figure>
 </div>
 </section>
-<section id="함정-모든-병합이-지연을-줄이지는-않는다-pitfall" class="level2">
-<h2 class="anchored" data-anchor-id="함정-모든-병합이-지연을-줄이지는-않는다-pitfall">3.7 함정: 모든 병합이 지연을 줄이지는 않는다 (Pitfall)</h2>
+<section id="함정-모든-병합이-지연을-줄이지는-않는다-pitfall" class="level3">
+<h3 class="anchored" data-anchor-id="함정-모든-병합이-지연을-줄이지는-않는다-pitfall">3.7 함정: 모든 병합이 지연을 줄이지는 않는다 (Pitfall)</h3>
 <blockquote class="blockquote">
 <p><strong>표기 주의:</strong> 이 슬라이드에서는 합성곱 가중치를 <span class="math inline">\(\theta \in \mathbb{R}^{C_{\text{in}} \times C_{\text{out}} \times K \times K}\)</span> 로 씁니다. 이는 앞서의 <span class="math inline">\(W \in \mathbb{R}^{C_{\text{out}} \times C_{\text{in}} \times K \times K}\)</span> 와 첫 두 축을 맞바꾼 것일 뿐, 같은 가중치입니다(<span class="math inline">\(W[o,i,:,:] = \theta[i,o,:,:]\)</span>).</p>
 </blockquote>
@@ -3402,8 +3391,8 @@ W_{\text{merged}} \in \mathbb{R}^{100 \times 100 \times 5 \times 5}
 <p><strong>시사점(Takeaway):</strong> 병합은 레이어의 <strong>개수</strong>를 줄이지만, 개별 레이어의 <strong>비용을 오히려 증가</strong>시킬 수 있습니다. 따라서 깊이 압축은 반드시 <strong>지연 인식(latency-aware)</strong> 이어야 합니다.</p>
 </blockquote>
 </section>
-<section id="단계-지연-인식-깊이-압축-two-stage-dp" class="level2">
-<h2 class="anchored" data-anchor-id="단계-지연-인식-깊이-압축-two-stage-dp">3.8 2단계 지연 인식 깊이 압축 (Two-stage DP)</h2>
+<section id="단계-지연-인식-깊이-압축-two-stage-dp" class="level3">
+<h3 class="anchored" data-anchor-id="단계-지연-인식-깊이-압축-two-stage-dp">3.8 2단계 지연 인식 깊이 압축 (Two-stage DP)</h3>
 <p>Kim et al.&nbsp;(ICML 2023)의 원래 깊이 압축 방법은 두 종류의 집합을 도입합니다.</p>
 <ul>
 <li><span class="math inline">\(A\)</span> : 유지되는 활성화 레이어</li>
@@ -3420,8 +3409,8 @@ D[l, t] = \max_{l' &lt; l} \; D[l', \, t - T_{\text{opt}}[l', l]] + I[l', l].
 \]</span></p>
 <p>핵심은, 2단계 DP에서 단순한 <span class="math inline">\(T[l', l]\)</span> 대신 1단계에서 미리 최적화한 <span class="math inline">\(T_{\text{opt}}[l', l]\)</span> 을 사용한다는 점입니다.</p>
 </section>
-<section id="대표적인-깊이-압축-결과-representative-results" class="level2">
-<h2 class="anchored" data-anchor-id="대표적인-깊이-압축-결과-representative-results">3.9 대표적인 깊이 압축 결과 (Representative results)</h2>
+<section id="대표적인-깊이-압축-결과-representative-results" class="level3">
+<h3 class="anchored" data-anchor-id="대표적인-깊이-압축-결과-representative-results">3.9 대표적인 깊이 압축 결과 (Representative results)</h3>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/depth_compression_results.png" class="img-fluid figure-img"></p>
@@ -3432,10 +3421,10 @@ D[l, t] = \max_{l' &lt; l} \; D[l', \, t - T_{\text{opt}}[l', l]] + I[l', l].
 <hr>
 </section>
 </section>
-<section id="layermerge" class="level1">
-<h1>4. LayerMerge</h1>
-<section id="깊이-압축에서-layermerge로" class="level2">
-<h2 class="anchored" data-anchor-id="깊이-압축에서-layermerge로">4.1 깊이 압축에서 LayerMerge로</h2>
+<section id="layermerge" class="level2">
+<h2 class="anchored" data-anchor-id="layermerge">4. LayerMerge</h2>
+<section id="깊이-압축에서-layermerge로" class="level3">
+<h3 class="anchored" data-anchor-id="깊이-압축에서-layermerge로">4.1 깊이 압축에서 LayerMerge로</h3>
 <p>기존 깊이 압축은 주로 <strong>활성화(activation)만 가지치기</strong>했습니다. <strong>LayerMerge</strong> 는 여기서 한 걸음 더 나아가, <strong>합성곱 레이어 자체를 항등 커널로 대체하여 가지치기</strong>하는 것까지 허용합니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -3447,8 +3436,8 @@ D[l, t] = \max_{l' &lt; l} \; D[l', \, t - T_{\text{opt}}[l', l]] + I[l', l].
 <p><strong>아이디어(Idea):</strong> 합성곱과 활성화 레이어를 <strong>동시에(jointly)</strong> 가지치기한 뒤, 테스트 시점에 연속된 선형 합성곱 블록을 병합합니다.</p>
 </blockquote>
 </section>
-<section id="layermerge-이산-선택-문제-discrete-selection-problem" class="level2">
-<h2 class="anchored" data-anchor-id="layermerge-이산-선택-문제-discrete-selection-problem">4.2 LayerMerge: 이산 선택 문제 (Discrete selection problem)</h2>
+<section id="layermerge-이산-선택-문제-discrete-selection-problem" class="level3">
+<h3 class="anchored" data-anchor-id="layermerge-이산-선택-문제-discrete-selection-problem">4.2 LayerMerge: 이산 선택 문제 (Discrete selection problem)</h3>
 <p>LayerMerge는 두 개의 집합을 동시에 최적화합니다.</p>
 <ul>
 <li><span class="math inline">\(A\)</span> : 활성화 레이어를 유지하는 위치</li>
@@ -3463,8 +3452,8 @@ D[l, t] = \max_{l' &lt; l} \; D[l', \, t - T_{\text{opt}}[l', l]] + I[l', l].
 <p><strong>난점(Challenge):</strong> 활성화와 합성곱의 최적 부분집합을 동시에 선택하는 것은 <strong>조합적(combinatorial)</strong> 입니다.</p>
 </blockquote>
 </section>
-<section id="layermerge-대리-함수-커널-크기-상태-kernel-size-state" class="level2">
-<h2 class="anchored" data-anchor-id="layermerge-대리-함수-커널-크기-상태-kernel-size-state">4.3 LayerMerge 대리 함수: 커널 크기 상태 (Kernel-size state)</h2>
+<section id="layermerge-대리-함수-커널-크기-상태-kernel-size-state" class="level3">
+<h3 class="anchored" data-anchor-id="layermerge-대리-함수-커널-크기-상태-kernel-size-state">4.3 LayerMerge 대리 함수: 커널 크기 상태 (Kernel-size state)</h3>
 <p>순진하게(naively) 접근하면, 블록의 중요도와 지연은 어떤 내부 합성곱이 유지되는지(<span class="math inline">\(C\)</span>)에 따라 달라집니다.</p>
 <p><span class="math display">\[
 I[i, j, C], \qquad T[i, j, C].
@@ -3479,8 +3468,8 @@ I[i, j, k], \qquad T[i, j, k].
 \]</span></p>
 <p>이로써 상태 공간이 <strong>지수적에서 다룰 수 있는(feasible) 크기로 축소</strong>됩니다. 이것이 LayerMerge가 조합적 폭발을 회피하는 핵심 트릭입니다.</p>
 </section>
-<section id="layermerge-dp-점화식" class="level2">
-<h2 class="anchored" data-anchor-id="layermerge-dp-점화식">4.4 LayerMerge DP 점화식</h2>
+<section id="layermerge-dp-점화식" class="level3">
+<h3 class="anchored" data-anchor-id="layermerge-dp-점화식">4.4 LayerMerge DP 점화식</h3>
 <p>다음을 정의합니다.</p>
 <p><span class="math display">\[
 M[l, t] = \text{지연 예산 } t \text{ 하에서 처음 } l \text{개 레이어에 대한 최대 중요도}.
@@ -3494,8 +3483,8 @@ M[l, t] = \max_{\substack{0 \leqslant l' &lt; l \\ k \in \mathcal{K}_{l'l}}} \Bi
 <p><strong>해석:</strong> 이전 경계 <span class="math inline">\(l'\)</span> 과 커널 크기 상태 <span class="math inline">\(k\)</span> 를 함께 선택하여, 지연 예산 하에서 최선의 중요도를 주는 조합을 찾습니다. 즉 3.6절의 DP에 <strong>커널 크기라는 차원이 하나 추가</strong>된 형태입니다.</p>
 </blockquote>
 </section>
-<section id="layermerge-결과-classification" class="level2">
-<h2 class="anchored" data-anchor-id="layermerge-결과-classification">4.5 LayerMerge 결과 (Classification)</h2>
+<section id="layermerge-결과-classification" class="level3">
+<h3 class="anchored" data-anchor-id="layermerge-결과-classification">4.5 LayerMerge 결과 (Classification)</h3>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/layermerge_results_classification.png" class="img-fluid figure-img"></p>
@@ -3504,8 +3493,8 @@ M[l, t] = \max_{\substack{0 \leqslant l' &lt; l \\ k \in \mathcal{K}_{l'l}}} \Bi
 </div>
 <p>두 네트워크 모두에서 <strong>LayerMerge가 활성화만 가지치기하는 Depth 방법과 합성곱만 가지치기하는 LayerOnly를 모두 능가</strong>한다는 점이 핵심입니다. 이는 두 종류의 가지치기를 결합(joint)하는 것의 이득을 보여줍니다.</p>
 </section>
-<section id="분류를-넘어서-layermerge의-확장-beyond-classification" class="level2">
-<h2 class="anchored" data-anchor-id="분류를-넘어서-layermerge의-확장-beyond-classification">4.6 분류를 넘어서: LayerMerge의 확장 (Beyond classification)</h2>
+<section id="분류를-넘어서-layermerge의-확장-beyond-classification" class="level3">
+<h3 class="anchored" data-anchor-id="분류를-넘어서-layermerge의-확장-beyond-classification">4.6 분류를 넘어서: LayerMerge의 확장 (Beyond classification)</h3>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/layermerge_results_beyond.png" class="img-fluid figure-img"></p>
@@ -3518,10 +3507,10 @@ M[l, t] = \max_{\substack{0 \leqslant l' &lt; l \\ k \in \mathcal{K}_{l'l}}} \Bi
 <hr>
 </section>
 </section>
-<section id="llm-가지치기-llm-pruning" class="level1">
-<h1>5. LLM 가지치기 (LLM pruning)</h1>
-<section id="왜-llm-가지치기는-다른가-why-pruning-llms-is-different" class="level2">
-<h2 class="anchored" data-anchor-id="왜-llm-가지치기는-다른가-why-pruning-llms-is-different">5.1 왜 LLM 가지치기는 다른가 (Why pruning LLMs is different)</h2>
+<section id="llm-가지치기-llm-pruning" class="level2">
+<h2 class="anchored" data-anchor-id="llm-가지치기-llm-pruning">5. LLM 가지치기 (LLM pruning)</h2>
+<section id="왜-llm-가지치기는-다른가-why-pruning-llms-is-different" class="level3">
+<h3 class="anchored" data-anchor-id="왜-llm-가지치기는-다른가-why-pruning-llms-is-different">5.1 왜 LLM 가지치기는 다른가 (Why pruning LLMs is different)</h3>
 <p>CNN에서는 가지치기가 주로 합성곱 필터나 채널을 대상으로 합니다. 그러나 LLM에서는 배포 비용이 다음 요소들에 의해 지배됩니다.</p>
 <ul>
 <li>어텐션과 MLP 블록의 <strong>조밀한 행렬 곱(dense matrix multiplications)</strong></li>
@@ -3533,8 +3522,8 @@ M[l, t] = \max_{\substack{0 \leqslant l' &lt; l \\ k \in \mathcal{K}_{l'l}}} \Bi
 <p><strong>실용적 제약(Practical constraint):</strong> 가지치기된 LLM은 <strong>하드웨어가 지원하는 희소성을 사용</strong>하거나, <strong>더 작은 조밀(dense) 모델이 되어야</strong> 실질적인 이득을 얻습니다.</p>
 </blockquote>
 </section>
-<section id="트랜스포머-블록-해부-transformer-block-anatomy" class="level2">
-<h2 class="anchored" data-anchor-id="트랜스포머-블록-해부-transformer-block-anatomy">5.2 트랜스포머 블록 해부 (Transformer block anatomy)</h2>
+<section id="트랜스포머-블록-해부-transformer-block-anatomy" class="level3">
+<h3 class="anchored" data-anchor-id="트랜스포머-블록-해부-transformer-block-anatomy">5.2 트랜스포머 블록 해부 (Transformer block anatomy)</h3>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/transformer_block.png" class="img-fluid figure-img"></p>
@@ -3543,8 +3532,8 @@ M[l, t] = \max_{\substack{0 \leqslant l' &lt; l \\ k \in \mathcal{K}_{l'l}}} \Bi
 </div>
 <p>가지치기 가능한 트랜스포머 구성 요소: <strong>가중치, 어텐션 헤드, MLP 뉴런, 은닉 차원, 레이어 전체.</strong></p>
 </section>
-<section id="llm-가지치기-분류-체계-taxonomy" class="level2">
-<h2 class="anchored" data-anchor-id="llm-가지치기-분류-체계-taxonomy">5.3 LLM 가지치기 분류 체계 (Taxonomy)</h2>
+<section id="llm-가지치기-분류-체계-taxonomy" class="level3">
+<h3 class="anchored" data-anchor-id="llm-가지치기-분류-체계-taxonomy">5.3 LLM 가지치기 분류 체계 (Taxonomy)</h3>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 25%">
@@ -3591,8 +3580,8 @@ M[l, t] = \max_{\substack{0 \leqslant l' &lt; l \\ k \in \mathcal{K}_{l'l}}} \Bi
 <p><strong>핵심 질문(Main question):</strong> 우리는 <strong>성긴 모델(sparse model)</strong> 을 원하는가, 아니면 <strong>더 작은 조밀 모델(smaller dense model)</strong> 을 원하는가? 이 선택이 어떤 기법을 쓸지를 결정합니다.</p>
 </blockquote>
 </section>
-<section id="사후-학습post-training-llm-가지치기" class="level2">
-<h2 class="anchored" data-anchor-id="사후-학습post-training-llm-가지치기">5.4 사후 학습(Post-training) LLM 가지치기</h2>
+<section id="사후-학습post-training-llm-가지치기" class="level3">
+<h3 class="anchored" data-anchor-id="사후-학습post-training-llm-가지치기">5.4 사후 학습(Post-training) LLM 가지치기</h3>
 <p>거대 언어 모델을 전부 재학습하는 것은 매우 비쌉니다. 그래서 많은 LLM 가지치기 기법은 <strong>사후 학습(post-training)</strong> 방식을 취합니다.</p>
 <p><span class="math display">\[
 \text{사전학습 LLM} \to \text{작은 보정(calibration) 집합} \to \text{가지치기된 LLM}.
@@ -3606,8 +3595,8 @@ X \in \mathbb{R}^{n \times d},
 <p><strong>활성값이 중요한 이유:</strong> 드물게 사용되는 입력 방향에 연결된 가중치는, 자주 사용되는 방향에 연결된 같은 크기의 가중치보다 <strong>덜 중요할 수 있습니다.</strong> 즉 가중치 크기만으로는 중요도를 충분히 판단할 수 없습니다.</p>
 </blockquote>
 </section>
-<section id="크기-가지치기-vs.-활성값-인식-가지치기-wanda" class="level2">
-<h2 class="anchored" data-anchor-id="크기-가지치기-vs.-활성값-인식-가지치기-wanda">5.5 크기 가지치기 vs.&nbsp;활성값 인식 가지치기 (Wanda)</h2>
+<section id="크기-가지치기-vs.-활성값-인식-가지치기-wanda" class="level3">
+<h3 class="anchored" data-anchor-id="크기-가지치기-vs.-활성값-인식-가지치기-wanda">5.5 크기 가지치기 vs.&nbsp;활성값 인식 가지치기 (Wanda)</h3>
 <p>선형 레이어 <span class="math inline">\(y = XW\)</span> (<span class="math inline">\(W \in \mathbb{R}^{d_{\text{in}} \times d_{\text{out}}}\)</span>)를 생각합시다.</p>
 <p><strong>단순 크기 가지치기</strong>는 다음 점수를 사용합니다.</p>
 <p><span class="math display">\[
@@ -3622,8 +3611,8 @@ X \in \mathbb{R}^{n \times d},
 <p><strong>해석:</strong> 큰 가중치는 중요하지만, <strong>큰 활성값 차원에 붙어 있는 가중치는 더욱 중요합니다.</strong> Wanda는 재학습 없이(no-retraining) 이 간단한 점수만으로 효과적인 가지치기를 달성합니다.</p>
 </blockquote>
 </section>
-<section id="sparsegpt-재구성-기반-가지치기-reconstruction-based" class="level2">
-<h2 class="anchored" data-anchor-id="sparsegpt-재구성-기반-가지치기-reconstruction-based">5.6 SparseGPT: 재구성 기반 가지치기 (Reconstruction-based)</h2>
+<section id="sparsegpt-재구성-기반-가지치기-reconstruction-based" class="level3">
+<h3 class="anchored" data-anchor-id="sparsegpt-재구성-기반-가지치기-reconstruction-based">5.6 SparseGPT: 재구성 기반 가지치기 (Reconstruction-based)</h3>
 <p>입력 활성값 <span class="math inline">\(X\)</span> 를 가진 레이어에 대해, <strong>SparseGPT</strong> (Frantar &amp; Alistarh, 2023)는 가중치를 가지치기하면서도 <strong>레이어 출력을 보존</strong>하는 것을 목표로 합니다.</p>
 <p><span class="math display">\[
 XW \approx X\tilde{W}.
@@ -3636,13 +3625,13 @@ XW \approx X\tilde{W}.
 <blockquote class="blockquote">
 <p><strong>핵심 아이디어:</strong> 단지 가중치를 삭제하는 데 그치지 않고, <strong>남은 가중치를 조정하여 원래의 레이어 출력을 재구성</strong>합니다. 이것이 단순 크기 가지치기 대비 정확도를 크게 끌어올리는 비결입니다.</p>
 </blockquote>
-<section id="보충-왜-2차-정보인가" class="level4">
-<h4 class="anchored" data-anchor-id="보충-왜-2차-정보인가">보충: 왜 2차 정보인가?</h4>
+<section id="보충-왜-2차-정보인가" class="level5">
+<h5 class="anchored" data-anchor-id="보충-왜-2차-정보인가">보충: 왜 2차 정보인가?</h5>
 <p>재구성 오차 <span class="math inline">\(\lVert XW - X\tilde{W} \rVert_F^2\)</span> 를 가중치에 대해 전개하면, 헤시안에 해당하는 항이 입력 공분산 <span class="math inline">\(X^\top X\)</span> 형태로 등장합니다. SparseGPT는 이 정보를 근사적으로 활용하여, 한 가중치를 0으로 만들었을 때 나머지 가중치를 어떻게 보정해야 출력 변화가 최소가 되는지를 결정합니다. 이는 고전적인 Optimal Brain Surgeon 계열 아이디어의 대규모 확장입니다.</p>
 </section>
 </section>
-<section id="준정형-희소성-24-가지치기-semi-structured-sparsity" class="level2">
-<h2 class="anchored" data-anchor-id="준정형-희소성-24-가지치기-semi-structured-sparsity">5.7 준정형 희소성: 2:4 가지치기 (Semi-structured sparsity)</h2>
+<section id="준정형-희소성-24-가지치기-semi-structured-sparsity" class="level3">
+<h3 class="anchored" data-anchor-id="준정형-희소성-24-가지치기-semi-structured-sparsity">5.7 준정형 희소성: 2:4 가지치기 (Semi-structured sparsity)</h3>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/sparsity_2to4.png" class="img-fluid figure-img"></p>
@@ -3657,8 +3646,8 @@ XW \approx X\tilde{W}.
 <p><strong>왜 중요한가:</strong> 2:4 희소성은 임의의 비정형 희소성보다 <strong>하드웨어 친화적</strong>입니다. 희소 패턴이 고정 크기 그룹 내로 제약되기 때문에, (NVIDIA Ampere 이후의) 전용 텐서 코어가 이를 가속할 수 있습니다.</p>
 </blockquote>
 </section>
-<section id="트랜스포머의-정형-가지치기는-커플링을-요구한다" class="level2">
-<h2 class="anchored" data-anchor-id="트랜스포머의-정형-가지치기는-커플링을-요구한다">5.8 트랜스포머의 정형 가지치기는 커플링을 요구한다</h2>
+<section id="트랜스포머의-정형-가지치기는-커플링을-요구한다" class="level3">
+<h3 class="anchored" data-anchor-id="트랜스포머의-정형-가지치기는-커플링을-요구한다">5.8 트랜스포머의 정형 가지치기는 커플링을 요구한다</h3>
 <p>CNN에서와 마찬가지로(2.3절), 트랜스포머의 정형 가지치기도 <strong>결합된 구조</strong>를 함께 제거해야 합니다. MLP 중간 뉴런 <span class="math inline">\(j\)</span> 를 가지치기하려면 다음을 모두 제거해야 합니다.</p>
 <ul>
 <li><span class="math inline">\(W_{\text{up}}\)</span> 의 <strong>열(column) <span class="math inline">\(j\)</span></strong></li>
@@ -3679,8 +3668,8 @@ h = \mathrm{GELU}(x W_{\text{up}}), \qquad y = h W_{\text{down}}.
 <p><strong>커플링 구조:</strong> 트랜스포머 가지치기는 종종 고립된 텐서가 아니라 <strong>파라미터 그룹</strong>을 가지치기하는 문제입니다.</p>
 </blockquote>
 </section>
-<section id="llm-pruner-회복-학습이-있는-정형-가지치기" class="level2">
-<h2 class="anchored" data-anchor-id="llm-pruner-회복-학습이-있는-정형-가지치기">5.9 LLM-Pruner: 회복 학습이 있는 정형 가지치기</h2>
+<section id="llm-pruner-회복-학습이-있는-정형-가지치기" class="level3">
+<h3 class="anchored" data-anchor-id="llm-pruner-회복-학습이-있는-정형-가지치기">5.9 LLM-Pruner: 회복 학습이 있는 정형 가지치기</h3>
 <p><strong>LLM-Pruner</strong> (Ma et al., 2023)는 다음과 같은 정형 그룹을 제거합니다: 어텐션 헤드, MLP 뉴런, 결합된 은닉 차원.</p>
 <p>전형적인 정형 가지치기 파이프라인은 다음과 같습니다.</p>
 <p><span class="math display">\[
@@ -3690,8 +3679,8 @@ h = \mathrm{GELU}(x W_{\text{up}}), \qquad y = h W_{\text{down}}.
 <p><strong>왜 회복 학습(recovery tuning)인가?</strong> 정형 가지치기는 아키텍처 자체를 바꾸기 때문에 성능 손실이 발생합니다. 그러나 소량의 <strong>파라미터 효율적 미세조정(LoRA 등)</strong> 만으로도 손실된 성능의 상당 부분을 회복할 수 있습니다.</p>
 </blockquote>
 </section>
-<section id="slicegpt-더-작고-조밀한-모델-만들기" class="level2">
-<h2 class="anchored" data-anchor-id="slicegpt-더-작고-조밀한-모델-만들기">5.10 SliceGPT: 더 작고 조밀한 모델 만들기</h2>
+<section id="slicegpt-더-작고-조밀한-모델-만들기" class="level3">
+<h3 class="anchored" data-anchor-id="slicegpt-더-작고-조밀한-모델-만들기">5.10 SliceGPT: 더 작고 조밀한 모델 만들기</h3>
 <p><strong>SliceGPT</strong> (Ashkboos et al., 2024)는 가중치 행렬을 성기게 만드는 대신, <strong>은닉 차원(hidden dimension) 자체를 줄입니다.</strong></p>
 <p><span class="math display">\[
 d_{\text{model}} \to d'_{\text{model}}.
@@ -3704,8 +3693,8 @@ W \in \mathbb{R}^{d \times d} \;\longrightarrow\; W' \in \mathbb{R}^{d' \times d
 <p><strong>배포 이점:</strong> 결과 모델이 여전히 <strong>조밀(dense)</strong> 하므로, 표준 dense 행렬 곱 커널을 그대로 사용할 수 있습니다. 이는 표현 차원(representation-dimension) 수준의 정형 가지치기로 볼 수 있습니다.</p>
 </blockquote>
 </section>
-<section id="llm을-위한-레이어-가지치기-layer-pruning" class="level2">
-<h2 class="anchored" data-anchor-id="llm을-위한-레이어-가지치기-layer-pruning">5.11 LLM을 위한 레이어 가지치기 (Layer pruning)</h2>
+<section id="llm을-위한-레이어-가지치기-layer-pruning" class="level3">
+<h3 class="anchored" data-anchor-id="llm을-위한-레이어-가지치기-layer-pruning">5.11 LLM을 위한 레이어 가지치기 (Layer pruning)</h3>
 <p>LLM에는 <strong>중복된(redundant) 트랜스포머 블록</strong>이 존재할 수 있습니다. 트랜스포머 레이어를</p>
 <p><span class="math display">\[
 x_{l+1} = F_l(x_l)
@@ -3723,8 +3712,8 @@ x_{l+1} = F_l(x_l)
 <p><strong>CNN 깊이 압축과의 연결:</strong> CNN 깊이 압축과 LLM 레이어 가지치기는 모두 <strong>깊이 방향의 중복(redundancy along depth)</strong> 을 활용한다는 공통 원리를 공유합니다.</p>
 </blockquote>
 </section>
-<section id="sheared-llama-가지치기로-더-작은-llm-만들기" class="level2">
-<h2 class="anchored" data-anchor-id="sheared-llama-가지치기로-더-작은-llm-만들기">5.12 Sheared LLaMA: 가지치기로 더 작은 LLM 만들기</h2>
+<section id="sheared-llama-가지치기로-더-작은-llm-만들기" class="level3">
+<h3 class="anchored" data-anchor-id="sheared-llama-가지치기로-더-작은-llm-만들기">5.12 Sheared LLaMA: 가지치기로 더 작은 LLM 만들기</h3>
 <p>또 다른 영역은, 가지치기를 단순한 배포용 압축이 아니라 <strong>큰 모델로부터 더 작은 파운데이션 모델을 생성</strong>하는 수단으로 사용하는 것입니다.</p>
 <p>가지치기 가능한 구조: 레이어, 어텐션 헤드, MLP 중간 차원, 은닉 차원.</p>
 <p>파이프라인은 다음과 같습니다.</p>
@@ -3735,8 +3724,8 @@ x_{l+1} = F_l(x_l)
 <p><strong>메시지:</strong> 가지치기는 최종 압축 단계로만 쓰이는 것이 아니라, <strong>효율적인 작은 모델을 초기화(initialize)하는 방법</strong>으로도 활용될 수 있습니다. (Xia et al., Sheared LLaMA, 2023)</p>
 </blockquote>
 </section>
-<section id="llm-가지치기-평가-evaluation" class="level2">
-<h2 class="anchored" data-anchor-id="llm-가지치기-평가-evaluation">5.13 LLM 가지치기 평가 (Evaluation)</h2>
+<section id="llm-가지치기-평가-evaluation" class="level3">
+<h3 class="anchored" data-anchor-id="llm-가지치기-평가-evaluation">5.13 LLM 가지치기 평가 (Evaluation)</h3>
 <p>CNN 가지치기는 주로 정확도와 지연을 보고하지만, LLM 가지치기는 일반적으로 다음을 보고합니다.</p>
 <ul>
 <li>언어 모델링 코퍼스에서의 <strong>퍼플렉서티(perplexity)</strong></li>
@@ -3752,10 +3741,10 @@ x_{l+1} = F_l(x_l)
 <hr>
 </section>
 </section>
-<section id="비교-및-요약-comparison-and-summary" class="level1">
-<h1>6. 비교 및 요약 (Comparison and summary)</h1>
-<section id="cnn-vs.-llm-가지치기" class="level2">
-<h2 class="anchored" data-anchor-id="cnn-vs.-llm-가지치기">6.1 CNN vs.&nbsp;LLM 가지치기</h2>
+<section id="비교-및-요약-comparison-and-summary" class="level2">
+<h2 class="anchored" data-anchor-id="비교-및-요약-comparison-and-summary">6. 비교 및 요약 (Comparison and summary)</h2>
+<section id="cnn-vs.-llm-가지치기" class="level3">
+<h3 class="anchored" data-anchor-id="cnn-vs.-llm-가지치기">6.1 CNN vs.&nbsp;LLM 가지치기</h3>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 33%">
@@ -3803,8 +3792,8 @@ x_{l+1} = F_l(x_l)
 </tbody>
 </table>
 </section>
-<section id="가지치기-vs.-양자화-vs.-증류" class="level2">
-<h2 class="anchored" data-anchor-id="가지치기-vs.-양자화-vs.-증류">6.2 가지치기 vs.&nbsp;양자화 vs.&nbsp;증류</h2>
+<section id="가지치기-vs.-양자화-vs.-증류" class="level3">
+<h3 class="anchored" data-anchor-id="가지치기-vs.-양자화-vs.-증류">6.2 가지치기 vs.&nbsp;양자화 vs.&nbsp;증류</h3>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 33%">
@@ -3845,8 +3834,8 @@ x_{l+1} = F_l(x_l)
 <p>이 방법들은 <strong>상호 보완적(complementary)</strong> 입니다. <strong>가지치기 + 양자화 + 증류</strong>를 함께 결합하는 것이 종종 가능하며, 실제로 효과적입니다.</p>
 </blockquote>
 </section>
-<section id="방법별-비교-method-comparison" class="level2">
-<h2 class="anchored" data-anchor-id="방법별-비교-method-comparison">6.3 방법별 비교 (Method comparison)</h2>
+<section id="방법별-비교-method-comparison" class="level3">
+<h3 class="anchored" data-anchor-id="방법별-비교-method-comparison">6.3 방법별 비교 (Method comparison)</h3>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 25%">
@@ -3926,8 +3915,8 @@ x_{l+1} = F_l(x_l)
 </tbody>
 </table>
 </section>
-<section id="강의-요약-lecture-summary" class="level2">
-<h2 class="anchored" data-anchor-id="강의-요약-lecture-summary">6.4 강의 요약 (Lecture summary)</h2>
+<section id="강의-요약-lecture-summary" class="level3">
+<h3 class="anchored" data-anchor-id="강의-요약-lecture-summary">6.4 강의 요약 (Lecture summary)</h3>
 <ul>
 <li>가지치기는 성능을 보존하려 노력하면서 가중치나 구성 요소를 제거합니다.</li>
 <li><strong>비정형 희소성</strong>은 파라미터를 줄이지만, 표준 하드웨어를 가속하지 못할 수 있습니다.</li>
@@ -3938,8 +3927,8 @@ x_{l+1} = F_l(x_l)
 <li>CNN과 LLM 모두에서 핵심 지표는 파라미터 수가 아니라 <strong>배포 파레토 프론티어(deployment Pareto frontier)</strong> 입니다.</li>
 </ul>
 </section>
-<section id="최종-시사점-final-takeaway" class="level2">
-<h2 class="anchored" data-anchor-id="최종-시사점-final-takeaway">6.5 최종 시사점 (Final takeaway)</h2>
+<section id="최종-시사점-final-takeaway" class="level3">
+<h3 class="anchored" data-anchor-id="최종-시사점-final-takeaway">6.5 최종 시사점 (Final takeaway)</h3>
 <p>가지치기는 단순히 작은 가중치를 삭제하는 작업이 아닙니다. 좋은 가지치기는 다음 세 요소의 결합입니다.</p>
 <p><span class="math display">\[
 \text{좋은 가지치기} = \text{중요도 추정} + \text{구조적 탐색} + \text{하드웨어 인식 배포}
@@ -3949,10 +3938,105 @@ x_{l+1} = F_l(x_l)
 <p><strong>원리(Principle):</strong> 추론 시스템이 실제로 활용할 수 있는 형태로 <strong>중복(redundancy)을 제거하라.</strong></p>
 </blockquote>
 <p>이 한 문장이 본 강의 전체를 관통하는 결론입니다. 파라미터를 줄이는 것 자체가 목적이 아니라, 그 감소가 <strong>실제 배포 환경에서 측정 가능한 이득(지연, 메모리, 처리량)</strong> 으로 이어지도록 만드는 것이 가지치기 연구의 본질입니다.</p>
-
-
-
 </section>
+</section>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 정의</strong></td>
+<td style="text-align: left;">가지치기는 학습된 네트워크에서 파라미터나 구성 요소를 제거하는 일이며, 이진 마스크로 <span class="math inline">\(W \to M \odot W\)</span> 로 쓴다</td>
+<td style="text-align: left;">가지치기의 정의</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 목표의 구분</strong></td>
+<td style="text-align: left;">압축(모델 크기)과 가속(지연 시간)은 다른 목표다. 무엇을 줄이려는지에 따라 지워야 할 대상이 달라진다</td>
+<td style="text-align: left;">압축 vs.&nbsp;가속</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 입도가 전부다</strong></td>
+<td style="text-align: left;">개별 가중치를 지우면 압축률은 높지만 희소 패턴이 불규칙해 일반 하드웨어에서 빨라지지 않는다. 필터 · 채널 · 레이어를 통째로 지우면 <strong>조밀한 작은 모델</strong>이 남아 실제로 빨라진다</td>
+<td style="text-align: left;">비정형 vs.&nbsp;정형</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 무엇을 지울까</strong></td>
+<td style="text-align: left;">대부분의 방법은 중요도 점수를 정의하고 낮은 것부터 지운다. 가지치기는 결국 “제약 하에서 중요도 합을 최대화”하는 최적화 문제로 쓰인다</td>
+<td style="text-align: left;">일반화된 가지치기 목적함수</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 고전적 절차</strong></td>
+<td style="text-align: left;">비정형 가지치기는 학습 → 가지치기 → 재학습의 순환을 돌며 정확도를 회복한다</td>
+<td style="text-align: left;">Train-prune-retrain</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 커플링</strong></td>
+<td style="text-align: left;">레이어 <span class="math inline">\(l\)</span> 의 출력 채널을 지우면 레이어 <span class="math inline">\(l+1\)</span> 의 대응 입력 채널도 반드시 함께 지워야 한다. 정형 가지치기는 텐서 하나가 아니라 <strong>묶음</strong>을 다루는 문제다</td>
+<td style="text-align: left;">채널 커플링</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 또 다른 축: 깊이</strong></td>
+<td style="text-align: left;">폭이 아니라 깊이를 줄일 수도 있다. 비선형 활성화가 없으면 연속된 두 합성곱은 하나로 <strong>정확히 병합</strong>되며, 커널 크기는 <span class="math inline">\(K_{\text{merged}} = 2K - 1\)</span> 이 된다</td>
+<td style="text-align: left;">합성곱 병합 조건</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 이산 선택 문제</strong></td>
+<td style="text-align: left;">따라서 “어떤 활성화를 남길 것인가”가 결정 변수가 된다. 블록 중요도와 블록 지연을 대리 함수로 두면 동적 계획법 점화식으로 풀린다</td>
+<td style="text-align: left;">깊이 압축 DP</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ 함정</strong></td>
+<td style="text-align: left;">모든 병합이 지연을 줄이지는 않는다. 병합된 커널이 커지면 오히려 느려질 수 있으므로, 지연을 인식하는 2단계 DP가 필요하다</td>
+<td style="text-align: left;">지연 인식 깊이 압축</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ LayerMerge</strong></td>
+<td style="text-align: left;">활성화만이 아니라 <strong>합성곱 레이어까지 항등으로 대체</strong>해 함께 고른다. 커널 크기를 상태에 넣은 DP로 풀며, 분류를 넘어 확산 모델에서도 파레토 곡선을 밀어 올린다</td>
+<td style="text-align: left;">LayerMerge DP · 결과</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑪ LLM은 다르다</strong></td>
+<td style="text-align: left;">재학습 비용이 감당되지 않으므로 <strong>사후 학습(post-training)</strong> 방식이 필요하고, 지울 대상도 어텐션 헤드 · MLP 뉴런 · 은닉 차원 · 블록으로 바뀐다</td>
+<td style="text-align: left;">LLM 가지치기 분류</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑫ 크기만으로는 부족</strong></td>
+<td style="text-align: left;">같은 크기의 가중치라도 큰 활성값과 곱해지면 출력에 미치는 영향이 크다. Wanda는 <span class="math inline">\(\lvert W_{ij} \rvert \cdot \lVert X_j \rVert\)</span> 를 점수로 쓰고, SparseGPT는 레이어별 복원 오차를 직접 최소화한다</td>
+<td style="text-align: left;">Wanda · SparseGPT</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑬ 하드웨어와의 타협</strong></td>
+<td style="text-align: left;">4개 중 2개를 0으로 만드는 2:4 준정형 희소성은 임의의 비정형 희소성보다 제약이 크지만, 텐서 코어가 지원하므로 실제 가속으로 이어진다</td>
+<td style="text-align: left;">2:4 희소성</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑭ 정형 LLM 가지치기</strong></td>
+<td style="text-align: left;">MLP 중간 뉴런 <span class="math inline">\(j\)</span> 를 지우려면 <span class="math inline">\(W_{\text{up}}\)</span> 의 열과 <span class="math inline">\(W_{\text{down}}\)</span> 의 행을 함께 지워야 한다. LLM-Pruner는 회복 학습을, SliceGPT는 더 작고 조밀한 모델을, Sheared LLaMA는 가지치기로 소형 모델 자체를 만든다</td>
+<td style="text-align: left;">트랜스포머 커플링 · 각 방법</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑮ 정리</strong></td>
+<td style="text-align: left;">가지치기는 양자화(표현 정밀도)나 증류(지식 이전)와 목표가 다르며, 서로 배타적이지 않고 함께 쓰인다</td>
+<td style="text-align: left;">방법 비교</td>
+</tr>
+</tbody>
+</table>
+
+
+
 </section>
 
 </main> <!-- /main -->

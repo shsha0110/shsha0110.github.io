@@ -1,6 +1,6 @@
 ---
 title: "[Deep Learning] 14. Modern Transformers"
-description: "Modern Transformers"
+description: "파라미터를 늘리면서 연산량은 묶어 두는 MoE와, 컨텍스트를 늘리면서 어텐션 비용은 선형으로 되돌리는 슬라이딩 윈도우 — 두 조건부 계산 기법을 gpt-oss 기준으로 구현합니다."
 author: "유성현"
 categories: [Deep Learning]
 format:
@@ -11,29 +11,26 @@ format:
     math: true
 ---
 
-## 들어가며 (Overview)
+> 본 포스트는 서울대학교 컴퓨터공학부 **Hyun Oh Song** 교수님의 *Introduction to Deep Learning* (M2177.0043) 14강 실습 세션(*Modern Transformer Components: MoE, Sliding Window Attention*)의 노트북을 바탕으로, 코드와 그 배경이 되는 논리를 함께 따라갈 수 있도록 재구성한 것입니다.
 
-이번 글은 lec11(Part 1)에서 이어지는 **현대 Transformer 구성요소(Modern Transformer Components)** 강의를 정리한 것입니다. 소재는 OpenAI가 공개한 **gpt-oss** 모델 계열이며, 다음 두 가지 기법을 다룹니다.
+## 한 줄 요약 (TL;DR)
 
-1. **Mixture of Experts (MoE)** — 모델의 파라미터 수는 키우되, 토큰당 계산량은 고정시키는 *희소 활성화(sparse activation)* 기법
-2. **Sliding Window Attention** — 어텐션의 **이차(quadratic) 비용**과 디코딩 시 선형적으로 커지는 KV 캐시 문제를 완화하는 기법
+> **"두 기법 모두 같은 발상에서 나옵니다 — 모든 것을 항상 다 계산할 필요는 없다."**
+>
+> 앞선 실습이 KV 캐시와 학습 파라미터라는 예산을 다뤘다면, 이번에는 **연산량** 예산을 다룹니다. 두 기법은 서로 다른 축을 건드리지만 논리는 같습니다. **Mixture of Experts(MoE)** 는 모델 용량의 축입니다. 성능을 올리려면 파라미터를 늘려야 하지만 그러면 토큰마다 드는 연산량도 함께 늘어납니다. MoE는 FeedForward를 여러 개의 전문가로 복제해 두고, 라우터가 토큰마다 상위 $k$ 개만 골라 활성화합니다. 그 결과 **전체 파라미터는 늘지만 토큰당 연산량은 $k$ 개분으로 고정**됩니다. **Sliding Window Attention** 은 컨텍스트 길이의 축입니다. 전체 어텐션은 길이 $s$ 에 대해 $\mathcal{O}(s^2)$ 이라 긴 문맥에서 감당이 되지 않는데, 각 토큰이 최근 $w$ 개만 보게 창을 제한하면 비용이 $\mathcal{O}(sw)$ 로 선형이 됩니다. 창 밖의 정보는 층을 쌓으며 간접적으로 전달되므로 유효 문맥은 층수에 비례해 넓어집니다. gpt-oss는 이 둘을 실제로 채택해, 층마다 슬라이딩 윈도우와 전체 인과 어텐션을 **번갈아** 씁니다.
 
-두 기법 모두 "**거대한 모델을 합리적인 비용으로 운용**한다"는 공통의 동기에서 출발합니다. 본문에서는 각 기법의 정의·동기·수식·gpt-oss에서의 실제 설정, 그리고 PyTorch 구현까지 차례대로 살펴보겠습니다.
-
----
-
-# 1. Mixture of Experts (MoE)
+## 1. Mixture of Experts (MoE)
 
 ![Figure 1: MoE 레이어의 개념도입니다. 입력 토큰 하나가 들어오면 라우터(router)가 전체 $N$개의 전문가(expert) 네트워크 중 일부 $K$개만 선택(top-$K$)하여 활성화합니다. 회색으로 표시된 비활성 전문가는 이 토큰에 대해 전혀 연산되지 않으며, 선택된 $K$개 전문가의 출력만 라우팅 가중치로 가중합되어 다음 레이어로 전달됩니다. 즉 "전체 네트워크 중 입력별로 일부 경로만 켜진다"는 희소 활성화 구조를 시각적으로 보여줍니다.](./images/moe_overview.png)
 
-## 1.1 MoE란 무엇인가 (What is it?)
+### 1.1 MoE란 무엇인가 (What is it?)
 
 **Mixture of Experts(MoE)** 모델은 한마디로 **희소 활성화 모델(sparsely-activated model)** 입니다. 여기서 "희소성(sparsity)"이란, 모든 입력에 대해 네트워크 전체 가중치를 사용하는 것이 아니라 **입력마다 신경망 가중치의 일부 부분집합만 활성화**한다는 데서 나옵니다.
 
 * 이 성질 덕분에 모델은 **엄청나게 많은 파라미터**를 보유하면서도, 입력 하나를 처리하는 데 드는 **계산 비용은 (거의) 일정(constant)** 하게 유지할 수 있습니다.
 * 직관적으로는 "방대한 지식을 가진 전문가 집단을 두되, 질문마다 관련 있는 소수의 전문가에게만 일을 맡긴다"는 그림입니다.
 
-## 1.2 왜 필요한가 (Why do we need?)
+### 1.2 왜 필요한가 (Why do we need?)
 
 핵심 동기는 **스케일링(scaling) 비용**입니다.
 
@@ -42,7 +39,7 @@ format:
 
 MoE는 이 결합(파라미터 수 ↔ 토큰당 계산량)을 끊어줍니다. 파라미터(=용량, capacity)는 전문가 수 $N$을 늘려 확장하되, 토큰당 실제로 켜지는 전문가는 $K(\ll N)$개로 고정하여 **계산량은 묶어두는** 것입니다.
 
-## 1.3 MoE 레이어의 수식적 정의 (MoE Layer)
+### 1.3 MoE 레이어의 수식적 정의 (MoE Layer)
 
 이제 MoE 레이어를 수식으로 정의해 보겠습니다. 기호를 먼저 정리합니다.
 
@@ -52,7 +49,7 @@ MoE는 이 결합(파라미터 수 ↔ 토큰당 계산량)을 끊어줍니다. 
 
 전체 $N$개의 전문가 중에서, 입력 $\mathbf{x}$에 대해서는 **오직 $K$개의 전문가** $\mathbf{E}_{e_1(\mathbf{x})}, \dots, \mathbf{E}_{e_K(\mathbf{x})}$ 만 활성화됩니다. 현대 Transformer에서 이 MoE 레이어는 **각 토큰에 독립적으로** 적용되며, 기존의 **피드포워드(FFN) 서브블록을 대체**합니다.
 
-### 1.3.1 라우터(Router): 어떤 전문가를 켤지 결정하기
+#### 1.3.1 라우터(Router): 어떤 전문가를 켤지 결정하기
 
 각 토큰이 어떻게 $K$개의 전문가를 고르는지 살펴보겠습니다. 먼저 **라우터 네트워크** $\mathbf{router} : \mathbb{R}^{dim} \to \mathbb{R}^{N}$ 를 다음의 단순한 선형 변환으로 정의합니다.
 
@@ -63,7 +60,7 @@ $$
 * 여기서 $\mathbf{W}_r \in \mathbb{R}^{N \times dim}$ 은 **라우터 가중치 행렬**입니다.
 * 출력 $\mathbf{router}(\mathbf{x}) \in \mathbb{R}^N$ 의 각 성분은 "$i$-번째 전문가에 대한 점수(logit)"로 해석됩니다.
 
-### 1.3.2 전문가 선택(Top-$K$)
+#### 1.3.2 전문가 선택(Top-$K$)
 
 $K$를 활성화할 전문가 수라 할 때, **전문가 선택 네트워크** $\mathbf{e} : \mathbb{R}^{dim} \to \{1, \dots, N\}^K$ 를
 
@@ -73,7 +70,7 @@ $$
 
 로 정의합니다. 여기서 $e_j(\mathbf{x}) \in \{1,\dots,N\}$ 는 $\mathbf{router}(\mathbf{x})$ 의 성분 중 **$j$-번째로 큰 값**의 인덱스이며, 동점(tie)은 임의로 처리합니다. 즉 라우터 점수가 가장 높은 $K$개의 전문가를 뽑는 **top-$K$ 연산**입니다.
 
-### 1.3.3 라우팅 확률(Routing Probability)
+#### 1.3.3 라우팅 확률(Routing Probability)
 
 선택된 전문가들에게 얼마만큼 비중을 줄지를 정하는 것이 라우팅 확률입니다. 전문가 $i$의 라우팅 확률 $p_i(\mathbf{x})$ 는 다음과 같이 정의됩니다.
 
@@ -99,7 +96,7 @@ $$
 
 즉 $\mathbf{p}(\mathbf{x})$ 는 (대부분의 성분이 $0$인) **확률분포**입니다.
 
-### 1.3.4 MoE 출력
+#### 1.3.4 MoE 출력
 
 최종적으로 MoE 레이어의 출력은 **선택된 전문가들의 출력에 대한 라우팅 가중합(weighted sum)** 입니다.
 
@@ -110,7 +107,7 @@ $$
 * 비활성 전문가는 $p_i(\mathbf{x}) = 0$ 이므로 합산에 전혀 기여하지 않습니다.
 * 따라서 실제 연산상으로는 $N$개가 아닌 **$K$개의 전문가만 forward**하면 충분하며, 이것이 MoE의 계산 절감이 발생하는 지점입니다.
 
-## 1.4 예시 (Example)
+### 1.4 예시 (Example)
 
 지수함수 계산을 피하기 위해, **선택된 두 전문가의 라우터 logit이 같은(tie)** 경우를 골라 직접 계산해 보겠습니다.
 
@@ -150,14 +147,14 @@ $$
 
 logit을 일부러 같게 만들어 둔 덕분에 지수 계산 없이도 라우팅 가중치가 $1/2, 1/2$ 로 깔끔하게 떨어지는 것을 확인할 수 있습니다.
 
-## 1.5 gpt-oss에서의 MoE 레이어 (MoE Layer in GPT-OSS)
+### 1.5 gpt-oss에서의 MoE 레이어 (MoE Layer in GPT-OSS)
 
 gpt-oss는 전문가를 **2-layer MLP**로 구성하되, 두 선형 사영(projection) 사이에 **SwiGLU**를 두고, 각 토큰을 **$K=4$개**의 전문가로 라우팅합니다.
 
 * `gpt-oss-120b` 는 $N=128$개, `gpt-oss-20b` 는 $N=32$개의 전문가를 사용합니다.
 * `gpt-oss-120b` 의 경우 **전체 117B** 파라미터를 보유하지만, 토큰당 활성화되는 파라미터는 **5.1B**에 불과합니다. 바로 이 점이 1.1·1.2절에서 말한 "거대한 파라미터, 고정된 계산량"의 구체적 수치입니다.
 
-### 1.5.1 전문가 네트워크의 정의
+#### 1.5.1 전문가 네트워크의 정의
 
 lec11에서 다룬 SwiGLU를 떠올려 봅니다. 일반적으로
 
@@ -179,23 +176,23 @@ $$
 * $\mathbf{W}_{2,i} \in \mathbb{R}^{h \times dim}$ : 두 번째 사영 ($h$ → $dim$, 입력 차원으로 복귀)
 * $\mathbf{b}_{1,i} \in \mathbb{R}^{2h}, \ \mathbf{b}_{2,i} \in \mathbb{R}^{dim}$ : 각 사영의 편향(bias)
 
-### 1.5.2 Gate/Linear의 융합(fused) 구현
+#### 1.5.2 Gate/Linear의 융합(fused) 구현
 
 * 원리적으로 SwiGLU는 두 개의 사영 $\mathbf{x}\mathbf{W}_{gate}$, $\mathbf{x}\mathbf{W}_{linear}$ 을 필요로 합니다.
 * gpt-oss는 이를 **하나의 융합 연산** $\mathbf{x}\mathbf{W}_{1,i}$ 로 계산한 뒤, 결과를 **짝수/홀수 열로 분리(even/odd column split)** 하여 gate와 linear 두 갈래를 얻습니다.
 * SwiGLU의 구체적 구현은 lec11을 참고하시면 됩니다. (아래 1.7절 코드의 `swiglu` 함수에서 `z[..., ::2]`, `z[..., 1::2]` 가 바로 이 분리에 해당합니다.)
 
-## 1.6 배치화된 전문가와 einsum (MoE with batched experts)
+### 1.6 배치화된 전문가와 einsum (MoE with batched experts)
 
 여러 전문가의 연산을 효율적으로 처리하기 위해, gpt-oss 구현은 `ModuleList` 대신 **배치화된 가중치 텐서 + `torch.einsum`** 을 사용합니다.
 
-### 1.6.1 왜 einsum을 쓰는가?
+#### 1.6.1 왜 einsum을 쓰는가?
 
 * **명료성(Clarity)**: `view`/`transpose`/`squeeze` 가 뒤섞인 난해한 체인 대신, **차원 라벨을 명시적으로 적어** 어떤 축끼리 곱하고 합산하는지 한눈에 드러냅니다.
 * **범용성(Universality)**: 동일한 표기가 NumPy·PyTorch·TensorFlow에서 그대로 통용되어 코드 이식성이 높습니다.
 * **성능(Performance)**: 수동 루프보다 효율적이며, 복잡한 다중 텐서 계약(contraction)에서는 최적화된 BLAS(Basic Linear Algebra Subprograms) 호출에 필적하거나 능가하기도 합니다.
 
-### 1.6.2 첫 번째 사영의 einsum 해석
+#### 1.6.2 첫 번째 사영의 einsum 해석
 
 gpt-oss의 모델 코드(`gpt-oss/torch/model.py`)에서 첫 번째 MLP는 다음과 같습니다.
 
@@ -215,7 +212,7 @@ z = torch.einsum("bk,bekc->bec", x, mlp1_weight) + mlp1_bias  # (bsz * seq, top_
 
 요약하면, 각 토큰이 선택한 $K$개 전문가의 첫 사영을 **한 번의 einsum으로 동시에** 수행하는 구조입니다.
 
-## 1.7 구현: RMSNorm, SwiGLU, MoEFeedForward
+### 1.7 구현: RMSNorm, SwiGLU, MoEFeedForward
 
 아래는 환경 설정 및 전체 MoE 피드포워드 구현입니다. 빈칸으로 남아 있던 TODO(SwiGLU 적용 → 두 번째 사영 → 전문가 가중합)까지 채워진 정답 코드입니다.
 
@@ -242,7 +239,7 @@ except:
 DEVICE = "cpu"
 ```
 
-### 1.7.1 RMSNorm
+#### 1.7.1 RMSNorm
 
 전문가에 입력을 넣기 전에 **RMSNorm**으로 정규화합니다. RMSNorm은 평균 차감 없이 **제곱평균제곱근(root-mean-square)** 으로만 스케일을 맞추는 정규화로, 토큰 표현 $\mathbf{x} \in \mathbb{R}^{d}$ 에 대해
 
@@ -267,7 +264,7 @@ class RMSNorm(nn.Module):
         return (t * self.scale).to(dtype)                              # (..., num_features)
 ```
 
-### 1.7.2 SwiGLU (gpt-oss 변형)
+#### 1.7.2 SwiGLU (gpt-oss 변형)
 
 gpt-oss의 SwiGLU는 표준형에 세 가지 실무적 장치를 더합니다.
 
@@ -288,7 +285,7 @@ def swiglu(z, alpha=1.702, limit=7.0):
     return out_gate * (x_linear + 1)                                 # (..., intermediate_dim)
 ```
 
-### 1.7.3 MoEFeedForward
+#### 1.7.3 MoEFeedForward
 
 전체 흐름은 **RMSNorm → 라우터 → top-$K$ → softmax → 두 번의 사영(사이에 SwiGLU) → 전문가 가중합 → 잔차 연결** 입니다. 세 번의 einsum이 각각 (1) 첫 사영, (2) 두 번째 사영, (3) 전문가 가중합을 담당합니다.
 
@@ -364,7 +361,7 @@ class MoEFeedForward(nn.Module):
 * **세 번째 einsum** `"bec,be->bc"`: 전문가별 출력 `(b, e, c)` 에 라우팅 가중치 `(b, e)` 를 곱하고 전문가 축 `e` 에 대해 합산합니다. 이것이 곧 1.3.4절의 $\sum_i p_i(\mathbf{x})\mathbf{E}_i(\mathbf{x})$ 입니다.
 * 마지막 `output = x_flat + mlp_residual` 은 **잔차 연결(residual connection)** 이며, 앞단의 RMSNorm과 함께 **pre-norm** 구조를 이룹니다. (수식 정의는 순수 가중합이지만, 실제 블록은 정규화·잔차가 덧붙는다는 점을 유의하시면 됩니다.)
 
-### 1.7.4 입력/출력 차원 확인
+#### 1.7.4 입력/출력 차원 확인
 
 ```python
 dim, intermediate_dim, n_experts, top_k = 64, 128, 8, 4
@@ -382,18 +379,18 @@ print(f"Experts: {n_experts}, Top-k: {top_k}")
 
 ---
 
-# 2. Sliding Window Attention
+## 2. Sliding Window Attention
 
 ![Figure 2: Sliding Window Attention의 어텐션 패턴을 나타낸 그림입니다. 가로·세로 축은 각각 key·query 위치이며, 색칠된(어텐션 가능한) 영역이 대각선을 따라 폭 $W$의 띠(band) 형태로 제한됩니다. 그림에서는 $W=3$으로, 각 query 토큰은 자기 자신을 포함해 직전 $W-1$개까지, 총 $W$개의 위치에만 어텐션을 수행합니다. 전체 정사각형이 채워지는 vanilla 어텐션과 대비하여, 멀리 떨어진 과거 위치가 마스킹(차단)되어 계산량이 줄어듦을 시각적으로 보여줍니다.](./images/sliding_window_attention.png)
 
-## 2.1 무엇인가 (What is it?)
+### 2.1 무엇인가 (What is it?)
 
 **Sliding Window Attention**은 각 토큰이 모든 이전 토큰/위치가 아니라, **자기 자신을 포함해 최대 $W$개의 위치에만** 어텐션하도록 하는 메커니즘입니다. ($W \in \mathbb{N}$ 은 **윈도우 크기(window size)**)
 
 * 위 그림에서는 $W=3$ 입니다.
 * 즉 query 위치 $i$ 는 $\{i-W+1, \dots, i\}$ 범위의 key에만 접근합니다.
 
-## 2.2 왜 필요한가 (Why do we need?)
+### 2.2 왜 필요한가 (Why do we need?)
 
 동기는 **비용**과 **수용 영역(receptive field)** 사이의 균형입니다.
 
@@ -402,7 +399,7 @@ print(f"Experts: {n_experts}, Top-k: {top_k}")
 
 Sliding Window Attention에서는 각 토큰이 자기 자신을 포함해 최대 $W$개 위치에만 어텐션합니다. 그러면 **한 어텐션 레이어**에서 정보는 앞으로 **최대 $W-1$ 위치**까지만 이동할 수 있습니다.
 
-### 2.2.1 적층(stacking)을 통한 정보 전파
+#### 2.2.1 적층(stacking)을 통한 정보 전파
 
 윈도우가 좁으면 "멀리 있는 토큰의 정보를 못 보는 것 아닌가?"라는 의문이 듭니다. 그러나 레이어를 쌓으면 수용 영역이 누적됩니다.
 
@@ -411,7 +408,7 @@ Sliding Window Attention에서는 각 토큰이 자기 자신을 포함해 최�
 
 **즉, 슬라이딩 윈도우 밖의 토큰도 적층된 레이어를 거쳐 다음 단어 예측에 여전히 영향을 줄 수 있습니다.** 이것이 좁은 윈도우로도 긴 맥락을 다룰 수 있는 이유입니다.
 
-## 2.3 복잡도 (Complexity)
+### 2.3 복잡도 (Complexity)
 
 | 항목 (Quantity) | Vanilla Attention | Sliding Window Attention |
 | :--- | :--- | :--- |
@@ -421,16 +418,16 @@ Sliding Window Attention에서는 각 토큰이 자기 자신을 포함해 최�
 * 어텐션 점수 행렬은 vanilla의 경우 $T \times T$ 전체를 채워야 하지만, 슬라이딩 윈도우는 각 행마다 폭 $W$의 띠만 계산하므로 $O(TW)$ 입니다.
 * **$W$를 상수로 취급**하면, 슬라이딩 윈도우 항은 각각 **$O(T)$** 와 **$O(1)$** 로 줄어듭니다. 즉 시퀀스 길이에 대해 어텐션이 **선형**, 디코딩 캐시가 **상수**가 됩니다.
 
-## 2.4 gpt-oss에서의 적용 (Alternating Layers)
+### 2.4 gpt-oss에서의 적용 (Alternating Layers)
 
 gpt-oss 두 모델 모두 **짝수 번째 레이어(`layer_idx % 2 == 0`)에만** $W=128$의 슬라이딩 윈도우 어텐션을 적용하고, **홀수 레이어는 full causal attention**(전체 인과적 어텐션)을 사용합니다.
 
 * 이렇게 **번갈아 배치(alternating)** 함으로써, 슬라이딩 윈도우의 **효율**과 full attention의 **전역 정보 흐름(global information flow)** 을 동시에 취합니다.
 * 짝수 레이어가 비용을 아끼는 동안, 홀수 레이어가 전체 맥락을 직접 연결해 주는 셈입니다.
 
-## 2.5 구현: 어텐션 마스크
+### 2.5 구현: 어텐션 마스크
 
-### 2.5.1 마스크 함수
+#### 2.5.1 마스크 함수
 
 마스크에서 값이 `-inf` 인 위치는 softmax에서 $0$이 되어 **어텐션이 차단**되고, `0` 인 위치는 **어텐션이 허용**됩니다.
 
@@ -463,7 +460,7 @@ def generate_sliding_window_mask(seqlen, window_size):
     return mask                                                         # (seq, seq)
 ```
 
-### 2.5.2 마스크 구성 논리 단계별 해석
+#### 2.5.2 마스크 구성 논리 단계별 해석
 
 행 인덱스를 query 위치 $i$, 열 인덱스를 key 위치 $j$ 라 하겠습니다.
 
@@ -478,7 +475,7 @@ $$
 
   자기 자신($j=i$)을 포함해 정확히 **$W$개**입니다. (시퀀스 시작 부근에서는 $\max(0, i-W+1)$ 로 자연히 잘립니다.) docstring의 "$\max(0,\, i-W+1)$ 부터 $i$ 까지"와 정확히 일치합니다.
 
-### 2.5.3 마스크 패턴 시각화 및 메모리 비교
+#### 2.5.3 마스크 패턴 시각화 및 메모리 비교
 
 ```python
 seqlen = 16
@@ -523,16 +520,17 @@ for seqlen in [1024, 4096, 16384, 65536]:
 
 ---
 
-# 3. 정리 (Summary)
+## 정리하며 (Closing Remarks)
 
-| 기법 (Technique) | 문제 (Problem) | 핵심 이점 (Key Benefit) | 사용처 (Used In) |
-|-----------|---------|-------------|---------|
-| **MoE** | 스케일링에 더 많은 계산이 필요 | 토큰당 활성 파라미터를 고정한 채 용량 확장 | Mixtral, DeepSeek, **gpt-oss** |
-| **Sliding Window** | 어텐션의 이차 비용 + 선형적으로 커지는 디코딩 캐시 | 어텐션 비용 선형 + 고정 크기 디코딩 캐시 | Mistral, Longformer, **gpt-oss** |
+이번 실습의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.
 
-**gpt-oss에서는 이 두 요소가 함께 작동합니다.**
-
-* **MoE**: top-4 라우팅 + 배치화된 `einsum`
-* **번갈아 적용되는 어텐션**: 슬라이딩 윈도우($W=128$, 짝수 레이어)와 full causal attention(홀수 레이어)
-
-두 기법 모두 "**용량은 키우되 비용은 묶는다**"는 동일한 철학의 서로 다른 구현이며, 이를 결합함으로써 gpt-oss는 거대한 파라미터 규모를 합리적인 추론 비용으로 운용합니다.
+| 단계 | 내용 | 근거 |
+|:---|:---|:---|
+| **① 용량의 딜레마** | 성능을 올리려면 파라미터를 늘려야 하지만, 밀집(dense) 모델에서는 토큰당 연산량도 같이 늘어난다 | 파라미터 ↔ 연산량의 결합 |
+| **② MoE의 분리** | FeedForward를 $N$ 개의 전문가로 복제하고 라우터가 토큰마다 상위 $k$ 개만 고른다. 전체 파라미터는 $N$ 배지만 토큰당 연산은 $k$ 개분으로 고정된다 | MoE 레이어의 정의 |
+| **③ 라우팅의 수식** | 출력은 선택된 전문가들의 게이트 가중합 $\sum_{i \in \text{top-}k} g_i(x)\, E_i(x)$ 이며, 게이트는 라우터 로짓의 softmax다 | MoE 수식 · 예시 |
+| **④ 구현의 요령** | 전문가마다 반복문을 도는 대신 가중치를 하나의 텐서로 쌓고 `einsum` 으로 배치화하면 GPU에서 효율적으로 처리된다 | 배치화된 전문가 |
+| **⑤ 길이의 딜레마** | 전체 어텐션은 $\mathcal{O}(s^2)$ 이라 컨텍스트를 늘릴수록 비용이 제곱으로 커진다 | 어텐션 복잡도 |
+| **⑥ 슬라이딩 윈도우** | 각 토큰이 최근 $w$ 개만 참조하게 하면 비용이 $\mathcal{O}(sw)$ 로 **선형**이 된다. 마스크는 상삼각뿐 아니라 왼쪽 아래 먼 영역도 함께 가린다 | 마스크 패턴 비교 |
+| **⑦ 창 밖의 정보** | 한 층에서는 $w$ 칸만 보지만, 층을 쌓으면 정보가 단계적으로 전달되어 유효 문맥이 층수에 비례해 넓어진다 | Effective Context Length |
+| **⑧ gpt-oss의 선택** | 짝수 층은 슬라이딩 윈도우, 홀수 층은 전체 인과 어텐션을 쓴다. 국소 정보의 저렴한 처리와 전역 참조를 번갈아 확보하는 절충이다 | 교대 레이어 구성 |

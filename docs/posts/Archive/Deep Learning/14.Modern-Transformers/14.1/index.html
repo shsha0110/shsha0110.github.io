@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Modern Transformers">
+<meta name="description" content="파라미터를 늘리면서 연산량은 묶어 두는 MoE와, 컨텍스트를 늘리면서 어텐션 비용은 선형으로 되돌리는 슬라이딩 윈도우 — 두 조건부 계산 기법을 gpt-oss 기준으로 구현합니다.">
 
 <title>[Deep Learning] 14. Modern Transformers – shsha0110.github.io</title>
 <style>
@@ -189,7 +189,7 @@ window.Quarto = {
       <h1 class="title">[Deep Learning] 14. Modern Transformers</h1>
                   <div>
         <div class="description">
-          Modern Transformers
+          파라미터를 늘리면서 연산량은 묶어 두는 MoE와, 컨텍스트를 늘리면서 어텐션 비용은 선형으로 되돌리는 슬라이딩 윈도우 — 두 조건부 계산 기법을 gpt-oss 기준으로 구현합니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -2928,54 +2928,26 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#들어가며-overview" id="toc-들어가며-overview" class="nav-link active" data-scroll-target="#들어가며-overview">들어가며 (Overview)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
   <li><a href="#mixture-of-experts-moe" id="toc-mixture-of-experts-moe" class="nav-link" data-scroll-target="#mixture-of-experts-moe">1. Mixture of Experts (MoE)</a>
   <ul class="collapse">
   <li><a href="#moe란-무엇인가-what-is-it" id="toc-moe란-무엇인가-what-is-it" class="nav-link" data-scroll-target="#moe란-무엇인가-what-is-it">1.1 MoE란 무엇인가 (What is it?)</a></li>
   <li><a href="#왜-필요한가-why-do-we-need" id="toc-왜-필요한가-why-do-we-need" class="nav-link" data-scroll-target="#왜-필요한가-why-do-we-need">1.2 왜 필요한가 (Why do we need?)</a></li>
-  <li><a href="#moe-레이어의-수식적-정의-moe-layer" id="toc-moe-레이어의-수식적-정의-moe-layer" class="nav-link" data-scroll-target="#moe-레이어의-수식적-정의-moe-layer">1.3 MoE 레이어의 수식적 정의 (MoE Layer)</a>
-  <ul class="collapse">
-  <li><a href="#라우터router-어떤-전문가를-켤지-결정하기" id="toc-라우터router-어떤-전문가를-켤지-결정하기" class="nav-link" data-scroll-target="#라우터router-어떤-전문가를-켤지-결정하기">1.3.1 라우터(Router): 어떤 전문가를 켤지 결정하기</a></li>
-  <li><a href="#전문가-선택top-k" id="toc-전문가-선택top-k" class="nav-link" data-scroll-target="#전문가-선택top-k">1.3.2 전문가 선택(Top-<span class="math inline">\(K\)</span>)</a></li>
-  <li><a href="#라우팅-확률routing-probability" id="toc-라우팅-확률routing-probability" class="nav-link" data-scroll-target="#라우팅-확률routing-probability">1.3.3 라우팅 확률(Routing Probability)</a></li>
-  <li><a href="#moe-출력" id="toc-moe-출력" class="nav-link" data-scroll-target="#moe-출력">1.3.4 MoE 출력</a></li>
-  </ul></li>
+  <li><a href="#moe-레이어의-수식적-정의-moe-layer" id="toc-moe-레이어의-수식적-정의-moe-layer" class="nav-link" data-scroll-target="#moe-레이어의-수식적-정의-moe-layer">1.3 MoE 레이어의 수식적 정의 (MoE Layer)</a></li>
   <li><a href="#예시-example" id="toc-예시-example" class="nav-link" data-scroll-target="#예시-example">1.4 예시 (Example)</a></li>
-  <li><a href="#gpt-oss에서의-moe-레이어-moe-layer-in-gpt-oss" id="toc-gpt-oss에서의-moe-레이어-moe-layer-in-gpt-oss" class="nav-link" data-scroll-target="#gpt-oss에서의-moe-레이어-moe-layer-in-gpt-oss">1.5 gpt-oss에서의 MoE 레이어 (MoE Layer in GPT-OSS)</a>
-  <ul class="collapse">
-  <li><a href="#전문가-네트워크의-정의" id="toc-전문가-네트워크의-정의" class="nav-link" data-scroll-target="#전문가-네트워크의-정의">1.5.1 전문가 네트워크의 정의</a></li>
-  <li><a href="#gatelinear의-융합fused-구현" id="toc-gatelinear의-융합fused-구현" class="nav-link" data-scroll-target="#gatelinear의-융합fused-구현">1.5.2 Gate/Linear의 융합(fused) 구현</a></li>
-  </ul></li>
-  <li><a href="#배치화된-전문가와-einsum-moe-with-batched-experts" id="toc-배치화된-전문가와-einsum-moe-with-batched-experts" class="nav-link" data-scroll-target="#배치화된-전문가와-einsum-moe-with-batched-experts">1.6 배치화된 전문가와 einsum (MoE with batched experts)</a>
-  <ul class="collapse">
-  <li><a href="#왜-einsum을-쓰는가" id="toc-왜-einsum을-쓰는가" class="nav-link" data-scroll-target="#왜-einsum을-쓰는가">1.6.1 왜 einsum을 쓰는가?</a></li>
-  <li><a href="#첫-번째-사영의-einsum-해석" id="toc-첫-번째-사영의-einsum-해석" class="nav-link" data-scroll-target="#첫-번째-사영의-einsum-해석">1.6.2 첫 번째 사영의 einsum 해석</a></li>
-  </ul></li>
-  <li><a href="#구현-rmsnorm-swiglu-moefeedforward" id="toc-구현-rmsnorm-swiglu-moefeedforward" class="nav-link" data-scroll-target="#구현-rmsnorm-swiglu-moefeedforward">1.7 구현: RMSNorm, SwiGLU, MoEFeedForward</a>
-  <ul class="collapse">
-  <li><a href="#rmsnorm" id="toc-rmsnorm" class="nav-link" data-scroll-target="#rmsnorm">1.7.1 RMSNorm</a></li>
-  <li><a href="#swiglu-gpt-oss-변형" id="toc-swiglu-gpt-oss-변형" class="nav-link" data-scroll-target="#swiglu-gpt-oss-변형">1.7.2 SwiGLU (gpt-oss 변형)</a></li>
-  <li><a href="#moefeedforward" id="toc-moefeedforward" class="nav-link" data-scroll-target="#moefeedforward">1.7.3 MoEFeedForward</a></li>
-  <li><a href="#입력출력-차원-확인" id="toc-입력출력-차원-확인" class="nav-link" data-scroll-target="#입력출력-차원-확인">1.7.4 입력/출력 차원 확인</a></li>
-  </ul></li>
+  <li><a href="#gpt-oss에서의-moe-레이어-moe-layer-in-gpt-oss" id="toc-gpt-oss에서의-moe-레이어-moe-layer-in-gpt-oss" class="nav-link" data-scroll-target="#gpt-oss에서의-moe-레이어-moe-layer-in-gpt-oss">1.5 gpt-oss에서의 MoE 레이어 (MoE Layer in GPT-OSS)</a></li>
+  <li><a href="#배치화된-전문가와-einsum-moe-with-batched-experts" id="toc-배치화된-전문가와-einsum-moe-with-batched-experts" class="nav-link" data-scroll-target="#배치화된-전문가와-einsum-moe-with-batched-experts">1.6 배치화된 전문가와 einsum (MoE with batched experts)</a></li>
+  <li><a href="#구현-rmsnorm-swiglu-moefeedforward" id="toc-구현-rmsnorm-swiglu-moefeedforward" class="nav-link" data-scroll-target="#구현-rmsnorm-swiglu-moefeedforward">1.7 구현: RMSNorm, SwiGLU, MoEFeedForward</a></li>
   </ul></li>
   <li><a href="#sliding-window-attention" id="toc-sliding-window-attention" class="nav-link" data-scroll-target="#sliding-window-attention">2. Sliding Window Attention</a>
   <ul class="collapse">
   <li><a href="#무엇인가-what-is-it" id="toc-무엇인가-what-is-it" class="nav-link" data-scroll-target="#무엇인가-what-is-it">2.1 무엇인가 (What is it?)</a></li>
-  <li><a href="#왜-필요한가-why-do-we-need-1" id="toc-왜-필요한가-why-do-we-need-1" class="nav-link" data-scroll-target="#왜-필요한가-why-do-we-need-1">2.2 왜 필요한가 (Why do we need?)</a>
-  <ul class="collapse">
-  <li><a href="#적층stacking을-통한-정보-전파" id="toc-적층stacking을-통한-정보-전파" class="nav-link" data-scroll-target="#적층stacking을-통한-정보-전파">2.2.1 적층(stacking)을 통한 정보 전파</a></li>
-  </ul></li>
+  <li><a href="#왜-필요한가-why-do-we-need-1" id="toc-왜-필요한가-why-do-we-need-1" class="nav-link" data-scroll-target="#왜-필요한가-why-do-we-need-1">2.2 왜 필요한가 (Why do we need?)</a></li>
   <li><a href="#복잡도-complexity" id="toc-복잡도-complexity" class="nav-link" data-scroll-target="#복잡도-complexity">2.3 복잡도 (Complexity)</a></li>
   <li><a href="#gpt-oss에서의-적용-alternating-layers" id="toc-gpt-oss에서의-적용-alternating-layers" class="nav-link" data-scroll-target="#gpt-oss에서의-적용-alternating-layers">2.4 gpt-oss에서의 적용 (Alternating Layers)</a></li>
-  <li><a href="#구현-어텐션-마스크" id="toc-구현-어텐션-마스크" class="nav-link" data-scroll-target="#구현-어텐션-마스크">2.5 구현: 어텐션 마스크</a>
-  <ul class="collapse">
-  <li><a href="#마스크-함수" id="toc-마스크-함수" class="nav-link" data-scroll-target="#마스크-함수">2.5.1 마스크 함수</a></li>
-  <li><a href="#마스크-구성-논리-단계별-해석" id="toc-마스크-구성-논리-단계별-해석" class="nav-link" data-scroll-target="#마스크-구성-논리-단계별-해석">2.5.2 마스크 구성 논리 단계별 해석</a></li>
-  <li><a href="#마스크-패턴-시각화-및-메모리-비교" id="toc-마스크-패턴-시각화-및-메모리-비교" class="nav-link" data-scroll-target="#마스크-패턴-시각화-및-메모리-비교">2.5.3 마스크 패턴 시각화 및 메모리 비교</a></li>
+  <li><a href="#구현-어텐션-마스크" id="toc-구현-어텐션-마스크" class="nav-link" data-scroll-target="#구현-어텐션-마스크">2.5 구현: 어텐션 마스크</a></li>
   </ul></li>
-  </ul></li>
-  <li><a href="#정리-summary" id="toc-정리-summary" class="nav-link" data-scroll-target="#정리-summary">3. 정리 (Summary)</a></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2986,34 +2958,34 @@ window.Quarto = {
 
 
 
-<section id="들어가며-overview" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며-overview">들어가며 (Overview)</h2>
-<p>이번 글은 lec11(Part 1)에서 이어지는 <strong>현대 Transformer 구성요소(Modern Transformer Components)</strong> 강의를 정리한 것입니다. 소재는 OpenAI가 공개한 <strong>gpt-oss</strong> 모델 계열이며, 다음 두 가지 기법을 다룹니다.</p>
-<ol type="1">
-<li><strong>Mixture of Experts (MoE)</strong> — 모델의 파라미터 수는 키우되, 토큰당 계산량은 고정시키는 <em>희소 활성화(sparse activation)</em> 기법</li>
-<li><strong>Sliding Window Attention</strong> — 어텐션의 <strong>이차(quadratic) 비용</strong>과 디코딩 시 선형적으로 커지는 KV 캐시 문제를 완화하는 기법</li>
-</ol>
-<p>두 기법 모두 “<strong>거대한 모델을 합리적인 비용으로 운용</strong>한다”는 공통의 동기에서 출발합니다. 본문에서는 각 기법의 정의·동기·수식·gpt-oss에서의 실제 설정, 그리고 PyTorch 구현까지 차례대로 살펴보겠습니다.</p>
-<hr>
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 14강 실습 세션(<em>Modern Transformer Components: MoE, Sliding Window Attention</em>)의 노트북을 바탕으로, 코드와 그 배경이 되는 논리를 함께 따라갈 수 있도록 재구성한 것입니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“두 기법 모두 같은 발상에서 나옵니다 — 모든 것을 항상 다 계산할 필요는 없다.”</strong></p>
+<p>앞선 실습이 KV 캐시와 학습 파라미터라는 예산을 다뤘다면, 이번에는 <strong>연산량</strong> 예산을 다룹니다. 두 기법은 서로 다른 축을 건드리지만 논리는 같습니다. <strong>Mixture of Experts(MoE)</strong> 는 모델 용량의 축입니다. 성능을 올리려면 파라미터를 늘려야 하지만 그러면 토큰마다 드는 연산량도 함께 늘어납니다. MoE는 FeedForward를 여러 개의 전문가로 복제해 두고, 라우터가 토큰마다 상위 <span class="math inline">\(k\)</span> 개만 골라 활성화합니다. 그 결과 <strong>전체 파라미터는 늘지만 토큰당 연산량은 <span class="math inline">\(k\)</span> 개분으로 고정</strong>됩니다. <strong>Sliding Window Attention</strong> 은 컨텍스트 길이의 축입니다. 전체 어텐션은 길이 <span class="math inline">\(s\)</span> 에 대해 <span class="math inline">\(\mathcal{O}(s^2)\)</span> 이라 긴 문맥에서 감당이 되지 않는데, 각 토큰이 최근 <span class="math inline">\(w\)</span> 개만 보게 창을 제한하면 비용이 <span class="math inline">\(\mathcal{O}(sw)\)</span> 로 선형이 됩니다. 창 밖의 정보는 층을 쌓으며 간접적으로 전달되므로 유효 문맥은 층수에 비례해 넓어집니다. gpt-oss는 이 둘을 실제로 채택해, 층마다 슬라이딩 윈도우와 전체 인과 어텐션을 <strong>번갈아</strong> 씁니다.</p>
+</blockquote>
 </section>
-<section id="mixture-of-experts-moe" class="level1">
-<h1>1. Mixture of Experts (MoE)</h1>
+<section id="mixture-of-experts-moe" class="level2">
+<h2 class="anchored" data-anchor-id="mixture-of-experts-moe">1. Mixture of Experts (MoE)</h2>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/moe_overview.png" class="img-fluid figure-img"></p>
 <figcaption>Figure 1: MoE 레이어의 개념도입니다. 입력 토큰 하나가 들어오면 라우터(router)가 전체 <span class="math inline">\(N\)</span>개의 전문가(expert) 네트워크 중 일부 <span class="math inline">\(K\)</span>개만 선택(top-<span class="math inline">\(K\)</span>)하여 활성화합니다. 회색으로 표시된 비활성 전문가는 이 토큰에 대해 전혀 연산되지 않으며, 선택된 <span class="math inline">\(K\)</span>개 전문가의 출력만 라우팅 가중치로 가중합되어 다음 레이어로 전달됩니다. 즉 “전체 네트워크 중 입력별로 일부 경로만 켜진다”는 희소 활성화 구조를 시각적으로 보여줍니다.</figcaption>
 </figure>
 </div>
-<section id="moe란-무엇인가-what-is-it" class="level2">
-<h2 class="anchored" data-anchor-id="moe란-무엇인가-what-is-it">1.1 MoE란 무엇인가 (What is it?)</h2>
+<section id="moe란-무엇인가-what-is-it" class="level3">
+<h3 class="anchored" data-anchor-id="moe란-무엇인가-what-is-it">1.1 MoE란 무엇인가 (What is it?)</h3>
 <p><strong>Mixture of Experts(MoE)</strong> 모델은 한마디로 <strong>희소 활성화 모델(sparsely-activated model)</strong> 입니다. 여기서 “희소성(sparsity)”이란, 모든 입력에 대해 네트워크 전체 가중치를 사용하는 것이 아니라 <strong>입력마다 신경망 가중치의 일부 부분집합만 활성화</strong>한다는 데서 나옵니다.</p>
 <ul>
 <li>이 성질 덕분에 모델은 <strong>엄청나게 많은 파라미터</strong>를 보유하면서도, 입력 하나를 처리하는 데 드는 <strong>계산 비용은 (거의) 일정(constant)</strong> 하게 유지할 수 있습니다.</li>
 <li>직관적으로는 “방대한 지식을 가진 전문가 집단을 두되, 질문마다 관련 있는 소수의 전문가에게만 일을 맡긴다”는 그림입니다.</li>
 </ul>
 </section>
-<section id="왜-필요한가-why-do-we-need" class="level2">
-<h2 class="anchored" data-anchor-id="왜-필요한가-why-do-we-need">1.2 왜 필요한가 (Why do we need?)</h2>
+<section id="왜-필요한가-why-do-we-need" class="level3">
+<h3 class="anchored" data-anchor-id="왜-필요한가-why-do-we-need">1.2 왜 필요한가 (Why do we need?)</h3>
 <p>핵심 동기는 <strong>스케일링(scaling) 비용</strong>입니다.</p>
 <ul>
 <li><strong>밀집 활성화 Transformer(densely-activated Transformer)</strong> 를 키우는 것은 계산적으로 매우 비쌉니다.</li>
@@ -3021,8 +2993,8 @@ window.Quarto = {
 </ul>
 <p>MoE는 이 결합(파라미터 수 ↔︎ 토큰당 계산량)을 끊어줍니다. 파라미터(=용량, capacity)는 전문가 수 <span class="math inline">\(N\)</span>을 늘려 확장하되, 토큰당 실제로 켜지는 전문가는 <span class="math inline">\(K(\ll N)\)</span>개로 고정하여 <strong>계산량은 묶어두는</strong> 것입니다.</p>
 </section>
-<section id="moe-레이어의-수식적-정의-moe-layer" class="level2">
-<h2 class="anchored" data-anchor-id="moe-레이어의-수식적-정의-moe-layer">1.3 MoE 레이어의 수식적 정의 (MoE Layer)</h2>
+<section id="moe-레이어의-수식적-정의-moe-layer" class="level3">
+<h3 class="anchored" data-anchor-id="moe-레이어의-수식적-정의-moe-layer">1.3 MoE 레이어의 수식적 정의 (MoE Layer)</h3>
 <p>이제 MoE 레이어를 수식으로 정의해 보겠습니다. 기호를 먼저 정리합니다.</p>
 <ul>
 <li><span class="math inline">\(K, N \in \mathbb{R}\)</span> : 각각 <strong>활성화되는 전문가 수</strong>와 <strong>전체 전문가 수</strong> (<span class="math inline">\(K \le N\)</span>)</li>
@@ -3030,8 +3002,8 @@ window.Quarto = {
 <li><span class="math inline">\(\mathbf{E}_i : \mathbb{R}^{dim} \to \mathbb{R}^{dim}\)</span> : <span class="math inline">\(i\)</span>-번째 <strong>전문가 네트워크</strong>, <span class="math inline">\(i \in \{1, \dots, N\}\)</span></li>
 </ul>
 <p>전체 <span class="math inline">\(N\)</span>개의 전문가 중에서, 입력 <span class="math inline">\(\mathbf{x}\)</span>에 대해서는 <strong>오직 <span class="math inline">\(K\)</span>개의 전문가</strong> <span class="math inline">\(\mathbf{E}_{e_1(\mathbf{x})}, \dots, \mathbf{E}_{e_K(\mathbf{x})}\)</span> 만 활성화됩니다. 현대 Transformer에서 이 MoE 레이어는 <strong>각 토큰에 독립적으로</strong> 적용되며, 기존의 <strong>피드포워드(FFN) 서브블록을 대체</strong>합니다.</p>
-<section id="라우터router-어떤-전문가를-켤지-결정하기" class="level3">
-<h3 class="anchored" data-anchor-id="라우터router-어떤-전문가를-켤지-결정하기">1.3.1 라우터(Router): 어떤 전문가를 켤지 결정하기</h3>
+<section id="라우터router-어떤-전문가를-켤지-결정하기" class="level4">
+<h4 class="anchored" data-anchor-id="라우터router-어떤-전문가를-켤지-결정하기">1.3.1 라우터(Router): 어떤 전문가를 켤지 결정하기</h4>
 <p>각 토큰이 어떻게 <span class="math inline">\(K\)</span>개의 전문가를 고르는지 살펴보겠습니다. 먼저 <strong>라우터 네트워크</strong> <span class="math inline">\(\mathbf{router} : \mathbb{R}^{dim} \to \mathbb{R}^{N}\)</span> 를 다음의 단순한 선형 변환으로 정의합니다.</p>
 <p><span class="math display">\[
 \mathbf{router}(\mathbf{x}) = \mathbf{W}_r \mathbf{x},
@@ -3041,16 +3013,16 @@ window.Quarto = {
 <li>출력 <span class="math inline">\(\mathbf{router}(\mathbf{x}) \in \mathbb{R}^N\)</span> 의 각 성분은 “<span class="math inline">\(i\)</span>-번째 전문가에 대한 점수(logit)”로 해석됩니다.</li>
 </ul>
 </section>
-<section id="전문가-선택top-k" class="level3">
-<h3 class="anchored" data-anchor-id="전문가-선택top-k">1.3.2 전문가 선택(Top-<span class="math inline">\(K\)</span>)</h3>
+<section id="전문가-선택top-k" class="level4">
+<h4 class="anchored" data-anchor-id="전문가-선택top-k">1.3.2 전문가 선택(Top-<span class="math inline">\(K\)</span>)</h4>
 <p><span class="math inline">\(K\)</span>를 활성화할 전문가 수라 할 때, <strong>전문가 선택 네트워크</strong> <span class="math inline">\(\mathbf{e} : \mathbb{R}^{dim} \to \{1, \dots, N\}^K\)</span> 를</p>
 <p><span class="math display">\[
 \mathbf{e}(\mathbf{x}) = \big(e_1(\mathbf{x}), \dots, e_K(\mathbf{x})\big)
 \]</span></p>
 <p>로 정의합니다. 여기서 <span class="math inline">\(e_j(\mathbf{x}) \in \{1,\dots,N\}\)</span> 는 <span class="math inline">\(\mathbf{router}(\mathbf{x})\)</span> 의 성분 중 <strong><span class="math inline">\(j\)</span>-번째로 큰 값</strong>의 인덱스이며, 동점(tie)은 임의로 처리합니다. 즉 라우터 점수가 가장 높은 <span class="math inline">\(K\)</span>개의 전문가를 뽑는 <strong>top-<span class="math inline">\(K\)</span> 연산</strong>입니다.</p>
 </section>
-<section id="라우팅-확률routing-probability" class="level3">
-<h3 class="anchored" data-anchor-id="라우팅-확률routing-probability">1.3.3 라우팅 확률(Routing Probability)</h3>
+<section id="라우팅-확률routing-probability" class="level4">
+<h4 class="anchored" data-anchor-id="라우팅-확률routing-probability">1.3.3 라우팅 확률(Routing Probability)</h4>
 <p>선택된 전문가들에게 얼마만큼 비중을 줄지를 정하는 것이 라우팅 확률입니다. 전문가 <span class="math inline">\(i\)</span>의 라우팅 확률 <span class="math inline">\(p_i(\mathbf{x})\)</span> 는 다음과 같이 정의됩니다.</p>
 <p><span class="math display">\[
 p_i(\mathbf{x}) =
@@ -3071,8 +3043,8 @@ p_i(\mathbf{x}) \ge 0, \qquad \sum_{i=1}^{N} p_i(\mathbf{x}) = 1.
 \]</span></p>
 <p>즉 <span class="math inline">\(\mathbf{p}(\mathbf{x})\)</span> 는 (대부분의 성분이 <span class="math inline">\(0\)</span>인) <strong>확률분포</strong>입니다.</p>
 </section>
-<section id="moe-출력" class="level3">
-<h3 class="anchored" data-anchor-id="moe-출력">1.3.4 MoE 출력</h3>
+<section id="moe-출력" class="level4">
+<h4 class="anchored" data-anchor-id="moe-출력">1.3.4 MoE 출력</h4>
 <p>최종적으로 MoE 레이어의 출력은 <strong>선택된 전문가들의 출력에 대한 라우팅 가중합(weighted sum)</strong> 입니다.</p>
 <p><span class="math display">\[
 \sum_{i=1}^{N} p_i(\mathbf{x})\, \mathbf{E}_i(\mathbf{x}) \;\in\; \mathbb{R}^{dim}.
@@ -3083,8 +3055,8 @@ p_i(\mathbf{x}) \ge 0, \qquad \sum_{i=1}^{N} p_i(\mathbf{x}) = 1.
 </ul>
 </section>
 </section>
-<section id="예시-example" class="level2">
-<h2 class="anchored" data-anchor-id="예시-example">1.4 예시 (Example)</h2>
+<section id="예시-example" class="level3">
+<h3 class="anchored" data-anchor-id="예시-example">1.4 예시 (Example)</h3>
 <p>지수함수 계산을 피하기 위해, <strong>선택된 두 전문가의 라우터 logit이 같은(tie)</strong> 경우를 골라 직접 계산해 보겠습니다.</p>
 <p><span class="math inline">\(N=3\)</span>, <span class="math inline">\(K=2\)</span>, <span class="math inline">\(dim=2\)</span> 로 두고, 입력과 라우터 가중치를 다음과 같이 설정합니다.</p>
 <p><span class="math display">\[
@@ -3113,15 +3085,15 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 \]</span></p>
 <p>logit을 일부러 같게 만들어 둔 덕분에 지수 계산 없이도 라우팅 가중치가 <span class="math inline">\(1/2, 1/2\)</span> 로 깔끔하게 떨어지는 것을 확인할 수 있습니다.</p>
 </section>
-<section id="gpt-oss에서의-moe-레이어-moe-layer-in-gpt-oss" class="level2">
-<h2 class="anchored" data-anchor-id="gpt-oss에서의-moe-레이어-moe-layer-in-gpt-oss">1.5 gpt-oss에서의 MoE 레이어 (MoE Layer in GPT-OSS)</h2>
+<section id="gpt-oss에서의-moe-레이어-moe-layer-in-gpt-oss" class="level3">
+<h3 class="anchored" data-anchor-id="gpt-oss에서의-moe-레이어-moe-layer-in-gpt-oss">1.5 gpt-oss에서의 MoE 레이어 (MoE Layer in GPT-OSS)</h3>
 <p>gpt-oss는 전문가를 <strong>2-layer MLP</strong>로 구성하되, 두 선형 사영(projection) 사이에 <strong>SwiGLU</strong>를 두고, 각 토큰을 <strong><span class="math inline">\(K=4\)</span>개</strong>의 전문가로 라우팅합니다.</p>
 <ul>
 <li><code>gpt-oss-120b</code> 는 <span class="math inline">\(N=128\)</span>개, <code>gpt-oss-20b</code> 는 <span class="math inline">\(N=32\)</span>개의 전문가를 사용합니다.</li>
 <li><code>gpt-oss-120b</code> 의 경우 <strong>전체 117B</strong> 파라미터를 보유하지만, 토큰당 활성화되는 파라미터는 <strong>5.1B</strong>에 불과합니다. 바로 이 점이 1.1·1.2절에서 말한 “거대한 파라미터, 고정된 계산량”의 구체적 수치입니다.</li>
 </ul>
-<section id="전문가-네트워크의-정의" class="level3">
-<h3 class="anchored" data-anchor-id="전문가-네트워크의-정의">1.5.1 전문가 네트워크의 정의</h3>
+<section id="전문가-네트워크의-정의" class="level4">
+<h4 class="anchored" data-anchor-id="전문가-네트워크의-정의">1.5.1 전문가 네트워크의 정의</h4>
 <p>lec11에서 다룬 SwiGLU를 떠올려 봅니다. 일반적으로</p>
 <p><span class="math display">\[
 \mathrm{SwiGLU}: \mathbb{R}^{B \times L \times 2h} \to \mathbb{R}^{B \times L \times h}, \quad h = intermediate\_dim
@@ -3138,8 +3110,8 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 <li><span class="math inline">\(\mathbf{b}_{1,i} \in \mathbb{R}^{2h}, \ \mathbf{b}_{2,i} \in \mathbb{R}^{dim}\)</span> : 각 사영의 편향(bias)</li>
 </ul>
 </section>
-<section id="gatelinear의-융합fused-구현" class="level3">
-<h3 class="anchored" data-anchor-id="gatelinear의-융합fused-구현">1.5.2 Gate/Linear의 융합(fused) 구현</h3>
+<section id="gatelinear의-융합fused-구현" class="level4">
+<h4 class="anchored" data-anchor-id="gatelinear의-융합fused-구현">1.5.2 Gate/Linear의 융합(fused) 구현</h4>
 <ul>
 <li>원리적으로 SwiGLU는 두 개의 사영 <span class="math inline">\(\mathbf{x}\mathbf{W}_{gate}\)</span>, <span class="math inline">\(\mathbf{x}\mathbf{W}_{linear}\)</span> 을 필요로 합니다.</li>
 <li>gpt-oss는 이를 <strong>하나의 융합 연산</strong> <span class="math inline">\(\mathbf{x}\mathbf{W}_{1,i}\)</span> 로 계산한 뒤, 결과를 <strong>짝수/홀수 열로 분리(even/odd column split)</strong> 하여 gate와 linear 두 갈래를 얻습니다.</li>
@@ -3147,19 +3119,19 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 </ul>
 </section>
 </section>
-<section id="배치화된-전문가와-einsum-moe-with-batched-experts" class="level2">
-<h2 class="anchored" data-anchor-id="배치화된-전문가와-einsum-moe-with-batched-experts">1.6 배치화된 전문가와 einsum (MoE with batched experts)</h2>
+<section id="배치화된-전문가와-einsum-moe-with-batched-experts" class="level3">
+<h3 class="anchored" data-anchor-id="배치화된-전문가와-einsum-moe-with-batched-experts">1.6 배치화된 전문가와 einsum (MoE with batched experts)</h3>
 <p>여러 전문가의 연산을 효율적으로 처리하기 위해, gpt-oss 구현은 <code>ModuleList</code> 대신 <strong>배치화된 가중치 텐서 + <code>torch.einsum</code></strong> 을 사용합니다.</p>
-<section id="왜-einsum을-쓰는가" class="level3">
-<h3 class="anchored" data-anchor-id="왜-einsum을-쓰는가">1.6.1 왜 einsum을 쓰는가?</h3>
+<section id="왜-einsum을-쓰는가" class="level4">
+<h4 class="anchored" data-anchor-id="왜-einsum을-쓰는가">1.6.1 왜 einsum을 쓰는가?</h4>
 <ul>
 <li><strong>명료성(Clarity)</strong>: <code>view</code>/<code>transpose</code>/<code>squeeze</code> 가 뒤섞인 난해한 체인 대신, <strong>차원 라벨을 명시적으로 적어</strong> 어떤 축끼리 곱하고 합산하는지 한눈에 드러냅니다.</li>
 <li><strong>범용성(Universality)</strong>: 동일한 표기가 NumPy·PyTorch·TensorFlow에서 그대로 통용되어 코드 이식성이 높습니다.</li>
 <li><strong>성능(Performance)</strong>: 수동 루프보다 효율적이며, 복잡한 다중 텐서 계약(contraction)에서는 최적화된 BLAS(Basic Linear Algebra Subprograms) 호출에 필적하거나 능가하기도 합니다.</li>
 </ul>
 </section>
-<section id="첫-번째-사영의-einsum-해석" class="level3">
-<h3 class="anchored" data-anchor-id="첫-번째-사영의-einsum-해석">1.6.2 첫 번째 사영의 einsum 해석</h3>
+<section id="첫-번째-사영의-einsum-해석" class="level4">
+<h4 class="anchored" data-anchor-id="첫-번째-사영의-einsum-해석">1.6.2 첫 번째 사영의 einsum 해석</h4>
 <p>gpt-oss의 모델 코드(<code>gpt-oss/torch/model.py</code>)에서 첫 번째 MLP는 다음과 같습니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># gpt-oss/torch/model.py (MLP 1)</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>mlp1_weight <span class="op">=</span> <span class="va">self</span>.mlp1_weight[expert_indices, ...]           <span class="co"># (bsz * seq, top_k, dim, 2 * intermediate_dim)</span></span>
@@ -3175,8 +3147,8 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 <p>요약하면, 각 토큰이 선택한 <span class="math inline">\(K\)</span>개 전문가의 첫 사영을 <strong>한 번의 einsum으로 동시에</strong> 수행하는 구조입니다.</p>
 </section>
 </section>
-<section id="구현-rmsnorm-swiglu-moefeedforward" class="level2">
-<h2 class="anchored" data-anchor-id="구현-rmsnorm-swiglu-moefeedforward">1.7 구현: RMSNorm, SwiGLU, MoEFeedForward</h2>
+<section id="구현-rmsnorm-swiglu-moefeedforward" class="level3">
+<h3 class="anchored" data-anchor-id="구현-rmsnorm-swiglu-moefeedforward">1.7 구현: RMSNorm, SwiGLU, MoEFeedForward</h3>
 <p>아래는 환경 설정 및 전체 MoE 피드포워드 구현입니다. 빈칸으로 남아 있던 TODO(SwiGLU 적용 → 두 번째 사영 → 전문가 가중합)까지 채워진 정답 코드입니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> seaborn <span class="im">as</span> sns</span>
@@ -3198,8 +3170,8 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 <span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    os.chdir(<span class="st">"/content/drive/My Drive/lec12"</span>)</span>
 <span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>DEVICE <span class="op">=</span> <span class="st">"cpu"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<section id="rmsnorm" class="level3">
-<h3 class="anchored" data-anchor-id="rmsnorm">1.7.1 RMSNorm</h3>
+<section id="rmsnorm" class="level4">
+<h4 class="anchored" data-anchor-id="rmsnorm">1.7.1 RMSNorm</h4>
 <p>전문가에 입력을 넣기 전에 <strong>RMSNorm</strong>으로 정규화합니다. RMSNorm은 평균 차감 없이 <strong>제곱평균제곱근(root-mean-square)</strong> 으로만 스케일을 맞추는 정규화로, 토큰 표현 <span class="math inline">\(\mathbf{x} \in \mathbb{R}^{d}\)</span> 에 대해</p>
 <p><span class="math display">\[
 \mathrm{RMSNorm}(\mathbf{x}) = \frac{\mathbf{x}}{\sqrt{\frac{1}{d}\sum_{j=1}^{d} x_j^2 + \epsilon}} \odot \mathbf{g}
@@ -3218,8 +3190,8 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 <span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>        t <span class="op">=</span> t <span class="op">*</span> torch.rsqrt(torch.mean(t<span class="op">**</span><span class="dv">2</span>, dim<span class="op">=-</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>) <span class="op">+</span> <span class="va">self</span>.eps)</span>
 <span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> (t <span class="op">*</span> <span class="va">self</span>.scale).to(dtype)                              <span class="co"># (..., num_features)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="swiglu-gpt-oss-변형" class="level3">
-<h3 class="anchored" data-anchor-id="swiglu-gpt-oss-변형">1.7.2 SwiGLU (gpt-oss 변형)</h3>
+<section id="swiglu-gpt-oss-변형" class="level4">
+<h4 class="anchored" data-anchor-id="swiglu-gpt-oss-변형">1.7.2 SwiGLU (gpt-oss 변형)</h4>
 <p>gpt-oss의 SwiGLU는 표준형에 세 가지 실무적 장치를 더합니다.</p>
 <ul>
 <li><strong>짝/홀 분리</strong>: <code>z[..., ::2]</code>(gate), <code>z[..., 1::2]</code>(linear) — 1.5.2절에서 설명한 융합 사영의 분리입니다.</li>
@@ -3236,8 +3208,8 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 <span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Note we add an extra bias of 1 to the linear layer</span></span>
 <span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> out_gate <span class="op">*</span> (x_linear <span class="op">+</span> <span class="dv">1</span>)                                 <span class="co"># (..., intermediate_dim)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="moefeedforward" class="level3">
-<h3 class="anchored" data-anchor-id="moefeedforward">1.7.3 MoEFeedForward</h3>
+<section id="moefeedforward" class="level4">
+<h4 class="anchored" data-anchor-id="moefeedforward">1.7.3 MoEFeedForward</h4>
 <p>전체 흐름은 <strong>RMSNorm → 라우터 → top-<span class="math inline">\(K\)</span> → softmax → 두 번의 사영(사이에 SwiGLU) → 전문가 가중합 → 잔차 연결</strong> 입니다. 세 번의 einsum이 각각 (1) 첫 사영, (2) 두 번째 사영, (3) 전문가 가중합을 담당합니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> MoEFeedForward(nn.Module):</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
@@ -3309,8 +3281,8 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 <li>마지막 <code>output = x_flat + mlp_residual</code> 은 <strong>잔차 연결(residual connection)</strong> 이며, 앞단의 RMSNorm과 함께 <strong>pre-norm</strong> 구조를 이룹니다. (수식 정의는 순수 가중합이지만, 실제 블록은 정규화·잔차가 덧붙는다는 점을 유의하시면 됩니다.)</li>
 </ul>
 </section>
-<section id="입력출력-차원-확인" class="level3">
-<h3 class="anchored" data-anchor-id="입력출력-차원-확인">1.7.4 입력/출력 차원 확인</h3>
+<section id="입력출력-차원-확인" class="level4">
+<h4 class="anchored" data-anchor-id="입력출력-차원-확인">1.7.4 입력/출력 차원 확인</h4>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>dim, intermediate_dim, n_experts, top_k <span class="op">=</span> <span class="dv">64</span>, <span class="dv">128</span>, <span class="dv">8</span>, <span class="dv">4</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>moe <span class="op">=</span> MoEFeedForward(dim, intermediate_dim, n_experts, top_k)</span>
@@ -3325,32 +3297,32 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 </section>
 </section>
 </section>
-<section id="sliding-window-attention" class="level1">
-<h1>2. Sliding Window Attention</h1>
+<section id="sliding-window-attention" class="level2">
+<h2 class="anchored" data-anchor-id="sliding-window-attention">2. Sliding Window Attention</h2>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/sliding_window_attention.png" class="img-fluid figure-img"></p>
 <figcaption>Figure 2: Sliding Window Attention의 어텐션 패턴을 나타낸 그림입니다. 가로·세로 축은 각각 key·query 위치이며, 색칠된(어텐션 가능한) 영역이 대각선을 따라 폭 <span class="math inline">\(W\)</span>의 띠(band) 형태로 제한됩니다. 그림에서는 <span class="math inline">\(W=3\)</span>으로, 각 query 토큰은 자기 자신을 포함해 직전 <span class="math inline">\(W-1\)</span>개까지, 총 <span class="math inline">\(W\)</span>개의 위치에만 어텐션을 수행합니다. 전체 정사각형이 채워지는 vanilla 어텐션과 대비하여, 멀리 떨어진 과거 위치가 마스킹(차단)되어 계산량이 줄어듦을 시각적으로 보여줍니다.</figcaption>
 </figure>
 </div>
-<section id="무엇인가-what-is-it" class="level2">
-<h2 class="anchored" data-anchor-id="무엇인가-what-is-it">2.1 무엇인가 (What is it?)</h2>
+<section id="무엇인가-what-is-it" class="level3">
+<h3 class="anchored" data-anchor-id="무엇인가-what-is-it">2.1 무엇인가 (What is it?)</h3>
 <p><strong>Sliding Window Attention</strong>은 각 토큰이 모든 이전 토큰/위치가 아니라, <strong>자기 자신을 포함해 최대 <span class="math inline">\(W\)</span>개의 위치에만</strong> 어텐션하도록 하는 메커니즘입니다. (<span class="math inline">\(W \in \mathbb{N}\)</span> 은 <strong>윈도우 크기(window size)</strong>)</p>
 <ul>
 <li>위 그림에서는 <span class="math inline">\(W=3\)</span> 입니다.</li>
 <li>즉 query 위치 <span class="math inline">\(i\)</span> 는 <span class="math inline">\(\{i-W+1, \dots, i\}\)</span> 범위의 key에만 접근합니다.</li>
 </ul>
 </section>
-<section id="왜-필요한가-why-do-we-need-1" class="level2">
-<h2 class="anchored" data-anchor-id="왜-필요한가-why-do-we-need-1">2.2 왜 필요한가 (Why do we need?)</h2>
+<section id="왜-필요한가-why-do-we-need-1" class="level3">
+<h3 class="anchored" data-anchor-id="왜-필요한가-why-do-we-need-1">2.2 왜 필요한가 (Why do we need?)</h3>
 <p>동기는 <strong>비용</strong>과 <strong>수용 영역(receptive field)</strong> 사이의 균형입니다.</p>
 <ul>
 <li><strong>Vanilla 어텐션</strong>은 시퀀스 길이 <span class="math inline">\(T \in \mathbb{N}\)</span> 에 대해 <strong>이차(quadratic) 비용</strong> <span class="math inline">\(O(T^2)\)</span> 을 갖습니다.</li>
 <li>게다가 <strong>자기회귀(autoregressive) 디코딩</strong> 시 <strong>KV 캐시</strong>가 처리한 토큰 수에 비례해 커지므로, <strong>지연(latency)은 증가하고 처리량(throughput)은 감소</strong>합니다.</li>
 </ul>
 <p>Sliding Window Attention에서는 각 토큰이 자기 자신을 포함해 최대 <span class="math inline">\(W\)</span>개 위치에만 어텐션합니다. 그러면 <strong>한 어텐션 레이어</strong>에서 정보는 앞으로 <strong>최대 <span class="math inline">\(W-1\)</span> 위치</strong>까지만 이동할 수 있습니다.</p>
-<section id="적층stacking을-통한-정보-전파" class="level3">
-<h3 class="anchored" data-anchor-id="적층stacking을-통한-정보-전파">2.2.1 적층(stacking)을 통한 정보 전파</h3>
+<section id="적층stacking을-통한-정보-전파" class="level4">
+<h4 class="anchored" data-anchor-id="적층stacking을-통한-정보-전파">2.2.1 적층(stacking)을 통한 정보 전파</h4>
 <p>윈도우가 좁으면 “멀리 있는 토큰의 정보를 못 보는 것 아닌가?”라는 의문이 듭니다. 그러나 레이어를 쌓으면 수용 영역이 누적됩니다.</p>
 <ul>
 <li><span class="math inline">\(h \in \mathbb{N}\)</span> 개의 어텐션 레이어를 쌓으면, 정보는 앞으로 <strong>최대 <span class="math inline">\(h(W-1)\)</span> 위치</strong>까지 이동할 수 있습니다.</li>
@@ -3359,8 +3331,8 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 <p><strong>즉, 슬라이딩 윈도우 밖의 토큰도 적층된 레이어를 거쳐 다음 단어 예측에 여전히 영향을 줄 수 있습니다.</strong> 이것이 좁은 윈도우로도 긴 맥락을 다룰 수 있는 이유입니다.</p>
 </section>
 </section>
-<section id="복잡도-complexity" class="level2">
-<h2 class="anchored" data-anchor-id="복잡도-complexity">2.3 복잡도 (Complexity)</h2>
+<section id="복잡도-complexity" class="level3">
+<h3 class="anchored" data-anchor-id="복잡도-complexity">2.3 복잡도 (Complexity)</h3>
 <table class="caption-top table">
 <thead>
 <tr class="header">
@@ -3387,18 +3359,18 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 <li><strong><span class="math inline">\(W\)</span>를 상수로 취급</strong>하면, 슬라이딩 윈도우 항은 각각 <strong><span class="math inline">\(O(T)\)</span></strong> 와 <strong><span class="math inline">\(O(1)\)</span></strong> 로 줄어듭니다. 즉 시퀀스 길이에 대해 어텐션이 <strong>선형</strong>, 디코딩 캐시가 <strong>상수</strong>가 됩니다.</li>
 </ul>
 </section>
-<section id="gpt-oss에서의-적용-alternating-layers" class="level2">
-<h2 class="anchored" data-anchor-id="gpt-oss에서의-적용-alternating-layers">2.4 gpt-oss에서의 적용 (Alternating Layers)</h2>
+<section id="gpt-oss에서의-적용-alternating-layers" class="level3">
+<h3 class="anchored" data-anchor-id="gpt-oss에서의-적용-alternating-layers">2.4 gpt-oss에서의 적용 (Alternating Layers)</h3>
 <p>gpt-oss 두 모델 모두 <strong>짝수 번째 레이어(<code>layer_idx % 2 == 0</code>)에만</strong> <span class="math inline">\(W=128\)</span>의 슬라이딩 윈도우 어텐션을 적용하고, <strong>홀수 레이어는 full causal attention</strong>(전체 인과적 어텐션)을 사용합니다.</p>
 <ul>
 <li>이렇게 <strong>번갈아 배치(alternating)</strong> 함으로써, 슬라이딩 윈도우의 <strong>효율</strong>과 full attention의 <strong>전역 정보 흐름(global information flow)</strong> 을 동시에 취합니다.</li>
 <li>짝수 레이어가 비용을 아끼는 동안, 홀수 레이어가 전체 맥락을 직접 연결해 주는 셈입니다.</li>
 </ul>
 </section>
-<section id="구현-어텐션-마스크" class="level2">
-<h2 class="anchored" data-anchor-id="구현-어텐션-마스크">2.5 구현: 어텐션 마스크</h2>
-<section id="마스크-함수" class="level3">
-<h3 class="anchored" data-anchor-id="마스크-함수">2.5.1 마스크 함수</h3>
+<section id="구현-어텐션-마스크" class="level3">
+<h3 class="anchored" data-anchor-id="구현-어텐션-마스크">2.5 구현: 어텐션 마스크</h3>
+<section id="마스크-함수" class="level4">
+<h4 class="anchored" data-anchor-id="마스크-함수">2.5.1 마스크 함수</h4>
 <p>마스크에서 값이 <code>-inf</code> 인 위치는 softmax에서 <span class="math inline">\(0\)</span>이 되어 <strong>어텐션이 차단</strong>되고, <code>0</code> 인 위치는 <strong>어텐션이 허용</strong>됩니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> generate_causal_mask(seqlen):</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Standard causal mask from Lecture 7."""</span></span>
@@ -3427,8 +3399,8 @@ p_1(\mathbf{x}) = p_2(\mathbf{x}) = \frac{\exp(1)}{\exp(1)+\exp(1)} = \frac{1}{2
 <span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> mask                                                         <span class="co"># (seq, seq)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="마스크-구성-논리-단계별-해석" class="level3">
-<h3 class="anchored" data-anchor-id="마스크-구성-논리-단계별-해석">2.5.2 마스크 구성 논리 단계별 해석</h3>
+<section id="마스크-구성-논리-단계별-해석" class="level4">
+<h4 class="anchored" data-anchor-id="마스크-구성-논리-단계별-해석">2.5.2 마스크 구성 논리 단계별 해석</h4>
 <p>행 인덱스를 query 위치 <span class="math inline">\(i\)</span>, 열 인덱스를 key 위치 <span class="math inline">\(j\)</span> 라 하겠습니다.</p>
 <ul>
 <li><strong>1단계 — 인과 마스크(causal).</strong> <code>torch.triu(..., diagonal=1)</code> 은 <strong>대각선보다 위쪽</strong>(<span class="math inline">\(j &gt; i\)</span>, 즉 미래 위치)을 <code>-inf</code> 로 막습니다. 미래 토큰을 보지 못하게 하는 표준 인과 제약입니다.</li>
@@ -3443,8 +3415,8 @@ j \in \{\, i-W+1,\ \dots,\ i \,\},
 \]</span></p>
 <p>자기 자신(<span class="math inline">\(j=i\)</span>)을 포함해 정확히 <strong><span class="math inline">\(W\)</span>개</strong>입니다. (시퀀스 시작 부근에서는 <span class="math inline">\(\max(0, i-W+1)\)</span> 로 자연히 잘립니다.) docstring의 “<span class="math inline">\(\max(0,\, i-W+1)\)</span> 부터 <span class="math inline">\(i\)</span> 까지”와 정확히 일치합니다.</p>
 </section>
-<section id="마스크-패턴-시각화-및-메모리-비교" class="level3">
-<h3 class="anchored" data-anchor-id="마스크-패턴-시각화-및-메모리-비교">2.5.3 마스크 패턴 시각화 및 메모리 비교</h3>
+<section id="마스크-패턴-시각화-및-메모리-비교" class="level4">
+<h4 class="anchored" data-anchor-id="마스크-패턴-시각화-및-메모리-비교">2.5.3 마스크 패턴 시각화 및 메모리 비교</h4>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>seqlen <span class="op">=</span> <span class="dv">16</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">4</span>, figsize<span class="op">=</span>(<span class="dv">20</span>, <span class="dv">5</span>))</span>
@@ -3492,44 +3464,65 @@ j \in \{\, i-W+1,\ \dots,\ i \,\},
 </section>
 </section>
 </section>
-<section id="정리-summary" class="level1">
-<h1>3. 정리 (Summary)</h1>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 실습의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 26%">
-<col style="width: 21%">
-<col style="width: 30%">
-<col style="width: 21%">
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
 </colgroup>
 <thead>
 <tr class="header">
-<th>기법 (Technique)</th>
-<th>문제 (Problem)</th>
-<th>핵심 이점 (Key Benefit)</th>
-<th>사용처 (Used In)</th>
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td><strong>MoE</strong></td>
-<td>스케일링에 더 많은 계산이 필요</td>
-<td>토큰당 활성 파라미터를 고정한 채 용량 확장</td>
-<td>Mixtral, DeepSeek, <strong>gpt-oss</strong></td>
+<td style="text-align: left;"><strong>① 용량의 딜레마</strong></td>
+<td style="text-align: left;">성능을 올리려면 파라미터를 늘려야 하지만, 밀집(dense) 모델에서는 토큰당 연산량도 같이 늘어난다</td>
+<td style="text-align: left;">파라미터 ↔︎ 연산량의 결합</td>
 </tr>
 <tr class="even">
-<td><strong>Sliding Window</strong></td>
-<td>어텐션의 이차 비용 + 선형적으로 커지는 디코딩 캐시</td>
-<td>어텐션 비용 선형 + 고정 크기 디코딩 캐시</td>
-<td>Mistral, Longformer, <strong>gpt-oss</strong></td>
+<td style="text-align: left;"><strong>② MoE의 분리</strong></td>
+<td style="text-align: left;">FeedForward를 <span class="math inline">\(N\)</span> 개의 전문가로 복제하고 라우터가 토큰마다 상위 <span class="math inline">\(k\)</span> 개만 고른다. 전체 파라미터는 <span class="math inline">\(N\)</span> 배지만 토큰당 연산은 <span class="math inline">\(k\)</span> 개분으로 고정된다</td>
+<td style="text-align: left;">MoE 레이어의 정의</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 라우팅의 수식</strong></td>
+<td style="text-align: left;">출력은 선택된 전문가들의 게이트 가중합 <span class="math inline">\(\sum_{i \in \text{top-}k} g_i(x)\, E_i(x)\)</span> 이며, 게이트는 라우터 로짓의 softmax다</td>
+<td style="text-align: left;">MoE 수식 · 예시</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 구현의 요령</strong></td>
+<td style="text-align: left;">전문가마다 반복문을 도는 대신 가중치를 하나의 텐서로 쌓고 <code>einsum</code> 으로 배치화하면 GPU에서 효율적으로 처리된다</td>
+<td style="text-align: left;">배치화된 전문가</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 길이의 딜레마</strong></td>
+<td style="text-align: left;">전체 어텐션은 <span class="math inline">\(\mathcal{O}(s^2)\)</span> 이라 컨텍스트를 늘릴수록 비용이 제곱으로 커진다</td>
+<td style="text-align: left;">어텐션 복잡도</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 슬라이딩 윈도우</strong></td>
+<td style="text-align: left;">각 토큰이 최근 <span class="math inline">\(w\)</span> 개만 참조하게 하면 비용이 <span class="math inline">\(\mathcal{O}(sw)\)</span> 로 <strong>선형</strong>이 된다. 마스크는 상삼각뿐 아니라 왼쪽 아래 먼 영역도 함께 가린다</td>
+<td style="text-align: left;">마스크 패턴 비교</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 창 밖의 정보</strong></td>
+<td style="text-align: left;">한 층에서는 <span class="math inline">\(w\)</span> 칸만 보지만, 층을 쌓으면 정보가 단계적으로 전달되어 유효 문맥이 층수에 비례해 넓어진다</td>
+<td style="text-align: left;">Effective Context Length</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ gpt-oss의 선택</strong></td>
+<td style="text-align: left;">짝수 층은 슬라이딩 윈도우, 홀수 층은 전체 인과 어텐션을 쓴다. 국소 정보의 저렴한 처리와 전역 참조를 번갈아 확보하는 절충이다</td>
+<td style="text-align: left;">교대 레이어 구성</td>
 </tr>
 </tbody>
 </table>
-<p><strong>gpt-oss에서는 이 두 요소가 함께 작동합니다.</strong></p>
-<ul>
-<li><strong>MoE</strong>: top-4 라우팅 + 배치화된 <code>einsum</code></li>
-<li><strong>번갈아 적용되는 어텐션</strong>: 슬라이딩 윈도우(<span class="math inline">\(W=128\)</span>, 짝수 레이어)와 full causal attention(홀수 레이어)</li>
-</ul>
-<p>두 기법 모두 “<strong>용량은 키우되 비용은 묶는다</strong>”는 동일한 철학의 서로 다른 구현이며, 이를 결합함으로써 gpt-oss는 거대한 파라미터 규모를 합리적인 추론 비용으로 운용합니다.</p>
 
 
 

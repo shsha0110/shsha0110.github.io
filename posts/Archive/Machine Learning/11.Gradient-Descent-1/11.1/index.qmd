@@ -1,6 +1,6 @@
 ---
 title: "[Machine Learning] 11. Gradient Descent"
-description: "Gradient Descent"
+description: "가장 가파른 방향으로 한 걸음씩 내려가는 아이디어에서 출발해, 1차원 알고리즘·다차원 확장·로지스틱 회귀 적용을 거쳐 SGD와 Momentum·AdaGrad·Adam까지 이어갑니다."
 author: "유성현"
 categories: [Machine Learning]
 format:
@@ -11,10 +11,19 @@ format:
     math: true
 ---
 
-## 개요 (Overview)
+> 본 포스트는 서울대학교 컴퓨터공학부 · 인공지능대학원(IPAI) **박재식(Jaesik Park)** 교수님의 *Introduction to Machine Learning* (4190.428) 강의 자료(11강 *Gradient Descent, Part 1*)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 원 강의 자료는 MIT 6.036(2019 Fall)과 Stanford CS229(2023–2024 Summer)의 강의 노트를 상당 부분 차용하고 있으며, Adam 알고리즘 상자는 Kingma & Ba의 원논문(ICLR 2015), 학습률 스케줄러 그림은 Kaggle의 PyTorch LR 스케줄링 가이드에서 가져온 것입니다.
 
-이번 포스트에서는 머신러닝 모델 학습의 근간이 되는 **경사 하강법(Gradient Descent)**을 다룹니다.  
-최적 파라미터를 어떻게 찾는지에 대한 동기(motivation)에서 출발하여, 1차원 알고리즘 → 다차원 확장 → 로지스틱 회귀 적용 → 확률적 경사 하강법(SGD) → Momentum / AdaGrad / Adam 순으로 전개합니다.
+## 한 줄 요약 (TL;DR)
+
+> **"손실 함수를 산으로 보면, 학습이란 지금 서 있는 자리에서 가장 가파르게 내려가는 방향으로 한 걸음씩 내딛는 일입니다. 나머지는 전부 '얼마나 크게, 어느 방향으로 내딛을 것인가'의 문제입니다."**
+>
+> 지금까지의 회차들은 대체로 닫힌 해가 있거나 QP 솔버에 맡길 수 있는 문제였습니다. 그러나 일반적인 $\Theta^* = \arg\min_\Theta J(\Theta)$에는 그런 사치가 없습니다. 남은 방법은 **반복적으로 내려가는 것**이고, 그 규칙이 $\Theta^{(t)} = \Theta^{(t-1)} - \eta\nabla_\Theta J(\Theta^{(t-1)})$입니다.
+>
+> 이 단순한 규칙에는 두 개의 조건이 붙습니다. **$J$가 볼록하면** 적절한 $\eta$에 대해 최적해로 수렴하지만, **비볼록이면** 도달점이 초기값에 따라 달라집니다. 그리고 $\eta$를 잘못 고르면 진동하거나 발산합니다.
+>
+> 여기에 현실적 제약이 하나 더 붙습니다. 데이터가 많으면 전체 기울기를 매번 계산하는 비용이 감당되지 않습니다. 그래서 **표본 하나(또는 미니배치)로 기울기를 추정**하는 SGD를 씁니다 — 기댓값으로는 같은 방향이고, 덤으로 얻는 잡음이 얕은 지역 최솟값을 빠져나오게 돕기도 합니다. 대신 수렴하려면 $\sum_t \eta^{(t)} = \infty$이면서 $\sum_t (\eta^{(t)})^2 < \infty$인 감소 스텝이 필요합니다.
+>
+> 마지막 문제는 **비등방성**입니다. $f(x,y) = x^2/20 + y^2$처럼 방향마다 곡률이 크게 다르면 SGD는 가파른 축으로 진동하며 기어갑니다. **Momentum**은 진동을 상쇄하고, **AdaGrad**는 파라미터마다 학습률을 달리 주며, **Adam**은 둘을 합칩니다. 실무의 마지막 손질은 학습률 **스케줄링**이고, ResNet 훈련 곡선의 계단 모양이 바로 그 흔적입니다.
 
 ---
 
@@ -40,7 +49,7 @@ $J(\Theta)$를 $\Theta$ 공간 위에 펼쳐진 **표면(surface)**으로 시각
 - 그러려면 현재 위치에서 "경사가 가장 가파르게 내려가는 방향"을 파악한 뒤, 그 방향으로 **작은 걸음**을 내딛어야 합니다.
 - 이 과정을 반복하면 결국 최솟값 근방에 도달합니다 — 마치 눈 덮인 산에서 스키어가 가장 가파른 경사를 타고 내려오는 것과 같습니다.
 
-![Figure: 경사 하강법의 직관. 왼쪽: 스키어가 산비탈을 내려오는 이미지로, 현재 위치에서 가장 가파른 방향으로 이동하는 전략을 비유합니다. 오른쪽: 2차원 파라미터 공간의 등고선(contour) 위에서 $x_0$ → $x_1$ → $x_2$ → $x_3$ → $x_4$ 순서로 기울기 방향을 따라 최솟값(중앙)에 수렴하는 과정을 보여줍니다. 각 화살표는 한 번의 업데이트 스텝을 나타냅니다.](./images/figure_optimal_parameter_motivation.png)
+![Figure 1: 경사 하강법의 직관. 왼쪽: 스키어가 산비탈을 내려오는 이미지로, 현재 위치에서 가장 가파른 방향으로 이동하는 전략을 비유합니다. 오른쪽: 2차원 파라미터 공간의 등고선(contour) 위에서 $x_0$ → $x_1$ → $x_2$ → $x_3$ → $x_4$ 순서로 기울기 방향을 따라 최솟값(중앙)에 수렴하는 과정을 보여줍니다. 각 화살표는 한 번의 업데이트 스텝을 나타냅니다.](./images/figure_optimal_parameter_motivation.png)
 
 ---
 
@@ -113,7 +122,7 @@ $$
 - **너무 큰 학습률 (Big learning rate)**: 최솟값 주변에서 **진동(oscillation)**하거나, 심하면 **발산(divergence)**합니다.
 - **너무 작은 학습률 (Small learning rate)**: 수렴은 하지만 **매우 느리게** 내려갑니다. 계산 비용이 급증합니다.
 
-![Figure: 학습률 크기에 따른 경사 하강법의 거동 비교. 왼쪽(Big learning rate): 스텝이 너무 커서 최솟값을 계속 건너뛰며 좌우로 진동하는 궤적을 보여줍니다. 오른쪽(Small learning rate): 스텝이 작아 U자형 곡선의 바닥을 향해 촘촘하고 천천히 수렴하는 궤적을 보여줍니다. 적절한 학습률 선택이 효율적 수렴의 핵심임을 직관적으로 설명합니다.](./images/figure_learning_rate_comparison.png)
+![Figure 2: 학습률 크기에 따른 경사 하강법의 거동 비교. 왼쪽(Big learning rate): 스텝이 너무 커서 최솟값을 계속 건너뛰며 좌우로 진동하는 궤적을 보여줍니다. 오른쪽(Small learning rate): 스텝이 작아 U자형 곡선의 바닥을 향해 촘촘하고 천천히 수렴하는 궤적을 보여줍니다. 적절한 학습률 선택이 효율적 수렴의 핵심임을 직관적으로 설명합니다.](./images/learning_rate_comparison.png)
 
 ---
 
@@ -126,7 +135,7 @@ $$
 - 하지만 초기값이 나쁘면 **지역 최솟값(local minimum)**에 갇혀버릴 수 있습니다.
 - 비볼록 함수에서 경사 하강법은 **전역 최솟값을 보장하지 않습니다**.
 
-![Figure: 비볼록 함수에서의 경사 하강법. 약 x = -0.7 근처에서 출발한 파란 화살표 궤적은 전역 최솟값(x ≈ -0.5)으로 수렴하는 반면, x = 2 근처에서 출발한 궤적은 지역 최솟값(x ≈ 3)으로 수렴합니다. 동일한 알고리즘이라도 초기값에 따라 전혀 다른 결과로 이어질 수 있음을 보여줍니다.](./images/figure_nonconvex_local_minima.png)
+![Figure 3: 봉우리가 하나 있는 비볼록 함수 위에서 경사 하강법이 어디로 가는지를 보여주는 그림입니다. 가로축 $x$는 $-2$에서 $4$까지, 세로축 $y$는 함숫값으로 최대 10까지이며, 검은 곡선이 목적 함수입니다. 이 함수는 $x \approx -0.6$ 부근에 **전역 최솟값**(값이 약 3)을, $x \approx 3$ 부근에 **지역 최솟값**(값이 약 7.5)을 가지고 그 사이 $x \approx 1.7$에 봉우리가 있습니다. 두 개의 파란 화살표 궤적이 그려져 있는데, 왼쪽 검은 점($x \approx -1$, 값 약 7.5)에서 출발한 궤적은 가파른 비탈을 따라 곧장 전역 최솟값으로 굴러떨어지는 반면, 오른쪽 검은 점($x \approx 2$, 봉우리 바로 오른쪽)에서 출발한 궤적은 오른쪽 아래로 흘러 지역 최솟값에 갇힙니다. **알고리즘도 학습률도 완전히 동일하고 초기값만 다른데 도달점이 달라진다**는 것이 요점이며, 볼록성이 깨지는 순간 수렴 정리가 보장해 주던 것이 사라진다는 뜻입니다.](./images/figure_nonconvex_local_minima.png)
 
 > **실무 함의**: 딥러닝에서는 무작위 재시작(random restarts), 배치 노이즈(SGD의 노이즈), 특수한 초기화 기법 등을 통해 지역 최솟값 문제를 완화합니다.
 
@@ -406,9 +415,9 @@ SGD와 배치 GD의 절충안이 **미니배치 SGD(Minibatch SGD)**입니다.
 
 아래 그림은 $f(x, y) = \frac{1}{20}x^2 + y^2$ 함수에서 SGD의 궤적을 보여줍니다.
 
-![Figure: 타원형 등고선을 가진 함수 $f(x,y) = x^2/20 + y^2$. 왼쪽은 3D 표면, 오른쪽은 2D 등고선입니다. $y$ 방향의 곡률이 $x$ 방향보다 훨씬 크기 때문에, SGD는 $y$ 방향으로 격렬하게 진동하면서 느리게 수렴하는 특성을 보입니다. 이 비등방성(anisotropy) 문제를 해결하기 위해 Momentum, AdaGrad, Adam 등이 제안됩니다.](./images/figure_sgd_landscape.png)
+![Figure 4: 타원형 등고선을 가진 함수 $f(x,y) = x^2/20 + y^2$. 왼쪽은 3D 표면, 오른쪽은 2D 등고선입니다. $y$ 방향의 곡률이 $x$ 방향보다 훨씬 크기 때문에, SGD는 $y$ 방향으로 격렬하게 진동하면서 느리게 수렴하는 특성을 보입니다. 이 비등방성(anisotropy) 문제를 해결하기 위해 Momentum, AdaGrad, Adam 등이 제안됩니다.](./images/figure_sgd_landscape.png)
 
-![Figure: SGD 궤적. 좁고 긴 타원형 등고선 위에서 SGD는 최솟값(중앙 십자 표시)을 향해 나아가지만, $y$ 방향으로 강하게 진동하는 지그재그 경로를 그립니다. 각 점은 하나의 업데이트 스텝이며, 진동이 수렴 속도를 크게 저하시키는 모습을 확인할 수 있습니다.](./images/figure_sgd_oscillation.png)
+![Figure 5: SGD 궤적. 좁고 긴 타원형 등고선 위에서 SGD는 최솟값(중앙 십자 표시)을 향해 나아가지만, $y$ 방향으로 강하게 진동하는 지그재그 경로를 그립니다. 각 점은 하나의 업데이트 스텝이며, 진동이 수렴 속도를 크게 저하시키는 모습을 확인할 수 있습니다.](./images/sgd_oscillation.png)
 
 ---
 
@@ -441,7 +450,7 @@ $$
 - ✅ **더 빠른 수렴 (Converge faster)**: 일관된 방향에서 속도가 점점 쌓입니다.
 - ✅ **진동 감소 (Avoid oscillation)**: 반대 방향의 기울기들이 속도를 상쇄하여 지그재그가 줄어듭니다.
 
-![Figure: 모멘텀 옵티마이저의 궤적. SGD의 지그재그 경로와 달리, 모멘텀은 이전 업데이트 방향을 누적하여 부드러운 곡선 경로로 최솟값을 향해 수렴합니다. 타원형 등고선의 긴 축 방향(x축)으로는 속도가 빠르게 쌓이고, 진동 방향(y축)으로는 상쇄가 일어나 훨씬 효율적인 경로를 그립니다.](./images/figure_momentum_path.png)
+![Figure 6: 모멘텀 옵티마이저의 궤적. SGD의 지그재그 경로와 달리, 모멘텀은 이전 업데이트 방향을 누적하여 부드러운 곡선 경로로 최솟값을 향해 수렴합니다. 타원형 등고선의 긴 축 방향(x축)으로는 속도가 빠르게 쌓이고, 진동 방향(y축)으로는 상쇄가 일어나 훨씬 효율적인 경로를 그립니다.](./images/figure_momentum_path.png)
 
 ---
 
@@ -518,7 +527,7 @@ $$
 
 **편향 보정의 필요성**: 초기에 $m_0 = v_0 = 0$으로 설정하면, 첫 몇 번의 스텝에서 $m_t$와 $v_t$가 실제 기울기 통계보다 **0에 편향(biased toward 0)**됩니다. 보정항 $(1 - \beta_1^t)$, $(1 - \beta_2^t)$로 나누면 이 편향이 제거됩니다.
 
-![Figure: Adam 옵티마이저 원논문의 알고리즘 박스. 스텝사이즈 $\alpha$, 지수 감쇠율 $\beta_1, \beta_2$, 안정화 상수 $\epsilon$을 입력으로 받아, 1차·2차 모멘트를 업데이트하고 편향 보정 후 파라미터를 갱신하는 전체 흐름이 명시되어 있습니다.](./images/figure_adam_algorithm.png)
+![Figure 7: Adam 옵티마이저 원논문의 알고리즘 박스. 스텝사이즈 $\alpha$, 지수 감쇠율 $\beta_1, \beta_2$, 안정화 상수 $\epsilon$을 입력으로 받아, 1차·2차 모멘트를 업데이트하고 편향 보정 후 파라미터를 갱신하는 전체 흐름이 명시되어 있습니다.](./images/figure_adam_algorithm.png)
 
 ---
 
@@ -526,7 +535,7 @@ $$
 
 네 가지 옵티마이저(SGD, Momentum, AdaGrad, Adam)를 $f(x, y) = \frac{1}{20}x^2 + y^2$ 위에서 시각적으로 비교합니다.
 
-![Figure: 4가지 옵티마이저의 궤적 비교 (좌상: SGD, 우상: Momentum, 좌하: AdaGrad, 우하: Adam). 모두 동일한 타원형 등고선 위에서 출발하여 중심(최솟값)을 향해 이동합니다. SGD는 격렬한 지그재그 진동을 보이고, Momentum은 관성으로 부드럽게 곡선을 그리며 접근합니다. AdaGrad는 파라미터별 적응적 학습률로 x 방향으로 거의 직선 궤적을 그리지만 후반부 학습률이 급감합니다. Adam은 Momentum과 AdaGrad의 장점을 결합하여 가장 안정적이고 효율적인 수렴 경로를 보입니다.](./images/figure_optimizer_comparison.png)
+![Figure 8: 4가지 옵티마이저의 궤적 비교 (좌상: SGD, 우상: Momentum, 좌하: AdaGrad, 우하: Adam). 모두 동일한 타원형 등고선 위에서 출발하여 중심(최솟값)을 향해 이동합니다. SGD는 격렬한 지그재그 진동을 보이고, Momentum은 관성으로 부드럽게 곡선을 그리며 접근합니다. AdaGrad는 파라미터별 적응적 학습률로 x 방향으로 거의 직선 궤적을 그리지만 후반부 학습률이 급감합니다. Adam은 Momentum과 AdaGrad의 장점을 결합하여 가장 안정적이고 효율적인 수렴 경로를 보입니다.](./images/optimizers_comparison.png)
 
 **요약 비교**:
 
@@ -545,7 +554,7 @@ $$
 
 아래 그래프는 ResNet 논문의 훈련 곡선으로, CIFAR-10과 ImageNet-1000 데이터셋에서 다양한 깊이(20/32/44/56-layer; 18/34-layer)의 ResNet 및 plain 네트워크의 훈련/검증 오차 추이를 보여줍니다.
 
-![Figure: ResNet 훈련 곡선. 왼쪽(CIFAR-10)과 오른쪽(ImageNet-1000) 모두에서, 특정 반복(iteration) 지점에서 오차가 급격히 감소하는 **계단형(step) 패턴**이 관찰됩니다. x축은 반복 횟수(10^4 단위), y축은 오차율(%)입니다. 실선은 검증/테스트 오차, 점선은 훈련 오차입니다.](./images/figure_resnet_training_curve.png)
+![Figure 9: ResNet 훈련 곡선. 왼쪽(CIFAR-10)과 오른쪽(ImageNet-1000) 모두에서, 특정 반복(iteration) 지점에서 오차가 급격히 감소하는 **계단형(step) 패턴**이 관찰됩니다. x축은 반복 횟수(10^4 단위), y축은 오차율(%)입니다. 실선은 검증/테스트 오차, 점선은 훈련 오차입니다.](./images/figure_resnet_training_curve.png)
 
 ### 학습 문제: 계단형 패턴의 이유는?
 
@@ -564,7 +573,7 @@ $$
 
 학습률을 어떻게 감쇠시키느냐에 따라 수렴 속도와 최종 성능이 크게 달라집니다.
 
-![Figure: 6가지 주요 학습률 스케줄러의 비교. 행 1 왼쪽부터: MultiplicativeLR(매 epoch마다 고정 비율로 곱해 감소), StepLR(특정 epoch마다 계단식 감소), MultiStepLR(복수의 지정된 epoch에서 계단식 감소). 행 2 왼쪽부터: ExponentialLR(지수적으로 부드럽게 감소), CosineAnnealingLR(코사인 함수를 따라 주기적으로 최고·최저를 반복), CosineAnnealingWarmRestarts(코사인 감소 후 주기적 재시작으로 지역 최솟값 탈출 시도). x축은 epoch 수, y축은 학습률입니다.](./images/figure_lr_schedulers.png)
+![Figure 10: 6가지 주요 학습률 스케줄러의 비교. 행 1 왼쪽부터: MultiplicativeLR(매 epoch마다 고정 비율로 곱해 감소), StepLR(특정 epoch마다 계단식 감소), MultiStepLR(복수의 지정된 epoch에서 계단식 감소). 행 2 왼쪽부터: ExponentialLR(지수적으로 부드럽게 감소), CosineAnnealingLR(코사인 함수를 따라 주기적으로 최고·최저를 반복), CosineAnnealingWarmRestarts(코사인 감소 후 주기적 재시작으로 지역 최솟값 탈출 시도). x축은 epoch 수, y축은 학습률입니다.](./images/figure_lr_schedulers.png)
 
 | 스케줄러 | 방식 | 특징 |
 |---------|------|------|
@@ -580,10 +589,25 @@ $$
 
 ---
 
-## 참고 자료
+## 정리하며 (Closing Remarks)
 
-- MIT 6.036 (2019 Fall) Lecture Notes
-- Stanford CS229 (2023–2024 Summer) Lecture Notes
-- Diederik P. Kingma and Jimmy Lei Ba, "Adam: A Method for Stochastic Optimization," ICLR 2015.
-- Ilya Loshchilov and Frank Hutter, "SGDR: Stochastic Gradient Descent with Warm Restarts," ICLR 2017.
-- PyTorch Learning Rate Scheduling Guide: https://www.kaggle.com/code/isbhargav/guide-to-pytorch-learning-rate-scheduling
+이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.
+
+| 단계 | 내용 | 근거 |
+|:---|:---|:---|
+| **① 문제** | 닫힌 해가 없는 $\Theta^* = \arg\min_\Theta J(\Theta)$를 어떻게 풀 것인가 | §1 |
+| **② 발상** | $J$를 $\Theta$ 위의 곡면으로 보고, 가장 가파른 내리막 방향으로 조금씩 내려간다 | §1, Figure 1 |
+| **③ 1차원 규칙** | $\Theta^{(t)} = \Theta^{(t-1)} - \eta J'(\Theta^{(t-1)})$, 초기값 · 스텝 · 정확도 세 가지를 정한다 | §2 |
+| **④ 정지 조건** | 고정 횟수 $T$, $\|\Theta^{(t)}-\Theta^{(t-1)}\| < \epsilon$, 또는 $\|J'(\Theta^{(t)})\| < \epsilon$ | §2 |
+| **⑤ 보장** | $J$가 볼록이면 어떤 정확도 $\epsilon$에 대해서도 수렴시키는 $\eta$가 존재한다 | §3 |
+| **⑥ 단서** | $\eta$가 너무 크면 진동 · 발산, 너무 작으면 느린 수렴 | §3, Figure 2 |
+| **⑦ 볼록성이 깨지면** | 도달점이 $\theta_{init}$에 의존해 지역 최솟값에 갇힐 수 있다 | §4, Figure 3 |
+| **⑧ 다차원 확장** | 도함수를 기울기 벡터 $\nabla_\Theta J$로 바꾸면 규칙은 그대로다 | §5 |
+| **⑨ 실제 적용** | 로지스틱 회귀에서 $\nabla_\theta J_{lr} = \frac{1}{n}\sum(g^{(i)}-y^{(i)})x^{(i)} + \lambda\theta$ | §6 |
+| **⑩ 비용 문제** | 매 스텝마다 전체 데이터를 훑는 것은 감당하기 어렵다 | §7 |
+| **⑪ SGD** | 표본을 무작위로 골라 기울기를 추정한다 — 기댓값으로는 같은 방향 | §7 |
+| **⑫ SGD 수렴 조건** | $\sum_t \eta^{(t)} = \infty$이고 $\sum_t (\eta^{(t)})^2 < \infty$이면 확률 1로 수렴 | §7 |
+| **⑬ SGD의 덤** | 잡음이 얕은 지역 최솟값을 탈출시키고, 과적합을 줄이며, 메모리를 아낀다 | §7 |
+| **⑭ 남은 병목** | 방향마다 곡률이 다르면(비등방성) 가파른 축으로 진동한다 | §7, Figure 4–5 |
+| **⑮ 처방** | Momentum(관성) · AdaGrad(파라미터별 학습률) · Adam(둘의 결합) | §8–§10 |
+| **⑯ 실무의 마무리** | 학습률 스케줄링 — ResNet 곡선의 계단이 그 증거다 | §11–§12 |

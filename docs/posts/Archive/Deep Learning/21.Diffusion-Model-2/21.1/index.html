@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Score-Based View and Modern Extensions">
+<meta name="description" content="디노이징 네트워크가 사실은 무엇을 배우고 있었는지를 스코어 함수로 답하고, DDPM과 NCSN이 하나의 SDE 틀로 합쳐지는 과정을 거쳐 잠재 확산과 CFG까지 이어갑니다.">
 
 <title>[Deep Learning] 21. Diffusion Models 2 – shsha0110.github.io</title>
 <style>
@@ -154,7 +154,7 @@ window.Quarto = {
       <h1 class="title">[Deep Learning] 21. Diffusion Models 2</h1>
                   <div>
         <div class="description">
-          Score-Based View and Modern Extensions
+          디노이징 네트워크가 사실은 무엇을 배우고 있었는지를 스코어 함수로 답하고, DDPM과 NCSN이 하나의 SDE 틀로 합쳐지는 과정을 거쳐 잠재 확산과 CFG까지 이어갑니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -2893,7 +2893,8 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#들어가며-recap-motivation" id="toc-들어가며-recap-motivation" class="nav-link active" data-scroll-target="#들어가며-recap-motivation">들어가며 (Recap &amp; Motivation)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
+  <li><a href="#지난-강의-복습과-오늘의-질문-last-time-today" id="toc-지난-강의-복습과-오늘의-질문-last-time-today" class="nav-link" data-scroll-target="#지난-강의-복습과-오늘의-질문-last-time-today">지난 강의 복습과 오늘의 질문 (Last Time &amp; Today)</a></li>
   <li><a href="#score-기반-생성-모델-score-based-generative-models" id="toc-score-기반-생성-모델-score-based-generative-models" class="nav-link" data-scroll-target="#score-기반-생성-모델-score-based-generative-models">1. Score 기반 생성 모델 (Score-Based Generative Models)</a>
   <ul class="collapse">
   <li><a href="#score-function이란" id="toc-score-function이란" class="nav-link" data-scroll-target="#score-function이란">1.1 Score Function이란?</a></li>
@@ -2943,10 +2944,7 @@ window.Quarto = {
   <li><a href="#이미지-복원-image-restoration" id="toc-이미지-복원-image-restoration" class="nav-link" data-scroll-target="#이미지-복원-image-restoration">7.1 이미지 복원 (Image Restoration)</a></li>
   <li><a href="#텍스트-이미지-생성-text-to-image-generation" id="toc-텍스트-이미지-생성-text-to-image-generation" class="nav-link" data-scroll-target="#텍스트-이미지-생성-text-to-image-generation">7.2 텍스트-이미지 생성 (Text-to-Image Generation)</a></li>
   </ul></li>
-  <li><a href="#강의-요약-summary" id="toc-강의-요약-summary" class="nav-link" data-scroll-target="#강의-요약-summary">강의 요약 (Summary)</a>
-  <ul class="collapse">
-  <li><a href="#참고-문헌" id="toc-참고-문헌" class="nav-link" data-scroll-target="#참고-문헌">참고 문헌</a></li>
-  </ul></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2957,8 +2955,18 @@ window.Quarto = {
 
 
 
-<section id="들어가며-recap-motivation" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며-recap-motivation">들어가며 (Recap &amp; Motivation)</h2>
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 강의 자료(21강 <em>Diffusion Models II: Score-Based View and Modern Extensions</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“DDPM의 디노이징 네트워크는 사실 스코어 <span class="math inline">\(\nabla_x \log p(x)\)</span> 를 배우고 있었고, 이 관점이 NCSN과 DDPM을 하나의 SDE로 묶어 줍니다.”</strong></p>
+<p>20강에서 확산 모델은 “노이즈를 예측하는 회귀”로 정리되었습니다. 이번 강의의 출발 질문은 그 회귀가 대체 <strong>무엇을 배우고 있느냐</strong>입니다. 답은 <strong>스코어 함수</strong> <span class="math inline">\(\nabla_x \log p(x)\)</span> 입니다. 스코어는 확률 밀도가 가장 가파르게 증가하는 방향을 가리키므로, 이를 알면 랑주뱅 동역학으로 표본을 뽑을 수 있습니다. 문제는 참 스코어를 모른다는 것인데, 피셔 발산을 부분적분으로 정리하면 참 스코어 없이도 학습 가능한 목적함수가 나오고(<strong>스코어 매칭</strong>), 야코비안의 대각합이 비싸다는 점은 허친슨 추정기로 우회합니다(<strong>슬라이스 스코어 매칭</strong>). 더 나은 길은 <strong>디노이징 스코어 매칭</strong> 입니다. 가우시안으로 오염시키면 그 조건부 스코어가 <span class="math inline">\(-(\tilde{x} - x)/\sigma^2\)</span> 로 <strong>정확히 알려져</strong> 있으므로, 디노이징을 학습하는 것이 곧 노이즈 낀 주변 분포의 스코어를 학습하는 일이 됩니다. 여기에 여러 노이즈 수준을 동시에 다루는 <strong>NCSN</strong> 과 담금질 랑주뱅 샘플링을 얹으면, DDPM과 NCSN이 사실상 같은 대상을 서로 다른 매개변수화로 배우고 있었음이 드러나고, 연속 시간으로 넘어가면 둘 다 <strong>역시간 SDE</strong> 의 특수한 경우가 됩니다. 마지막으로 조건부 생성(CFG)과 잠재 확산 같은 현대적 확장까지 이어집니다.</p>
+</blockquote>
+</section>
+<section id="지난-강의-복습과-오늘의-질문-last-time-today" class="level2">
+<h2 class="anchored" data-anchor-id="지난-강의-복습과-오늘의-질문-last-time-today">지난 강의 복습과 오늘의 질문 (Last Time &amp; Today)</h2>
 <p>지난 강의에서는 DDPM(Denoising Diffusion Probabilistic Models)의 <strong>순방향 노이징(forward noising)</strong>과 <strong>역방향 샘플링(reverse sampling)</strong>을 다루었습니다. 핵심 수식을 정리하면 다음과 같습니다.</p>
 <p><strong>순방향 노이징:</strong></p>
 <p><span class="math display">\[x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1 - \bar{\alpha}_t}\, \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)\]</span></p>
@@ -3346,7 +3354,7 @@ window.Quarto = {
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/cfg_illustration.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: Classifier-Free Guidance의 원리. <span class="math inline">\(w=1\)</span>일 때는 일반적인 조건부 생성이, <span class="math inline">\(w\)</span>가 커질수록 조건에 더 강하게 부합하는 고품질 이미지가 생성되지만 다양성이 감소합니다. 화살표는 비조건부 기준에서 조건부 방향으로의 편향(bias) 정도를 나타냅니다.</figcaption>
+<figcaption>Figure: Classifier-Free Guidance의 정의를 담은 슬라이드입니다. 같은 모델을 조건 <span class="math inline">\(c\)</span> 가 있을 때와 없을 때(<span class="math inline">\(\varnothing\)</span>) 모두로 학습시켜 <span class="math inline">\(\epsilon_\theta(x_t, t, c)\)</span> 와 <span class="math inline">\(\epsilon_\theta(x_t, t, \varnothing)\)</span> 를 함께 얻은 뒤, 상자 안의 식 <span class="math inline">\(\epsilon_{\text{guided}} = \epsilon_\theta(x_t, t, \varnothing) + w\,[\epsilon_\theta(x_t, t, c) - \epsilon_\theta(x_t, t, \varnothing)]\)</span> 로 두 예측을 섞습니다. 대괄호 안의 차이가 “조건이 만들어 내는 방향”이고, <span class="math inline">\(w\)</span> 는 그 방향을 얼마나 밀어붙일지 정하는 손잡이입니다. 아래 세 항목이 그 효과를 정리합니다. <span class="math inline">\(w = 1\)</span> 이면 평범한 조건부 생성이고, <span class="math inline">\(w\)</span> 를 키우면 조건에 더 강하게 부합하지만, 지나치게 키우면 인공적인 결함이 생기거나 다양성이 줄어듭니다. 별도의 분류기를 학습시키지 않고도 조건의 강도를 조절할 수 있다는 것이 이 기법의 이름(classifier-<strong>free</strong>)이 뜻하는 바입니다.</figcaption>
 </figure>
 </div>
 </section>
@@ -3426,42 +3434,93 @@ window.Quarto = {
 <hr>
 </section>
 </section>
-<section id="강의-요약-summary" class="level2">
-<h2 class="anchored" data-anchor-id="강의-요약-summary">강의 요약 (Summary)</h2>
-<p>이번 강의에서 다룬 핵심 내용을 정리합니다.</p>
-<p><strong>Score function:</strong></p>
-<p><span class="math display">\[\nabla_x \log p(x)\]</span></p>
-<ul>
-<li>확률 밀도가 증가하는 방향을 가리키는 벡터장</li>
-</ul>
-<p><strong>Langevin dynamics:</strong></p>
-<p><span class="math display">\[x_{k+1} = x_k + \frac{\eta}{2}\nabla_x \log p(x_k) + \sqrt{\eta}\, z_k\]</span></p>
-<ul>
-<li>score를 이용하여 분포 <span class="math inline">\(p(x)\)</span>에서 샘플링하는 방법</li>
-</ul>
-<p><strong>Denoising score matching:</strong></p>
-<p><span class="math display">\[s_\theta(\tilde{x}, \sigma) \approx -\frac{\tilde{x} - x}{\sigma^2}\]</span></p>
-<ul>
-<li>노이즈 오염 분포의 score를 지도 학습으로 학습</li>
-</ul>
-<p><strong>DDPM-Score 연결:</strong></p>
-<p><span class="math display">\[s_\theta(x_t, t) \approx -\frac{\epsilon_\theta(x_t, t)}{\sqrt{1 - \bar{\alpha}_t}}\]</span></p>
-<ul>
-<li>DDPM의 노이즈 예측은 score 예측과 스케일 인수만큼의 차이</li>
-</ul>
-<p><strong>현대 확산 시스템의 구성 요소:</strong> - <strong>Conditional diffusion:</strong> <span class="math inline">\(\epsilon_\theta(x_t, t, c)\)</span>로 다양한 조건부 생성 - <strong>Classifier-Free Guidance:</strong> 조건 강도를 가중치 <span class="math inline">\(w\)</span>로 제어 - <strong>Latent Diffusion:</strong> 잠재 공간에서의 확산으로 계산 효율성 향상</p>
-<hr>
-<section id="참고-문헌" class="level3">
-<h3 class="anchored" data-anchor-id="참고-문헌">참고 문헌</h3>
-<ul>
-<li>Song, Y., &amp; Ermon, S. (2019). Generative modeling by estimating gradients of the data distribution. <em>NeurIPS 2019</em>.</li>
-<li>Song, Y., Sohl-Dickstein, J., Kingma, D. P., Kumar, A., Ermon, S., &amp; Poole, B. (2021). Score-based generative modeling through stochastic differential equations. <em>ICLR 2021</em>.</li>
-<li>Nichol, A., Dhariwal, P., et al.&nbsp;(2021). GLIDE: Towards photorealistic image generation and editing with text-guided diffusion models.</li>
-</ul>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 질문</strong></td>
+<td style="text-align: left;">DDPM의 디노이징 네트워크는 대체 무엇을 배우고 있는가</td>
+<td style="text-align: left;">오늘의 주요 질문</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 스코어 함수</strong></td>
+<td style="text-align: left;"><span class="math inline">\(s(x) = \nabla_x \log p(x)\)</span> 는 확률 밀도가 가장 가파르게 증가하는 방향을 가리킨다. 밀도의 정규화 상수를 몰라도 계산된다</td>
+<td style="text-align: left;">스코어의 정의</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 스코어로 샘플링</strong></td>
+<td style="text-align: left;">랑주뱅 동역학 <span class="math inline">\(x_{k+1} = x_k + \frac{\eta}{2}s_\theta(x_k) + \sqrt{\eta}\,z_k\)</span> 는 “밀도가 높은 쪽으로 이동 + 무작위 흔들기”를 반복해 <span class="math inline">\(p(x)\)</span> 에서 표본을 뽑는다</td>
+<td style="text-align: left;">랑주뱅 동역학</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 학습의 난관</strong></td>
+<td style="text-align: left;">참 스코어를 모르므로 피셔 발산 <span class="math inline">\(\frac{1}{2}\mathbb{E}\lVert \nabla_x \log p(x) - s_\theta(x) \rVert^2\)</span> 을 직접 최소화할 수 없다</td>
+<td style="text-align: left;">이상적 목적함수</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 스코어 매칭</strong></td>
+<td style="text-align: left;">교차항을 부분적분하면 참 스코어가 사라지고 <span class="math inline">\(\mathbb{E}[\mathrm{tr}(\nabla_x s_\theta(x)) + \frac{1}{2}\lVert s_\theta(x) \rVert^2]\)</span> 만 남는다</td>
+<td style="text-align: left;">부분적분 항등식</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 대각합의 비용</strong></td>
+<td style="text-align: left;">야코비안 대각합은 고차원에서 비싸다. 허친슨 추정기로 무작위 벡터 하나의 이차형식으로 근사한다</td>
+<td style="text-align: left;">슬라이스 스코어 매칭</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 더 나은 길</strong></td>
+<td style="text-align: left;">가우시안으로 오염시키면 조건부 스코어 <span class="math inline">\(\nabla_{\tilde{x}} \log q_\sigma(\tilde{x} \mid x) = -(\tilde{x} - x)/\sigma^2\)</span> 를 <strong>정확히</strong> 안다. 따라서 디노이징 학습이 곧 스코어 학습이 된다</td>
+<td style="text-align: left;">디노이징 스코어 매칭</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 무엇을 배우는가</strong></td>
+<td style="text-align: left;">이렇게 학습한 네트워크는 원본 분포가 아니라 <strong>노이즈 낀 주변 분포</strong> <span class="math inline">\(q_\sigma(\tilde{x})\)</span> 의 스코어를 배운다</td>
+<td style="text-align: left;">노이즈 낀 주변 스코어</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ 여러 노이즈 수준</strong></td>
+<td style="text-align: left;">큰 <span class="math inline">\(\sigma\)</span> 는 저밀도 영역을 덮고 작은 <span class="math inline">\(\sigma\)</span> 는 정밀하다. NCSN은 <span class="math inline">\(\sigma_1 &gt; \cdots &gt; \sigma_L\)</span> 전체에 대해 <span class="math inline">\(s_\theta(x, \sigma_i)\)</span> 를 배우고, 담금질 랑주뱅으로 큰 노이즈에서 작은 노이즈 순으로 정제한다</td>
+<td style="text-align: left;">NCSN · 담금질 랑주뱅</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ DDPM과의 연결</strong></td>
+<td style="text-align: left;"><span class="math inline">\(x_t = \sqrt{\bar\alpha_t}x_0 + \sqrt{1 - \bar\alpha_t}\epsilon\)</span> 에서 <span class="math inline">\(\nabla_{x_t} \log q(x_t \mid x_0) = -\epsilon/\sqrt{1 - \bar\alpha_t}\)</span> 이므로, 노이즈 예측 <span class="math inline">\(\epsilon_\theta\)</span> 와 스코어 <span class="math inline">\(s_\theta\)</span> 는 상수배 관계다</td>
+<td style="text-align: left;">노이즈 예측 ↔︎ 스코어</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑪ 하나의 틀</strong></td>
+<td style="text-align: left;">랑주뱅과 DDPM 역방향 단계는 “현재 표본 + 스코어 방향 이동 + 노이즈”라는 같은 형판을 따른다. 연속 시간으로 보내면 둘 다 <strong>역시간 SDE</strong> 의 특수한 경우다</td>
+<td style="text-align: left;">SDE 통합</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑫ 조건부 생성</strong></td>
+<td style="text-align: left;">같은 모델을 조건이 있을 때와 없을 때로 함께 학습한 뒤 두 예측을 <span class="math inline">\(w\)</span> 로 섞으면, 별도의 분류기 없이 조건의 강도를 조절할 수 있다</td>
+<td style="text-align: left;">Classifier-free guidance</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑬ 잠재 확산</strong></td>
+<td style="text-align: left;">픽셀 공간 확산은 비싸다. 오토인코더로 압축한 잠재 공간에서 확산을 수행하면 비용이 크게 줄고, 이것이 Stable Diffusion의 토대다</td>
+<td style="text-align: left;">잠재 확산</td>
+</tr>
+</tbody>
+</table>
 
 
 
-</section>
 </section>
 
 </main> <!-- /main -->

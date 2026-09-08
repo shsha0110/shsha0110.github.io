@@ -1,6 +1,6 @@
 ---
 title: "[Deep Learning] 21. Diffusion Models 2"
-description: "Score-Based View and Modern Extensions"
+description: "디노이징 네트워크가 사실은 무엇을 배우고 있었는지를 스코어 함수로 답하고, DDPM과 NCSN이 하나의 SDE 틀로 합쳐지는 과정을 거쳐 잠재 확산과 CFG까지 이어갑니다."
 author: "유성현"
 categories: [Deep Learning]
 format:
@@ -11,7 +11,15 @@ format:
     math: true
 ---
 
-## 들어가며 (Recap & Motivation)
+> 본 포스트는 서울대학교 컴퓨터공학부 **Hyun Oh Song** 교수님의 *Introduction to Deep Learning* (M2177.0043) 강의 자료(21강 *Diffusion Models II: Score-Based View and Modern Extensions*)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다.
+
+## 한 줄 요약 (TL;DR)
+
+> **"DDPM의 디노이징 네트워크는 사실 스코어 $\nabla_x \log p(x)$ 를 배우고 있었고, 이 관점이 NCSN과 DDPM을 하나의 SDE로 묶어 줍니다."**
+>
+> 20강에서 확산 모델은 "노이즈를 예측하는 회귀"로 정리되었습니다. 이번 강의의 출발 질문은 그 회귀가 대체 **무엇을 배우고 있느냐**입니다. 답은 **스코어 함수** $\nabla_x \log p(x)$ 입니다. 스코어는 확률 밀도가 가장 가파르게 증가하는 방향을 가리키므로, 이를 알면 랑주뱅 동역학으로 표본을 뽑을 수 있습니다. 문제는 참 스코어를 모른다는 것인데, 피셔 발산을 부분적분으로 정리하면 참 스코어 없이도 학습 가능한 목적함수가 나오고(**스코어 매칭**), 야코비안의 대각합이 비싸다는 점은 허친슨 추정기로 우회합니다(**슬라이스 스코어 매칭**). 더 나은 길은 **디노이징 스코어 매칭** 입니다. 가우시안으로 오염시키면 그 조건부 스코어가 $-(\tilde{x} - x)/\sigma^2$ 로 **정확히 알려져** 있으므로, 디노이징을 학습하는 것이 곧 노이즈 낀 주변 분포의 스코어를 학습하는 일이 됩니다. 여기에 여러 노이즈 수준을 동시에 다루는 **NCSN** 과 담금질 랑주뱅 샘플링을 얹으면, DDPM과 NCSN이 사실상 같은 대상을 서로 다른 매개변수화로 배우고 있었음이 드러나고, 연속 시간으로 넘어가면 둘 다 **역시간 SDE** 의 특수한 경우가 됩니다. 마지막으로 조건부 생성(CFG)과 잠재 확산 같은 현대적 확장까지 이어집니다.
+
+## 지난 강의 복습과 오늘의 질문 (Last Time & Today)
 
 지난 강의에서는 DDPM(Denoising Diffusion Probabilistic Models)의 **순방향 노이징(forward noising)**과 **역방향 샘플링(reverse sampling)**을 다루었습니다. 핵심 수식을 정리하면 다음과 같습니다.
 
@@ -445,7 +453,7 @@ $$\epsilon_\text{guided} = \epsilon_\theta(x_t, t, \emptyset) + w\left[\epsilon_
 
 **직관:** $w$가 클수록 조건 $c$와 관련된 방향으로 더 강하게 밀어붙입니다. 이는 조건부 방향과 비조건부 방향의 차이를 과장하는 것과 같습니다.
 
-![Figure: Classifier-Free Guidance의 원리. $w=1$일 때는 일반적인 조건부 생성이, $w$가 커질수록 조건에 더 강하게 부합하는 고품질 이미지가 생성되지만 다양성이 감소합니다. 화살표는 비조건부 기준에서 조건부 방향으로의 편향(bias) 정도를 나타냅니다.](./images/cfg_illustration.png)
+![Figure: Classifier-Free Guidance의 정의를 담은 슬라이드입니다. 같은 모델을 조건 $c$ 가 있을 때와 없을 때($\varnothing$) 모두로 학습시켜 $\epsilon_\theta(x_t, t, c)$ 와 $\epsilon_\theta(x_t, t, \varnothing)$ 를 함께 얻은 뒤, 상자 안의 식 $\epsilon_{\text{guided}} = \epsilon_\theta(x_t, t, \varnothing) + w\,[\epsilon_\theta(x_t, t, c) - \epsilon_\theta(x_t, t, \varnothing)]$ 로 두 예측을 섞습니다. 대괄호 안의 차이가 "조건이 만들어 내는 방향"이고, $w$ 는 그 방향을 얼마나 밀어붙일지 정하는 손잡이입니다. 아래 세 항목이 그 효과를 정리합니다. $w = 1$ 이면 평범한 조건부 생성이고, $w$ 를 키우면 조건에 더 강하게 부합하지만, 지나치게 키우면 인공적인 결함이 생기거나 다양성이 줄어듭니다. 별도의 분류기를 학습시키지 않고도 조건의 강도를 조절할 수 있다는 것이 이 기법의 이름(classifier-**free**)이 뜻하는 바입니다.](./images/cfg_illustration.png)
 
 ### 6.3 Latent Diffusion (잠재 공간 확산)
 
@@ -516,43 +524,22 @@ $$\epsilon_\theta(x_t, t, \text{text})$$
 
 ---
 
-## 강의 요약 (Summary)
+## 정리하며 (Closing Remarks)
 
-이번 강의에서 다룬 핵심 내용을 정리합니다.
+이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.
 
-**Score function:**
-
-$$\nabla_x \log p(x)$$
-
-- 확률 밀도가 증가하는 방향을 가리키는 벡터장
-
-**Langevin dynamics:**
-
-$$x_{k+1} = x_k + \frac{\eta}{2}\nabla_x \log p(x_k) + \sqrt{\eta}\, z_k$$
-
-- score를 이용하여 분포 $p(x)$에서 샘플링하는 방법
-
-**Denoising score matching:**
-
-$$s_\theta(\tilde{x}, \sigma) \approx -\frac{\tilde{x} - x}{\sigma^2}$$
-
-- 노이즈 오염 분포의 score를 지도 학습으로 학습
-
-**DDPM-Score 연결:**
-
-$$s_\theta(x_t, t) \approx -\frac{\epsilon_\theta(x_t, t)}{\sqrt{1 - \bar{\alpha}_t}}$$
-
-- DDPM의 노이즈 예측은 score 예측과 스케일 인수만큼의 차이
-
-**현대 확산 시스템의 구성 요소:**
-- **Conditional diffusion:** $\epsilon_\theta(x_t, t, c)$로 다양한 조건부 생성
-- **Classifier-Free Guidance:** 조건 강도를 가중치 $w$로 제어
-- **Latent Diffusion:** 잠재 공간에서의 확산으로 계산 효율성 향상
-
----
-
-### 참고 문헌
-
-- Song, Y., & Ermon, S. (2019). Generative modeling by estimating gradients of the data distribution. *NeurIPS 2019*.
-- Song, Y., Sohl-Dickstein, J., Kingma, D. P., Kumar, A., Ermon, S., & Poole, B. (2021). Score-based generative modeling through stochastic differential equations. *ICLR 2021*.
-- Nichol, A., Dhariwal, P., et al. (2021). GLIDE: Towards photorealistic image generation and editing with text-guided diffusion models.
+| 단계 | 내용 | 근거 |
+|:---|:---|:---|
+| **① 질문** | DDPM의 디노이징 네트워크는 대체 무엇을 배우고 있는가 | 오늘의 주요 질문 |
+| **② 스코어 함수** | $s(x) = \nabla_x \log p(x)$ 는 확률 밀도가 가장 가파르게 증가하는 방향을 가리킨다. 밀도의 정규화 상수를 몰라도 계산된다 | 스코어의 정의 |
+| **③ 스코어로 샘플링** | 랑주뱅 동역학 $x_{k+1} = x_k + \frac{\eta}{2}s_\theta(x_k) + \sqrt{\eta}\,z_k$ 는 "밀도가 높은 쪽으로 이동 + 무작위 흔들기"를 반복해 $p(x)$ 에서 표본을 뽑는다 | 랑주뱅 동역학 |
+| **④ 학습의 난관** | 참 스코어를 모르므로 피셔 발산 $\frac{1}{2}\mathbb{E}\lVert \nabla_x \log p(x) - s_\theta(x) \rVert^2$ 을 직접 최소화할 수 없다 | 이상적 목적함수 |
+| **⑤ 스코어 매칭** | 교차항을 부분적분하면 참 스코어가 사라지고 $\mathbb{E}[\mathrm{tr}(\nabla_x s_\theta(x)) + \frac{1}{2}\lVert s_\theta(x) \rVert^2]$ 만 남는다 | 부분적분 항등식 |
+| **⑥ 대각합의 비용** | 야코비안 대각합은 고차원에서 비싸다. 허친슨 추정기로 무작위 벡터 하나의 이차형식으로 근사한다 | 슬라이스 스코어 매칭 |
+| **⑦ 더 나은 길** | 가우시안으로 오염시키면 조건부 스코어 $\nabla_{\tilde{x}} \log q_\sigma(\tilde{x} \mid x) = -(\tilde{x} - x)/\sigma^2$ 를 **정확히** 안다. 따라서 디노이징 학습이 곧 스코어 학습이 된다 | 디노이징 스코어 매칭 |
+| **⑧ 무엇을 배우는가** | 이렇게 학습한 네트워크는 원본 분포가 아니라 **노이즈 낀 주변 분포** $q_\sigma(\tilde{x})$ 의 스코어를 배운다 | 노이즈 낀 주변 스코어 |
+| **⑨ 여러 노이즈 수준** | 큰 $\sigma$ 는 저밀도 영역을 덮고 작은 $\sigma$ 는 정밀하다. NCSN은 $\sigma_1 > \cdots > \sigma_L$ 전체에 대해 $s_\theta(x, \sigma_i)$ 를 배우고, 담금질 랑주뱅으로 큰 노이즈에서 작은 노이즈 순으로 정제한다 | NCSN · 담금질 랑주뱅 |
+| **⑩ DDPM과의 연결** | $x_t = \sqrt{\bar\alpha_t}x_0 + \sqrt{1 - \bar\alpha_t}\epsilon$ 에서 $\nabla_{x_t} \log q(x_t \mid x_0) = -\epsilon/\sqrt{1 - \bar\alpha_t}$ 이므로, 노이즈 예측 $\epsilon_\theta$ 와 스코어 $s_\theta$ 는 상수배 관계다 | 노이즈 예측 ↔ 스코어 |
+| **⑪ 하나의 틀** | 랑주뱅과 DDPM 역방향 단계는 "현재 표본 + 스코어 방향 이동 + 노이즈"라는 같은 형판을 따른다. 연속 시간으로 보내면 둘 다 **역시간 SDE** 의 특수한 경우다 | SDE 통합 |
+| **⑫ 조건부 생성** | 같은 모델을 조건이 있을 때와 없을 때로 함께 학습한 뒤 두 예측을 $w$ 로 섞으면, 별도의 분류기 없이 조건의 강도를 조절할 수 있다 | Classifier-free guidance |
+| **⑬ 잠재 확산** | 픽셀 공간 확산은 비싸다. 오토인코더로 압축한 잠재 공간에서 확산을 수행하면 비용이 크게 줄고, 이것이 Stable Diffusion의 토대다 | 잠재 확산 |

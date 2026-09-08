@@ -1,6 +1,6 @@
 ---
-title: "[Deep Learning] 26. Neural Network Pruning and LLM Compression"
-description: "Neural Network Pruning and LLM Compression"
+title: "[Deep Learning] 26. Neural Network Quantization and LLM Compression"
+description: "비트 수를 줄이는 일이 왜 단순한 자료형 변경이 아닌지 — 반올림 결정을 최적화하고, 이상값을 스케일링과 회전으로 다스리며, 균일 격자를 코드북으로 대체하는 과정을 따라갑니다."
 author: "유성현"
 categories: [Deep Learning]
 format:
@@ -11,41 +11,17 @@ format:
     math: true
 ---
 
-## 들어가며 (Introduction)
+> 본 포스트는 서울대학교 컴퓨터공학부 **Hyun Oh Song** 교수님의 *Introduction to Deep Learning* (M2177.0043) 강의 자료(26강 *Neural Network Quantization and LLM Compression*)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 25강의 가지치기와 짝을 이루는 또 하나의 압축 축을 다룹니다.
 
-지난 강의에서는 **가지치기(pruning)** 를 통해 신경망의 가중치나 더 큰 구성요소를 제거하는 방법을 다루었습니다. 그때 가장 중요했던 통찰은 다음 한 줄로 요약됩니다.
+## 한 줄 요약 (TL;DR)
 
-$$
-\text{희소한(sparse) 작은 파라미터 수} \;\neq\; \text{빠른 추론(faster inference)}
-$$
+> **"양자화는 자료형을 바꾸는 일이 아니라, 어디에 코드값을 배치하고 무엇을 최소화할지를 고르는 최적화 문제입니다."**
+>
+> 25강의 가지치기가 **무엇을 지울까**를 물었다면, 양자화는 **몇 비트로 표현할까**를 묻습니다. 출발점인 어파인 균일 양자화는 스케일과 영점으로 실수 구간을 정수 격자에 대응시키는 단순한 사상이지만, 곧 세 가지 어려움이 드러납니다. 첫째, **가중치 오차를 줄이는 것이 목적이 아닙니다.** 정말 줄여야 할 것은 레이어 출력의 오차 $\lVert X\hat{W} - XW \rVert^2$ 이므로, 최근접 반올림이 최적이 아닐 수 있습니다. AdaRound는 반올림 방향 자체를 학습하고, GPTQ는 헤시안 정보로 남은 가중치를 보정하며 순차적으로 양자화하고, AWQ는 활성값이 큰 채널의 가중치를 미리 키워 보호합니다. 둘째, **이상값(outlier)** 입니다. LLM의 활성값에는 극단적으로 큰 채널이 소수 존재해 양자화 범위를 통째로 늘려 버립니다. SmoothQuant는 그 어려움을 가중치 쪽으로 옮기고, QuIP와 QuaRot은 직교 변환으로 이상값을 여러 차원에 **흩뿌립니다**. 셋째, **균일 격자 자체가 최선이 아닙니다.** 가중치 분포는 종 모양이라 균등 간격은 낭비이므로, SqueezeLLM은 Fisher 가중 k-means로 코드북을 배치하고 GuidedQuant는 최종 손실을 기준으로 삼습니다. 나아가 스칼라가 아니라 벡터 단위로 묶으면 이웃 가중치 사이의 상관까지 활용할 수 있습니다.
 
-* 단순히 0이 많아진다고 해서 추론이 빨라지지는 않습니다. **정형 가지치기(structured pruning)** 가 가속에 유리한 이유는, 그것이 *더 작은 밀집(dense) 연산자* 를 만들어 내기 때문이었습니다.
-* LLM 가지치기는 가중치 희소화, 어텐션 헤드 제거, MLP 뉴런 제거, 은닉 차원(hidden-dimension) 제거, 레이어 제거 등을 포함했습니다.
+## 1. 양자화 기초 (Quantization Fundamentals)
 
-이번 강의의 주제인 **양자화(quantization)** 도 정확히 같은 철학을 공유합니다. 양자화는 텐서를 표현하는 데 사용하는 **비트 수를 줄이는** 기법입니다. 그러나 핵심 메시지는 가지치기와 평행합니다.
-
-$$
-\text{더 적은 비트(lower bits)} \;\neq\; \text{빠른 추론}
-$$
-
-> **이번 강의의 핵심 질문**
-> 모델 품질을 보존하면서, 동시에 *실제 배포 비용* 까지 개선하려면 어떻게 더 적은 비트를 사용해야 할까요? 저비트 표현은 **그 포맷이 커널(kernel)과 하드웨어에 부합할 때에만** 실제 속도 향상으로 이어집니다.
-
-본 강의는 다음 일곱 개의 흐름으로 구성됩니다.
-
-* 양자화 기초 (Quantization fundamentals)
-* Weight-only LLM 양자화 (Weight-only LLM quantization)
-* 활성값 및 이상치 인식 양자화 (Activation and outlier-aware quantization)
-* KV-cache 양자화 (KV-cache quantization)
-* 비균일 스칼라 양자화 (Non-uniform scalar quantization)
-* 벡터 양자화 (Vector quantization)
-* 비교 및 요약 (Comparison and summary)
-
----
-
-# 1. 양자화 기초 (Quantization Fundamentals)
-
-## 1.1 양자화란 무엇인가? (What is quantization?)
+### 1.1 양자화란 무엇인가? (What is quantization?)
 
 **양자화**란, 무수히 많은 실수값을 **유한하고 작은 표현 가능 집합(finite representable set)** 으로 대응(map)시키는 작업입니다.
 
@@ -58,7 +34,7 @@ $$
 
 즉, 원래의 FP32/FP16 텐서를 저비트 정수로 인코딩해 저장하고, 연산 시점에 이를 다시 근사적인 실수 텐서로 복원(dequantize)하여 사용합니다.
 
-## 1.2 왜 신경망을 양자화하는가? (Why quantize neural networks?)
+### 1.2 왜 신경망을 양자화하는가? (Why quantize neural networks?)
 
 양자화의 대상이 무엇이냐에 따라 줄어드는 자원과 얻는 이득이 달라집니다.
 
@@ -72,7 +48,7 @@ $$
 > **배포 원칙 (Deployment principle)**
 > 양자화는 **추론 시스템이 저비트 표현을 실제로 활용할 수 있을 때에만** 도움이 됩니다. 4비트로 저장되어 있더라도 *모든 연산마다 FP16으로 복원* 한다면, 메모리는 절약되지만 속도 향상은 온전히 실현되지 않습니다.
 
-## 1.3 어파인 균일 양자화 (Affine uniform quantization)
+### 1.3 어파인 균일 양자화 (Affine uniform quantization)
 
 가장 흔한 출발점은 **어파인 균일 양자화** 입니다. 실수 스칼라 $x$ 에 대해, 양의 **스케일(scale)** $s > 0$ 과 **영점(zero-point)** $z$ 를 정하면 정수 코드는 다음과 같이 정의됩니다.
 
@@ -93,7 +69,7 @@ $$
 > **용어 정리**
 > 정수 $q$ 는 실제로 저장되는 **코드(stored code)** 이고, 실수 $\hat{x}$ 는 그로부터 다시 만들어 낸 **복원값(reconstructed / dequantized value)** 입니다.
 
-## 1.4 대칭 vs. 비대칭 양자화 (Symmetric vs. asymmetric)
+### 1.4 대칭 vs. 비대칭 양자화 (Symmetric vs. asymmetric)
 
 영점 $z$ 를 0으로 고정하느냐 아니냐에 따라 두 변형으로 나뉩니다.
 
@@ -115,7 +91,7 @@ $$
 
 직관적으로, 활성값처럼 분포가 한쪽으로 치우친 경우에는 영점을 자유롭게 옮길 수 있는 비대칭 방식이 표현 범위를 더 효율적으로 활용합니다.
 
-## 1.5 비트폭의 의미 (What does a bitwidth mean?)
+### 1.5 비트폭의 의미 (What does a bitwidth mean?)
 
 $b$ 비트를 쓰면 표현 가능한 코드는 총 $2^b$ 개입니다.
 
@@ -131,7 +107,7 @@ LLM 논문에서 자주 등장하는 표기법은 다음과 같습니다.
 * **W4A16**: 가중치(Weight)는 4비트, 활성값(Activation)은 16비트로 유지.
 * **W8A8**: 가중치와 활성값 모두 8비트.
 
-## 1.6 4비트 양자화는 정말 4비트로 계산하는가? (Does 4-bit quantization compute in 4-bit?)
+### 1.6 4비트 양자화는 정말 4비트로 계산하는가? (Does 4-bit quantization compute in 4-bit?)
 
 결론부터 말하면, 흔히 쓰이는 LLM **weight-only 양자화에서는 보통 그렇지 않습니다.**
 
@@ -156,7 +132,7 @@ $$
 > **핵심**
 > W4A16의 주된 이득은 **가중치 메모리 대역폭의 감소**입니다. 네트워크 전체가 완전히 4비트로 연산되는 것은 *아닙니다*. 작은 타일을 복원한 뒤에는 결국 FP16/BF16 행렬곱이 수행됩니다.
 
-## 1.7 Weight-only vs. weight-activation 양자화
+### 1.7 Weight-only vs. weight-activation 양자화
 
 | 설정 | 저장되는 가중치 | 연산 / 활성값 |
 | :--- | :--- | :--- |
@@ -167,7 +143,7 @@ $$
 * **W4A16** 에서는 *오직 가중치만* 양자화됩니다.
 * **W8A8, W4A4** 에서는 활성값도 양자화되므로 연산 자체를 더 직접적으로 저정밀화할 수 있습니다.
 
-## 1.8 스케일 단위 (Scale granularity)
+### 1.8 스케일 단위 (Scale granularity)
 
 스케일 $s$ 를 어느 단위로 공유하느냐에 따라 정확도와 메타데이터(스케일/영점 저장량) 사이의 균형이 달라집니다.
 
@@ -177,7 +153,7 @@ $$
 
 > LLM weight-only 양자화에서는 **per-group 스케일** 이 흔히 쓰입니다. 정확도와 메타데이터 오버헤드 사이의 균형이 가장 좋기 때문입니다.
 
-## 1.9 형식적인 양자화기 / 역양자화기 관점 (Formal view)
+### 1.9 형식적인 양자화기 / 역양자화기 관점 (Formal view)
 
 $k$ 비트 양자화 방법은 **양자화기 $Q$** 와 **역양자화기 $dQ$** 의 쌍으로 정의할 수 있습니다.
 
@@ -202,7 +178,7 @@ $$
 
 > **표기 주의**: 이후 본문에서 *비트 코드* 는 $\bar{w}$, *복원된 실수 텐서* 는 $\hat{w}$ (또는 가중치 행렬의 경우 $\widehat{W}$)로 구분하여 표기하겠습니다.
 
-## 1.10 최근접 반올림 균일 양자화 (Rounding-to-nearest)
+### 1.10 최근접 반올림 균일 양자화 (Rounding-to-nearest)
 
 균일 격자(uniform grid)는 다음과 같이 $[m, M]$ 구간을 $2^k - 1$ 등분한 점들의 집합입니다.
 
@@ -230,7 +206,7 @@ $$
 
 * 직관적으로, $x$ 를 $[m,M]$ 구간 내에서 $[0, 2^k-1]$ 로 선형 변환한 뒤 반올림하여 격자 인덱스를 얻고, 다시 원래 스케일로 되돌리는 과정입니다.
 
-## 1.11 양자화 범위 선택 (Choosing the quantization range)
+### 1.11 양자화 범위 선택 (Choosing the quantization range)
 
 비트폭 $k$ 가 고정되면, 양자화 **범위 $[m, M]$** 는 *클리핑(clipping)* 과 *해상도(resolution)* 사이의 트레이드오프를 결정합니다.
 
@@ -245,9 +221,9 @@ $$
 
 ---
 
-# 2. Weight-only LLM 양자화 (Weight-only LLM Quantization)
+## 2. Weight-only LLM 양자화 (Weight-only LLM Quantization)
 
-## 2.1 LLM의 선형 레이어 (LLM linear layers)
+### 2.1 LLM의 선형 레이어 (LLM linear layers)
 
 Transformer의 파라미터 대부분은 **선형 레이어**에 있습니다. 활성값 벡터들의 배치에 대해,
 
@@ -269,7 +245,7 @@ $$
 
 > **표기 규약**: 이후로 열 $w_j = W[:, j]$ 는 선형 레이어의 **출력 채널(output channel)** 에 대응합니다.
 
-## 2.2 가중치 오차가 전부는 아니다 (Weight error is not the whole story)
+### 2.2 가중치 오차가 전부는 아니다 (Weight error is not the whole story)
 
 가장 단순한 목적함수는 **가중치 복원 오차**입니다.
 
@@ -286,7 +262,7 @@ $$
 > **왜 캘리브레이션 데이터가 중요한가**
 > 캘리브레이션 활성값 $X$ 는 *어떤 입력 방향이 자주 쓰이는지* 를 알려줍니다. 자주 쓰이는 방향에서의 오차가 더 중요하기 때문에, 같은 가중치 오차라도 그것이 어떤 입력 방향에 실리는지가 결정적입니다.
 
-## 2.3 레이어별 복원 목적함수 (Layer-wise reconstruction objective)
+### 2.3 레이어별 복원 목적함수 (Layer-wise reconstruction objective)
 
 오차를 $\Delta W = \widehat{W} - W$ 로 정의하면,
 
@@ -309,7 +285,7 @@ $$
 > **결론**
 > 목적함수는 **출력 열 단위로 분해**됩니다. 단, 한 열 *안에서는* 각 성분들이 $H$ 를 통해 서로 상호작용합니다. 즉, 각 출력 채널은 독립적으로 풀 수 있지만, 한 채널 내부의 가중치들은 입력 공분산을 통해 얽혀 있습니다.
 
-## 2.4 왜 최근접 반올림은 최적이 아닌가 (Why RTN can be suboptimal)
+### 2.4 왜 최근접 반올림은 최적이 아닌가 (Why RTN can be suboptimal)
 
 1비트 격자 $\{0, 1\}$ 위에서 하나의 출력 열 $w \in \mathbb{R}^2$ 를 양자화하는 예시를 봅시다.
 
@@ -339,7 +315,7 @@ $$
 > **교훈**
 > 최선의 반올림 결정은 $H = X^{\top}X$ 의 **상관관계(correlation)** 에 의존합니다. 성분별로 독립적으로 반올림하는 RTN은 이 상관 구조를 무시하므로 일반적으로 차선책입니다.
 
-## 2.5 AdaRound: 반올림 결정을 최적화하기 (Optimize rounding decisions)
+### 2.5 AdaRound: 반올림 결정을 최적화하기 (Optimize rounding decisions)
 
 **AdaRound** 는 고정된 최근접 반올림 대신, *학습 가능한 소프트 반올림(soft rounding)* 결정을 사용합니다. 각 가중치의 양자화값을 "아래 격자점 + 소프트 오프셋"으로 표현합니다.
 
@@ -362,13 +338,13 @@ $$
 >
 > *(Nagel et al., Up or Down? Adaptive Rounding for Post-Training Quantization, ICML 2020.)*
 
-### AdaRound 정칙항의 직관
+#### AdaRound 정칙항의 직관
 
 ![Figure: AdaRound 정칙항 $f_{\text{reg}}(V_{i,j})$ 를 소프트 양자화 변수 $h(V_{i,j}) \in [0,1]$ 에 대한 함수로 그린 그래프입니다. 가로축은 소프트 반올림 값 $h$, 세로축은 정칙항의 크기입니다. 세 곡선은 온도 파라미터 $\beta=2$(파란 실선), $\beta=4$(초록 점선), $\beta=8$(주황 점-쇄선)에 해당합니다. 모든 곡선은 $h=0.5$ 근처에서 최대(약 1.0)이고 $h=0$ 과 $h=1$ 에서 0이 되는 종 모양(오목한 분수형)을 보입니다. $\beta$ 가 커질수록 곡선이 더 평평한 봉우리와 가파른 가장자리를 가지므로, 정칙항이 중간값($h=0.5$)에 더 강한 패널티를 주어 $h$ 를 0 또는 1로 강하게 밀어냅니다. 즉 최적화 후기로 갈수록 $\beta$ 를 키우면 소프트 반올림이 하드한 up/down 결정으로 수렴합니다.](./images/adaround_regularizer.png)
 
 * **직관**: 최적화 초기에는 소프트 반올림이 연속적으로 움직일 수 있습니다. 후기로 갈수록 정칙항이 각 반올림 변수를 *하드한 up-or-down 결정* 으로 밀어붙입니다.
 
-## 2.6 GPTQ: 고수준 아이디어 (High-level idea)
+### 2.6 GPTQ: 고수준 아이디어 (High-level idea)
 
 **GPTQ** 는 LLM을 위한 후처리(post-training) 가중치 양자화 방법입니다. 그 절차는 다음 3단계의 반복으로 요약됩니다.
 
@@ -383,7 +359,7 @@ $$
 >
 > *(Frantar et al., GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers, ICLR 2023.)*
 
-## 2.7 GPTQ 보정 문제 (Correction problem)
+### 2.7 GPTQ 보정 문제 (Correction problem)
 
 출력 열 인덱스를 생략하고 하나의 열 $w \in \mathbb{R}^{d_{\text{in}}}$ 만 생각합시다. 첫 번째 좌표가 $w[0]$ 에서 $\hat{w}[0]$ 으로 양자화되었다고 하면, **그 좌표의 양자화 오차는 이미 고정** 됩니다.
 
@@ -402,7 +378,7 @@ $$
 
 * 이는 첫 좌표의 반올림 오차를 **출력 오차가 최소가 되도록** 열 전체에 흡수시키는 방법입니다.
 
-## 2.8 GPTQ 보정 유도 (Correction derivation)
+### 2.8 GPTQ 보정 유도 (Correction derivation)
 
 위 제약 최적화는 라그랑주 승수법으로 닫힌 해(closed form)를 가집니다. **라그랑지안** 은 다음과 같습니다.
 
@@ -438,7 +414,7 @@ $$
 
 * 직관: 첫 좌표의 고정된 오차를, $H^{-1}$ 의 첫 열이 가리키는 방향(상관관계가 반영된 방향)으로 나머지 좌표에 퍼뜨려 출력 오차를 상쇄합니다.
 
-## 2.9 GPTQ 순차 갱신 (Sequential update)
+### 2.9 GPTQ 순차 갱신 (Sequential update)
 
 스텝 $i$ 에서 GPTQ는 $w[i]$ 를 양자화하고 나머지 좌표를 보정합니다. 이때 아직 양자화되지 않은 후미(trailing) 부분에 해당하는 헤시안 블록 $H[i:, i:]$ 을 사용합니다.
 
@@ -455,7 +431,7 @@ $$
 > **구현 디테일**
 > GPTQ는 매 스텝마다 행렬 역원을 다시 계산하지 않기 위해, **콜레스키(Cholesky) 기반 갱신** 과 배치(batching) 기법을 사용합니다. 이로써 전체 양자화를 효율적인 한 번의 패스로 수행할 수 있습니다.
 
-## 2.10 GPTQ가 중요한 이유 (Why it matters)
+### 2.10 GPTQ가 중요한 이유 (Why it matters)
 
 최근접 반올림(RTN)은 매우 낮은 비트에서 종종 붕괴하지만, GPTQ는 반올림 오차를 보상하므로 훨씬 정확합니다. 아래는 WikiText2 퍼플렉서티(낮을수록 좋음)입니다.
 
@@ -470,7 +446,7 @@ $$
 > **시사점**
 > 3비트에서 *순진한 반올림(RTN)* 은 (176B 모델에서 퍼플렉서티 571처럼) **파국적으로 실패** 할 수 있는 반면, 복원 인식(reconstruction-aware) 양자화는 여전히 사용 가능한 수준을 유지합니다.
 
-## 2.11 AWQ: 활성값 인식 가중치 양자화 (Activation-aware Weight Quantization)
+### 2.11 AWQ: 활성값 인식 가중치 양자화 (Activation-aware Weight Quantization)
 
 **AWQ** 는 weight-only 양자화(W4A16, 즉 4비트 가중치 + FP16/BF16 활성값)를 대상으로 합니다. 선형 레이어 $Y = XW$ 에서, 캘리브레이션 활성값은 *어떤 입력 채널이 중요한지* 를 드러냅니다.
 
@@ -481,7 +457,7 @@ $$
 > **AWQ의 아이디어**
 > 중요한 활성값 채널과 연결된 가중치를, 큰 양자화 오차로부터 **보호** 하자.
 
-### 채널 스케일링 (Channel scaling)
+#### 채널 스케일링 (Channel scaling)
 
 AWQ는 대각 채널 스케일링 행렬 $S = \mathrm{diag}(s_1, \dots, s_{d_{\text{in}}})$ 를 도입합니다.
 
@@ -501,7 +477,7 @@ $$
 Y \approx (XS^{-1})\,Q(SW)
 $$
 
-### 왜 스케일링이 도움이 되는가? (Why does scaling help?)
+#### 왜 스케일링이 도움이 되는가? (Why does scaling help?)
 
 * 변환 $XW = (XS^{-1})(SW)$ 는 양자화 *이전* 에는 정확히 동치입니다. 그러나 양자화 후에는 $Q(SW) \neq SW$ 이므로, **$S$ 의 선택이 양자화 오차 $SW - Q(SW)$ 를 바꿉니다.**
 * 입력 채널 $i$ 가 중요하다면, AWQ는 더 큰 스케일 $s_i$ 를 골라 $W$ 의 해당 행을 양자화 전에 증폭시킵니다.
@@ -516,9 +492,9 @@ $$
 
 ---
 
-# 3. 활성값 및 이상치 인식 양자화 (Activation and Outlier-aware Quantization)
+## 3. 활성값 및 이상치 인식 양자화 (Activation and Outlier-aware Quantization)
 
-## 3.1 Weight-only vs. weight-activation 양자화
+### 3.1 Weight-only vs. weight-activation 양자화
 
 | 설정 | 예시 | 주된 난점 |
 | :--- | :--- | :--- |
@@ -529,7 +505,7 @@ $$
 * **Weight-only 양자화** 는 주로 모델 메모리와 가중치 대역폭을 줄입니다.
 * **Weight-activation 양자화** 는 행렬곱을 더 직접적으로 가속할 수 있지만, *활성값이 큰 이상치(outlier)를 가질 수 있어* 더 어렵습니다.
 
-## 3.2 활성값 이상치 (Activation outliers)
+### 3.2 활성값 이상치 (Activation outliers)
 
 LLM에서는 소수의 활성값 채널이 전형적인 채널보다 **훨씬 큰 크기(magnitude)** 를 가질 수 있습니다. 균일 양자화에서 이상치는 딜레마를 만듭니다.
 
@@ -538,7 +514,7 @@ LLM에서는 소수의 활성값 채널이 전형적인 채널보다 **훨씬 �
 
 즉 단 하나의 이상치 채널이 전체 채널의 양자화 품질을 망칠 수 있습니다.
 
-## 3.3 SmoothQuant: 활성값의 어려움을 가중치로 이전하기
+### 3.3 SmoothQuant: 활성값의 어려움을 가중치로 이전하기
 
 선형 레이어 $Y = XW$ 에서, 임의의 양의 대각 행렬 $S$ 에 대해 다음이 성립합니다.
 
@@ -557,14 +533,14 @@ $$
 >
 > *(Xiao et al., SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models, ICML 2023.)*
 
-## 3.4 LLM 가중치의 이상치 (Outliers in LLM weights)
+### 3.4 LLM 가중치의 이상치 (Outliers in LLM weights)
 
 * 저비트 가중치 양자화 역시 **두꺼운 꼬리(heavy-tailed)** 가중치 분포의 영향을 받습니다.
 * 소수의 큰 성분이 양자화 범위를 넓혀, 많은 코드값을 낭비하게 만듭니다.
 
 ![Figure: SqueezeLLM에서 가져온, 레이어별 가중치 절댓값의 백분위 분포를 보여주는 두 개의 막대그래프입니다. 왼쪽은 출력 투영(Output Projection) 가중치, 오른쪽은 다운 투영(Down Projection) 가중치이며, 가로축은 레이어 인덱스(0~30), 세로축은 정규화된 절대 가중치 값(0~1.0)입니다. 각 막대는 99%(보라), 99.9%(남색), 99.99%(청록), 100%(연두) 백분위에 해당하는 누적 구간으로 색칠되어 있습니다. 99% 백분위까지의 값(보라)은 대부분 0.1~0.2 수준에 머무는 반면, 최대값(100%, 연두)은 1.0까지 치솟습니다. 즉 가중치의 99%는 매우 작은 범위에 모여 있지만 극소수의 이상치가 전체 동적 범위(dynamic range)를 1.0까지 확장시켜, 균일 양자화 시 대부분의 코드값이 이상치 영역에 낭비됨을 시각적으로 보여줍니다.](./images/squeezellm_weight_outliers.png)
 
-## 3.5 회전 아이디어: 텐서를 양자화하기 쉽게 만들기 (Rotation idea)
+### 3.5 회전 아이디어: 텐서를 양자화하기 쉽게 만들기 (Rotation idea)
 
 이상치를 다루는 또 다른 방법은 표현을 **회전(rotate)** 시키는 것입니다. $R$ 이 직교행렬이면 노름이 보존됩니다.
 
@@ -577,7 +553,7 @@ $$
 > **양자화 직관**
 > 좌표들이 더 고르게 펼쳐지면 일반적으로 **더 작은 동적 범위(dynamic range)** 만 필요하므로, 양자화하기가 쉬워집니다. 회전은 에너지(노름)를 보존하면서 첨예한 이상치를 분산시키는 핵심 도구입니다.
 
-## 3.6 QuIP: 비간섭성 처리 (Incoherence processing)
+### 3.6 QuIP: 비간섭성 처리 (Incoherence processing)
 
 **QuIP** 는 양자화 전에 직교 변환을 적용합니다. 직교행렬 $U \in \mathbb{R}^{d_{\text{in}} \times d_{\text{in}}}$, $V \in \mathbb{R}^{d_{\text{out}} \times d_{\text{out}}}$ 에 대해,
 
@@ -597,11 +573,11 @@ $$
 >
 > *(Chee et al., QuIP: 2-Bit Quantization of Large Language Models With Guarantees, NeurIPS 2023.)*
 
-### 비간섭성 처리의 효과
+#### 비간섭성 처리의 효과
 
 ![Figure: 비간섭성 처리(incoherence processing) 전후의 최대 절대 가중치 값을 비교한 산점도입니다. 가로축은 처리 *이전* 의 최대 $|W_{ij}|$, 세로축은 처리 *이후* 의 최대 $|W_{ij}|$ 이며, 회색 대각선은 $y=x$ (변화 없음)을 나타냅니다. 각 파란 점은 하나의 가중치 블록(혹은 레이어)에 대응합니다. 대부분의 점이 대각선 *아래* 에 분포하며, 특히 처리 전 최대값이 0.5에 달하던 점들도 처리 후에는 0.1 미만으로 크게 낮아졌습니다. 이는 비간섭성 처리가 최대 절대 가중치 값을 일관되게 줄여, 양자화 범위를 좁히고 이상치 문제를 완화함을 실증적으로 보여줍니다.](./images/quip_incoherence_effect.png)
 
-## 3.7 QuaRot: 은닉 차원을 회전해 이상치를 분산하기
+### 3.7 QuaRot: 은닉 차원을 회전해 이상치를 분산하기
 
 **QuaRot** 는 신중하게 선택된 회전을 은닉 차원에 적용합니다.
 
@@ -624,9 +600,9 @@ $$
 
 ---
 
-# 4. KV-cache 양자화 (KV-cache Quantization)
+## 4. KV-cache 양자화 (KV-cache Quantization)
 
-## 4.1 자기회귀 생성에서의 KV 캐시 (KV cache in autoregressive generation)
+### 4.1 자기회귀 생성에서의 KV 캐시 (KV cache in autoregressive generation)
 
 자기회귀 디코딩 중, 각 Transformer 레이어는 이전 토큰들의 **키(Key)** 와 **값(Value)** 을 저장합니다.
 
@@ -638,7 +614,7 @@ $$
 \text{KV 메모리} \;\propto\; \text{레이어 수} \times \text{시퀀스 길이} \times \text{은닉 차원} \times \text{바이트 수}
 $$
 
-## 4.2 KV-cache 양자화가 다른 이유 (Why it is different)
+### 4.2 KV-cache 양자화가 다른 이유 (Why it is different)
 
 가중치 양자화는 *정적인* 모델 파라미터를 압축하지만, KV-cache 양자화는 디코딩 도중 *온라인으로 생성되는* 텐서를 압축합니다.
 
@@ -649,7 +625,7 @@ $$
 | **주된 이득** | 모델 메모리 / 대역폭 | 긴 문맥 디코딩 메모리 |
 | **난점** | 레이어 연산 보존 | 과거 토큰에 대한 어텐션 보존 |
 
-## 4.3 KIVI: 비대칭 KV-cache 양자화
+### 4.3 KIVI: 비대칭 KV-cache 양자화
 
 **KIVI** 는 KV-cache 텐서의 분포를 연구하여, *키와 값에 대해 서로 다른 그룹화 규칙* 을 사용합니다.
 
@@ -663,16 +639,16 @@ $$
 
 ---
 
-# 5. 비균일 스칼라 양자화 (Non-uniform Scalar Quantization)
+## 5. 비균일 스칼라 양자화 (Non-uniform Scalar Quantization)
 
-## 5.1 왜 비균일 양자화인가? (Why non-uniform?)
+### 5.1 왜 비균일 양자화인가? (Why non-uniform?)
 
 * 균일 양자화는 *등간격* 격자값을 사용합니다.
 * 그러나 가중치 분포는 균일하지 않습니다(대개 0 근처에 밀집).
 
 > **비균일 양자화** 는 데이터가 **밀집한 곳에 더 많은 코드값을 할당** 합니다. 즉 자주 등장하는 작은 값 영역에 해상도를 집중시킵니다.
 
-## 5.2 비균일 스칼라 양자화의 정의
+### 5.2 비균일 스칼라 양자화의 정의
 
 스케일과 영점 대신, **코드북(codebook)** 을 사용합니다.
 
@@ -701,7 +677,7 @@ $$
 > **연결고리**
 > 이는 정확히 $2^k$ 개 군집을 가진 **k-means 목적함수** 입니다. ($P\mathbf{1} = \mathbf{1}$ 제약은 각 가중치가 정확히 하나의 군집/코드워드에 배정됨을 의미합니다.) 즉 비균일 코드북 학습은 가중치값들에 대한 1차원 클러스터링입니다.
 
-## 5.3 SqueezeLLM: Fisher-가중 k-means
+### 5.3 SqueezeLLM: Fisher-가중 k-means
 
 **SqueezeLLM** 은 **2차 손실 근사(second-order loss approximation)** 를 사용합니다. 양자화된 파라미터 벡터를 $\hat{w}$ 라 하면, 손실을 $w$ 주변에서 2차까지 테일러 전개합니다(1차항은 수렴점에서 0에 가깝다고 가정).
 
@@ -720,7 +696,7 @@ $$
 >
 > *(Kim et al., SqueezeLLM: Dense-and-Sparse Quantization, ICML 2024.)*
 
-## 5.4 GuidedQuant: 최종 손실로 안내되는 복원 (End-loss-guided reconstruction)
+### 5.4 GuidedQuant: 최종 손실로 안내되는 복원 (End-loss-guided reconstruction)
 
 레이어별 복원은 $\|XW - X\widehat{W}\|_F^2$ 를 사용합니다. 그러나 **모든 출력 특징이 최종 손실에 같은 영향을 주는 것은 아닙니다.**
 
@@ -736,7 +712,7 @@ $$
 >
 > *(Kim et al., GuidedQuant: Large Language Model Quantization via Exploiting End Loss Guidance, ICML 2025.)*
 
-### GuidedQuant를 Fisher 블록 근사로 환원하기
+#### GuidedQuant를 Fisher 블록 근사로 환원하기
 
 출력 열 $w_j = W[:, j]$ 와 데이터 포인트 $i$ 에 대해, 연쇄 법칙(chain rule)을 적용합니다. 스칼라 출력 $Z_{ij} = X_{i,:}\, w_j$ 이므로,
 
@@ -772,7 +748,7 @@ $$
 > **해석**
 > GuidedQuant는 (대각 Fisher만 쓰는 SqueezeLLM과 달리) **출력 채널 내부의 상호작용** 을 블록 $F_j$ 로 유지하면서, 동시에 최종 손실의 기울기 정보를 활용합니다.
 
-## 5.5 LNQ: 비균일 양자화를 위한 교대 최적화 (Alternating optimization)
+### 5.5 LNQ: 비균일 양자화를 위한 교대 최적화 (Alternating optimization)
 
 GuidedQuant는 **레이어별 비균일 양자화(Layer-wise Non-uniform Quantization, LNQ)** 를 사용합니다. 각 출력 열 $w_j$ 에 대해 다음을 풉니다.
 
@@ -788,13 +764,13 @@ LNQ는 두 단계를 **교대(alternate)** 로 반복합니다.
 > **왜 유용한가**
 > 비균일 코드북은 균일 격자보다 가중치 분포를 더 잘 맞출 수 있으며, 특히 **2~3비트** 같은 극저비트에서 강점을 보입니다.
 
-## 5.6 비균일 양자화 결과 (Non-uniform quantization results)
+### 5.6 비균일 양자화 결과 (Non-uniform quantization results)
 
 ![Figure: WikiText2 퍼플렉서티(세로축, 낮을수록 좋음)를 비트폭(가로축, 2/3/4비트)에 대해 그린 선 그래프입니다. 회색 점선은 Original-FP16 기준선, 초록색 원-마커 선은 SqueezeLLM(가중 k-means), 파란색 다이아몬드-마커 선은 LNQ(layer-wise), 빨간색 삼각형-마커 선은 LNQ + GuidedQuant(제안 기법)입니다. 세로축은 5.0 부근에서 축이 끊긴(break) 비선형 스케일로, 2비트 영역에서는 8~40의 큰 퍼플렉서티 차이를 보여줍니다. 2비트에서 SqueezeLLM은 약 40, LNQ는 약 24인 반면 LNQ+GuidedQuant는 약 8로 가장 낮으며, 비트폭이 커질수록 세 방법 모두 FP16 기준선(약 5.1)으로 수렴합니다. 즉 비트폭이 낮을수록 목적함수의 선택이 결정적이며, 최종 손실로 안내된(end-loss-guided) 목적함수가 가장 우수함을 보여줍니다.](./images/nonuniform_quant_perplexity.png)
 
 > **시사점**: 매우 낮은 비트에서는 *양자화 목적함수* 가 중요합니다. 최종 손실로 안내된 목적함수는 순수 레이어별 목적함수나 Fisher 대각 목적함수보다 개선될 수 있습니다.
 
-### 비균일 양자화 정량 비교표
+#### 비균일 양자화 정량 비교표
 
 Llama-2 모델에 대한 WikiText2(Wiki2)와 C4 퍼플렉서티(낮을수록 좋음)입니다. Bits는 실효 비트폭입니다.
 
@@ -826,9 +802,9 @@ Llama-2 모델에 대한 WikiText2(Wiki2)와 C4 퍼플렉서티(낮을수록 좋
 
 ---
 
-# 6. 벡터 양자화 (Vector Quantization)
+## 6. 벡터 양자화 (Vector Quantization)
 
-## 6.1 벡터 양자화의 정의 (Vector quantization)
+### 6.1 벡터 양자화의 정의 (Vector quantization)
 
 * **스칼라 양자화** 는 각 스칼라를 하나의 코드북 값에 대응시킵니다.
 * **벡터 양자화** 는 여러 가중치를 하나의 벡터로 묶습니다.
@@ -850,7 +826,7 @@ $$
 > **왜 벡터 양자화가 도움이 되는가**
 > 스칼라 양자화가 무시하는 **이웃 가중치 사이의 상관관계** 를 활용할 수 있습니다. 즉 가중치들을 개별적으로가 아니라 *함께* 표현함으로써 동일 비트 예산에서 더 낮은 왜곡을 달성할 수 있습니다.
 
-## 6.2 현대적 벡터 양자화 방법 (Modern VQ methods)
+### 6.2 현대적 벡터 양자화 방법 (Modern VQ methods)
 
 * **GPTVQ**: GPTQ 스타일의 복원을 벡터 양자화로 확장합니다.
 * **AQLM**: 각 벡터를 *여러 코드북에서 뽑은 코드워드들의 합* 으로 표현합니다(additive quantization).
@@ -859,7 +835,7 @@ $$
 
 > **일반적 주제**: 매우 낮은 비트폭에서는, 스칼라 균일 양자화보다 **더 강력한 코드북** 이 필요합니다.
 
-## 6.3 벡터 양자화 결과 (Vector quantization results)
+### 6.3 벡터 양자화 결과 (Vector quantization results)
 
 Llama-2 모델에 대한 Wiki2/C4 퍼플렉서티(낮을수록 좋음)입니다.
 
@@ -888,7 +864,7 @@ Llama-2 모델에 대한 Wiki2/C4 퍼플렉서티(낮을수록 좋음)입니다.
 
 * 벡터 양자화 계열은 동일 비트폭에서 스칼라 방법보다 낮은 퍼플렉서티를 달성하는 경향이 있으며, QTIP + GuidedQuant가 대부분의 구간에서 최고 성능을 보입니다.
 
-## 6.4 처리량 비교 (Throughput comparison)
+### 6.4 처리량 비교 (Throughput comparison)
 
 그러나 **정확도가 곧 속도는 아닙니다.** 아래는 초당 토큰 수(Tok/s, 높을수록 좋음)입니다. (OOM은 메모리 부족.)
 
@@ -913,9 +889,9 @@ Llama-2 모델에 대한 Wiki2/C4 퍼플렉서티(낮을수록 좋음)입니다.
 
 ---
 
-# 7. 비교 및 요약 (Comparison and Summary)
+## 7. 비교 및 요약 (Comparison and Summary)
 
-## 7.1 방법 비교 (Method comparison)
+### 7.1 방법 비교 (Method comparison)
 
 | 방법 | 양자화 대상 | 포맷 | 핵심 아이디어 |
 | :--- | :--- | :--- | :--- |
@@ -931,7 +907,7 @@ Llama-2 모델에 대한 Wiki2/C4 퍼플렉서티(낮을수록 좋음)입니다.
 | **GuidedQuant** | 가중치 | 비균일 스칼라/VQ | 최종 손실로 안내된 복원 |
 | **AQLM / QTIP** | 가중치 | 벡터 코드북 | 스칼라가 아닌 벡터를 양자화 |
 
-## 7.2 요약 (Summary)
+### 7.2 요약 (Summary)
 
 * **양자화** 는 실수값 텐서를 저비트 코드로 대응시키고, 다시 근사 텐서로 복원합니다.
 * **균일 어파인 양자화** 는 스케일과 영점으로 제어됩니다.
@@ -942,7 +918,7 @@ Llama-2 모델에 대한 Wiki2/C4 퍼플렉서티(낮을수록 좋음)입니다.
 * **KV-cache 양자화** 는 긴 문맥 자기회귀 디코딩에 결정적으로 중요합니다.
 * **비균일·벡터 양자화** 는 매우 낮은 비트에서 정확도를 높이지만, 더 복잡한 커널을 요구할 수 있습니다.
 
-## 7.3 마지막 교훈 (Final takeaway)
+### 7.3 마지막 교훈 (Final takeaway)
 
 > **양자화는 단순히 자료형(datatype)을 바꾸는 것이 아닙니다.**
 
@@ -954,3 +930,25 @@ $$
 
 > **원칙 (Principle)**
 > 모델이 *실제로 수행하는 연산* 을 보존하고, *추론 시스템이 활용할 수 있는* 방식으로 더 적은 비트를 사용하라.
+
+## 정리하며 (Closing Remarks)
+
+이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.
+
+| 단계 | 내용 | 근거 |
+|:---|:---|:---|
+| **① 정의** | 양자화는 수많은 실수값을 작은 유한 집합으로 보내는 사상이다. 어파인 균일 양자화는 스케일 $s$ 와 영점 $z$ 로 $\hat{x} = s(q - z)$ 를 만든다 | 어파인 균일 양자화 |
+| **② 무엇이 줄어드는가** | 가중치를 줄이면 모델 크기와 메모리 대역폭이, 활성값까지 줄이면 연산 자체가 줄어든다. 목표에 따라 대상이 달라진다 | 양자화의 목적 |
+| **③ 흔한 오해** | "4비트 양자화"라고 해서 4비트로 연산하는 것은 아니다. weight-only 방식은 저장만 4비트이고 계산 직전에 역양자화한다 | 4비트로 계산하는가? |
+| **④ 스케일의 단위** | 스케일을 텐서 하나로 공유할지, 채널·그룹 단위로 나눌지가 정확도와 오버헤드를 가른다 | 스케일 granularity |
+| **⑤ 목적함수의 전환** | 최소화 대상은 가중치 오차 $\lVert \hat{W} - W \rVert$ 가 아니라 **레이어 출력 오차** $\lVert X\hat{W} - XW \rVert^2$ 다. 입력 통계 $X$ 가 개입한다 | 레이어별 복원 목적함수 |
+| **⑥ 반올림의 재고** | 출력 오차 기준으로 보면 최근접 반올림이 최적이 아닐 수 있다. AdaRound는 반올림 방향을 학습 변수로 두고, 정칙항이 후반부에 이를 0/1로 밀어붙인다 | AdaRound |
+| **⑦ GPTQ** | 한 가중치를 양자화한 뒤 그 오차를 **아직 양자화하지 않은 나머지**에 헤시안 기반으로 분배한다. 매우 낮은 비트에서 최근접 반올림이 무너질 때 특히 효과가 크다 | GPTQ 보정 유도 |
+| **⑧ AWQ** | $XW = (XS^{-1})(SW)$ 는 수학적으로 동치이지만, 활성값이 큰 채널의 가중치를 미리 키워 두면 양자화 오차로부터 보호된다 | 채널 스케일링 |
+| **⑨ 이상값 문제** | LLM 활성값에는 극단적으로 큰 채널이 소수 존재해, 이들이 양자화 범위를 늘려 나머지 대부분의 해상도를 낭비하게 만든다 | 활성값 이상값 |
+| **⑩ 두 가지 대응** | SmoothQuant는 활성값의 어려움을 가중치로 **이전**하고, QuIP · QuaRot은 직교 변환으로 이상값을 여러 차원에 **분산**시킨다. 비간섭성 처리 후 최대 절댓값이 실제로 줄어든다 | SmoothQuant · 회전 |
+| **⑪ KV 캐시** | 가중치는 정적이지만 KV 캐시는 생성 중 계속 늘어나는 동적 텐서다. KIVI는 키와 값의 분포 차이에 맞춰 비대칭적으로 양자화한다 | KV-cache 양자화 |
+| **⑫ 균일 격자의 한계** | 가중치 분포는 0 근처에 몰린 종 모양이라, 균등 간격 격자는 희소한 꼬리에 코드값을 낭비한다 | 비균일 양자화의 동기 |
+| **⑬ 코드북 배치** | SqueezeLLM은 Fisher 가중 k-means로 민감한 영역에 코드값을 몰아주고, GuidedQuant는 레이어 출력이 아닌 **최종 손실**을 기준으로 삼으며, LNQ는 교대 최적화로 이를 푼다. 낮은 비트일수록 목적함수의 선택이 결정적이다 | 비균일 양자화 결과 |
+| **⑭ 벡터 양자화** | 스칼라 하나가 아니라 여러 가중치를 벡터로 묶어 코드북에 대응시키면, 이웃 가중치 사이의 **상관**까지 활용할 수 있다 | 벡터 양자화 |
+| **⑮ 배포의 현실** | 퍼플렉서티가 가장 좋은 방법이 반드시 가장 빠른 것은 아니다. 역양자화 비용과 커널 지원까지 함께 보아야 한다 | 처리량 비교 |

@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Linear Classifier">
+<meta name="description" content="이진 분류를 초평면 하나로 환원하는 선형 분류기의 기하와, 무작위 탐색이라는 가장 원시적인 학습 알고리즘을 교차 검증으로 평가하는 방법을 다룹니다.">
 
 <title>[Machine Learning] 02. Linear Classifier – shsha0110.github.io</title>
 <style>
@@ -154,7 +154,7 @@ window.Quarto = {
       <h1 class="title">[Machine Learning] 02. Linear Classifier</h1>
                   <div>
         <div class="description">
-          Linear Classifier
+          이진 분류를 초평면 하나로 환원하는 선형 분류기의 기하와, 무작위 탐색이라는 가장 원시적인 학습 알고리즘을 교차 검증으로 평가하는 방법을 다룹니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -1286,7 +1286,7 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../../../../../posts/Archive/Deep Learning/26.Neural-Network-Prunning-and-LLM-Compression/26.1/index.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">[Deep Learning] 26. Neural Network Pruning and LLM Compression</span></a>
+ <span class="menu-text">[Deep Learning] 26. Neural Network Quantization and LLM Compression</span></a>
   </div>
 </li>
       </ul>
@@ -2893,7 +2893,8 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#introduction-classification" id="toc-introduction-classification" class="nav-link active" data-scroll-target="#introduction-classification">1. Introduction: Classification</a>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
+  <li><a href="#introduction-classification" id="toc-introduction-classification" class="nav-link" data-scroll-target="#introduction-classification">1. Introduction: Classification</a>
   <ul class="collapse">
   <li><a href="#the-classification-problem" id="toc-the-classification-problem" class="nav-link" data-scroll-target="#the-classification-problem">1.1 The Classification Problem</a></li>
   <li><a href="#supervised-learning-setup" id="toc-supervised-learning-setup" class="nav-link" data-scroll-target="#supervised-learning-setup">1.2 Supervised Learning Setup</a></li>
@@ -2917,6 +2918,7 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#algorithm-2-cross-validation-교차-검증" id="toc-algorithm-2-cross-validation-교차-검증" class="nav-link" data-scroll-target="#algorithm-2-cross-validation-교차-검증">5.1 Algorithm 2: Cross-Validation (교차 검증)</a></li>
   </ul></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2927,6 +2929,18 @@ window.Quarto = {
 
 
 
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 · 인공지능대학원(IPAI) <strong>박재식(Jaesik Park)</strong> 교수님의 <em>Introduction to Machine Learning</em> (4190.428) 강의 자료(2강 <em>Linear classifiers</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 원 강의 자료는 MIT 6.036(2019 Fall)과 Stanford CS229(2023–2024 Summer)의 강의 노트를 상당 부분 차용하고 있습니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“선형 분류기는 <span class="math inline">\(\mathbb{R}^d\)</span>를 초평면 하나로 갈라 반공간에 부호를 붙이는 것이 전부이며, 학습이란 그 초평면을 결정하는 <span class="math inline">\(d+1\)</span>개의 숫자 <span class="math inline">\((\theta, \theta_0)\)</span>를 고르는 일입니다.”</strong></p>
+<p>1강에서 세운 좌표축 중 이번 회차가 채우는 칸은 <strong>model class</strong>입니다. 가설 공간 <span class="math inline">\(\mathcal{H}\)</span>를 “모든 함수”에서 “<span class="math inline">\(\mathbb{R}^{d+1}\)</span>의 벡터들”로 좁히는 순간, 학습 문제는 함수 탐색에서 유한 차원 파라미터 탐색으로 바뀝니다.</p>
+<p>여기에 <strong>algorithm</strong> 칸의 가장 원시적인 답으로 무작위 후보를 <span class="math inline">\(k\)</span>개 뽑아 학습 오차가 최소인 것을 고르는 <code>Random-Linear-Classifier</code>를 놓습니다. 학습 오차는 <span class="math inline">\(k\)</span>와 함께 줄어들지만, 그것이 테스트 오차의 감소를 뜻하지는 않습니다 — 이 간극이 7·8강 일반화 논의의 출발점입니다.</p>
+<p>마지막으로 <strong>evaluation criteria</strong> 칸에는 교차 검증이 들어갑니다. 다만 교차 검증이 평가하는 대상은 특정 가설 <span class="math inline">\(h\)</span>가 아니라 <strong>가설을 만들어 내는 알고리즘</strong>이라는 점이 이번 강의의 가장 중요한 구분입니다.</p>
+</blockquote>
+</section>
 <section id="introduction-classification" class="level2">
 <h2 class="anchored" data-anchor-id="introduction-classification">1. Introduction: Classification</h2>
 <ul>
@@ -3036,7 +3050,7 @@ h(x; \theta, \theta_0) = \text{sign}(\theta^\top x + \theta_0) =
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/linear_classifier_geometry.png" class="img-fluid figure-img"></p>
-<figcaption>Figure 1: 선형 분류기의 기하학적 예시. 2차원 평면 위의 데이터 포인트들(+, -)이 하나의 직선(Hyperplane)에 의해 구분되고 있다. 벡터 <span class="math inline">\(\theta\)</span>는 결정 경계(검은 선)에 수직이며 Positive 클래스 쪽을 향하고 있다.</figcaption>
+<figcaption>Figure 1: <span class="math inline">\(\theta = (-1, 1.5)^\top\)</span>, <span class="math inline">\(\theta_0 = 3\)</span>이 만드는 선형 분류기를 2차원 평면에 그린 그림입니다. 굵은 검은 직선이 결정 경계 <span class="math inline">\(\theta^\top x + \theta_0 = 0\)</span>이고, 이 직선이 평면을 두 개의 반공간으로 가릅니다. 청록색 화살표가 법선 벡터 <span class="math inline">\(\theta\)</span>이며, 화살표가 향하는 왼쪽 위 반공간이 양의 반공간이어서 그쪽의 파란 ‘+’ 점들은 <span class="math inline">\(+1\)</span>로, 반대편 오른쪽 아래의 빨간 ‘−’ 점들은 <span class="math inline">\(-1\)</span>로 분류됩니다. 라벨이 붙은 <span class="math inline">\(x^{(1)}\)</span>은 화살표 쪽에 있어 <span class="math inline">\(+1\)</span>, <span class="math inline">\(x^{(2)}\)</span>는 반대편에 있어 <span class="math inline">\(-1\)</span>이 되며, 이는 §3.3에서 손으로 계산할 값과 정확히 일치합니다. 화살표가 결정 경계에 수직으로 꽂혀 있다는 사실이 “<span class="math inline">\(\theta\)</span>는 초평면의 법선 벡터”라는 주장의 시각적 근거입니다.</figcaption>
 </figure>
 </div>
 </section>
@@ -3073,17 +3087,27 @@ h(x^{(2)}) &amp;= \text{sign}\left( \begin{bmatrix} -1 &amp; 1.5 \end{bmatrix} \
 <ul>
 <li>위 계산을 통해 <span class="math inline">\(x^{(1)}\)</span>은 양성 클래스, <span class="math inline">\(x^{(2)}\)</span>는 음성 클래스로 분류됨을 확인할 수 있습니다.</li>
 </ul>
-<blockquote class="blockquote">
-<p><strong>Think Deeper:</strong></p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>생각해 보기 (Think Deeper)
+</div>
+</div>
+<div class="callout-body-container callout-body">
 <ol type="1">
 <li><strong>법선 벡터 찾기</strong>: 결정 경계에 수직인 벡터는 무엇인가? <span class="math inline">\(\rightarrow\)</span> 바로 <span class="math inline">\(\theta\)</span> 입니다.</li>
 <li><strong>분류 반전시키기</strong>: 결정 경계(직선)의 위치는 그대로 두고, 모든 (+) 포인트를 (-)로, (-) 포인트를 (+)로 분류하려면 어떻게 해야 할까요?
 <ul>
 <li><span class="math inline">\(\theta\)</span>와 <span class="math inline">\(\theta_0\)</span>의 부호를 모두 반대로 바꾸면 됩니다 (<span class="math inline">\(-\theta, -\theta_0\)</span>).</li>
 <li>부등호의 방향이 반대가 되어 <span class="math inline">\(\text{sign}\)</span> 함수의 결과가 역전되기 때문입니다.</li>
+<li>주의할 점은 <strong>경계 자체는 움직이지 않는다</strong>는 것입니다. <span class="math inline">\(-\theta^\top x - \theta_0 = 0\)</span>은 <span class="math inline">\(\theta^\top x + \theta_0 = 0\)</span>과 같은 직선이며, 바뀐 것은 어느 쪽 반공간을 양으로 부를지에 대한 약속뿐입니다.</li>
 </ul></li>
 </ol>
-</blockquote>
+</div>
+</div>
 </section>
 </section>
 <section id="learning-algorithms" class="level2">
@@ -3114,9 +3138,22 @@ h(x^{(2)}) &amp;= \text{sign}\left( \begin{bmatrix} -1 &amp; 1.5 \end{bmatrix} \
 </ol></li>
 </ul></li>
 </ul>
-<blockquote class="blockquote">
-<p><strong>Study Question:</strong> <span class="math inline">\(k\)</span>가 증가하면 학습 에러 <span class="math inline">\(\mathcal{E}_n\)</span>은 어떻게 될까요? 일반적으로 <span class="math inline">\(k\)</span>가 커질수록 더 많은 가설을 탐색하므로, 운 좋게 좋은 분류기를 찾을 확률이 높아져 학습 에러는 감소하는 경향이 있습니다. 하지만 이것이 테스트 에러(일반화 성능)의 감소를 보장하지는 않습니다.</p>
-</blockquote>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Study Question
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>Q1. <span class="math inline">\(k\)</span>가 증가하면 학습 에러 <span class="math inline">\(\mathcal{E}_n(h)\)</span>은 어떻게 될까요?</strong></p>
+<p>일반적으로 <span class="math inline">\(k\)</span>가 커질수록 더 많은 가설을 탐색하므로, 운 좋게 좋은 분류기를 찾을 확률이 높아져 학습 에러는 감소하는 경향이 있습니다. 정확히는 <span class="math inline">\(k\)</span>에 대해 <strong>단조 비증가</strong>입니다 — 후보를 추가하는 것은 최솟값을 취하는 집합을 넓히는 일이므로 최솟값이 커질 수 없기 때문입니다. 하지만 이것이 테스트 에러(일반화 성능)의 감소를 보장하지는 않습니다.</p>
+<p><strong>Q2. 학습 데이터 <span class="math inline">\(\mathcal{D}_n\)</span>의 어떤 성질이 <span class="math inline">\(\mathcal{E}_n(h)\)</span>에 영향을 줄까요?</strong></p>
+<p>가장 결정적인 것은 <strong>데이터가 선형 분리 가능한가(linearly separable)</strong> 입니다. 분리 불가능하다면 아무리 <span class="math inline">\(k\)</span>를 키워도 <span class="math inline">\(\mathcal{E}_n\)</span>은 0으로 내려가지 않습니다. 그 밖에 표본 수 <span class="math inline">\(n\)</span>(많을수록 우연히 맞히기 어려움), 차원 <span class="math inline">\(d\)</span>(높을수록 무작위 초평면이 데이터를 가를 여지가 큼), 두 클래스의 분리 여백과 균형이 함께 작용합니다.</p>
+</div>
+</div>
 </section>
 </section>
 <section id="evaluating-learning-algorithms" class="level2">
@@ -3156,14 +3193,96 @@ h(x^{(2)}) &amp;= \text{sign}\left( \begin{bmatrix} -1 &amp; 1.5 \end{bmatrix} \
 <li>계산된 <span class="math inline">\(k\)</span>개의 에러의 평균을 반환합니다. <span class="math display">\[\text{CV Error} = \frac{1}{k} \sum_{i=1}^{k} \mathcal{E}_i(h_i)\]</span></li>
 </ol></li>
 </ul></li>
+<li><p>이렇게 데이터를 재사용하면 표본을 낭비하지 않고 여러 번의 학습·평가를 얻을 수 있습니다. 다만 각 폴드의 학습 집합이 서로 겹치기 때문에 <span class="math inline">\(k\)</span>개의 오차가 독립이 아니고, 그래서 <strong>이론적 분석은 오히려 까다로워진다</strong>는 대가가 따릅니다.</p></li>
 </ul>
-<blockquote class="blockquote">
-<p><strong>핵심 통찰 (Key Insight):</strong> Cross-Validation은 특정한 하나의 가설 <span class="math inline">\(h\)</span>를 평가하는 것이 아닙니다. 이 과정은 <strong>가설을 만들어내는 “학습 알고리즘” 자체의 성능</strong>을 평가하는 것입니다. 최종적으로 우리가 사용할 모델은 전체 데이터를 사용하여 다시 학습시킨 결과물이 됩니다.</p>
-</blockquote>
-
-
-
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>교차 검증이 평가하는 것은 가설이 아니라 알고리즘입니다
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Cross-Validation은 특정한 하나의 가설 <span class="math inline">\(h\)</span>를 만들어 내지도, 평가하지도 않습니다. 각 폴드마다 서로 다른 <span class="math inline">\(h_i\)</span>가 만들어지므로, 평균 오차가 말해 주는 것은 <strong>가설을 만들어내는 “학습 알고리즘” 자체의 기대 성능</strong>입니다. 최종적으로 우리가 사용할 모델은 전체 데이터를 사용하여 다시 학습시킨 결과물이며, 교차 검증 점수는 그 모델의 성능 추정치로 쓰이는 것입니다.</p>
+</div>
+</div>
+<hr>
 </section>
+</section>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 문제 정의</strong></td>
+<td style="text-align: left;">이진 분류는 <span class="math inline">\(h : \mathbb{R}^d \to \{-1,+1\}\)</span>를 찾는 문제이며, 입력은 보통 특징 추출 <span class="math inline">\(\varphi\)</span>를 거친 벡터다</td>
+<td style="text-align: left;">§1.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 성공 기준</strong></td>
+<td style="text-align: left;">학습 데이터가 아니라 새 데이터에서 잘 맞아야 한다 — i.i.d. 가정이 이 요구를 의미 있게 만든다</td>
+<td style="text-align: left;">§2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 측정 도구</strong></td>
+<td style="text-align: left;">0-1 손실로 학습 오차 <span class="math inline">\(\mathcal{E}_n(h)\)</span>와 테스트 오차 <span class="math inline">\(\mathcal{E}(h)\)</span>를 정의한다</td>
+<td style="text-align: left;">§2.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 탐색 범위 설정</strong></td>
+<td style="text-align: left;">학습은 가설 공간 <span class="math inline">\(\mathcal{H}\)</span> 안에서의 선택이며, <span class="math inline">\(\mathcal{H}\)</span>의 표현력이 테스트 오차를 좌우한다</td>
+<td style="text-align: left;">§2.2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ <span class="math inline">\(\mathcal{H}\)</span>의 구체화</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\mathcal{H}\)</span>를 <span class="math inline">\(\mathbb{R}^{d+1}\)</span>의 벡터 <span class="math inline">\((\theta, \theta_0)\)</span>로 좁히면 <span class="math inline">\(h(x)=\text{sign}(\theta^\top x + \theta_0)\)</span>가 된다</td>
+<td style="text-align: left;">§3.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 기하학적 해석</strong></td>
+<td style="text-align: left;"><span class="math inline">\((\theta, \theta_0)\)</span>는 초평면 하나를 지정하고, <span class="math inline">\(\theta\)</span>는 그 법선이자 양의 반공간의 방향이다</td>
+<td style="text-align: left;">§3.2, Figure 1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 가장 단순한 학습</strong></td>
+<td style="text-align: left;">무작위로 <span class="math inline">\(k\)</span>개를 뽑아 학습 오차 최소인 것을 고른다 — <span class="math inline">\(\mathcal{E}_n\)</span>은 <span class="math inline">\(k\)</span>에 대해 비증가</td>
+<td style="text-align: left;">§4.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 평가의 함정</strong></td>
+<td style="text-align: left;">한 번의 학습·테스트 결과는 데이터 분할과 알고리즘 내부 난수에 따라 흔들린다</td>
+<td style="text-align: left;">§5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ 해법</strong></td>
+<td style="text-align: left;"><span class="math inline">\(k\)</span>-겹 교차 검증으로 데이터를 재사용해 여러 번 평가한다 (대가: 이론적 분석의 어려움)</td>
+<td style="text-align: left;">§5.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ 해석의 교정</strong></td>
+<td style="text-align: left;">교차 검증의 평가 대상은 가설이 아니라 <strong>알고리즘</strong>이다</td>
+<td style="text-align: left;">§5.1</td>
+</tr>
+</tbody>
+</table>
+
+
+
 </section>
 
 </main> <!-- /main -->

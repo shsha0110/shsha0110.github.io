@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Backpropagation">
+<meta name="description" content="경사 하강법을 손으로 확인하는 데서 출발해, 연쇄 법칙을 단변수에서 야코비안으로 확장하고, 끝내 forward/backward 인터페이스를 갖춘 MLP 모듈로 캡슐화합니다.">
 
 <title>[Deep Learning] 07. Backpropagation – shsha0110.github.io</title>
 <style>
@@ -189,7 +189,7 @@ window.Quarto = {
       <h1 class="title">[Deep Learning] 07. Backpropagation</h1>
                   <div>
         <div class="description">
-          Backpropagation
+          경사 하강법을 손으로 확인하는 데서 출발해, 연쇄 법칙을 단변수에서 야코비안으로 확장하고, 끝내 forward/backward 인터페이스를 갖춘 MLP 모듈로 캡슐화합니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -2928,7 +2928,7 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#들어가며-introduction" id="toc-들어가며-introduction" class="nav-link active" data-scroll-target="#들어가며-introduction">들어가며 (Introduction)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
   <li><a href="#기본-경사-하강법-basic-gradient-descent" id="toc-기본-경사-하강법-basic-gradient-descent" class="nav-link" data-scroll-target="#기본-경사-하강법-basic-gradient-descent">1. 기본 경사 하강법 (Basic Gradient Descent)</a>
   <ul class="collapse">
   <li><a href="#경사-하강법의-직관과-정당성" id="toc-경사-하강법의-직관과-정당성" class="nav-link" data-scroll-target="#경사-하강법의-직관과-정당성">1.1 경사 하강법의 직관과 정당성</a></li>
@@ -2957,8 +2957,8 @@ window.Quarto = {
   <li><a href="#activation-모듈-silu의-역전파" id="toc-activation-모듈-silu의-역전파" class="nav-link" data-scroll-target="#activation-모듈-silu의-역전파">4.4 Activation 모듈: SiLU의 역전파</a></li>
   <li><a href="#mlp-모듈-끝에서-끝까지end-to-end-역전파" id="toc-mlp-모듈-끝에서-끝까지end-to-end-역전파" class="nav-link" data-scroll-target="#mlp-모듈-끝에서-끝까지end-to-end-역전파">4.5 MLP 모듈: 끝에서 끝까지(end-to-end) 역전파</a></li>
   <li><a href="#데모-cifar-10-분류-linear-vs-mlp" id="toc-데모-cifar-10-분류-linear-vs-mlp" class="nav-link" data-scroll-target="#데모-cifar-10-분류-linear-vs-mlp">4.6 데모: CIFAR-10 분류 (Linear vs MLP)</a></li>
-  <li><a href="#마치며-conclusion" id="toc-마치며-conclusion" class="nav-link" data-scroll-target="#마치며-conclusion">마치며 (Conclusion)</a></li>
   </ul></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2969,29 +2969,20 @@ window.Quarto = {
 
 
 
-<section id="들어가며-introduction" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며-introduction">들어가며 (Introduction)</h2>
-<p>딥러닝 모델을 학습시킨다는 것은 결국 <strong>손실 함수(loss function)를 최소화하는 파라미터를 찾는 일</strong>입니다. 이때 거의 예외 없이 사용하는 도구가 바로 <strong>경사 하강법(gradient descent)</strong>이며, 경사 하강법을 돌리려면 손실 함수의 <strong>그래디언트(gradient)</strong>에 접근할 수 있어야 합니다.</p>
-<p>그런데 신경망은 수많은 함수들이 겹겹이 합성된 거대한 합성 함수입니다. 이런 복잡한 함수의 그래디언트를 손으로 일일이 계산하는 것은 사실상 불가능합니다. 이 실습의 목표는 다음과 같습니다.</p>
-<ul>
-<li>가장 기본적인 경사 하강법이 정말로 함수 값을 줄여 나가는지 직접 눈으로 확인합니다.</li>
-<li>복잡한 함수를 미분하는 핵심 도구인 <strong>연쇄 법칙(Chain Rule)</strong>을 단변수 함수에서부터 다변수 함수로 확장합니다.</li>
-<li>마지막으로, 우리가 만든 MLP 모듈이 <strong>스스로 그래디언트를 계산하도록(automatic differentiation)</strong> 모듈화하여, 역전파의 본질을 코드로 체득합니다.</li>
-</ul>
-<p>전체 흐름을 정리한 세부 목표는 다음과 같습니다.</p>
-<ul>
-<li><strong>기본 경사 하강법 (Basic gradient descent)</strong></li>
-<li><strong>단변수 함수에서의 연쇄 법칙 (Chain Rule on a single variable function)</strong></li>
-<li><strong>다변수 함수로의 확장 (Expand to multi variable function)</strong></li>
-<li><strong>모듈화 (Modularization)</strong></li>
-</ul>
-<p>이제 한 단계씩 따라가 보겠습니다.</p>
-<hr>
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 7강 실습 세션(<em>Backpropagation</em>)의 노트북을 바탕으로, 코드와 그 배경이 되는 논리를 함께 따라갈 수 있도록 재구성한 것입니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“<code>loss.backward()</code> 한 줄 뒤에 숨은 것은, 국소 미분을 저장해 두었다가 출력에서 입력 방향으로 곱해 내려오는 단순한 규칙입니다.”</strong></p>
+<p>딥러닝 학습은 손실 함수를 최소화하는 파라미터를 찾는 일이고, 그 방향을 알려 주는 것은 그래디언트입니다. 그런데 신경망은 수많은 함수가 겹겹이 합성된 거대한 합성 함수여서, 그래디언트를 손으로 유도하는 것은 현실적이지 않습니다. 이 실습은 그 간극을 네 단계로 메웁니다. 먼저 <strong>경사 하강법</strong>이 실제로 함수 값을 줄여 나가는지 2차원 함수 위에서 궤적을 그려 눈으로 확인합니다. 다음으로 <strong>연쇄 법칙</strong>을 단변수 합성 함수에서 임의 개수의 합성으로 일반화하면서, 역전파가 성립하려면 <strong>순전파에서 중간 값을 반드시 저장해 두어야 한다</strong>는 사실을 발견합니다. 이어 다변수로 확장하면 국소 미분 계수의 곱이 <strong>야코비안 행렬의 곱</strong>이 되고, 손실이 스칼라라는 사실 덕분에 출력에서 입력 방향으로 계산하는 편이 압도적으로 싸다는 점이 드러납니다. 마지막으로 이 원리를 모듈별 <code>forward</code> / <code>backward</code> 인터페이스로 캡슐화해, 파라미터를 최적화하는 MLP를 밑바닥부터 완성하고 CIFAR-10에서 선형 모델과 비교합니다.</p>
+</blockquote>
 </section>
-<section id="기본-경사-하강법-basic-gradient-descent" class="level1">
-<h1>1. 기본 경사 하강법 (Basic Gradient Descent)</h1>
-<section id="경사-하강법의-직관과-정당성" class="level2">
-<h2 class="anchored" data-anchor-id="경사-하강법의-직관과-정당성">1.1 경사 하강법의 직관과 정당성</h2>
+<section id="기본-경사-하강법-basic-gradient-descent" class="level2">
+<h2 class="anchored" data-anchor-id="기본-경사-하강법-basic-gradient-descent">1. 기본 경사 하강법 (Basic Gradient Descent)</h2>
+<section id="경사-하강법의-직관과-정당성" class="level3">
+<h3 class="anchored" data-anchor-id="경사-하강법의-직관과-정당성">1.1 경사 하강법의 직관과 정당성</h3>
 <p>미분 가능한 함수 <span class="math inline">\(f(x): \mathbb{R}^m \to \mathbb{R}\)</span>가 주어졌다고 합시다. 경사 하강법은 다음과 같이 점을 갱신합니다.</p>
 <p><span class="math display">\[
 x_{n+1} = x_n - \eta \nabla f(x_n)
@@ -3020,8 +3011,8 @@ f(x_{n+1}) &amp;= f\big(x_n - \eta \nabla f(x_n)\big) \\
 f(x_1) \ge f(x_2) \ge \cdots \ge f(x_N).
 \]</span></p>
 </section>
-<section id="예제-함수와-시각화" class="level2">
-<h2 class="anchored" data-anchor-id="예제-함수와-시각화">1.2 예제 함수와 시각화</h2>
+<section id="예제-함수와-시각화" class="level3">
+<h3 class="anchored" data-anchor-id="예제-함수와-시각화">1.2 예제 함수와 시각화</h3>
 <p>이 성질을 다음 2변수 함수로 직접 확인해 보겠습니다.</p>
 <p><span class="math display">\[
 f(x, y) = 0.25\,(3x^2 + 2y^2 - 2xy + 6x - y)
@@ -3063,8 +3054,8 @@ f(x, y) = 0.25\,(3x^2 + 2y^2 - 2xy + 6x - y)
 </figure>
 </div>
 </section>
-<section id="그래디언트의-손계산과-구현" class="level2">
-<h2 class="anchored" data-anchor-id="그래디언트의-손계산과-구현">1.3 그래디언트의 손계산과 구현</h2>
+<section id="그래디언트의-손계산과-구현" class="level3">
+<h3 class="anchored" data-anchor-id="그래디언트의-손계산과-구현">1.3 그래디언트의 손계산과 구현</h3>
 <p>경사 하강법을 돌리려면 <span class="math inline">\(\nabla f = (\partial f/\partial x,\ \partial f/\partial y)\)</span>를 알아야 합니다. 직접 미분해 보겠습니다.</p>
 <p><span class="math display">\[
 \begin{aligned}
@@ -3127,10 +3118,10 @@ f(-1.1,\,-0.3) = -0.7875
 <hr>
 </section>
 </section>
-<section id="연쇄-법칙-chain-rule" class="level1">
-<h1>2. 연쇄 법칙 (Chain Rule)</h1>
-<section id="단변수-합성-함수의-미분" class="level2">
-<h2 class="anchored" data-anchor-id="단변수-합성-함수의-미분">2.1 단변수 합성 함수의 미분</h2>
+<section id="연쇄-법칙-chain-rule" class="level2">
+<h2 class="anchored" data-anchor-id="연쇄-법칙-chain-rule">2. 연쇄 법칙 (Chain Rule)</h2>
+<section id="단변수-합성-함수의-미분" class="level3">
+<h3 class="anchored" data-anchor-id="단변수-합성-함수의-미분">2.1 단변수 합성 함수의 미분</h3>
 <p>앞 절의 <span class="math inline">\(f\)</span>는 미분이 쉬운 단순한 함수였습니다. 하지만 실제로 우리가 다루는 함수는 <strong>여러 미분 가능한 함수가 합성된 형태</strong>가 대부분입니다. 예를 들어 <span class="math inline">\(f(x) = g(h(x))\)</span>처럼 말이죠. 이때 그래디언트를 얻는 핵심 도구가 <strong>연쇄 법칙</strong>입니다.</p>
 <p><span class="math display">\[
 \frac{df}{dx} = \frac{dg}{dh}\,\frac{dh}{dx}.
@@ -3145,8 +3136,8 @@ f'(x) = g'(y)\,h'(x)
 \]</span></p>
 <p>즉, <strong>순전파(forward)에서 계산해 둔 중간 값 <span class="math inline">\(y\)</span>를 그대로 재사용</strong>하면 <span class="math inline">\(g'(y)\)</span>를 다시 계산할 필요가 없습니다. 바로 이 아이디어가 역전파의 출발점입니다.</p>
 </section>
-<section id="임의-개수의-합성으로-일반화" class="level2">
-<h2 class="anchored" data-anchor-id="임의-개수의-합성으로-일반화">2.2 임의 개수의 합성으로 일반화</h2>
+<section id="임의-개수의-합성으로-일반화" class="level3">
+<h3 class="anchored" data-anchor-id="임의-개수의-합성으로-일반화">2.2 임의 개수의 합성으로 일반화</h3>
 <p>이 기법은 임의의 개수의 함수 합성으로 자연스럽게 확장됩니다. 다음과 같이 정의합시다.</p>
 <p><span class="math display">\[
 \begin{aligned}
@@ -3165,8 +3156,8 @@ f'(x) = \prod_{i=1}^n f_i'(z_i).
 <li>단변수에서는 곱셈이 교환 가능하므로 곱하는 순서는 중요하지 않습니다(다변수에서는 달라집니다 — 3장 참고).</li>
 </ul>
 </section>
-<section id="기본-함수와-그-그래디언트-구현" class="level2">
-<h2 class="anchored" data-anchor-id="기본-함수와-그-그래디언트-구현">2.3 기본 함수와 그 그래디언트 구현</h2>
+<section id="기본-함수와-그-그래디언트-구현" class="level3">
+<h3 class="anchored" data-anchor-id="기본-함수와-그-그래디언트-구현">2.3 기본 함수와 그 그래디언트 구현</h3>
 <p>먼저 1차/2차/다항 함수와 각각의 도함수를 정의합니다. 손으로 미분하면 다음과 같습니다.</p>
 <ul>
 <li>1차 함수 <span class="math inline">\(\ell(x) = ax + b \;\Rightarrow\; \ell'(x) = a\)</span></li>
@@ -3205,8 +3196,8 @@ f'(x) = \prod_{i=1}^n f_i'(z_i).
 <span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>test_gradient(<span class="st">"polynomial"</span>, polynomial_fn(np.array([<span class="dv">1</span>,<span class="op">-</span><span class="dv">4</span>,<span class="op">-</span><span class="dv">9</span>,<span class="dv">16</span>,<span class="dv">20</span>])<span class="op">*</span><span class="fl">0.1</span>), np.random.randn(<span class="dv">4</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>세 테스트 모두 통과합니다 (<code>✓ linear/quadratic/polynomial test passed</code>).</p>
 </section>
-<section id="합성-함수-만들기" class="level2">
-<h2 class="anchored" data-anchor-id="합성-함수-만들기">2.4 합성 함수 만들기</h2>
+<section id="합성-함수-만들기" class="level3">
+<h3 class="anchored" data-anchor-id="합성-함수-만들기">2.4 합성 함수 만들기</h3>
 <p>이제 위 함수들을 합성합니다.</p>
 <p><span class="math display">\[
 \begin{aligned}
@@ -3243,8 +3234,8 @@ f(x) &amp;= (f_3 \circ f_2 \circ f_1)(x).
 </figure>
 </div>
 </section>
-<section id="중간-값을-보존하는-순전파역전파-구현" class="level2">
-<h2 class="anchored" data-anchor-id="중간-값을-보존하는-순전파역전파-구현">2.5 중간 값을 보존하는 순전파/역전파 구현</h2>
+<section id="중간-값을-보존하는-순전파역전파-구현" class="level3">
+<h3 class="anchored" data-anchor-id="중간-값을-보존하는-순전파역전파-구현">2.5 중간 값을 보존하는 순전파/역전파 구현</h3>
 <p><strong>핵심:</strong> 위의 <code>f_naive</code>는 최종 출력만 반환하므로 그래디언트 계산에 부적합합니다. 연쇄 법칙을 적용하려면 각 층의 중간 값 <span class="math inline">\(z_i\)</span>가 필요하기 때문입니다. 따라서 순전파 함수가 <strong>모든 중간 값의 리스트</strong> <span class="math inline">\((z_1, z_2, \ldots, z_{n+1})\)</span>을 반환하도록 재설계합니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> f(x):</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""중간 값들의 리스트 (x, f1(x), f2(f1(x)), ...) 를 반환"""</span></span>
@@ -3264,8 +3255,8 @@ f(x) &amp;= (f_3 \circ f_2 \circ f_1)(x).
 <span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> dfdx</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>grad_f</code>의 루프는 정확히 <span class="math inline">\(f'(x) = \prod_{i} f_i'(z_i)\)</span>를 구현한 것입니다. 인덱스를 <span class="math inline">\(n\)</span>에서 <span class="math inline">\(1\)</span>로 거꾸로 돌면서 곱하는 모습이, 바로 <strong>그래디언트가 출력에서 입력 방향으로 거슬러 흐르는</strong> 역전파의 골격입니다.</p>
 </section>
-<section id="합성-함수에서의-경사-하강법" class="level2">
-<h2 class="anchored" data-anchor-id="합성-함수에서의-경사-하강법">2.6 합성 함수에서의 경사 하강법</h2>
+<section id="합성-함수에서의-경사-하강법" class="level3">
+<h3 class="anchored" data-anchor-id="합성-함수에서의-경사-하강법">2.6 합성 함수에서의 경사 하강법</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> gradient_descent(x, f, grad_f, eta, N_step):</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    trace <span class="op">=</span> [x]</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(N_step):</span>
@@ -3294,10 +3285,10 @@ f(x) &amp;= (f_3 \circ f_2 \circ f_1)(x).
 <hr>
 </section>
 </section>
-<section id="다변수-함수로의-확장-expand-to-multi-variable-function" class="level1">
-<h1>3. 다변수 함수로의 확장 (Expand to Multi-variable Function)</h1>
-<section id="야코비안jacobian-행렬" class="level2">
-<h2 class="anchored" data-anchor-id="야코비안jacobian-행렬">3.1 야코비안(Jacobian) 행렬</h2>
+<section id="다변수-함수로의-확장-expand-to-multi-variable-function" class="level2">
+<h2 class="anchored" data-anchor-id="다변수-함수로의-확장-expand-to-multi-variable-function">3. 다변수 함수로의 확장 (Expand to Multi-variable Function)</h2>
+<section id="야코비안jacobian-행렬" class="level3">
+<h3 class="anchored" data-anchor-id="야코비안jacobian-행렬">3.1 야코비안(Jacobian) 행렬</h3>
 <p>이제 연쇄 법칙을 다변수 벡터 함수로 확장합니다. 그 핵심 개념이 <strong>야코비안 행렬</strong>입니다. 미분 가능한 함수 <span class="math inline">\(\mathbf{f} = (f_1, \ldots, f_m): \mathbb{R}^n \to \mathbb{R}^m\)</span>에 대해, 야코비안은 모든 1차 편미분을 모아 놓은 행렬입니다.</p>
 <p><span class="math display">\[
 \mathbf{J}_\mathbf{f}
@@ -3319,8 +3310,8 @@ f(x) &amp;= (f_3 \circ f_2 \circ f_1)(x).
 \]</span></p>
 <p>이는 1차원에서 <span class="math inline">\(f(x+\Delta x) - f(x) \approx f'(x)\,\Delta x\)</span>였던 식의 자연스러운 다변수 일반화입니다. 야코비안은 입력 섭동(perturbation) <span class="math inline">\(\Delta \mathbf{x}\)</span>를 출력 섭동으로 <strong>선형 변환</strong>해 주는 행렬인 셈입니다.</p>
 </section>
-<section id="다변수-연쇄-법칙" class="level2">
-<h2 class="anchored" data-anchor-id="다변수-연쇄-법칙">3.2 다변수 연쇄 법칙</h2>
+<section id="다변수-연쇄-법칙" class="level3">
+<h3 class="anchored" data-anchor-id="다변수-연쇄-법칙">3.2 다변수 연쇄 법칙</h3>
 <p>이제 단변수 때처럼 합성을 정의합니다.</p>
 <p><span class="math display">\[
 \begin{aligned}
@@ -3349,10 +3340,10 @@ f(x) &amp;= (f_3 \circ f_2 \circ f_1)(x).
 <hr>
 </section>
 </section>
-<section id="모듈화-modularization" class="level1">
-<h1>4. 모듈화 (Modularization)</h1>
-<section id="입력이-아니라-파라미터를-최적화한다" class="level2">
-<h2 class="anchored" data-anchor-id="입력이-아니라-파라미터를-최적화한다">4.1 입력이 아니라 파라미터를 최적화한다</h2>
+<section id="모듈화-modularization" class="level2">
+<h2 class="anchored" data-anchor-id="모듈화-modularization">4. 모듈화 (Modularization)</h2>
+<section id="입력이-아니라-파라미터를-최적화한다" class="level3">
+<h3 class="anchored" data-anchor-id="입력이-아니라-파라미터를-최적화한다">4.1 입력이 아니라 파라미터를 최적화한다</h3>
 <p>지금까지는 입력 <span class="math inline">\(x\)</span>에 대한 그래디언트를 다뤘지만, 머신러닝에서 우리가 최적화하는 대상은 <strong>모델 파라미터 <span class="math inline">\(\theta\)</span></strong>입니다. 이를 다음과 같이 정식화합니다.</p>
 <p><span class="math display">\[
 \min_\theta \sum_{x \in D} \ell(x; \theta)
@@ -3383,8 +3374,8 @@ z_{i+1} &amp;= f_i(z_i; \theta_i), \\
 </ul>
 <p>이 구조 덕분에 우리는 <strong>각 층을 독립적인 모듈로 캡슐화</strong>할 수 있습니다. 각 모듈은 단지 “들어온 그래디언트를 받아, 입력 쪽 그래디언트를 내보내고, 자기 파라미터 그래디언트는 저장한다”는 약속만 지키면 됩니다.</p>
 </section>
-<section id="모듈의-추상-클래스" class="level2">
-<h2 class="anchored" data-anchor-id="모듈의-추상-클래스">4.2 모듈의 추상 클래스</h2>
+<section id="모듈의-추상-클래스" class="level3">
+<h3 class="anchored" data-anchor-id="모듈의-추상-클래스">4.2 모듈의 추상 클래스</h3>
 <p>모든 층이 공유할 인터페이스는 두 가지입니다.</p>
 <ul>
 <li><strong><code>forward</code></strong>: 입력 <span class="math inline">\(z_i\)</span>로부터 출력 <span class="math inline">\(z_{i+1}\)</span>을 계산 (순전파).</li>
@@ -3403,8 +3394,8 @@ z_{i+1} &amp;= f_i(z_i; \theta_i), \\
 <span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">NotImplementedError</span></span>
 <span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># state_dict / grad_dict / load_state_dict / to : 테스트용 (수정 불필요)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="linear-모듈-행렬-곱의-역전파" class="level2">
-<h2 class="anchored" data-anchor-id="linear-모듈-행렬-곱의-역전파">4.3 Linear 모듈: 행렬 곱의 역전파</h2>
+<section id="linear-모듈-행렬-곱의-역전파" class="level3">
+<h3 class="anchored" data-anchor-id="linear-모듈-행렬-곱의-역전파">4.3 Linear 모듈: 행렬 곱의 역전파</h3>
 <p>가장 단순한 모듈은 선형 변환 <span class="math inline">\(Y = XW + b\)</span>입니다. 그 역전파 공식은 다음과 같습니다.</p>
 <p><span class="math display">\[
 \begin{aligned}
@@ -3452,8 +3443,8 @@ z_{i+1} &amp;= f_i(z_i; \theta_i), \\
 <p><strong>구현 디테일:</strong> 입력 <span class="math inline">\(x\)</span>가 2차원이 아닌 다차원(예: <code>(5, 3, 6)</code>)일 수 있으므로, 가중치/편향 그래디언트는 마지막 차원만 남기고 <code>reshape(-1, dim)</code>으로 평탄화하여 배치 방향 합산을 일괄 처리합니다. 모든 차원 테스트(2D/3D/4D)가 통과합니다.</p>
 </blockquote>
 </section>
-<section id="activation-모듈-silu의-역전파" class="level2">
-<h2 class="anchored" data-anchor-id="activation-모듈-silu의-역전파">4.4 Activation 모듈: SiLU의 역전파</h2>
+<section id="activation-모듈-silu의-역전파" class="level3">
+<h3 class="anchored" data-anchor-id="activation-모듈-silu의-역전파">4.4 Activation 모듈: SiLU의 역전파</h3>
 <p>비선형성을 위해 활성화 함수가 필요합니다. 여기서는 <strong>SiLU(Sigmoid-weighted Linear Unit, = Swish)</strong>의 역전파만 구현합니다. SiLU는 다음과 같이 정의됩니다.</p>
 <p><span class="math display">\[
 y = \text{SiLU}(x) = \frac{x}{1 + e^{-x}} = x\,\sigma(x).
@@ -3499,8 +3490,8 @@ y = \text{SiLU}(x) = \frac{x}{1 + e^{-x}} = x\,\sigma(x).
 <p>활성화 함수는 <strong>원소별(element-wise)</strong> 연산이므로 야코비안이 대각 행렬이 되고, 역전파는 단순히 상류 그래디언트에 국소 도함수를 <strong>원소별로 곱하는</strong> 형태가 됩니다. (<span class="math inline">\(\text{grad\_y} \odot y'\)</span>)</p>
 </blockquote>
 </section>
-<section id="mlp-모듈-끝에서-끝까지end-to-end-역전파" class="level2">
-<h2 class="anchored" data-anchor-id="mlp-모듈-끝에서-끝까지end-to-end-역전파">4.5 MLP 모듈: 끝에서 끝까지(end-to-end) 역전파</h2>
+<section id="mlp-모듈-끝에서-끝까지end-to-end-역전파" class="level3">
+<h3 class="anchored" data-anchor-id="mlp-모듈-끝에서-끝까지end-to-end-역전파">4.5 MLP 모듈: 끝에서 끝까지(end-to-end) 역전파</h3>
 <p>마지막으로 <code>Linear</code>와 <code>Activation</code>을 쌓아 MLP를 구성합니다. 구조는 <code>linear_0 → act_0 → linear_1 → act_1 → ... → final</code>입니다.</p>
 <ul>
 <li><strong>순전파:</strong> 입력에서 출력 방향으로 각 층을 차례로 통과시킵니다.</li>
@@ -3535,8 +3526,8 @@ y = \text{SiLU}(x) = \frac{x}{1 + e^{-x}} = x\,\sigma(x).
 <span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>test_module(<span class="st">"MLP"</span>, MLP, [<span class="dv">3</span>, <span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>, <span class="dv">2</span>], torch.randn(<span class="dv">5</span>, <span class="dv">3</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>backward</code>의 한 줄 <code>layer.backward(act_fn.backward(grad_x))</code>가 본질을 압축적으로 보여 줍니다. 상류 그래디언트가 <strong>활성화의 역전파를 먼저 통과한 뒤 선형 층의 역전파로 전달</strong>되며, 이 흐름이 입력에 닿을 때까지 반복됩니다. 모든 파라미터 그래디언트는 각 모듈 내부에 저장되므로, 우리는 그저 <code>model.backward(grad)</code>만 호출하면 됩니다. 모든 테스트가 통과합니다.</p>
 </section>
-<section id="데모-cifar-10-분류-linear-vs-mlp" class="level2">
-<h2 class="anchored" data-anchor-id="데모-cifar-10-분류-linear-vs-mlp">4.6 데모: CIFAR-10 분류 (Linear vs MLP)</h2>
+<section id="데모-cifar-10-분류-linear-vs-mlp" class="level3">
+<h3 class="anchored" data-anchor-id="데모-cifar-10-분류-linear-vs-mlp">4.6 데모: CIFAR-10 분류 (Linear vs MLP)</h3>
 <p>이제 우리가 직접 만든 역전파가 실제 데이터셋에서 동작하는지 확인합니다. 데이터 로딩·전처리·학습·평가 유틸리티는 모두 제공되어 있으니, 셀을 실행해 결과만 확인하면 됩니다.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> torchvision, torchvision.transforms <span class="im">as</span> transforms</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -3595,20 +3586,70 @@ y = \text{SiLU}(x) = \frac{x}{1 + e^{-x}} = x\,\sigma(x).
 </blockquote>
 <hr>
 </section>
-<section id="마치며-conclusion" class="level2">
-<h2 class="anchored" data-anchor-id="마치며-conclusion">마치며 (Conclusion)</h2>
-<p>이번 실습에서 우리는 다음의 논리적 사다리를 한 칸씩 올라왔습니다.</p>
-<ol type="1">
-<li><strong>경사 하강법</strong>은 그래디언트만 있으면 함수 값을 줄일 수 있다.</li>
-<li>복잡한 합성 함수의 그래디언트는 <strong>연쇄 법칙</strong>으로 얻을 수 있으며, <strong>순전파에서 중간 값을 저장</strong>해 두는 것이 핵심이다.</li>
-<li>다변수로 확장하면 국소 미분 계수의 곱이 <strong>야코비안 행렬 곱</strong>이 되고, 손실이 스칼라이므로 <strong>출력에서 입력 방향으로</strong> 그래디언트 벡터를 전달하는 것이 효율적이다.</li>
-<li>이 원리를 <strong>모듈별 <code>forward</code>/<code>backward</code> 인터페이스</strong>로 캡슐화하면, 어떤 신경망이든 그래디언트를 자동으로 계산할 수 있다 — 이것이 바로 <strong>역전파(backpropagation)</strong>다.</li>
-</ol>
+</section>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 실습의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 출발점</strong></td>
+<td style="text-align: left;">그래디언트만 알면 <span class="math inline">\(x \leftarrow x - \eta \nabla f(x)\)</span> 로 함수 값을 줄일 수 있다. 2차원 예제에서 궤적이 실제로 최소점으로 내려간다</td>
+<td style="text-align: left;">경사 하강 궤적 시각화</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 문제</strong></td>
+<td style="text-align: left;">신경망은 거대한 합성 함수라 그래디언트를 손으로 유도할 수 없다</td>
+<td style="text-align: left;">합성의 깊이</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 연쇄 법칙</strong></td>
+<td style="text-align: left;">합성 함수의 미분은 국소 미분 계수들의 곱이다. 합성이 몇 겹이든 같은 규칙이 반복 적용된다</td>
+<td style="text-align: left;"><span class="math inline">\(\frac{df}{dx} = \prod_k \frac{\partial u_{k+1}}{\partial u_k}\)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 순전파의 역할</strong></td>
+<td style="text-align: left;">각 국소 미분은 <strong>그 지점의 입력 값</strong>에 의존하므로, 순전파에서 중간 값을 저장해 두지 않으면 역전파를 계산할 수 없다</td>
+<td style="text-align: left;">중간 값 보존 구현</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 다변수로의 확장</strong></td>
+<td style="text-align: left;">입력과 출력이 벡터면 국소 미분은 <strong>야코비안 행렬</strong>이 되고, 연쇄 법칙은 야코비안의 행렬 곱이 된다</td>
+<td style="text-align: left;">야코비안 · 다변수 연쇄 법칙</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 방향의 선택</strong></td>
+<td style="text-align: left;">손실은 스칼라이므로, 출력 쪽에서 시작해 입력 방향으로 곱해 내려가면 매 단계가 벡터–행렬 곱으로 끝난다. 반대 방향은 행렬–행렬 곱이라 훨씬 비싸다</td>
+<td style="text-align: left;">역방향 계산의 이점</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 최적화 대상의 전환</strong></td>
+<td style="text-align: left;">실제로 갱신해야 하는 것은 입력이 아니라 <strong>파라미터</strong>이므로, 각 모듈은 입력에 대한 그래디언트와 파라미터에 대한 그래디언트를 함께 내보내야 한다</td>
+<td style="text-align: left;">모듈의 추상 클래스</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 모듈화</strong></td>
+<td style="text-align: left;"><code>forward</code> / <code>backward</code> 인터페이스로 캡슐화하면 Linear · Activation · MLP를 자유롭게 조립해도 그래디언트가 자동으로 흐른다. CIFAR-10에서 MLP가 선형 모델을 앞선다</td>
+<td style="text-align: left;">끝에서 끝까지 역전파 · 데모</td>
+</tr>
+</tbody>
+</table>
 <p>오늘날 PyTorch의 <code>loss.backward()</code> 한 줄 뒤에 숨어 있는 메커니즘이 바로 우리가 직접 손으로 만든 이 과정입니다.</p>
 
 
 
-</section>
 </section>
 
 </main> <!-- /main -->

@@ -1,6 +1,6 @@
 ---
 name: refactor-post
-description: Bring an EXISTING Quarto blog post in the shsha0110.github.io repo up to the current house style, using the original PDF to audit for missing content. Adds the 서두 인용구 / 한 줄 요약 / 정리하며 sections, fills in concepts, equations, and figures the old post skipped, normalizes callouts and captions — while preserving the existing prose, file path, and image filenames. Use this whenever the user points at an existing post (with or without its source PDF) and says things like "이 포스트 새 규격에 맞춰줘", "기존 포스트 정비", "리팩토링해줘", "빠진 내용 채워줘", "예전에 쓴 글 업데이트", or asks to make an old post consistent with the newer ones. For writing a brand-new post from a PDF, use the post skill instead.
+description: Bring an EXISTING Quarto blog post in the shsha0110.github.io repo up to the current house style, using the original PDF to audit for missing content. Adds the 서두 인용구 / 한 줄 요약 / 정리하며 sections, fills in concepts, equations, and figures the old post skipped, normalizes callouts and captions — while preserving the existing prose, file path, and image filenames — then renders, commits, and pushes the result to origin/main. Use this whenever the user points at an existing post (with or without its source PDF) and says things like "이 포스트 새 규격에 맞춰줘", "기존 포스트 정비", "리팩토링해줘", "빠진 내용 채워줘", "예전에 쓴 글 업데이트", or asks to make an old post consistent with the newer ones. For writing a brand-new post from a PDF, use the post skill instead.
 ---
 
 # Quarto 블로그 포스트 정비 (기존)
@@ -45,7 +45,7 @@ description: Bring an EXISTING Quarto blog post in the shsha0110.github.io repo 
 
 ### STEP 0 — 하우스 스타일 규격 로드
 
-`.claude/blog-house-style.md`를 읽는다. 서식 · 구조 · 문체의 **모든** 규격(§A–§K)이 거기 있다. 규격을 기억에 의존해 추측하지 않는다.
+`.claude/blog-house-style.md`를 읽는다. 서식 · 구조 · 문체의 **모든** 규격과 게시 절차(§A–§L)가 거기 있다. 규격을 기억에 의존해 추측하지 않는다.
 
 ### STEP 1 — 안전 점검
 
@@ -99,7 +99,19 @@ description: Bring an EXISTING Quarto blog post in the shsha0110.github.io repo 
 
 편집은 파일 전체 재작성이 아니라 **부분 편집**으로 수행한다. 그래야 diff가 실제 변경분만 보여준다.
 
-### STEP 6 — 보고
+### STEP 6 — 자체 점검
+
+규격 §K 체크리스트를 수행한다. ❌가 하나라도 있으면 **게시하지 말고** 먼저 고친다.
+
+### STEP 7 — 게시
+
+규격 §L의 게시 절차를 따른다 — 렌더 → 스테이징 → 커밋 → 푸시. 커밋 메시지는 `Refactor [<카테고리>] <NN>. <주제명>` 형식이다.
+
+앞 단계가 실패하면 뒤로 진행하지 않는다. 특히 **렌더가 실패하면 커밋하지 않는다.**
+
+STEP 1에서 작업 시작 전 워킹 트리가 깨끗했음을 이미 확인했으므로, 이 시점의 변경분은 전부 이 스킬이 만든 것이어야 한다. 그렇지 않은 파일이 보이면 §L-2에 따라 스테이징을 멈추고 묻는다.
+
+### STEP 8 — 보고
 
 아래 형식으로 채팅 응답에 보고한다. 파일에는 넣지 않는다.
 
@@ -131,5 +143,7 @@ description: Bring an EXISTING Quarto blog post in the shsha0110.github.io repo 
 |:---|:---|:---|:---|:---|
 
 **4. 판단이 필요한 항목** — 원본과 기존 서술이 어긋나는데 어느 쪽이 맞는지 확정하기 어려운 지점, 담당 범위가 애매했던 부분 등. 없으면 `없음`.
+
+**5. 게시 결과** — 렌더 성공 여부, 커밋 해시와 메시지, 푸시 결과, 그리고 `git diff --stat` 기준 변경 규모(최소 개입이 지켜졌는지 사용자가 한눈에 보게). 어느 단계에서 멈췄다면 그 이유를 명시한다.
 
 **5. 규격 자체 점검** — `.claude/blog-house-style.md` §K의 체크리스트를 그대로 수행해 보고한다.

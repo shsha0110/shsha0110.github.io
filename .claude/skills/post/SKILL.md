@@ -1,6 +1,6 @@
 ---
 name: post
-description: Write a NEW Quarto (.qmd) blog post for the shsha0110.github.io repo from a PDF — lecture slides, a paper, or a book chapter — following the blog's fixed house style (Korean 경어체, `##` top-level headings, 출처 인용구 + 한 줄 요약 + 정리하며 sections, automatic figure extraction, fixed YAML front matter). Use this whenever the user attaches or points to a PDF of course material, a paper, or a textbook chapter and wants it written up, or says things like "포스트 작성해줘", "이거 정리해줘", "블로그에 올려줘", "논문 리뷰 써줘", "강의 자료 정리", even if they never say the words "Quarto" or "블로그". For bringing an ALREADY-EXISTING post up to the current standard, use the refactor-post skill instead.
+description: Write a NEW Quarto (.qmd) blog post for the shsha0110.github.io repo from a PDF — lecture slides, a paper, or a book chapter — following the blog's fixed house style (Korean 경어체, `##` top-level headings, 출처 인용구 + 한 줄 요약 + 정리하며 sections, automatic figure extraction, fixed YAML front matter), then renders it with Quarto and commits and pushes it to origin/main. Use this whenever the user attaches or points to a PDF of course material, a paper, or a textbook chapter and wants it written up, or says things like "포스트 작성해줘", "이거 정리해줘", "블로그에 올려줘", "논문 리뷰 써줘", "강의 자료 정리", even if they never say the words "Quarto" or "블로그". For bringing an ALREADY-EXISTING post up to the current standard, use the refactor-post skill instead.
 ---
 
 # Quarto 블로그 포스트 작성 (신규)
@@ -31,7 +31,7 @@ description: Write a NEW Quarto (.qmd) blog post for the shsha0110.github.io rep
 
 ### STEP 0 — 하우스 스타일 규격 로드
 
-`.claude/blog-house-style.md`를 읽는다. 서식 · 구조 · 문체의 **모든** 규격(§A–§K)이 거기 있고, 이 스킬 본문에는 워크플로만 있다. 규격을 기억에 의존해 추측하지 않는다.
+`.claude/blog-house-style.md`를 읽는다. 서식 · 구조 · 문체의 **모든** 규격과 게시 절차(§A–§L)가 거기 있고, 이 스킬 본문에는 워크플로만 있다. 규격을 기억에 의존해 추측하지 않는다.
 
 ### STEP 1 — 유형 판별과 경로 결정
 
@@ -67,7 +67,17 @@ PDF를 처음부터 끝까지 읽는다. 부록 · 증명 · 각주 · 표까지
 
 규격 §A–§I에 따라 `index.qmd`를 생성한다.
 
-### STEP 6 — 검증 보고
+### STEP 6 — 자체 점검
+
+규격 §K 체크리스트를 수행한다. ❌가 하나라도 있으면 **게시하지 말고** 먼저 고친다.
+
+### STEP 7 — 게시
+
+규격 §L의 게시 절차를 따른다 — 렌더 → 스테이징 → 커밋 → 푸시. 커밋 메시지는 `Add [<카테고리>] <NN>. <주제명>` 형식이다.
+
+앞 단계가 실패하면 뒤로 진행하지 않는다. 특히 **렌더가 실패하면 커밋하지 않는다.**
+
+### STEP 8 — 검증 보고
 
 아래 §J 형식으로 채팅 응답에 보고한다. 이 내용은 **파일에 넣지 않는다.**
 
@@ -102,3 +112,5 @@ PDF를 처음부터 끝까지 읽는다. 부록 · 증명 · 각주 · 표까지
 - **생략된 내용 및 사유**: (리스트업. 없으면 `없음`으로 명시)
 
 **4. 규격 자체 점검** — `.claude/blog-house-style.md` §K의 체크리스트를 그대로 수행해 보고한다.
+
+**5. 게시 결과** — 렌더 성공 여부, 커밋 해시와 메시지, 푸시 결과. 어느 단계에서 멈췄다면 그 이유를 명시한다.

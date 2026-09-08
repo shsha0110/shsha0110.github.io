@@ -1,6 +1,6 @@
 ---
 title: "[Machine Learning] 09. Perceptron & Neural Networks"
-description: "Perceptron & Neural Networks"
+description: "퍼셉트론 수렴 정리를 코사인 논증으로 증명하고, 손실 함수 3종과 다층 신경망을 거쳐 ResNet·CNN·Transformer·LayerNorm까지 현대 아키텍처의 계보를 정리합니다."
 author: "유성현"
 categories: [Machine Learning]
 format:
@@ -10,6 +10,18 @@ format:
     code-fold: show
     math: true
 ---
+
+> 본 포스트는 서울대학교 컴퓨터공학부 · 인공지능대학원(IPAI) **박재식(Jaesik Park)** 교수님의 *Introduction to Machine Learning* (4190.428) 강의 자료(9강 *Perceptron & Neural Networks*)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 원 강의 자료는 MIT 6.036(2019 Fall)과 Stanford CS229(2023–2024 Summer)의 강의 노트를 상당 부분 차용하고 있습니다.
+
+## 한 줄 요약 (TL;DR)
+
+> **"퍼셉트론은 틀릴 때마다 가중치를 정답 쪽으로 조금씩 돌리는 규칙일 뿐인데, 그 규칙이 최대 $(R/\gamma)^2$번의 실수만으로 끝난다는 것을 코사인 하나로 증명할 수 있습니다."**
+>
+> 전반부는 **퍼셉트론 수렴 정리**입니다. 오분류할 때마다 $\theta \leftarrow \theta + y^{(i)}x^{(i)}$로 갱신하는 이 단순한 알고리즘이, 데이터가 선형 분리 가능하기만 하면 **반드시 유한 번의 실수 안에** 분리기를 찾아냅니다. 증명은 현재 가중치 $\theta^{(k)}$와 정답 $\theta^*$ 사이 각도의 코사인을 위아래로 각각 묶는 데서 나옵니다 — 분자는 매 실수마다 최소 $\gamma$씩 늘고, 분모는 최대 $R^2$씩만 자라므로, 코사인이 1을 넘을 수 없다는 사실에서 $k \le (R/\gamma)^2$이 떨어집니다.
+>
+> 후반부는 그 한계를 넘어섭니다. 퍼셉트론은 결국 선형 모델이고, 3강에서 본 대로 특성 사상 $\phi$가 필요합니다. 그런데 $\phi$를 사람이 설계하는 대신 **데이터로부터 학습**하면 어떨까요 — 이것이 신경망입니다. 다층 완전연결망의 출력을 $\bar{h}_\theta(x) = W^{[r]}\phi_\beta(x) + b^{[r]}$로 다시 쓰면, 딥러닝이란 마지막 선형 층과 그 아래 특성 사상을 **동시에** 최적화하는 일임이 드러납니다.
+>
+> 마지막으로 도메인 구조를 반영한 현대 아키텍처들을 훑습니다 — 스킵 커넥션으로 깊이를 가능하게 한 **ResNet**, 공간 국소성을 이용한 **CNN**, 전역 의존성을 병렬로 계산하는 **Transformer/ViT**, 그리고 학습을 안정시키는 **LayerNorm**입니다.
 
 ## 1. 서론: 선형 분류기에서 비선형 신경망으로
 
@@ -35,9 +47,17 @@ format:
 
 * 이 단순한 업데이트 규칙은 기하학적으로 분류 경계면(hyperplane)을 오분류된 데이터 포인트 방향으로 이동시키는 효과를 낳습니다.
 
-![Figure: 퍼셉트론의 기하학적 업데이트 과정. 파란색 십자가(+)와 빨간색 마이너스(-) 데이터가 존재할 때, 기존 경계면 $\theta^{(0)}$가 파란색 포인트 $x^{(1)}$을 음성 클래스로 잘못 분류하면, $\theta^{(1)}$ 방향으로 법선 벡터가 회전하여 새로운 경계면을 형성하고 올바르게 분류하게 됩니다.](./images/perceptron_update.png)
+![Figure 1: 퍼셉트론의 기하학적 업데이트 과정. 파란색 십자가(+)와 빨간색 마이너스(-) 데이터가 존재할 때, 기존 경계면 $\theta^{(0)}$가 파란색 포인트 $x^{(1)}$을 음성 클래스로 잘못 분류하면, $\theta^{(1)}$ 방향으로 법선 벡터가 회전하여 새로운 경계면을 형성하고 올바르게 분류하게 됩니다.](./images/perceptron_update.png)
 
-* 예를 들어, $\theta^{(0)} = [\begin{matrix}1 \\ -1\end{matrix}]$, $\theta_0^{(0)} = 1$이고, 포인트 $x^{(1)} = [\begin{matrix}1 \\ 3\end{matrix}]$의 실제 레이블이 $y^{(1)} = 1$일 때, 예측값은 $y^{(1)}({\theta^{(0)}}^\top x^{(1)} + \theta_0^{(0)}) = [\begin{matrix}1 \\ 3\end{matrix}] + 1 = -1 < 0$이 되어 오분류됩니다. 이 경우 업데이트 규칙에 따라 $\theta^{(1)} = \theta^{(0)} + y^{(1)}x^{(1)} = [\begin{matrix}2 \\ 2\end{matrix}]$, $\theta_0^{(1)} = \theta_0^{(0)} + y^{(1)} = 2$가 되어 새로운 경계면을 형성합니다. 중요한 점은, 학습 오차(training error)가 0인 선형 분류기가 존재한다면 이 알고리즘은 궁극적으로 이를 찾아낸다는 것입니다.
+* 예를 들어 $\theta^{(0)} = \begin{bmatrix}1 \\ -1\end{bmatrix}$, $\theta_0^{(0)} = 1$이고, 포인트 $x^{(1)} = \begin{bmatrix}1 \\ 3\end{bmatrix}$의 실제 레이블이 $y^{(1)} = 1$이라고 합시다. 이때
+
+$$y^{(1)}\left({\theta^{(0)}}^\top x^{(1)} + \theta_0^{(0)}\right) = 1 \cdot \left(\begin{bmatrix}1 & -1\end{bmatrix}\begin{bmatrix}1 \\ 3\end{bmatrix} + 1\right) = (1 - 3) + 1 = -1 < 0$$
+
+* 값이 음수이므로 오분류입니다. 업데이트 규칙에 따라
+
+$$\theta^{(1)} = \theta^{(0)} + y^{(1)}x^{(1)} = \begin{bmatrix}1 \\ -1\end{bmatrix} + \begin{bmatrix}1 \\ 3\end{bmatrix} = \begin{bmatrix}2 \\ 2\end{bmatrix}, \qquad \theta_0^{(1)} = \theta_0^{(0)} + y^{(1)} = 2$$
+
+* 가 되어 새로운 경계면을 형성합니다. 중요한 점은, 학습 오차(training error)가 0인 선형 분류기가 존재한다면 이 알고리즘은 궁극적으로 이를 찾아낸다는 것입니다.
 
 ### 2.2 Offset의 제거: 차원 확장을 통한 원점 통과 모델
 
@@ -47,23 +67,46 @@ format:
 * 새로운 입력 $x_{new}$와 가중치 $\theta_{new}$를 다음과 같이 정의합니다:
 $$x_{new} = [\begin{matrix}x_1 & x_2 & \cdots & x_d & +1\end{matrix}]^\top$$
 $$\theta_{new} = [\begin{matrix}\theta_1 & \theta_2 & \cdots & \theta_d & \theta_0\end{matrix}]^\top$$
-* 이렇게 하면 ${\theta_{new}}^\top x_{new} = \theta^\top x + \theta_0$가 성립하므로, 원점을 지나는 동일한 형태의 분류 문제로 치환됩니다. 따라서 알고리즘에서도 $\theta_0$ 업데이트를 생략하고 오직 가중치 벡터만 업데이트하는 형태(Perceptron-Through-Origin)로 재작성할 수 있습니다.
+* 이렇게 하면 ${\theta_{new}}^\top x_{new} = \theta_1 x_1 + \cdots + \theta_d x_d + \theta_0 \cdot 1 = \theta^\top x + \theta_0$가 성립하므로, 원점을 지나는 동일한 형태의 분류 문제로 치환됩니다. 따라서 알고리즘에서도 $\theta_0$ 업데이트를 생략하고 오직 가중치 벡터만 업데이트하는 형태(Perceptron-Through-Origin)로 재작성할 수 있습니다.
+
+#### 구체적인 예시
+
+* 다음 1차원 데이터셋을 봅시다.
+$$X = [[1], [2], [3], [4]], \qquad Y = [[+1], [+1], [-1], [-1]]$$
+* 이 데이터는 $d=1$에서 $\theta = [-1]$, $\theta_0 = 2.5$로 분리됩니다 ($-x + 2.5 > 0 \iff x < 2.5$). 하지만 **원점을 지나는** 분리기, 즉 $\theta_0 = 0$인 형태로는 분리할 수 없습니다. 1차원에서 원점을 지나는 분리기는 부호만 보는 것이라 $x=1,2,3,4$가 모두 같은 쪽에 놓이기 때문입니다.
+* 각 입력에 1을 덧붙여 2차원으로 올리면 상황이 달라집니다.
+$$X_{new} = \left[\begin{bmatrix}1 \\ 1\end{bmatrix}, \begin{bmatrix}2 \\ 1\end{bmatrix}, \begin{bmatrix}3 \\ 1\end{bmatrix}, \begin{bmatrix}4 \\ 1\end{bmatrix}\right], \qquad \theta_{new} = [-1,\ 2.5]^\top$$
+* 이제 이 데이터셋은 원점을 지나는 분리기로 완벽하게 나뉩니다. **차원 하나를 더해 편향을 흡수한 것**이지, 문제를 바꾼 것이 아니라는 점이 핵심입니다.
 
 ### 2.3 퍼셉트론 수렴 정리 (Convergence Theorem)
 
 * 선형 분리가 가능하다(Linearly separable)는 것은, 모든 $i$에 대해 $y^{(i)}(\theta^\top x^{(i)} + \theta_0) > 0$을 만족하는 $\theta, \theta_0$가 존재한다는 뜻이며, 이는 학습 에러 $\epsilon_n(h) = 0$을 의미합니다.
 
-* 퍼셉트론의 핵심 이론적 결과는 **데이터가 선형 분리 가능하다면 퍼셉트론 알고리즘은 반드시 선형 분리기를 찾아낸다는 보장(guarantee)이 있다**는 점입니다. 이를 증명하기 위해 **마진(margin)**이라는 개념을 도입합니다.
+* 퍼셉트론의 핵심 이론적 결과는 **데이터가 선형 분리 가능하다면 퍼셉트론 알고리즘은 반드시 선형 분리기를 찾아낸다는 보장(guarantee)이 있다**는 점입니다.
+* 참고로 어떤 데이터가 선형 분리 가능한지 자체를 판정하는 알고리즘들도 존재하며, 실행 시간은 $O(n^{d/2})$, $O(d^2 n)$, $O(n^{d-1}\log n)$ 등으로 알려져 있습니다.
+* 수렴을 증명하기 위해 **마진(margin)**이라는 개념을 도입합니다.
 데이터 포인트와 초평면 사이의 거리는 $\frac{\theta^\top x + \theta_0}{||\theta||}$이며, 정확히 분류되었는지 여부를 고려한 기하학적 마진은 다음과 같습니다:
 $$y \cdot \frac{\theta^\top x + \theta_0}{||\theta||}$$
 * 데이터셋 전체의 마진은 위 값들의 최소값 $\min_i \left( y^{(i)} \cdot \frac{\theta^\top x^{(i)} + \theta_0}{||\theta||} \right)$으로 정의됩니다.
+
+::: {.callout-tip}
+## Study Question: 오분류된 점의 마진은 어떤 부호일까요?
+
+**음수**입니다. 마진 $y \cdot \frac{\theta^\top x + \theta_0}{\|\theta\|}$에서 분모 $\|\theta\|$는 항상 양수이므로 부호는 $y(\theta^\top x + \theta_0)$가 결정합니다. 오분류란 예측 부호 $\mathrm{sign}(\theta^\top x + \theta_0)$가 실제 레이블 $y$와 다르다는 뜻이므로 이 곱은 음수입니다. 따라서 **데이터셋의 마진(= 개별 마진의 최솟값)이 양수인 것과 모든 점이 올바르게 분류된 것은 서로 필요충분조건**이며, 이 사실이 다음 수렴 정리에서 조건 a를 세울 수 있게 해 줍니다.
+:::
 
 #### **[수렴 정리의 가정과 결론]** 
 * 편의상 원점을 지나는 선형 분리기를 가정할 때, 다음 조건이 성립한다고 합시다.
   * **조건 a**: 완벽히 분류하는 $\theta^*$가 존재하여, 모든 $i$에 대해 마진이 최소 $\gamma > 0$ 이상이다. 즉, $y^{(i)}\frac{{\theta^*}^\top x^{(i)}}{||\theta^*||} \ge \gamma$.
   * **조건 b**: 모든 데이터의 크기가 유계(bounded)이다. 즉, $||x^{(i)}|| \le R$.
 
-* 결론적으로, **퍼셉트론 알고리즘은 최대 $(R/\gamma)^2$ 번의 오분류(mistakes)만을 범합니다**.
+::: {.callout-important}
+## 정리 (퍼셉트론 수렴 정리)
+
+원점을 지나는 분리기를 가정할 때, 위의 조건 a(마진 $\gamma > 0$ 이상으로 분리하는 $\theta^*$의 존재)와 조건 b($\|x^{(i)}\| \le R$)가 성립하면, 퍼셉트론 알고리즘은 **최대 $\left(\frac{R}{\gamma}\right)^2$번의 오분류만을 범한다.**
+:::
+
+* 주목할 점은 이 한계에 **데이터 개수 $n$도 차원 $d$도 등장하지 않는다**는 것입니다. 오직 데이터가 얼마나 넉넉히 분리되는가($\gamma$)와 얼마나 크게 퍼져 있는가($R$)만이 실수 횟수를 좌우합니다.
 
 #### **[수렴 증명 과정]** 
 * 증명의 핵심은 현재 학습된 가중치 $\theta^{(k)}$ (k번 틀렸을 때의 상태)와 이상적인 정답 가중치 $\theta^*$ 사이의 각도를 측정하는 것입니다. 두 벡터 사이의 각도의 코사인 값은 다음과 같이 분해할 수 있습니다.
@@ -109,13 +152,24 @@ $$\cos(\theta^{(k)}, \theta^*) = \frac{\theta^{(k)} \cdot \theta^*}{||\theta^*||
 * 신경망은 반복적인 행렬 곱셈(matrix multiplication)과 비선형 활성화 함수(non-linear activation)로 구축됩니다. 
 주택 가격 예측을 예로 들면, 입력으로 "집의 크기", "침실 개수", "우편번호", "동네 수준"을 주었을 때, 이를 곧바로 가격으로 변환하는 대신 신경망은 "가족 규모", "도보 가능성", "학교 품질"과 같은 중간 변수(hidden units, hidden neurons)를 스스로 학습하여 쌓아 올립니다.
 
-![Figure: 주택 가격 예측을 위한 단일 은닉층 신경망. 집 크기, 방 개수 등의 원시 피처가 은닉 노드(Family Size, Walkable, School Quality)를 거쳐 최종 가격으로 매핑됨을 보여주는 계층적 구조 모식도.](./images/housing_nn.png)
+![Figure 2: 주택 가격 예측을 위한 단일 은닉층 신경망의 구조도입니다. 왼쪽 열의 네 개 노드가 원시 입력 피처(집 크기 $x_1$, 침실 개수 $x_2$, 우편번호 $x_3$, 동네 수준 $x_4$)이고, 가운데 열의 세 노드가 은닉 유닛으로 각각 "가족 규모(family size)", "도보 가능성(walkable)", "학교 품질(school quality)"이라는 의미를 부여받았습니다. 화살표는 어떤 입력이 어떤 은닉 유닛으로 연결되는지를 나타내며, 예컨대 가족 규모는 집 크기와 침실 개수에서, 도보 가능성은 우편번호에서, 학교 품질은 우편번호와 동네 수준에서 만들어집니다. 오른쪽의 최종 노드가 예측 가격입니다. 핵심은 이 중간 개념들이 **사람이 지정한 것이 아니라 학습 과정에서 스스로 형성된다**는 점이며, 그래서 3강에서 사람이 손으로 설계하던 특성 사상 $\phi$를 신경망이 대신 학습한다고 말할 수 있습니다.](./images/housing_nn.png)
+
+* 이 그림을 수식으로 옮기면 은닉 유닛 $a_1, a_2, a_3$와 출력은 다음과 같습니다.
+$$a_1 = \text{ReLU}(\theta_1 x_1 + \theta_2 x_2 + \theta_3), \quad a_2 = \text{ReLU}(\theta_4 x_3 + \theta_5), \quad a_3 = \text{ReLU}(\theta_6 x_3 + \theta_7 x_4 + \theta_8)$$
+$$\bar{h}_\theta(x) = \theta_9 a_1 + \theta_{10} a_2 + \theta_{11} a_3 + \theta_{12}$$
+  * 이렇게 중간에 끼워 넣은 $a_i$들을 **은닉 유닛(hidden units)** 또는 **은닉 뉴런(hidden neurons)**이라고 부릅니다.
 
 * 단일 뉴런 모델은 가중치 $w \in \mathbb{R}^d$와 편향 $b \in \mathbb{R}$에 대해 $\theta = (w, b)$로 두고 계산한 선형 합을 ReLU와 같은 활성화 함수를 통과시키는 형태로 정의됩니다.
 $$\bar{h}_\theta(x) = \text{ReLU}(w^\top x + b)$$ 
   * 여기서 $\text{ReLU}(t) = \max\{t, 0\}$은 음수 집값을 방지하는 효과적인 장치가 됩니다.
 
 #### 다층 완전 연결 신경망 (Multi-layer Fully-Connected NN)과 벡터화
+
+* 일반적인 2층 완전연결 신경망은 먼저 성분별로 다음과 같이 쓸 수 있습니다. 은닉 유닛이 $m$개일 때, 모든 $j \in \{1,\dots,m\}$에 대해
+$$z_j = {w_j^{[1]}}^\top x + b_j^{[1]}, \quad a_j = \text{ReLU}(z_j), \qquad \bar{h}_\theta(x) = {w^{[2]}}^\top a + b^{[2]}$$
+  * 여기서 $w_j^{[1]} \in \mathbb{R}^d$, $b_j^{[1]} \in \mathbb{R}$, $a = [a_1, \dots, a_m]^\top \in \mathbb{R}^m$, $w^{[2]} \in \mathbb{R}^m$입니다.
+* $m$개의 식을 for-loop로 하나씩 돌리는 대신, 행벡터 $w_j^{[1]\top}$들을 세로로 쌓아 행렬 $W^{[1]}$을 만들면 전체가 한 줄로 압축됩니다.
+$$a = \text{ReLU}(W^{[1]}x + b^{[1]}), \qquad \bar{h}_\theta(x) = W^{[2]}a + b^{[2]}$$
 
 * 여러 개의 은닉 유닛을 병렬 및 직렬로 쌓으면, 연산은 개별 for-loop가 아니라 벡터 및 행렬 연산(Vectorization)으로 간결하게 표현됩니다. 층(layer) $r$에 대해 가중치 행렬 $W^{[r]}$를 도입하면 심층 네트워크의 계층적 연산은 다음과 같이 전개됩니다.
   * **첫 번째 은닉층**: $a^{[1]} = \text{ReLU}(W^{[1]}x + b^{[1]})$
@@ -164,11 +218,15 @@ $$\bar{h}_\theta(x) = W^{[r]}\phi_\beta(x) + b^{[r]} \quad (\text{단, } \beta\t
 $$\text{Res}(z) = z + \sigma(\text{MM}(\sigma(\text{MM}(z))))$$ 
 * 전체 네트워크는 이러한 잔차 블록들을 합성한 $\text{ResNet-S}(x) = \text{MM}(\text{Res}(\text{Res}(\cdots \text{Res}(x))))$ 형태가 되어 수백 층 이상의 깊은 학습이 가능해졌습니다.
 
+![Figure 3: 일반적인 다층 퍼셉트론(왼쪽)과 잔차 연결을 쓰는 ResNet(오른쪽)의 구조를 나란히 비교한 그림입니다. 양쪽 모두 아래에서 입력 $x$가 들어가 위로 올라가며, 점선 상자는 한 층의 내부를 확대한 것입니다. **왼쪽 Normal Layers**에서 각 층은 행렬곱 $\text{MM}_{W^{[i]}, b^{[i]}}$ 뒤에 활성화 $\sigma$를 통과시키는 단순한 직렬 경로이고, 신호가 반드시 모든 변환을 거쳐야만 위로 전달됩니다. **오른쪽 w/ Residual Connection**의 Res 블록 안에는 같은 MM–$\sigma$ 쌍이 두 번 들어 있지만, 그 옆으로 입력을 그대로 위쪽 덧셈 기호(+)까지 실어 나르는 **곡선 화살표(스킵 커넥션)**가 하나 더 있습니다. 이 우회로 덕분에 블록은 출력 전체가 아니라 **입력에 더할 변화량(잔차)만** 학습하면 되고, 역전파 시 기울기가 곡선 경로를 따라 손실 없이 아래로 내려갈 수 있어 수백 층 규모의 학습이 가능해집니다.](./images/figure03_resnet_vs_normal_layers.png)
+
 ### 4.2 합성곱 신경망 (CNN: Convolutional Neural Network)
 
 * CNN은 2D 입력 이미지 처리를 위해 특별히 설계된 구조입니다. 
 * 네트워크가 공간적 위상을 유지한 채로 $k \times k$ 필터를 활용하여 로컬 영역을 슬라이딩하면서 합성곱 연산을 수행합니다. 이를 통해 다중 채널(multi-channel) 3D 텐서 상에서 복잡한 공간적 특징(spatial features)을 자동적으로 추출합니다.
 * 여기에 최대 풀링(Max-pooling)과 같은 특화된 모듈을 삽입해 효과적인 다운샘플링(downsampling)을 수행한 뒤, 최종 분류층으로 연결됩니다.
+
+![Figure 4: 계층적 2차원 합성곱 신경망 파이프라인의 전형적인 구성입니다. 왼쪽 끝의 입력층은 $36 \times 36 \times 3$ 크기의 상자로, 마지막 3이 RGB 채널 수입니다. 그 위에 겹쳐 그려진 작은 점선 상자가 $11 \times 11$ 필터가 훑는 국소 영역이며, 화살표는 그 영역 하나가 다음 층의 한 점으로 요약됨을 나타냅니다. 합성곱층 1을 지나면 $26 \times 26 \times 9$가 되어 **공간 크기는 줄고 채널 수는 늘어나며**, 이어지는 최대 풀링층이 $12 \times 12 \times 9$로 절반 이하로 줄입니다. 같은 패턴(합성곱 → 풀링)이 한 번 더 반복되어 $6 \times 6 \times 3$, 다시 $2 \times 3 \times 3$까지 압축된 뒤, 오른쪽의 완전연결층(파란 원들)과 출력층(초록 원들)으로 이어집니다. 층이 깊어질수록 공간 해상도를 버리는 대신 채널(= 검출하는 특징의 종류)을 늘려 가는 이 사다리 구조가 CNN의 핵심이며, 필터가 이미지 전체를 슬라이딩하며 같은 가중치를 재사용하기 때문에 완전연결망보다 훨씬 적은 파라미터로 공간적 특징을 잡아냅니다.](./images/figure04_cnn_pipeline.png)
 
 ### 4.3 트랜스포머와 시각 트랜스포머 (Transformer & ViT)
 
@@ -177,6 +235,8 @@ $$\text{Res}(z) = z + \sigma(\text{MM}(\sigma(\text{MM}(z))))$$
 
 * **ViT (Vision Transformer)**는 이 구조를 컴퓨터 비전 분야에 적용한 사례입니다. 이미지를 분할하여 1D 시퀀스인 패치(flattened patches)로 만들어 Transformer 인코더에 밀어넣습니다. 기존 CNN의 구조적 한계인 국소 수용 영역(local receptive field)의 제약을 우회하여, 초기 계층부터 이미지의 전역적인 공간 컨텍스트(global spatial context)를 직접 포착할 수 있다는 강력한 이점을 가집니다. 이는 방대한 데이터셋에서의 대규모 사전 학습(pre-training)과 결합될 때 엄청난 성능을 보여줍니다.
 
+![Figure 5: Vision Transformer(ViT)의 전체 구조(왼쪽)와 그 안에 쓰이는 Transformer 인코더 블록의 내부(오른쪽)입니다. 왼쪽 아래에서 입력 이미지가 격자로 잘려 아홉 개의 정사각 패치가 되고, 이들이 순서대로 "Linear Projection of Flattened Patches"를 통과해 벡터로 바뀝니다. 그 위 분홍색 칸들이 패치 임베딩에 위치 임베딩을 더한 토큰들이며, 맨 앞의 `0*`는 분류를 위해 추가로 학습되는 [class] 토큰입니다. 이 토큰 열 전체가 회색 Transformer Encoder를 통과한 뒤, [class] 토큰의 출력만 주황색 MLP Head로 들어가 최종 클래스(Bird, Ball, Car …)를 냅니다. 오른쪽 패널은 그 인코더 한 블록의 속을 보여 주는데, 아래에서부터 Norm → Multi-Head Attention → 덧셈(잔차 연결) → Norm → MLP → 덧셈 순서이며, `L ×`는 이 블록이 $L$번 반복됨을 뜻합니다. 두 개의 (+) 기호가 §4.1의 잔차 연결이고 두 개의 Norm이 §4.4의 LayerNorm이어서, 이 그림 한 장이 앞서 본 요소들이 실제로 어떻게 조립되는지를 보여 줍니다. 이미지를 자르는 순간부터 모든 패치가 서로를 볼 수 있다는 점이 CNN의 국소 수용 영역과 결정적으로 다른 지점입니다.](./images/figure05_vision_transformer.png)
+
 ### 4.4 정규화 기법 (Normalization)
 
 * 깊은 네트워크를 안정적으로 학습시키기 위해서는 활성화 값을 정규화하는 기법이 필수적입니다. 데이터 텐서의 형태 $N$(배치), $C$(채널), $H, W$(공간 크기)에서 기준 축을 어떻게 설정하느냐에 따라 나뉩니다.
@@ -184,3 +244,27 @@ $$\text{Res}(z) = z + \sigma(\text{MM}(\sigma(\text{MM}(z))))$$
   * **Layer Norm**: Transformer 계열에서 주로 쓰이며, 각 개별 샘플 단위로 모든 채널에 대해 정규화를 수행하므로 미니배치 통계(mini-batch statistics)에 독립적이라는 장점이 있습니다. 계산식은 다음과 같습니다:
     $$LN(x) = \gamma \odot \frac{x - \mu}{\sqrt{\sigma^2 + \epsilon}} + \beta$$ 
   * 이 외에도 채널 축을 나눠 수행하는 **Instance Norm**, **Group Norm** 등이 존재합니다.
+
+---
+
+## 정리하며 (Closing Remarks)
+
+이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.
+
+| 단계 | 내용 | 근거 |
+|:---|:---|:---|
+| **① 알고리즘** | 틀릴 때마다 $\theta \leftarrow \theta + y^{(i)}x^{(i)}$, $\theta_0 \leftarrow \theta_0 + y^{(i)}$ | §2.1 |
+| **② 기하학적 의미** | 갱신은 경계면을 오분류된 점 쪽으로 회전시킨다 | §2.1, Figure 1 |
+| **③ 단순화** | 입력에 1을 덧붙여 차원을 하나 올리면 편향이 흡수된다 | §2.2 |
+| **④ 성공의 정의** | 선형 분리 가능 $\iff$ 모든 $i$에서 $y^{(i)}(\theta^\top x^{(i)}+\theta_0)>0$ $\iff \epsilon_n(h)=0$ | §2.3 |
+| **⑤ 측정 도구** | 마진 $y \cdot \frac{\theta^\top x + \theta_0}{\|\theta\|}$ — 부호가 정오답을, 크기가 여유를 나타낸다 | §2.3 |
+| **⑥ 가정** | (a) 마진 $\gamma$ 이상으로 분리하는 $\theta^*$ 존재, (b) $\|x^{(i)}\| \le R$ | §2.3 |
+| **⑦ 증명 전략** | $\cos(\theta^{(k)}, \theta^*)$를 두 인수로 쪼개 각각 묶는다 | §2.3 |
+| **⑧ 분자** | 실수 한 번마다 $\gamma$씩 증가 → $\ge k\gamma$ | §2.3 |
+| **⑨ 분모** | 오분류 시 교차항이 음수이므로 $\|\theta^{(k)}\|^2 \le kR^2$ | §2.3 |
+| **⑩ 결론** | $\cos \ge \sqrt{k}\gamma/R \le 1$ → $k \le (R/\gamma)^2$ — $n$도 $d$도 무관 | §2.3 |
+| **⑪ 한계와 전환** | 퍼셉트론은 선형 모델이며, 실제 관계는 비선형이다 | §3 |
+| **⑫ 목적 함수** | 회귀는 MSE, 이진 분류는 시그모이드+BCE, 다중 분류는 softmax+CE | §3.1 |
+| **⑬ 신경망** | 행렬곱과 비선형 활성화를 번갈아 쌓아 중간 표현을 스스로 만든다 | §3.2, Figure 2 |
+| **⑭ 커널과의 연결** | $\bar{h}_\theta(x) = W^{[r]}\phi_\beta(x) + b^{[r]}$ — 특성 사상까지 함께 학습한다 | §3.2 |
+| **⑮ 현대 아키텍처** | ResNet(스킵) · CNN(공간 국소성) · Transformer/ViT(전역 의존성) · LayerNorm(안정화) | §4, Figure 3–5 |

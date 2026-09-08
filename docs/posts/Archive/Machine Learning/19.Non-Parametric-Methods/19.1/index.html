@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Non-Parametric Methods">
+<meta name="description" content="모델의 복잡도를 사람이 정하지 않고 데이터가 정하게 하는 방법들 — 결정 트리와 가지치기, 배깅과 랜덤 포레스트, 그리고 학습을 아예 하지 않는 최근접 이웃까지.">
 
 <title>[Machine Learning] 19. Non-Parametric Methods – shsha0110.github.io</title>
 <style>
@@ -154,7 +154,7 @@ window.Quarto = {
       <h1 class="title">[Machine Learning] 19. Non-Parametric Methods</h1>
                   <div>
         <div class="description">
-          Non-Parametric Methods
+          모델의 복잡도를 사람이 정하지 않고 데이터가 정하게 하는 방법들 — 결정 트리와 가지치기, 배깅과 랜덤 포레스트, 그리고 학습을 아예 하지 않는 최근접 이웃까지.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -1286,7 +1286,7 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../../../../../posts/Archive/Deep Learning/26.Neural-Network-Prunning-and-LLM-Compression/26.1/index.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">[Deep Learning] 26. Neural Network Pruning and LLM Compression</span></a>
+ <span class="menu-text">[Deep Learning] 26. Neural Network Quantization and LLM Compression</span></a>
   </div>
 </li>
       </ul>
@@ -2893,7 +2893,8 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#개요-overview" id="toc-개요-overview" class="nav-link active" data-scroll-target="#개요-overview">개요 (Overview)</a>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
+  <li><a href="#개요-overview" id="toc-개요-overview" class="nav-link" data-scroll-target="#개요-overview">개요 (Overview)</a>
   <ul class="collapse">
   <li><a href="#비모수적이라는-이름의-함정" id="toc-비모수적이라는-이름의-함정" class="nav-link" data-scroll-target="#비모수적이라는-이름의-함정">“비모수적”이라는 이름의 함정</a></li>
   </ul></li>
@@ -2958,7 +2959,7 @@ window.Quarto = {
   <li><a href="#보로노이-분할-voronoi-partition" id="toc-보로노이-분할-voronoi-partition" class="nav-link" data-scroll-target="#보로노이-분할-voronoi-partition">보로노이 분할 (Voronoi partition)</a></li>
   <li><a href="#유용한-변형들" id="toc-유용한-변형들" class="nav-link" data-scroll-target="#유용한-변형들">유용한 변형들</a></li>
   </ul></li>
-  <li><a href="#마치며-conclusion" id="toc-마치며-conclusion" class="nav-link" data-scroll-target="#마치며-conclusion">마치며 (Conclusion)</a></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2969,6 +2970,21 @@ window.Quarto = {
 
 
 
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 · 인공지능대학원(IPAI) <strong>박재식(Jaesik Park)</strong> 교수님의 <em>Introduction to Machine Learning</em> (4190.428) 강의 자료(19강 <em>Non-parametric methods</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 원 강의 자료는 MIT 6.036(2019 Fall)과 Stanford CS229(2023–2024 Summer)의 강의 노트를 상당 부분 차용하고 있습니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“지금까지는 사람이 모델의 모양을 정하고 데이터가 그 안의 숫자를 정했습니다. 이번 회차의 방법들은 <strong>모양 자체를 데이터가 정합니다.</strong>”</strong></p>
+<p>신경망도 교차 검증으로 구조를 고를 수 있었지만, 후보 구조를 나열하는 것은 결국 사람이었습니다. <strong>비모수적 방법</strong>은 이름과 달리 파라미터가 없는 것이 아니라, <strong>사전에 고정된 파라미터화가 없는</strong> 방법들입니다.</p>
+<p><strong>결정 트리</strong>는 입력 공간을 축에 나란한 직사각형으로 재귀적으로 쪼갭니다. 최적 트리를 찾는 것은 계산적으로 불가능하므로, 매 단계에서 가장 좋은 분할 하나를 고르는 <strong>탐욕적 재귀 분할</strong>을 씁니다. 분류에서는 분할의 좋고 나쁨을 <strong>엔트로피 · 지니 · 오분류 오차</strong> 같은 불순도로 재며, 매끄러운 앞의 두 척도는 트리를 키울 때, 꺾인 마지막 척도는 가지치기할 때 쓰입니다.</p>
+<p>언제 멈출 것인가는 별도의 문제입니다. “이득이 작으면 멈춘다”는 단순한 기준은 <strong>다음 한 걸음 뒤에 큰 이득이 숨어 있을 때</strong> 실패하므로, 일단 크게 키운 뒤 <strong>비용 복잡도 기준으로 가지치기</strong>하는 편이 낫습니다.</p>
+<p>트리는 해석 가능하고 가설 공간이 넓지만 <strong>추정 오차(분산)가 큽니다.</strong> 이를 다스리는 것이 <strong>배깅</strong> — 부트스트랩 표본으로 여러 트리를 만들어 평균 내는 것 — 이고, 여기에 각 분할에서 변수도 무작위로 고르게 해 트리들 사이의 상관까지 끊은 것이 <strong>랜덤 포레스트</strong>입니다.</p>
+<p>마지막 <strong>최근접 이웃</strong>은 아예 학습을 하지 않습니다. 데이터를 그대로 기억했다가 질의 시점에 가장 가까운 점의 답을 돌려주며, 그 결정 경계는 <strong>보로노이 분할</strong>로 나타납니다. 여기서는 무엇이 “가깝다”인지를 정하는 <strong>거리 척도</strong>가 모델 설계의 전부가 됩니다.</p>
+</blockquote>
+<hr>
+</section>
 <section id="개요-overview" class="level2">
 <h2 class="anchored" data-anchor-id="개요-overview">개요 (Overview)</h2>
 <p>이번 포스트에서는 우리가 데이터에 맞출 수 있는 모델의 종류를 한층 더 넓혀 보겠습니다.</p>
@@ -3263,7 +3279,7 @@ Q_m(T) =
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/impurity_curves.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 이진 분류에서 <span class="math inline">\(p = \hat{P}_{m0}\)</span>(영역이 클래스 0일 경험적 확률)에 따른 세 가지 불순도 척도의 곡선. 가로축은 <span class="math inline">\(p\)</span>(0에서 1), 세로축은 불순도 값입니다. 세 곡선 모두 <span class="math inline">\(p=0\)</span>과 <span class="math inline">\(p=1\)</span>의 양 끝에서 0이 되고(영역이 한 클래스로 순수할 때), <span class="math inline">\(p=0.5\)</span>의 가장 불확실한 지점에서 최댓값을 가집니다. 빨간색 <strong>Entropy</strong> 곡선은 가장 위쪽으로 볼록하게 솟아 <span class="math inline">\(p=0.5\)</span>에서 최댓값 1.0에 도달합니다. 파란색 <strong>Gini</strong> 곡선은 그 아래에서 부드러운 포물선 형태로 <span class="math inline">\(p=0.5\)</span>에서 최댓값 0.5를 가집니다. 검은색 <strong>Misclassification error</strong> 곡선은 <span class="math inline">\(p=0.5\)</span>에서 같은 최댓값 0.5를 가지지만, 매끄러운 곡선이 아니라 꼭짓점에서 뾰족하게 꺾이는 삼각형(절댓값) 형태입니다. 이 그림은 엔트로피와 지니가 미분 가능하고 매끄러워 분할 선택 시 더 민감하게 반응하는 반면, 오분류 오차는 꺾인 형태라 트리를 키우는 단계에서는 잘 쓰이지 않는 이유를 시각적으로 보여 줍니다.</figcaption>
+<figcaption>Figure 1: 이진 분류에서 <span class="math inline">\(p = \hat{P}_{m0}\)</span>(영역이 클래스 0일 경험적 확률)에 따른 세 가지 불순도 척도의 곡선. 가로축은 <span class="math inline">\(p\)</span>(0에서 1), 세로축은 불순도 값입니다. 세 곡선 모두 <span class="math inline">\(p=0\)</span>과 <span class="math inline">\(p=1\)</span>의 양 끝에서 0이 되고(영역이 한 클래스로 순수할 때), <span class="math inline">\(p=0.5\)</span>의 가장 불확실한 지점에서 최댓값을 가집니다. 빨간색 <strong>Entropy</strong> 곡선은 가장 위쪽으로 볼록하게 솟아 <span class="math inline">\(p=0.5\)</span>에서 최댓값 1.0에 도달합니다. 파란색 <strong>Gini</strong> 곡선은 그 아래에서 부드러운 포물선 형태로 <span class="math inline">\(p=0.5\)</span>에서 최댓값 0.5를 가집니다. 검은색 <strong>Misclassification error</strong> 곡선은 <span class="math inline">\(p=0.5\)</span>에서 같은 최댓값 0.5를 가지지만, 매끄러운 곡선이 아니라 꼭짓점에서 뾰족하게 꺾이는 삼각형(절댓값) 형태입니다. 이 그림은 엔트로피와 지니가 미분 가능하고 매끄러워 분할 선택 시 더 민감하게 반응하는 반면, 오분류 오차는 꺾인 형태라 트리를 키우는 단계에서는 잘 쓰이지 않는 이유를 시각적으로 보여 줍니다.</figcaption>
 </figure>
 </div>
 <ul>
@@ -3286,7 +3302,7 @@ Q_m(T) =
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/decision_tree_partition.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 결정 트리가 2차원 입력 공간(<span class="math inline">\(f_1\)</span>, <span class="math inline">\(f_2\)</span>)을 어떻게 분할하는지 보여 주는 예시. 왼쪽 그림은 라벨이 달린 데이터 점들로, 양성(+) 점들과 음성(−) 점들이 평면 위에 흩어져 있습니다. 오른쪽 그림은 동일한 점들에 대해 결정 트리가 만든 분할 결과로, 평면이 축에 정렬된 경계선들로 여러 색의 직사각형 영역(초록·주황·노랑)으로 나뉘어 있습니다. 각 색 영역은 그 안의 다수결 클래스로 예측되는 영역을 나타냅니다. 이 그림은 트리의 분할이 축에 정렬된 직사각형 형태로만 이루어지며, 그렇게 나뉜 각 영역에 상수 예측이 할당된다는 점을 보여 줍니다.</figcaption>
+<figcaption>Figure 2: 결정 트리가 2차원 입력 공간(<span class="math inline">\(f_1\)</span>, <span class="math inline">\(f_2\)</span>)을 어떻게 분할하는지 보여 주는 예시. 왼쪽 그림은 라벨이 달린 데이터 점들로, 양성(+) 점들과 음성(−) 점들이 평면 위에 흩어져 있습니다. 오른쪽 그림은 동일한 점들에 대해 결정 트리가 만든 분할 결과로, 평면이 축에 정렬된 경계선들로 여러 색의 직사각형 영역(초록·주황·노랑)으로 나뉘어 있습니다. 각 색 영역은 그 안의 다수결 클래스로 예측되는 영역을 나타냅니다. 이 그림은 트리의 분할이 축에 정렬된 직사각형 형태로만 이루어지며, 그렇게 나뉜 각 영역에 상수 예측이 할당된다는 점을 보여 줍니다.</figcaption>
 </figure>
 </div>
 <ul>
@@ -3452,7 +3468,7 @@ h(x) = y^{(i)} \quad \text{where} \quad i = \arg\min_i d(x, x^{(i)}).
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/voronoi_partition.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 6개의 학습 점에 대한 최근접 이웃 분류기를 보로노이 분할로 시각화한 그림. 2차원 평면(<span class="math inline">\(f_1\)</span>, <span class="math inline">\(f_2\)</span>) 위에 양성(+) 점들과 음성(−) 점들이 놓여 있고, 평면 전체가 각 학습 점을 가장 가까운 점으로 갖는 영역들로 나뉩니다. 초록색으로 칠해진 영역은 한 클래스로 예측되는 영역을 나타내며, 영역들의 경계는 인접한 두 점의 수직 이등분선 조각들이 이어져 직선이 꺾이는 형태로 나타납니다. 이 그림은 최근접 이웃 규칙이 결정 트리의 직사각형 분할과 달리, 점들 사이의 거리에 의해 결정되는 다각형 형태의 경계를 만든다는 점을 보여 줍니다.</figcaption>
+<figcaption>Figure 3: 6개의 학습 점에 대한 최근접 이웃 분류기를 보로노이 분할로 시각화한 그림. 2차원 평면(<span class="math inline">\(f_1\)</span>, <span class="math inline">\(f_2\)</span>) 위에 양성(+) 점들과 음성(−) 점들이 놓여 있고, 평면 전체가 각 학습 점을 가장 가까운 점으로 갖는 영역들로 나뉩니다. 초록색으로 칠해진 영역은 한 클래스로 예측되는 영역을 나타내며, 영역들의 경계는 인접한 두 점의 수직 이등분선 조각들이 이어져 직선이 꺾이는 형태로 나타납니다. 이 그림은 최근접 이웃 규칙이 결정 트리의 직사각형 분할과 달리, 점들 사이의 거리에 의해 결정되는 다각형 형태의 경계를 만든다는 점을 보여 줍니다.</figcaption>
 </figure>
 </div>
 <ul>
@@ -3474,14 +3490,120 @@ h(x) = y^{(i)} \quad \text{where} \quad i = \arg\min_i d(x, x^{(i)}).
 </ul>
 </section>
 </section>
-<section id="마치며-conclusion" class="level2">
-<h2 class="anchored" data-anchor-id="마치며-conclusion">마치며 (Conclusion)</h2>
-<p>이번 강의에서는 사전에 고정된 파라미터화 없이 데이터에 따라 복잡도를 조절하는 비모수적 방법들을 살펴보았습니다.</p>
-<ul>
-<li><strong>트리</strong>는 공간을 분할하여 가설 공간을 넓히고 해석 가능성을 제공하지만, 추정 오차가 높다는 단점이 있습니다.</li>
-<li><strong>배깅과 랜덤 포레스트</strong>는 여러 예측기를 결합해 추정 오차를 줄이며, 특히 랜덤 포레스트는 변수의 무작위 선택으로 트리를 탈상관시켜 강력한 성능을 냅니다.</li>
-<li><strong>최근접 이웃</strong>은 학습 없이 데이터를 기억했다가 예측 시 거리 척도에 의존하는, 가장 직관적이면서도 강력한 방법입니다.</li>
-</ul>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 문제 제기</strong></td>
+<td style="text-align: left;">지금까지는 사람이 후보 구조를 정하고 그중 하나를 골랐다</td>
+<td style="text-align: left;">§개요</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 이름의 정정</strong></td>
+<td style="text-align: left;">“비모수적”은 파라미터가 없다는 뜻이 아니라 <strong>사전 고정된 파라미터화가 없다</strong>는 뜻</td>
+<td style="text-align: left;">§개요</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 두 부류</strong></td>
+<td style="text-align: left;">준모수적(트리 — 형태를 데이터가 결정) vs 순수 비모수적(최근접 이웃 — 예측 시 데이터에 직접 의존)</td>
+<td style="text-align: left;">§개요</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 평가 축</strong></td>
+<td style="text-align: left;">구조적 오차와 추정 오차의 트레이드오프로 방법들을 읽는다</td>
+<td style="text-align: left;">§도입</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 트리의 아이디어</strong></td>
+<td style="text-align: left;">입력 공간을 축에 나란한 영역으로 재귀 분할하고 각 영역에 상수를 예측한다</td>
+<td style="text-align: left;">§트리, Figure 2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 회귀의 기준</strong></td>
+<td style="text-align: left;">분할 후 각 영역의 평균으로 예측했을 때의 제곱오차 감소량</td>
+<td style="text-align: left;">§회귀</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 탐색 전략</strong></td>
+<td style="text-align: left;">최적 트리는 찾을 수 없으므로 매 단계 최선의 분할을 고르는 탐욕적 재귀 분할</td>
+<td style="text-align: left;">§트리 구축하기</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 정지의 함정</strong></td>
+<td style="text-align: left;">이득이 작다고 멈추면 한 걸음 뒤의 큰 이득을 놓친다</td>
+<td style="text-align: left;">§가지치기</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ 처방</strong></td>
+<td style="text-align: left;">크게 키운 뒤 비용 복잡도 기준으로 약한 고리부터 가지치기한다</td>
+<td style="text-align: left;">§가지치기</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ 분류의 기준</strong></td>
+<td style="text-align: left;">리프의 경험적 확률로부터 엔트로피 · 지니 · 오분류 오차를 정의한다</td>
+<td style="text-align: left;">§분류</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑪ 척도의 선택</strong></td>
+<td style="text-align: left;">매끄러운 엔트로피·지니는 성장 단계에, 꺾인 오분류 오차는 가지치기에</td>
+<td style="text-align: left;">§분류, Figure 1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑫ 트리의 약점</strong></td>
+<td style="text-align: left;">가설 공간은 넓고 해석은 쉽지만 추정 오차(분산)가 크다</td>
+<td style="text-align: left;">§트리에 관한 정리</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑬ 처방 1</strong></td>
+<td style="text-align: left;">부트스트랩 표본으로 여러 예측기를 만들어 평균 낸다 (배깅)</td>
+<td style="text-align: left;">§배깅</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑭ 배깅의 한계</strong></td>
+<td style="text-align: left;">같은 데이터에서 나온 트리들은 서로 닮아 있어 분산 감소가 제한된다</td>
+<td style="text-align: left;">§랜덤 포레스트</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑮ 처방 2</strong></td>
+<td style="text-align: left;">각 분할에서 변수도 무작위로 제한해 트리들을 탈상관시킨다 (랜덤 포레스트)</td>
+<td style="text-align: left;">§랜덤 포레스트</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑯ 반대편 극단</strong></td>
+<td style="text-align: left;">아예 학습하지 않고 데이터를 기억했다가 질의 시 가장 가까운 답을 낸다</td>
+<td style="text-align: left;">§최근접 이웃</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑰ 설계의 전부</strong></td>
+<td style="text-align: left;">무엇이 “가깝다”인지를 정하는 거리 척도가 모델을 결정한다</td>
+<td style="text-align: left;">§거리 척도</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑱ 결정 경계</strong></td>
+<td style="text-align: left;">보로노이 분할 — 트리의 직사각형과 달리 수직 이등분선이 만드는 다각형</td>
+<td style="text-align: left;">§보로노이 분할, Figure 3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑲ 변형들</strong></td>
+<td style="text-align: left;"><span class="math inline">\(k\)</span>-최근접 이웃 · 국소 가중 회귀 · 볼 트리 같은 탐색 자료 구조</td>
+<td style="text-align: left;">§유용한 변형들</td>
+</tr>
+</tbody>
+</table>
 <blockquote class="blockquote">
 <p>이 강의 노트는 MIT 6.036 (2019 Fall)과 Stanford CS229 (2023–2024 Summer)의 자료를 상당 부분 참고하여 작성되었습니다.</p>
 </blockquote>

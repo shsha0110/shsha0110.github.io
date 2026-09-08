@@ -1,6 +1,6 @@
 ---
 title: "[Machine Learning] 06. Support Vector Machines"
-description: "Support Vector Machines"
+description: "SVM 원초 문제를 라그랑주 쌍대 문제로 옮겨 서포트 벡터의 희소성과 커널 적용 가능성을 얻고, 슬랙 변수와 SMO 알고리즘으로 실제 해까지 도달하는 전 과정을 정리합니다."
 author: "유성현"
 categories: [Machine Learning]
 format:
@@ -10,6 +10,20 @@ format:
     code-fold: show
     math: true
 ---
+
+> 본 포스트는 서울대학교 컴퓨터공학부 · 인공지능대학원(IPAI) **박재식(Jaesik Park)** 교수님의 *Introduction to Machine Learning* (4190.428) 강의 자료(6강 *Support Vector Machines, Part 2*)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 원 강의 자료는 MIT 6.036(2019 Fall)과 Stanford CS229(2023–2024 Summer)의 강의 노트를 상당 부분 차용하고 있습니다. 5강에서 유도한 최적 마진 분류기의 표준형에서 이어집니다.
+
+## 한 줄 요약 (TL;DR)
+
+> **"원초 문제를 쌍대 문제로 옮기면 세 가지가 한꺼번에 따라옵니다 — 서포트 벡터의 희소성, 내적만으로 표현되는 예측식(곧 커널), 그리고 SMO라는 실용적인 해법."**
+>
+> 5강의 $\min \frac{1}{2}\|w\|^2$는 이미 볼록 QP이므로 그대로 풀 수도 있습니다. 그럼에도 굳이 **라그랑주 쌍대 문제**로 옮기는 이유는 그 형태에서만 보이는 것들이 있기 때문입니다.
+>
+> KKT의 **쌍대 상보성 조건** $\alpha_i^* g_i(w^*) = 0$은 마진 위에 걸친 소수의 점만 $\alpha_i > 0$을 가질 수 있음을 말해 줍니다 — 이것이 **서포트 벡터**이고, 모델이 데이터 대부분을 잊어버려도 되는 이유입니다.
+>
+> 또 쌍대 목적함수 $W(\alpha)$와 예측식 $\sum_i \alpha_i y^{(i)}\langle x^{(i)}, x\rangle + b$에는 데이터가 **오직 내적으로만** 등장합니다. 4강의 커널 트릭을 꽂아 넣을 자리가 여기서 열립니다.
+>
+> 마지막 두 조각은 현실 대응입니다. 선형 분리가 불가능하거나 이상치가 있는 경우를 위해 **슬랙 변수 $\xi_i$와 벌점 $C$**를 도입하면 쌍대 제약이 $0 \le \alpha_i \le C$로 바뀌고, 이 문제를 실제로 푸는 **SMO 알고리즘**은 등식 제약 때문에 좌표 상승법을 쓸 수 없다는 난점을 "한 번에 두 변수씩"이라는 아이디어로 우회합니다.
 
 ## 1. 서론 (Introduction)
 
@@ -21,13 +35,13 @@ format:
 
 * 우리의 목표는 훈련 데이터에 대해 모든 예측을 정확하고 확신 있게 내릴 수 있는 최적의 마진을 찾는 것입니다. 이를 위해 기하학적 마진 $\gamma$를 최대화하는 최적화 문제는 다음과 같이 정의됩니다.
 
-$$max_{\gamma,w,b}\frac{\gamma}{||w||}$$
+$$\max_{\hat{\gamma},w,b}\frac{\hat{\gamma}}{||w||}$$
 
-* 단, 제약 조건은 $y^{(i)}(w^{\top}x^{(i)}+b)\ge\gamma$ (모든 $i=1,...,n$에 대하여) 입니다. (초기 공식에서는 $||w||=1$이라는 비볼록(non-convex) 제약 조건이 있었으나, 이를 스케일링을 통해 제거하고 최적화하기 쉬운 형태로 변형합니다 ).
+* 단, 제약 조건은 $y^{(i)}(w^{\top}x^{(i)}+b)\ge\hat{\gamma}$ (모든 $i=1,...,n$에 대하여) 입니다. (초기 공식에서는 $||w||=1$이라는 비볼록(non-convex) 제약 조건이 있었으나, 이를 스케일링을 통해 제거하고 최적화하기 쉬운 형태로 변형합니다.)
 
-* $\frac{\gamma}{||w||} = \frac{1}{||w||}$ 관계를 이용하여, 위 최대화 문제는 다음과 같은 2차 계획법(Quadratic Programming) 최소화 문제로 변환할 수 있습니다.
+* 여기서 $\hat{\gamma}$는 함수적 마진, $\gamma = \hat{\gamma}/\|w\|$는 기하학적 마진입니다. 스케일 불변성 덕분에 $\hat{\gamma}=1$로 고정할 수 있고, 그러면 $\frac{\hat{\gamma}}{||w||} = \frac{1}{||w||}$가 되어 위 최대화 문제는 다음과 같은 2차 계획법(Quadratic Programming) 최소화 문제로 변환됩니다.
 
-$$min_{w,b}\frac{1}{2}||w||^{2}$$
+$$\min_{w,b}\frac{1}{2}||w||^{2}$$
 $$\textit{s.t.} \quad y^{(i)}(w^{\top}x^{(i)}+b)\ge1, \quad i=1,...,n$$ 
 
 * 이 문제의 해가 바로 우리가 찾는 **최적 마진 분류기(Optimal Margin Classifier)**가 됩니다.
@@ -186,11 +200,25 @@ $$\begin{aligned}
 & \xi_{i} \ge 0, \quad i=1,\dots,n. 
 \end{aligned}$$
 
-* 여기서 파라미터 $C$는 마진을 넓게 유지하는 것과 오차를 줄이는 것 사이의 가중치를 조절하는 역할을 합니다. 이 식의 쌍대 형태를 구하면 하드 마진과 동일한 목적 함수 $W(\alpha)$를 가지지만, 제약 조건에 $C$ 상한선이 추가됩니다.
+* 이제 함수적 마진이 1보다 작은($1-\xi_i$, 단 $\xi_i>0$) 예제가 허용되는 대신, 목적 함수에 $C\xi_i$만큼의 벌점이 더해집니다. 파라미터 $C$는 $\|w\|^2$을 작게 유지하는 것(넓은 마진)과 대부분의 예제가 함수적 마진 1 이상을 갖도록 하는 것 사이의 **상대적 가중치**를 조절합니다.
 
-$$\begin{aligned} \text{s.t.} \quad & 0 \le \alpha_{i} \le C, \quad i=1,\dots,n, \\ & \sum_{i=1}^{n}\alpha_{i}y^{(i)} = 0. \end{aligned}$$
+* 하드 마진 때와 같은 방식으로 라그랑주안을 세웁니다. 이번에는 제약이 두 종류($1-\xi_i$ 조건과 $\xi_i \ge 0$)이므로 승수도 $\alpha_i$와 $r_i$ 두 벌이 필요합니다.
 
-* 변경된 KKT 조건은 $\alpha_i$의 값에 따라 데이터가 마진 바깥에 있는지($\alpha_i=0$), 마진 경계에 있는지($0<\alpha_i<C$), 혹은 마진 안쪽이나 오분류되었는지($\alpha_i=C$)를 명확하게 구분해 줍니다.
+$$\mathcal{L}(w,b,\xi,\alpha,r) = \frac{1}{2}w^{\top}w + C\sum_{i=1}^{n}\xi_{i} - \sum_{i=1}^{n}\alpha_{i}\left[y^{(i)}(x^{(i)\top}w+b)-1+\xi_{i}\right] - \sum_{i=1}^{n}r_{i}\xi_{i}$$
+
+* 앞에서와 똑같이 $w$, $b$, $\xi$에 대한 편미분을 0으로 두고 대입해 정리하면, 놀랍게도 목적 함수는 하드 마진과 **완전히 동일한** $W(\alpha)$가 나오고 제약 조건에만 $C$ 상한선이 추가됩니다.
+
+$$\begin{aligned} \max_{\alpha} \quad & W(\alpha) = \sum_{i=1}^{n}\alpha_{i} - \frac{1}{2}\sum_{i=1}^{n}\sum_{j=1}^{n}y^{(i)}y^{(j)}\alpha_{i}\alpha_{j}\langle x^{(i)},x^{(j)}\rangle \\ \text{s.t.} \quad & 0 \le \alpha_{i} \le C, \quad i=1,\dots,n, \\ & \sum_{i=1}^{n}\alpha_{i}y^{(i)} = 0. \end{aligned}$$
+
+* 변경된 KKT 쌍대 상보성 조건은 다음 세 줄로 정리되며, $\alpha_i$ 값 하나만 보고도 그 데이터가 마진 바깥에 있는지 · 경계 위에 있는지 · 안쪽으로 침범했는지를 즉시 읽어낼 수 있게 해 줍니다.
+
+$$\begin{aligned} \alpha_{i}=0 \quad &\Rightarrow \quad y^{(i)}(w^{\top}x^{(i)}+b) \ge 1 \quad \text{(마진 바깥, 여유 있게 맞힘)} \\ \alpha_{i}=C \quad &\Rightarrow \quad y^{(i)}(w^{\top}x^{(i)}+b) \le 1 \quad \text{(마진 침범 또는 오분류)} \\ 0<\alpha_{i}<C \quad &\Rightarrow \quad y^{(i)}(w^{\top}x^{(i)}+b) = 1 \quad \text{(마진 경계 위, 서포트 벡터)} \end{aligned}$$
+
+::: {.callout-tip}
+## 이 조건이 SMO의 종료 판정이 됩니다
+
+위 세 줄은 단순한 분류 기준이 아니라, 최적해가 만족해야 하는 **필요조건**입니다. 따라서 반대로 읽으면 "모든 $i$에 대해 이 조건이 성립하면 수렴한 것"이라는 판정 규칙이 됩니다. §6의 SMO 알고리즘이 언제 멈춰야 하는지를 아는 근거가 바로 여기입니다.
+:::
 
 ## 6. SMO 알고리즘 (Sequential Minimal Optimization)
 
@@ -205,11 +233,18 @@ $$\max_{\alpha} W(\alpha_{1},\alpha_{2},\dots,\alpha_{n})$$
 * 좌표 상승법은 가장 안쪽 루프에서 단 하나의 변수 $\alpha_i$만을 선택하여 최적화하고 나머지 변수들은 고정값으로 취급하는 과정을 수렴할 때까지 반복하는 알고리즘입니다.
 
 **[Algorithm: Coordinate Ascent]**
+
+```text
 Loop until convergence {
     For i = 1, ..., n, {
-        \alpha_i := \arg\max_{\hat{\alpha}_i} W(\alpha_1, ..., \alpha_{i-1}, \hat{\alpha}_i, \alpha_{i+1}, ..., \alpha_n)
+        alpha_i := argmax_{alpha_i_hat} W(alpha_1, ..., alpha_{i-1}, alpha_i_hat, alpha_{i+1}, ..., alpha_n)
     }
 }
+```
+
+* 더 정교한 변형은 $i$를 1부터 $n$까지 순서대로 도는 대신, $W(\alpha)$를 가장 크게 증가시킬 좌표를 골라서 갱신하기도 합니다.
+
+![Figure: 좌표 상승법이 이차 함수의 최대점을 찾아가는 경로입니다. 색색의 타원은 최대화하려는 이차 함수의 등고선으로, 안쪽으로 갈수록(빨강 → 노랑 → 초록 → 하늘 → 파랑) 함숫값이 커지며 중심 부근이 전역 최대점입니다. 파란 꺾은선은 $(2, -2)$에서 출발한 갱신 경로이고, 각 'x' 표시가 한 번의 갱신 결과입니다. 모든 이동이 **가로 또는 세로 축과 정확히 평행**하다는 점이 핵심입니다 — 한 번에 한 좌표만 최적화하므로 나머지 좌표는 값이 그대로이기 때문입니다. 이 그림은 동시에 SVM에서 이 알고리즘을 쓸 수 없는 이유도 보여줍니다. 축과 평행한 이동은 $\sum_i \alpha_i y^{(i)}$의 값을 바꿔 버리므로, SVM의 등식 제약을 즉시 위반하게 됩니다.](./images/coordinate_ascent.png)
 
 ### 6.2. SVM에서의 문제점과 SMO의 해결책
 
@@ -231,25 +266,25 @@ $$\alpha_{1}=(\zeta-\alpha_{2}y^{(2)})y^{(1)}$$
 
 $$W(\alpha_{1},\alpha_{2},\dots,\alpha_{n}) = W((\zeta-\alpha_{2}y^{(2)})y^{(1)},\alpha_{2},\dots,\alpha_{n})$$
 
-#### 6.3. Box 제약 조건과 클리핑 (Clipping)
+### 6.3. Box 제약 조건과 클리핑 (Clipping)
 
 * 단순화된 2차 함수를 미분하여 $\alpha_2$에 대한 무제약 최적값 $\alpha_2^{new, unclipped}$을 구하는 것은 매우 쉽습니다. 하지만 소프트 마진 SVM에서는 각 $\alpha_i$가 $0 \le \alpha_i \le C$ 라는 Box 제약 조건을 만족해야 합니다 .
 
-* 위 그림처럼 두 변수의 선형 조건 $\alpha_{1}y^{(1)}+\alpha_{2}y^{(2)}=\zeta$가 $[0, C] \times [0, C]$ 상자 내부를 지나는 구간을 구하면, $\alpha_2$가 가질 수 있는 허용 범위의 하한(Lower bound) $L$과 상한(Upper bound) $H$를 계산할 수 있습니다 .
+![Figure: SMO 알고리즘의 제약 조건 상자(Box Constraint). $\alpha_1$과 $\alpha_2$는 소프트 마진의 제약 $0 \le \alpha_i \le C$에 의해 가로·세로가 각각 $C$인 정사각형 영역 $[0,C]\times[0,C]$ 내부에서만 값을 가질 수 있습니다. 여기에 등식 제약에서 온 직선 $\alpha_1 y^{(1)} + \alpha_2 y^{(2)} = \zeta$가 겹쳐 그려져 있으며, 두 변수는 반드시 이 직선 위에 있어야 합니다. 따라서 실제로 움직일 수 있는 곳은 **직선과 정사각형이 겹치는 선분 하나**뿐이고, 그 선분의 양 끝이 $\alpha_2$의 하한 $L$과 상한 $H$를 결정합니다. 무제약 최적값이 이 구간을 벗어나면 가장 가까운 끝점으로 잘라내야 한다는 클리핑 규칙이 이 그림에서 곧바로 읽힙니다.](./images/smo_box_constraint.png)
+
+* 위 그림처럼 두 변수의 선형 조건 $\alpha_{1}y^{(1)}+\alpha_{2}y^{(2)}=\zeta$가 $[0, C] \times [0, C]$ 상자 내부를 지나는 구간을 구하면, $\alpha_2$가 가질 수 있는 허용 범위의 하한(Lower bound) $L$과 상한(Upper bound) $H$를 계산할 수 있습니다. 즉 $L \le \alpha_2 \le H$입니다.
 
 * 최종적으로, 무제약 상태의 최적값 $\alpha_2^{new, unclipped}$을 이 $[L, H]$ 구간 안으로 잘라내는 **클리핑(Clipping)** 과정을 거쳐 실제 업데이트할 $\alpha_2^{new}$를 확정합니다 .
 
 $$\alpha_{2}^{new} = \begin{cases} H & \text{if } \alpha_{2}^{new, unclipped} > H \\ \alpha_{2}^{new, unclipped} & \text{if } L \le \alpha_{2}^{new, unclipped} \le H \\ L & \text{if } \alpha_{2}^{new, unclipped} < L \end{cases}$$
 
-* 이러한 가벼운 2변수 최적화 과정을 전체 데이터에 대해 반복하며, 모든 데이터 포인트가 KKT 쌍대 상보성 조건을 만족하게 되면 수렴한 것으로 판단하고 알고리즘을 종료합니다.
+* 이러한 가벼운 2변수 최적화 과정을 전체 데이터에 대해 반복하며, 모든 데이터 포인트가 §5의 KKT 쌍대 상보성 조건을 만족하게 되면 수렴한 것으로 판단하고 알고리즘을 종료합니다.
 
-![Figure: SMO 알고리즘의 제약 조건 상자(Box Constraint). 알파1과 알파2는 변수의 제약 조건에 의해 가로 세로가 각각 C인 정사각형 영역 내부에서만 값을 가질 수 있다. 또한 알파1*y1 + 알파2*y2 = zeta 라는 선형 등식 조건에 따라, 이 사선이 정사각형 상자와 만나는 하한점 L(Lower bound)과 상한점 H(Upper bound) 사이의 선분 위에서만 변수가 업데이트 되어야 함을 기하학적으로 보여준다.](./images/smo_box_constraint.png)
-
-## 7. SMO 알고리즘 실전 최적화 예시 (Toy Example)
+### 6.4. 손으로 따라가 보는 SMO (Toy Example)
 
 * 앞서 다룬 SMO 알고리즘의 수학적 전개가 실제 계산 과정에서 어떻게 작동하는지 살펴보기 위해, 단 2개의 데이터 포인트만 존재하는 극단적으로 단순화된 모델을 최적화해 보겠습니다.
 
-### 7.1. 문제 설정 (Initialization)
+#### 6.4.1. 문제 설정 (Initialization)
 
 * 다음과 같은 2개의 2차원 데이터 포인트가 주어졌다고 가정해 봅시다.
   * **양성 데이터 ($i=1$):** $x^{(1)} = (1, 2)^{\top}, \quad y^{(1)} = 1$
@@ -259,7 +294,7 @@ $$\alpha_{2}^{new} = \begin{cases} H & \text{if } \alpha_{2}^{new, unclipped} > 
   * 초기 승수: $\alpha_{1} = 0, \quad \alpha_{2} = 0$
   * 페널티 파라미터 (Soft Margin): $C = 1$
 
-### 7.2. 등식 제약 조건과 치환 (Constraint & Substitution)
+#### 6.4.2. 등식 제약 조건과 치환 (Constraint & Substitution)
 
 * SMO는 한 번에 두 개의 변수만 업데이트합니다. 여기서는 전체 변수가 2개뿐이므로 $\alpha_1$과 $\alpha_2$를 선택합니다. 먼저 등식 제약 조건 $\sum \alpha_{i}y^{(i)} = 0$을 전개합니다.
 
@@ -267,7 +302,7 @@ $$\alpha_{1}(1) + \alpha_{2}(-1) = 0 \quad \Rightarrow \quad \alpha_{1} = \alpha
 
 * 이 단순한 관계식 덕분에, 우리는 $\zeta = 0$인 상태에서 $\alpha_1$을 완벽하게 $\alpha_2$로 치환할 수 있습니다. 상자 제약 조건(Box Constraint)인 $0 \le \alpha_i \le C$에 따라, $\alpha_1 = \alpha_2$이므로 $\alpha_2$가 가질 수 있는 유효 구간은 $[L, H] = [0, 1]$이 됩니다.
 
-### 7.3. 내적 계산 및 1차원 목적 함수 생성
+#### 6.4.3. 내적 계산 및 1차원 목적 함수 생성
 
 * 목적 함수 $W(\alpha)$를 계산하기 위해 데이터 간의 내적(Inner Product)을 먼저 구합니다.
   * $\langle x^{(1)}, x^{(1)} \rangle = 1^2 + 2^2 = 5$
@@ -278,7 +313,7 @@ $$\alpha_{1}(1) + \alpha_{2}(-1) = 0 \quad \Rightarrow \quad \alpha_{1} = \alpha
 
 $$\begin{aligned} W(\alpha_{2}) &= (\alpha_{1} + \alpha_{2}) - \frac{1}{2}\left[ y^{(1)}y^{(1)}\alpha_{1}^{2}\langle x^{(1)}, x^{(1)} \rangle + y^{(2)}y^{(2)}\alpha_{2}^{2}\langle x^{(2)}, x^{(2)} \rangle + 2y^{(1)}y^{(2)}\alpha_{1}\alpha_{2}\langle x^{(1)}, x^{(2)} \rangle \right] \\ &= 2\alpha_{2} - \frac{1}{2}\left[ (1)(1)\alpha_{2}^{2}(5) + (-1)(-1)\alpha_{2}^{2}(5) + 2(1)(-1)\alpha_{2}^{2}(-5) \right] \\ &= 2\alpha_{2} - \frac{1}{2}\left[ 5\alpha_{2}^{2} + 5\alpha_{2}^{2} + 10\alpha_{2}^{2} \right] \\ &= 2\alpha_{2} - 10\alpha_{2}^{2} \end{aligned}$$
 
-### 7.4. 미분 및 클리핑 (Optimization & Clipping)
+#### 6.4.4. 미분 및 클리핑 (Optimization & Clipping)
 
 * 이제 다변수 최적화 문제가 중학교 수준의 2차 함수 최대값 찾기 문제로 바뀌었습니다. 위 식을 $\alpha_2$에 대해 미분하여 0이 되는 지점을 찾습니다.
 
@@ -288,10 +323,35 @@ $$\frac{d W(\alpha_{2})}{d \alpha_{2}} = 2 - 20\alpha_{2} = 0 \quad \Rightarrow 
   * 업데이트 결과: $\alpha_{2}^{new} = 0.1$
   * 관계식에 의한 도출: $\alpha_{1}^{new} = \alpha_{2}^{new} = 0.1$
 
-### 7.5. 최종 가중치 $w$ 도출
+#### 6.4.5. 최종 가중치 $w$ 도출
 
 * 업데이트된 $\alpha$ 값들을 이용해 최적의 결정 경계 가중치 $w$를 계산해 봅니다.
 
 $$\begin{aligned} w &= \sum_{i=1}^{2} \alpha_{i}y^{(i)}x^{(i)} \\ &= 0.1(1)\begin{pmatrix} 1 \\ 2 \end{pmatrix} + 0.1(-1)\begin{pmatrix} -1 \\ -2 \end{pmatrix} \\ &= \begin{pmatrix} 0.1 \\ 0.2 \end{pmatrix} + \begin{pmatrix} 0.1 \\ 0.2 \end{pmatrix} = \begin{pmatrix} 0.2 \\ 0.4 \end{pmatrix} \end{aligned}$$
 
 * **결론:** 아주 단순화된 예시이지만, SMO 알고리즘이 **1) 등식 조건을 이용해 변수를 하나로 치환하고**, **2) 1차원 2차 함수 미분을 통해 무제약 해를 구한 뒤**, **3) Box 제약 조건 안으로 클리핑하는 과정**을 수만 개의 데이터 쌍에 대해 반복하며 전역 최적점(Global Optimum)을 향해 빠르게 수렴해 나간다는 원리를 명확하게 확인할 수 있습니다.
+
+
+---
+
+## 정리하며 (Closing Remarks)
+
+이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.
+
+| 단계 | 내용 | 근거 |
+|:---|:---|:---|
+| **① 출발점** | 5강의 결과 — 최적 마진 분류기는 볼록 QP $\min \frac{1}{2}\|w\|^2$ s.t. $y^{(i)}(w^\top x^{(i)}+b)\ge1$ | §2 |
+| **② 질문** | QP 솔버로 풀 수 있는데 왜 다른 형태가 필요한가 | §2 |
+| **③ 도구 준비** | 일반화 라그랑주안 $\mathcal{L}(w,\alpha,\beta)$와 $\theta_\mathcal{P}(w)$ — 제약 위반에 $\infty$ 벌점을 준다 | §3.1 |
+| **④ 순서 교환** | min max를 max min으로 바꾼 것이 쌍대 문제이며 항상 $d^* \le p^*$ | §3.2 |
+| **⑤ 등호 조건** | $f,g_i$ 볼록 · $h_i$ 아핀 · 엄격 실현 가능이면 $d^*=p^*$ (강한 쌍대성) | §3.2 |
+| **⑥ 결정적 조건** | KKT 쌍대 상보성 $\alpha_i^* g_i(w^*)=0$ — 둘 중 하나는 반드시 0 | §3.2 |
+| **⑦ 첫 번째 수확** | 따라서 $\alpha_i>0$인 점은 마진 위에 걸린 소수뿐 — **서포트 벡터** | §3.2, Figure |
+| **⑧ 쌍대형 유도** | $\nabla_w\mathcal{L}=0 \Rightarrow w=\sum\alpha_i y^{(i)}x^{(i)}$, $\partial_b\mathcal{L}=0 \Rightarrow \sum\alpha_i y^{(i)}=0$ | §4.1 |
+| **⑨ 소거** | [EQ. b]에 의해 $b$ 항이 사라지고 $\alpha$만의 함수 $W(\alpha)$가 남는다 | §4.2–§4.3 |
+| **⑩ 두 번째 수확** | $W(\alpha)$와 예측식에 데이터가 **내적으로만** 등장한다 → 커널 트릭의 입구 | §4.4 |
+| **⑪ 현실 대응 1** | 이상치 하나에 경계가 크게 흔들린다 → 슬랙 변수 $\xi_i$와 벌점 $C$ 도입 | §5 |
+| **⑫ 결과** | 목적 함수는 그대로, 제약만 $0\le\alpha_i\le C$로 바뀐다 (박스 제약) | §5 |
+| **⑬ 현실 대응 2** | 등식 제약 때문에 좌표 상승법을 한 변수에 쓸 수 없다 | §6.1–§6.2 |
+| **⑭ 해법** | 두 변수를 동시에 골라 치환하면 1차원 이차함수가 된다 (SMO) | §6.2 |
+| **⑮ 마무리** | 무제약 해를 $[L,H]$로 클리핑하고, KKT 조건 충족을 종료 판정으로 삼는다 | §6.3 |

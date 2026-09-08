@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Optimizer">
+<meta name="description" content="SGD에서 Adam까지, 각 옵티마이저가 앞 방법의 어떤 결함을 메우려고 등장했는지를 갱신 규칙 하나씩 추가해 가며 구현하고 Transformer 학습으로 비교합니다.">
 
 <title>[Deep Learning] 11. Optimizer – shsha0110.github.io</title>
 <style>
@@ -189,7 +189,7 @@ window.Quarto = {
       <h1 class="title">[Deep Learning] 11. Optimizer</h1>
                   <div>
         <div class="description">
-          Optimizer
+          SGD에서 Adam까지, 각 옵티마이저가 앞 방법의 어떤 결함을 메우려고 등장했는지를 갱신 규칙 하나씩 추가해 가며 구현하고 Transformer 학습으로 비교합니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -2928,7 +2928,7 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#들어가며-introduction" id="toc-들어가며-introduction" class="nav-link active" data-scroll-target="#들어가며-introduction">들어가며 (Introduction)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
   <li><a href="#추상-옵티마이저-클래스-abstracted-optimizer-class" id="toc-추상-옵티마이저-클래스-abstracted-optimizer-class" class="nav-link" data-scroll-target="#추상-옵티마이저-클래스-abstracted-optimizer-class">1. 추상 옵티마이저 클래스 (Abstracted optimizer class)</a>
   <ul class="collapse">
   <li><a href="#왜-추상-클래스가-필요한가" id="toc-왜-추상-클래스가-필요한가" class="nav-link" data-scroll-target="#왜-추상-클래스가-필요한가">1.1. 왜 추상 클래스가 필요한가</a></li>
@@ -2966,7 +2966,7 @@ window.Quarto = {
   <li><a href="#학습-루프" id="toc-학습-루프" class="nav-link" data-scroll-target="#학습-루프">6.2. 학습 루프</a></li>
   <li><a href="#학습-곡선-비교" id="toc-학습-곡선-비교" class="nav-link" data-scroll-target="#학습-곡선-비교">6.3. 학습 곡선 비교</a></li>
   </ul></li>
-  <li><a href="#마무리-summary" id="toc-마무리-summary" class="nav-link" data-scroll-target="#마무리-summary">마무리 (Summary)</a></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2977,20 +2977,15 @@ window.Quarto = {
 
 
 
-<section id="들어가며-introduction" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며-introduction">들어가며 (Introduction)</h2>
-<p>딥러닝 모델을 학습한다는 것은 결국 손실 함수 <span class="math inline">\(\ell(\theta)\)</span>를 최소화하는 파라미터 <span class="math inline">\(\theta\)</span>를 찾는 <strong>최적화(optimization) 문제</strong>를 푸는 일입니다. 우리는 이미 역전파(backpropagation)를 통해 임의의 파라미터 지점에서 그래디언트 <span class="math inline">\(\nabla \ell(\theta)\)</span>를 계산하는 방법을 알고 있습니다. 이제 남은 질문은 다음과 같습니다.</p>
 <blockquote class="blockquote">
-<p>“계산한 그래디언트를 가지고, <strong>파라미터를 구체적으로 어떻게 갱신(update)</strong> 할 것인가?”</p>
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 11강 실습 세션(<em>Optimizer</em>)의 노트북을 바탕으로, 코드와 그 배경이 되는 논리를 함께 따라갈 수 있도록 재구성한 것입니다.</p>
 </blockquote>
-<p>이 갱신 규칙(update rule)을 정의하는 객체가 바로 <strong>옵티마이저(optimizer)</strong> 입니다. 이번 실습에서는 PyTorch가 제공하는 <code>torch.optim</code>을 그대로 쓰는 대신, 옵티마이저를 <strong>밑바닥부터 직접 구현</strong>하면서 다음을 학습합니다.</p>
-<ul>
-<li>여러 옵티마이저가 공유하는 <strong>공통 인터페이스를 추상 클래스로 추출</strong>하는 객체지향 설계</li>
-<li><strong>SGD → Momentum → RMSProp → Adam</strong> 으로 이어지는 갱신 규칙의 발전 과정과 각 단계의 동기(motivation)</li>
-<li>직접 만든 옵티마이저로 <strong>Transformer 언어 모델을 실제로 학습</strong>시키고 성능을 비교하기</li>
-</ul>
-<p>전체 흐름은 “왜 이전 방법으로는 부족한가 → 그래서 무엇을 추가하는가”라는 한 줄기 서사로 이어집니다. 각 옵티마이저의 한계가 다음 옵티마이저를 낳는 구조이므로, 순서대로 따라오시길 권합니다.</p>
-<hr>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“SGD → Momentum → RMSProp → Adam 은 기능 목록이 아니라, 앞 방법의 결함을 하나씩 메워 온 계보입니다.”</strong></p>
+<p>앞선 실습에서 그래디언트를 계산하는 데까지 왔다면, 이제 남은 질문은 하나입니다. <strong>그 그래디언트로 파라미터를 구체적으로 어떻게 갱신할 것인가.</strong> 이 갱신 규칙을 담은 객체가 옵티마이저이며, 이번 실습은 PyTorch가 제공하는 것들을 밑바닥부터 다시 만듭니다. 먼저 여러 옵티마이저가 공유하는 부분(<code>zero_grad</code>, <code>step</code>, 파라미터 등록, 가중치 감쇠)을 <strong>추상 클래스로 추출</strong>해 두면, 이후 각 방법은 갱신식 한 줄의 차이로 표현됩니다. 그 위에서 계보가 드러납니다. <strong>SGD</strong> 는 그래디언트 방향으로 고정 보폭만큼 움직이지만 골짜기에서 진동하고 느립니다. <strong>Momentum</strong> 은 과거 갱신을 지수 이동 평균으로 누적해 관성을 주어 진동을 상쇄합니다. <strong>RMSProp</strong> 은 반대 축을 건드립니다 — 그래디언트 제곱의 이동 평균으로 나눠 <strong>파라미터마다 보폭을 따로</strong> 조절합니다. <strong>Adam</strong> 은 이 둘을 합치고, 초기에 이동 평균이 0으로 편향되는 문제를 편향 보정으로 바로잡습니다. 마지막으로 직접 만든 네 옵티마이저로 같은 Transformer를 학습시켜 수렴 속도를 비교합니다.</p>
+</blockquote>
 </section>
 <section id="추상-옵티마이저-클래스-abstracted-optimizer-class" class="level2">
 <h2 class="anchored" data-anchor-id="추상-옵티마이저-클래스-abstracted-optimizer-class">1. 추상 옵티마이저 클래스 (Abstracted optimizer class)</h2>
@@ -3421,6 +3416,12 @@ m_{t} = (1-\beta_1)\sum_{k=1}^{t}\beta_1^{\,t-k}\, \nabla\ell(\theta_k)
 <span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>sns.lineplot(data<span class="op">=</span>test_df)</span>
 <span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>plt.title(<span class="st">'Test Loss'</span>)</span>
 <span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/figure01_optimizer_loss_curves.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 네 옵티마이저(SGD 파란 실선, Momentum 주황 파선, RMSProp 초록 점선, Adam 빨간 일점쇄선)로 같은 Transformer를 50 epoch 학습시킨 결과입니다. 왼쪽이 학습 손실, 오른쪽이 평가 손실이며 가로축은 epoch입니다. 가장 눈에 띄는 것은 <strong>SGD(파란 실선)만 거의 평평하게 완만히 내려간다</strong>는 점으로, 고정 학습률로는 50 epoch 안에 충분히 수렴하지 못합니다. 나머지 셋은 초기 몇 epoch 동안 손실이 크게 요동친 뒤(적응적 방법이 아직 2차 모멘트 추정을 안정화하지 못한 구간) 급격히 떨어져 6 부근에 도달합니다. RMSProp(초록)의 초기 스파이크가 가장 크고, Adam(빨강)은 30 epoch 부근에서 한 번 더 튀었다가 회복합니다. 평가 손실(오른쪽)에서는 세 적응적 방법이 거의 같은 지점에 수렴해, 이 규모의 문제에서는 최종 성능보다 <strong>수렴 속도</strong>에서 차이가 난다는 점을 보여 줍니다.</figcaption>
+</figure>
+</div>
 <ul>
 <li>왼쪽은 학습 손실, 오른쪽은 평가 손실 곡선입니다.</li>
 <li>일반적으로 이런 비교 실험에서는 <strong>Adam이 가장 빠르게 손실을 낮추며</strong>, RMSProp과 Momentum이 그 뒤를 따르고, <strong>순수 SGD가 가장 느린</strong> 경향을 보입니다. 이는 앞 절들에서 살펴본 “모멘텀에 의한 가속 + 적응적 학습률”의 효과가 실제 학습 곡선으로 확인되는 셈입니다.</li>
@@ -3429,17 +3430,60 @@ m_{t} = (1-\beta_1)\sum_{k=1}^{t}\beta_1^{\,t-k}\, \nabla\ell(\theta_k)
 <hr>
 </section>
 </section>
-<section id="마무리-summary" class="level2">
-<h2 class="anchored" data-anchor-id="마무리-summary">마무리 (Summary)</h2>
-<p>이번 실습에서는 옵티마이저를 밑바닥부터 구현하며, 갱신 규칙이 어떻게 점진적으로 정교해지는지를 따라왔습니다.</p>
-<ul>
-<li><strong>추상 클래스</strong> : 공통 골격(<code>step</code>, <code>wd_grad</code>)은 부모에, 갱신 규칙(<code>update_dict</code>)은 자식에 두는 설계로 코드 중복을 제거했습니다.</li>
-<li><strong>SGD</strong> : 가장 가파른 내리막 방향으로 한 걸음씩. 단순하지만 정체·진동에 취약합니다.</li>
-<li><strong>Momentum</strong> : 과거 그래디언트를 지수 가중 합으로 누적해 관성을 부여, 진동을 줄이고 평탄 구간을 가속합니다.</li>
-<li><strong>RMSProp</strong> : 그래디언트 제곱의 EMA로 파라미터별 민감도를 추정해 학습률을 적응적으로 조절합니다.</li>
-<li><strong>Adam</strong> : 1차·2차 모멘트를 모두 추적하고 편향 보정까지 더해, 모멘텀과 적응적 학습률의 장점을 결합합니다.</li>
-</ul>
-<p>각 방법의 <strong>한계가 다음 방법의 동기</strong>가 되는 구조를 이해하셨다면, 새로운 옵티마이저(예: AdamW, Nadam)를 마주쳤을 때도 “기존 무엇을 어떻게 보완했는가”라는 질문으로 빠르게 파악하실 수 있을 것입니다.</p>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 실습의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 남은 질문</strong></td>
+<td style="text-align: left;">그래디언트를 얻은 다음, 파라미터를 <strong>어떻게</strong> 갱신할 것인가. 이 규칙을 담는 객체가 옵티마이저다</td>
+<td style="text-align: left;">역전파 이후의 단계</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 공통 구조의 추출</strong></td>
+<td style="text-align: left;">파라미터 등록, <code>zero_grad</code>, <code>step</code>, 가중치 감쇠는 모든 옵티마이저가 공유한다. 추상 클래스로 묶으면 각 방법은 갱신식 한 줄의 차이가 된다</td>
+<td style="text-align: left;">추상 옵티마이저 클래스</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ SGD의 한계</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\theta \leftarrow \theta - \eta g\)</span> 는 단순하지만, 곡률이 비대칭인 골짜기에서 좁은 축을 따라 진동하며 느리게 나아간다</td>
+<td style="text-align: left;">고정 보폭의 문제</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ Momentum</strong></td>
+<td style="text-align: left;">과거 갱신 방향을 지수 이동 평균으로 누적해 관성을 준다. 진동하는 성분은 서로 상쇄되고 일관된 방향은 누적되어 가속된다</td>
+<td style="text-align: left;">1차 모멘트</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ RMSProp</strong></td>
+<td style="text-align: left;">방향이 아니라 <strong>보폭</strong>을 손본다. 그래디언트 제곱의 이동 평균으로 나눠, 자주 큰 그래디언트를 받는 파라미터는 보폭을 줄이고 그렇지 않은 쪽은 키운다</td>
+<td style="text-align: left;">2차 모멘트 · 파라미터별 학습률</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ Adam</strong></td>
+<td style="text-align: left;">1차 모멘트(방향)와 2차 모멘트(보폭)를 함께 쓴다. 두 이동 평균을 0으로 초기화하면 초기에 0 쪽으로 치우치므로, <span class="math inline">\(1 - \beta^t\)</span> 로 나누는 <strong>편향 보정</strong>이 필요하다</td>
+<td style="text-align: left;">두 모멘트의 결합 · 편향 보정</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 실측 비교</strong></td>
+<td style="text-align: left;">같은 Transformer를 네 옵티마이저로 학습하면 SGD만 50 epoch 안에 수렴하지 못하고, 적응적 방법 셋은 초기 요동 뒤 비슷한 지점에 도달한다. 차이는 최종 성능보다 <strong>수렴 속도</strong>에서 난다</td>
+<td style="text-align: left;">학습 · 평가 손실 곡선</td>
+</tr>
+</tbody>
+</table>
 
 
 

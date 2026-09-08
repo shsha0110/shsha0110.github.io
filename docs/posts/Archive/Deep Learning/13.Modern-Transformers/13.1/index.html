@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Modern Transformers">
+<meta name="description" content="gpt-oss를 해부해 RMSNorm·SwiGLU부터 MHA→MQA→GQA로 이어지는 KV 캐시 절감, 그리고 LoRA의 저랭크 적응까지 현대 트랜스포머의 구성 요소를 직접 구현합니다.">
 
 <title>[Deep Learning] 13. Modern Transformers – shsha0110.github.io</title>
 <style>
@@ -189,7 +189,7 @@ window.Quarto = {
       <h1 class="title">[Deep Learning] 13. Modern Transformers</h1>
                   <div>
         <div class="description">
-          Modern Transformers
+          gpt-oss를 해부해 RMSNorm·SwiGLU부터 MHA→MQA→GQA로 이어지는 KV 캐시 절감, 그리고 LoRA의 저랭크 적응까지 현대 트랜스포머의 구성 요소를 직접 구현합니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -2928,7 +2928,7 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#들어가며-overview" id="toc-들어가며-overview" class="nav-link active" data-scroll-target="#들어가며-overview">들어가며 (Overview)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
   <li><a href="#아키텍처-개요-architecture-overview-gpt-oss" id="toc-아키텍처-개요-architecture-overview-gpt-oss" class="nav-link" data-scroll-target="#아키텍처-개요-architecture-overview-gpt-oss">1. 아키텍처 개요 (Architecture Overview: gpt-oss)</a>
   <ul class="collapse">
   <li><a href="#표에서-읽어야-할-핵심-포인트" id="toc-표에서-읽어야-할-핵심-포인트" class="nav-link" data-scroll-target="#표에서-읽어야-할-핵심-포인트">1.1 표에서 읽어야 할 핵심 포인트</a></li>
@@ -2954,7 +2954,7 @@ window.Quarto = {
   <li><a href="#항등-시작-검증" id="toc-항등-시작-검증" class="nav-link" data-scroll-target="#항등-시작-검증">4.4 항등 시작 검증</a></li>
   <li><a href="#파라미터-효율성-parameter-efficiency" id="toc-파라미터-효율성-parameter-efficiency" class="nav-link" data-scroll-target="#파라미터-효율성-parameter-efficiency">4.5 파라미터 효율성 (Parameter efficiency)</a></li>
   </ul></li>
-  <li><a href="#요약-summary" id="toc-요약-summary" class="nav-link" data-scroll-target="#요약-summary">5. 요약 (Summary)</a></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2965,18 +2965,15 @@ window.Quarto = {
 
 
 
-<section id="들어가며-overview" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며-overview">들어가며 (Overview)</h2>
-<p>이번 강의의 목표는 <strong>Transformer의 효율성(efficiency)과 확장성(scalability)을 끌어올린 현대적 기법들</strong>을 이해하는 것입니다. 단순히 개념만 나열하는 것이 아니라, <strong>OpenAI가 공개한 gpt-oss 모델 패밀리</strong>(<a href="https://github.com/openai/gpt-oss">github.com/openai/gpt-oss</a>)를 실제 레퍼런스 구현으로 삼아, 각 구성요소가 왜 필요하고 어떻게 동작하는지를 코드 수준에서 확인해 보겠습니다.</p>
-<p>다룰 주제는 다음 네 가지입니다.</p>
-<ol type="1">
-<li><strong>Architecture Overview</strong>: gpt-oss 전체 구조 조망</li>
-<li><strong>Building Blocks</strong>: RMSNorm &amp; SwiGLU</li>
-<li><strong>Attention Variants</strong>: MHA, MQA, GQA</li>
-<li><strong>LoRA</strong>: Low-Rank Adaptation (저랭크 적응)</li>
-</ol>
-<p>표준 Transformer(LayerNorm + GELU + MHA)와 비교하면서 읽으면, “왜 최신 LLM들은 약속이나 한 듯 비슷한 구조로 수렴했는가”라는 질문에 대한 직관을 얻으실 수 있을 것입니다.</p>
-<hr>
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 13강 실습 세션(<em>Modern Transformer Components: Inside OpenAI’s GPT-OSS</em>)의 노트북을 바탕으로, 코드와 그 배경이 되는 논리를 함께 따라갈 수 있도록 재구성한 것입니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“현대 트랜스포머의 변형들은 대부분 성능이 아니라 <strong>메모리와 파라미터 예산</strong>을 놓고 벌이는 절충입니다.”</strong></p>
+<p>지금까지 만든 기본 트랜스포머와 실제로 배포되는 모델 사이에는 몇 가지 구성 요소의 차이가 있습니다. 이번 실습은 OpenAI의 공개 모델 <strong>gpt-oss</strong> 를 기준으로 그 차이를 하나씩 뜯어봅니다. 기본 벽돌인 <strong>RMSNorm</strong> 과 <strong>SwiGLU</strong> 는 앞선 실습에서 다룬 것과 같습니다. 본론은 <strong>어텐션 변형</strong>입니다. 자기회귀 생성에서 KV 캐시는 컨텍스트 길이에 비례해 커지는데, 이것이 긴 컨텍스트의 진짜 병목입니다. MHA는 쿼리 헤드마다 키·값 헤드를 하나씩 두지만, <strong>MQA</strong> 는 키·값을 단 하나로 공유해 캐시를 극단적으로 줄이는 대신 표현력을 잃습니다. <strong>GQA</strong> 는 그 사이에서 쿼리 헤드를 몇 개의 그룹으로 묶어 그룹마다 키·값을 공유하며, 그룹 수가 곧 메모리 예산이 됩니다. 마지막으로 <strong>LoRA</strong> 는 다른 축의 예산 문제를 다룹니다. 사전학습 가중치를 얼려 두고 저랭크 행렬 <span class="math inline">\(W_A, W_B\)</span> 만 학습해 <span class="math inline">\(\Delta W\)</span> 를 근사하면, 학습 파라미터 수를 몇 자릿수 줄이면서도 파인튜닝이 가능해집니다.</p>
+</blockquote>
 </section>
 <section id="아키텍처-개요-architecture-overview-gpt-oss" class="level2">
 <h2 class="anchored" data-anchor-id="아키텍처-개요-architecture-overview-gpt-oss">1. 아키텍처 개요 (Architecture Overview: gpt-oss)</h2>
@@ -3564,6 +3561,12 @@ k, v \rightarrow \mathbb{R}^{B \times n\_kv\_heads \times L \times head\_dim}.
 <span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a><span class="co"># gpt-oss-120b: 8 KV heads, head_dim=64, 36 layers</span></span>
 <span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>gpt_oss_kv <span class="op">=</span> <span class="dv">2</span> <span class="op">*</span> <span class="dv">8</span> <span class="op">*</span> <span class="dv">64</span> <span class="op">*</span> seqlen <span class="op">*</span> <span class="dv">2</span> <span class="op">*</span> <span class="dv">36</span> <span class="op">/</span> (<span class="dv">1024</span><span class="op">**</span><span class="dv">2</span>)</span>
 <span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span><span class="st">'gpt-oss-120b (kv=8)'</span><span class="sc">:20s}</span><span class="ss">: </span><span class="sc">{</span>gpt_oss_kv<span class="sc">:8.1f}</span><span class="ss"> MB  (head_dim=64, 36 layers)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/figure03_kv_cache_bar.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 위 코드의 결과를 막대그래프로 옮긴 것입니다. <span class="math inline">\(d = 4096\)</span>, 32개 층, 시퀀스 길이 4096, float16 조건에서 어텐션 변형별 KV 캐시 크기를 MB 단위로 비교합니다. MHA(kv=32)가 2048MB로 가장 크고, GQA-8은 512MB, GQA-4는 256MB, GQA-2는 128MB, MQA(kv=1)는 64MB입니다. 막대 높이가 KV 헤드 수에 <strong>정확히 비례</strong>한다는 점이 핵심인데, 이는 캐시 크기 공식 <span class="math inline">\(2 \times n_{\text{kv}} \times d_h \times n\)</span> 에서 <span class="math inline">\(n_{\text{kv}}\)</span> 만이 변수이기 때문입니다. 즉 GQA에서 그룹 수를 정하는 일은 곧 메모리 예산을 정하는 일입니다.</figcaption>
+</figure>
+</div>
 <ul>
 <li>계산식의 마지막 <code>* 2</code>는 float16(2바이트) 가정에서 비롯됩니다.</li>
 <li><strong>MHA 대비 GQA-8은 KV 캐시를 약 <span class="math inline">\(4\times\)</span>, MQA는 약 <span class="math inline">\(32\times\)</span> 줄입니다</strong>(이 설정 기준). 즉 KV 헤드 수 <span class="math inline">\(n_\text{kv}\)</span>에 메모리가 정확히 비례합니다.</li>
@@ -3710,77 +3713,65 @@ W' = W + \frac{\alpha}{r} A \cdot 0 = W
 <hr>
 </section>
 </section>
-<section id="요약-summary" class="level2">
-<h2 class="anchored" data-anchor-id="요약-summary">5. 요약 (Summary)</h2>
-<p>이번 강의에서 다룬 <strong>현대 Transformer 구성요소</strong>를 정리하면 다음과 같습니다.</p>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 실습의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
 </colgroup>
 <thead>
 <tr class="header">
-<th>Technique</th>
-<th>해결한 문제</th>
-<th>핵심 이점</th>
-<th>사용 모델</th>
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td><strong>RMSNorm</strong></td>
-<td>LayerNorm의 연산 오버헤드</td>
-<td>약 10~15% 빠르고 품질 동등</td>
-<td>LLaMA, Mistral, <strong>gpt-oss</strong></td>
+<td style="text-align: left;"><strong>① 기준점</strong></td>
+<td style="text-align: left;">gpt-oss는 우리가 만든 기본 트랜스포머와 같은 골격 위에 몇 가지 구성 요소를 바꿔 얹은 모델이다</td>
+<td style="text-align: left;">아키텍처 개요</td>
 </tr>
 <tr class="even">
-<td><strong>SwiGLU</strong></td>
-<td>ReLU/GELU의 한계</td>
-<td>더 나은 그래디언트 흐름, 게이트형 활성화</td>
-<td>LLaMA, Mistral, <strong>gpt-oss</strong></td>
+<td style="text-align: left;"><strong>② 공통 벽돌</strong></td>
+<td style="text-align: left;">RMSNorm은 평균을 빼지 않고 RMS로만 나누어 정규화하고, SwiGLU는 두 갈래 경로를 원소별 곱으로 합쳐 게이팅한다</td>
+<td style="text-align: left;">빌딩 블록 구현</td>
 </tr>
 <tr class="odd">
-<td><strong>GQA</strong></td>
-<td>너무 큰 KV 캐시</td>
-<td>최대 <span class="math inline">\(8\times\)</span> 메모리 절감</td>
-<td>LLaMA 2/3, Mistral, <strong>gpt-oss</strong></td>
+<td style="text-align: left;"><strong>③ 진짜 병목</strong></td>
+<td style="text-align: left;">자기회귀 생성에서 KV 캐시는 컨텍스트 길이에 비례해 커진다. 레이어당 크기는 <span class="math inline">\(2 \times n_{\text{kv}} \times d_h \times n\)</span> 이다</td>
+<td style="text-align: left;">KV 캐시 크기 공식</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 양 극단</strong></td>
+<td style="text-align: left;">MHA는 쿼리 헤드마다 키·값 헤드를 두어 표현력이 크지만 캐시도 최대다. MQA는 키·값을 하나로 공유해 캐시를 최소화하지만 표현력을 잃는다</td>
+<td style="text-align: left;">MHA vs MQA</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ GQA의 절충</strong></td>
+<td style="text-align: left;">쿼리 헤드를 <span class="math inline">\(G\)</span> 개 그룹으로 묶어 그룹마다 키·값을 공유한다. <span class="math inline">\(G\)</span> 를 정하는 일이 곧 메모리 예산을 정하는 일이며, 캐시 크기는 <span class="math inline">\(n_{\text{kv}}\)</span> 에 정확히 비례한다</td>
+<td style="text-align: left;">그룹 수별 캐시 비교</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 구현의 요령</strong></td>
+<td style="text-align: left;"><code>repeat_kv</code> 로 키·값 헤드를 쿼리 헤드 수만큼 브로드캐스트하면, 기존 어텐션 코드를 거의 그대로 재사용할 수 있다</td>
+<td style="text-align: left;"><code>repeat_kv</code></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 또 다른 예산</strong></td>
+<td style="text-align: left;">파인튜닝은 전체 가중치를 갱신해야 해서 비용이 크다. 갱신량 <span class="math inline">\(\Delta W\)</span> 가 저랭크라고 가정하면 <span class="math inline">\(W + W_B W_A\)</span> 로 근사할 수 있다</td>
+<td style="text-align: left;">LoRA의 가정</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ LoRA의 효율</strong></td>
+<td style="text-align: left;">랭크 <span class="math inline">\(r\)</span> 만 학습하므로 파라미터 수가 몇 자릿수 줄고, 랭크를 키울수록 전체 파인튜닝 대비 비율이 선형으로 늘어난다</td>
+<td style="text-align: left;">파라미터 효율 그래프</td>
 </tr>
 </tbody>
 </table>
-<p><strong>파라미터 효율적 미세조정(PEFT)</strong> 기법:</p>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Technique</th>
-<th>해결한 문제</th>
-<th>핵심 이점</th>
-<th>사용 사례</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><strong>LoRA</strong></td>
-<td>미세조정 비용이 너무 큼</td>
-<td>학습 파라미터 <span class="math inline">\(100\times\)</span> 감소</td>
-<td>QLoRA, PEFT, 대부분의 미세조정</td>
-</tr>
-</tbody>
-</table>
-<p>이번 강의에서는 핵심 Transformer 빌딩 블록과 실용적 미세조정 기법 하나를 다뤘습니다.</p>
-<ul>
-<li><strong>RMSNorm pre-norm + SwiGLU 활성화</strong></li>
-<li><strong>GQA</strong>(64 query heads, 8 KV heads)를 통한 KV 캐시 메모리 절감</li>
-<li><strong>LoRA</strong>를 통한 파라미터 효율적 미세조정</li>
-</ul>
-<p>다음 강의에서는 또 다른 핵심 Transformer 빌딩 블록인 <strong>MoE(Mixture-of-Experts)</strong>와 <strong>Sliding Window Attention</strong>을 다룰 예정입니다.</p>
 
 
 

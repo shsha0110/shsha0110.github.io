@@ -1,6 +1,6 @@
 ---
 title: "[Deep Learning] 13. Modern Transformers"
-description: "Modern Transformers"
+description: "gpt-oss를 해부해 RMSNorm·SwiGLU부터 MHA→MQA→GQA로 이어지는 KV 캐시 절감, 그리고 LoRA의 저랭크 적응까지 현대 트랜스포머의 구성 요소를 직접 구현합니다."
 author: "유성현"
 categories: [Deep Learning]
 format:
@@ -11,20 +11,13 @@ format:
     math: true
 ---
 
-## 들어가며 (Overview)
+> 본 포스트는 서울대학교 컴퓨터공학부 **Hyun Oh Song** 교수님의 *Introduction to Deep Learning* (M2177.0043) 13강 실습 세션(*Modern Transformer Components: Inside OpenAI's GPT-OSS*)의 노트북을 바탕으로, 코드와 그 배경이 되는 논리를 함께 따라갈 수 있도록 재구성한 것입니다.
 
-이번 강의의 목표는 **Transformer의 효율성(efficiency)과 확장성(scalability)을 끌어올린 현대적 기법들**을 이해하는 것입니다. 단순히 개념만 나열하는 것이 아니라, **OpenAI가 공개한 gpt-oss 모델 패밀리**([github.com/openai/gpt-oss](https://github.com/openai/gpt-oss))를 실제 레퍼런스 구현으로 삼아, 각 구성요소가 왜 필요하고 어떻게 동작하는지를 코드 수준에서 확인해 보겠습니다.
+## 한 줄 요약 (TL;DR)
 
-다룰 주제는 다음 네 가지입니다.
-
-1. **Architecture Overview**: gpt-oss 전체 구조 조망
-2. **Building Blocks**: RMSNorm & SwiGLU
-3. **Attention Variants**: MHA, MQA, GQA
-4. **LoRA**: Low-Rank Adaptation (저랭크 적응)
-
-표준 Transformer(LayerNorm + GELU + MHA)와 비교하면서 읽으면, "왜 최신 LLM들은 약속이나 한 듯 비슷한 구조로 수렴했는가"라는 질문에 대한 직관을 얻으실 수 있을 것입니다.
-
----
+> **"현대 트랜스포머의 변형들은 대부분 성능이 아니라 **메모리와 파라미터 예산**을 놓고 벌이는 절충입니다."**
+>
+> 지금까지 만든 기본 트랜스포머와 실제로 배포되는 모델 사이에는 몇 가지 구성 요소의 차이가 있습니다. 이번 실습은 OpenAI의 공개 모델 **gpt-oss** 를 기준으로 그 차이를 하나씩 뜯어봅니다. 기본 벽돌인 **RMSNorm** 과 **SwiGLU** 는 앞선 실습에서 다룬 것과 같습니다. 본론은 **어텐션 변형**입니다. 자기회귀 생성에서 KV 캐시는 컨텍스트 길이에 비례해 커지는데, 이것이 긴 컨텍스트의 진짜 병목입니다. MHA는 쿼리 헤드마다 키·값 헤드를 하나씩 두지만, **MQA** 는 키·값을 단 하나로 공유해 캐시를 극단적으로 줄이는 대신 표현력을 잃습니다. **GQA** 는 그 사이에서 쿼리 헤드를 몇 개의 그룹으로 묶어 그룹마다 키·값을 공유하며, 그룹 수가 곧 메모리 예산이 됩니다. 마지막으로 **LoRA** 는 다른 축의 예산 문제를 다룹니다. 사전학습 가중치를 얼려 두고 저랭크 행렬 $W_A, W_B$ 만 학습해 $\Delta W$ 를 근사하면, 학습 파라미터 수를 몇 자릿수 줄이면서도 파인튜닝이 가능해집니다.
 
 ## 1. 아키텍처 개요 (Architecture Overview: gpt-oss)
 
@@ -589,6 +582,9 @@ gpt_oss_kv = 2 * 8 * 64 * seqlen * 2 * 36 / (1024**2)
 print(f"{'gpt-oss-120b (kv=8)':20s}: {gpt_oss_kv:8.1f} MB  (head_dim=64, 36 layers)")
 ```
 
+
+![Figure: 위 코드의 결과를 막대그래프로 옮긴 것입니다. $d = 4096$, 32개 층, 시퀀스 길이 4096, float16 조건에서 어텐션 변형별 KV 캐시 크기를 MB 단위로 비교합니다. MHA(kv=32)가 2048MB로 가장 크고, GQA-8은 512MB, GQA-4는 256MB, GQA-2는 128MB, MQA(kv=1)는 64MB입니다. 막대 높이가 KV 헤드 수에 **정확히 비례**한다는 점이 핵심인데, 이는 캐시 크기 공식 $2 \times n_{\text{kv}} \times d_h \times n$ 에서 $n_{\text{kv}}$ 만이 변수이기 때문입니다. 즉 GQA에서 그룹 수를 정하는 일은 곧 메모리 예산을 정하는 일입니다.](./images/figure03_kv_cache_bar.png)
+
 - 계산식의 마지막 `* 2`는 float16(2바이트) 가정에서 비롯됩니다.
 - **MHA 대비 GQA-8은 KV 캐시를 약 $4\times$, MQA는 약 $32\times$ 줄입니다**(이 설정 기준). 즉 KV 헤드 수 $n_\text{kv}$에 메모리가 정확히 비례합니다.
 
@@ -739,26 +735,17 @@ For a 4096x4096 layer (full: 16,777,216 params):
 
 ---
 
-## 5. 요약 (Summary)
+## 정리하며 (Closing Remarks)
 
-이번 강의에서 다룬 **현대 Transformer 구성요소**를 정리하면 다음과 같습니다.
+이번 실습의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.
 
-| Technique | 해결한 문제 | 핵심 이점 | 사용 모델 |
-|---|---|---|---|
-| **RMSNorm** | LayerNorm의 연산 오버헤드 | 약 10~15% 빠르고 품질 동등 | LLaMA, Mistral, **gpt-oss** |
-| **SwiGLU** | ReLU/GELU의 한계 | 더 나은 그래디언트 흐름, 게이트형 활성화 | LLaMA, Mistral, **gpt-oss** |
-| **GQA** | 너무 큰 KV 캐시 | 최대 $8\times$ 메모리 절감 | LLaMA 2/3, Mistral, **gpt-oss** |
-
-**파라미터 효율적 미세조정(PEFT)** 기법:
-
-| Technique | 해결한 문제 | 핵심 이점 | 사용 사례 |
-|---|---|---|---|
-| **LoRA** | 미세조정 비용이 너무 큼 | 학습 파라미터 $100\times$ 감소 | QLoRA, PEFT, 대부분의 미세조정 |
-
-이번 강의에서는 핵심 Transformer 빌딩 블록과 실용적 미세조정 기법 하나를 다뤘습니다.
-
-- **RMSNorm pre-norm + SwiGLU 활성화**
-- **GQA**(64 query heads, 8 KV heads)를 통한 KV 캐시 메모리 절감
-- **LoRA**를 통한 파라미터 효율적 미세조정
-
-다음 강의에서는 또 다른 핵심 Transformer 빌딩 블록인 **MoE(Mixture-of-Experts)**와 **Sliding Window Attention**을 다룰 예정입니다.
+| 단계 | 내용 | 근거 |
+|:---|:---|:---|
+| **① 기준점** | gpt-oss는 우리가 만든 기본 트랜스포머와 같은 골격 위에 몇 가지 구성 요소를 바꿔 얹은 모델이다 | 아키텍처 개요 |
+| **② 공통 벽돌** | RMSNorm은 평균을 빼지 않고 RMS로만 나누어 정규화하고, SwiGLU는 두 갈래 경로를 원소별 곱으로 합쳐 게이팅한다 | 빌딩 블록 구현 |
+| **③ 진짜 병목** | 자기회귀 생성에서 KV 캐시는 컨텍스트 길이에 비례해 커진다. 레이어당 크기는 $2 \times n_{\text{kv}} \times d_h \times n$ 이다 | KV 캐시 크기 공식 |
+| **④ 양 극단** | MHA는 쿼리 헤드마다 키·값 헤드를 두어 표현력이 크지만 캐시도 최대다. MQA는 키·값을 하나로 공유해 캐시를 최소화하지만 표현력을 잃는다 | MHA vs MQA |
+| **⑤ GQA의 절충** | 쿼리 헤드를 $G$ 개 그룹으로 묶어 그룹마다 키·값을 공유한다. $G$ 를 정하는 일이 곧 메모리 예산을 정하는 일이며, 캐시 크기는 $n_{\text{kv}}$ 에 정확히 비례한다 | 그룹 수별 캐시 비교 |
+| **⑥ 구현의 요령** | `repeat_kv` 로 키·값 헤드를 쿼리 헤드 수만큼 브로드캐스트하면, 기존 어텐션 코드를 거의 그대로 재사용할 수 있다 | `repeat_kv` |
+| **⑦ 또 다른 예산** | 파인튜닝은 전체 가중치를 갱신해야 해서 비용이 크다. 갱신량 $\Delta W$ 가 저랭크라고 가정하면 $W + W_B W_A$ 로 근사할 수 있다 | LoRA의 가정 |
+| **⑧ LoRA의 효율** | 랭크 $r$ 만 학습하므로 파라미터 수가 몇 자릿수 줄고, 랭크를 키울수록 전체 파인튜닝 대비 비율이 선형으로 늘어난다 | 파라미터 효율 그래프 |

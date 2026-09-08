@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="DDPM and Noise Prediction">
+<meta name="description" content="노이즈를 점진적으로 더하는 고정된 과정을 뒤집는 법을 배우는 것이 확산 모델입니다. 닫힌 형태 노이징에서 출발해 왜 노이즈를 예측하게 되는지, 그 목적함수가 변분 하한에서 어떻게 나오는지 따라갑니다.">
 
 <title>[Deep Learning] 20. Diffusion Models 1 – shsha0110.github.io</title>
 <style>
@@ -189,7 +189,7 @@ window.Quarto = {
       <h1 class="title">[Deep Learning] 20. Diffusion Models 1</h1>
                   <div>
         <div class="description">
-          DDPM and Noise Prediction
+          노이즈를 점진적으로 더하는 고정된 과정을 뒤집는 법을 배우는 것이 확산 모델입니다. 닫힌 형태 노이징에서 출발해 왜 노이즈를 예측하게 되는지, 그 목적함수가 변분 하한에서 어떻게 나오는지 따라갑니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -2928,7 +2928,8 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#들어가며-motivation" id="toc-들어가며-motivation" class="nav-link active" data-scroll-target="#들어가며-motivation">들어가며 (Motivation)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
+  <li><a href="#큰-그림-big-picture" id="toc-큰-그림-big-picture" class="nav-link" data-scroll-target="#큰-그림-big-picture">큰 그림 (Big Picture)</a></li>
   <li><a href="#순방향-노이징-과정-forward-noising-process" id="toc-순방향-노이징-과정-forward-noising-process" class="nav-link" data-scroll-target="#순방향-노이징-과정-forward-noising-process">1. 순방향 노이징 과정 (Forward Noising Process)</a>
   <ul class="collapse">
   <li><a href="#순방향-과정의-정의" id="toc-순방향-과정의-정의" class="nav-link" data-scroll-target="#순방향-과정의-정의">1.1 순방향 과정의 정의</a></li>
@@ -2966,10 +2967,7 @@ window.Quarto = {
   <li><a href="#ddpm-변분적-하한의-최종-형태" id="toc-ddpm-변분적-하한의-최종-형태" class="nav-link" data-scroll-target="#ddpm-변분적-하한의-최종-형태">5.5 DDPM 변분적 하한의 최종 형태</a></li>
   <li><a href="#가우시안-kl에서-노이즈-예측으로" id="toc-가우시안-kl에서-노이즈-예측으로" class="nav-link" data-scroll-target="#가우시안-kl에서-노이즈-예측으로">5.6 가우시안 KL에서 노이즈 예측으로</a></li>
   </ul></li>
-  <li><a href="#강의-요약-lecture-summary" id="toc-강의-요약-lecture-summary" class="nav-link" data-scroll-target="#강의-요약-lecture-summary">강의 요약 (Lecture Summary)</a>
-  <ul class="collapse">
-  <li><a href="#ddpm-핵심-공식-모음" id="toc-ddpm-핵심-공식-모음" class="nav-link" data-scroll-target="#ddpm-핵심-공식-모음">DDPM 핵심 공식 모음</a></li>
-  </ul></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2980,8 +2978,18 @@ window.Quarto = {
 
 
 
-<section id="들어가며-motivation" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며-motivation">들어가며 (Motivation)</h2>
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 강의 자료(20강 <em>Diffusion Models I: DDPM and Noise Prediction</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“어려운 생성 문제를, 노이즈를 한 단계씩 지우는 쉬운 회귀 문제들의 사슬로 바꾸는 것이 확산 모델입니다.”</strong></p>
+<p>자기회귀 모델은 정확한 우도를 주지만 샘플링이 느렸고, GAN은 빠르고 선명하지만 학습이 불안정했습니다. 확산 모델은 세 번째 길을 냅니다. 먼저 데이터에 가우시안 노이즈를 조금씩 더해 순수 노이즈로 만드는 <strong>고정된</strong> 순방향 과정을 정의합니다. 이 과정은 학습 대상이 아니라 우리가 고르는 것이며, 결정적으로 <span class="math inline">\(q(x_t \mid x_0) = \mathcal{N}(\sqrt{\bar\alpha_t}\,x_0, (1 - \bar\alpha_t)I)\)</span> 라는 <strong>닫힌 형태</strong>를 가져 임의의 시점 <span class="math inline">\(t\)</span> 로 한 번에 건너뛸 수 있습니다. 학습해야 할 것은 그 역방향입니다. 그런데 <span class="math inline">\(x_t = \sqrt{\bar\alpha_t}x_0 + \sqrt{1 - \bar\alpha_t}\,\epsilon\)</span> 이므로 <span class="math inline">\(x_0\)</span> 를 맞히는 것과 <span class="math inline">\(\epsilon\)</span> 을 맞히는 것은 같은 정보를 요구하고, 실제로는 <strong>노이즈 <span class="math inline">\(\epsilon\)</span> 을 예측</strong>하는 편이 학습이 안정적입니다. 그 결과 목적함수는 <span class="math inline">\(\lVert \epsilon - \epsilon_\theta(x_t, t) \rVert^2\)</span> 라는 단순한 회귀로 떨어집니다. 마지막으로 이 단순한 손실이 임의로 고른 것이 아니라 VAE와 같은 <strong>변분 하한</strong>에서 유도된다는 점을 확인합니다.</p>
+</blockquote>
+</section>
+<section id="큰-그림-big-picture" class="level2">
+<h2 class="anchored" data-anchor-id="큰-그림-big-picture">큰 그림 (Big Picture)</h2>
 <p>지난 강의들에서 우리는 자기회귀 모델(PixelRNN/CNN)과 GAN(Generative Adversarial Network)을 살펴보았습니다. 이번 강의에서는 최근 이미지 생성 분야에서 가장 강력한 성능을 보여주고 있는 <strong>확산 모델(Diffusion Models)</strong> 을 다룹니다.</p>
 <p>확산 모델의 핵심 아이디어는 한 문장으로 요약됩니다:</p>
 <blockquote class="blockquote">
@@ -3356,30 +3364,78 @@ window.Quarto = {
 <hr>
 </section>
 </section>
-<section id="강의-요약-lecture-summary" class="level2">
-<h2 class="anchored" data-anchor-id="강의-요약-lecture-summary">강의 요약 (Lecture Summary)</h2>
-<p>이번 강의에서 다룬 핵심 내용을 정리합니다:</p>
-<ul>
-<li><strong>확산 모델의 핵심:</strong> 점진적인 노이즈 추가 과정을 역방향으로 복원하는 것을 학습</li>
-<li><strong>순방향 과정 (닫힌 형식):</strong> <span class="math display">\[x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1-\bar{\alpha}_t}\, \epsilon\]</span></li>
-<li><strong>학습 목적함수:</strong> <span class="math display">\[\mathcal{L}_\text{simple} = \mathbb{E}\!\left[\left\|\epsilon - \epsilon_\theta(x_t, t)\right\|_2^2\right]\]</span></li>
-<li><strong>샘플링:</strong> <span class="math display">\[x_T \sim \mathcal{N}(0, I), \quad x_T \to x_{T-1} \to \cdots \to x_0\]</span></li>
-<li><strong>네트워크:</strong> 타임스텝 임베딩을 가진 U-Net</li>
-<li><strong>이론적 기반:</strong> VAE와 유사한 변분적 하한(ELBO)에서 유도</li>
-</ul>
-<p>다음 강의에서는 DDPM의 느린 샘플링 문제를 해결하는 방법들(DDIM 등)과 조건부 생성(Conditional Generation)을 다룰 예정입니다.</p>
-<hr>
-<section id="ddpm-핵심-공식-모음" class="level3">
-<h3 class="anchored" data-anchor-id="ddpm-핵심-공식-모음">DDPM 핵심 공식 모음</h3>
-<p><span class="math display">\[\alpha_t = 1-\beta_t, \qquad \bar{\alpha}_t = \prod_{s=1}^t \alpha_s\]</span></p>
-<p><span class="math display">\[q(x_t|x_0) = \mathcal{N}(x_t;\,\sqrt{\bar\alpha_t}x_0,\,(1-\bar\alpha_t)I)\]</span></p>
-<p><span class="math display">\[x_t = \sqrt{\bar\alpha_t}x_0 + \sqrt{1-\bar\alpha_t}\epsilon, \quad \epsilon\sim\mathcal{N}(0,I)\]</span></p>
-<p><span class="math display">\[\mathcal{L}_{\rm simple} = \mathbb{E}_{x_0,t,\epsilon}\bigl[\|\epsilon - \epsilon_\theta(x_t,t)\|_2^2\bigr]\]</span></p>
-<p><span class="math display">\[x_{t-1} = \frac{1}{\sqrt{\alpha_t}}\!\left(x_t - \frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\epsilon_\theta(x_t,t)\right) + \sigma_t z\]</span></p>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 발상</strong></td>
+<td style="text-align: left;">생성을 한 번에 해내려 하지 말고, <strong>점진적 노이징을 역방향으로 되돌리는 법</strong>을 배우자</td>
+<td style="text-align: left;">큰 그림</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 순방향 과정</strong></td>
+<td style="text-align: left;"><span class="math inline">\(q(x_t \mid x_{t-1}) = \mathcal{N}(\sqrt{1 - \beta_t}\,x_{t-1}, \beta_t I)\)</span> 는 <strong>고정</strong>이며 학습 파라미터가 없다. 우리가 스케줄 <span class="math inline">\(\beta_t\)</span> 를 고를 뿐이다</td>
+<td style="text-align: left;">순방향 과정의 정의</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 닫힌 형태</strong></td>
+<td style="text-align: left;"><span class="math inline">\(q(x_t \mid x_0) = \mathcal{N}(\sqrt{\bar\alpha_t}\,x_0, (1 - \bar\alpha_t)I)\)</span> 이므로 <span class="math inline">\(t\)</span> 단계를 하나씩 거칠 필요 없이 <strong>한 번에</strong> 노이즈를 입힐 수 있다. 이것이 학습을 실용적으로 만든다</td>
+<td style="text-align: left;"><span class="math inline">\(\bar\alpha_t = \prod_s \alpha_s\)</span></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 신호 대 잡음</strong></td>
+<td style="text-align: left;"><span class="math inline">\(t\)</span> 가 작으면 <span class="math inline">\(\bar\alpha_t \approx 1\)</span> 이라 <span class="math inline">\(x_t \approx x_0\)</span>, <span class="math inline">\(t\)</span> 가 크면 <span class="math inline">\(\bar\alpha_t \approx 0\)</span> 이라 <span class="math inline">\(x_t \approx \epsilon\)</span> 이다. 시점이 곧 난이도를 정한다</td>
+<td style="text-align: left;">SNR 직관</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 역방향 과정</strong></td>
+<td style="text-align: left;">되돌리는 쪽은 배워야 한다. 각 역방향 단계를 가우시안 <span class="math inline">\(p_\theta(x_{t-1} \mid x_t)\)</span> 로 두고 그 평균을 신경망이 결정하게 한다</td>
+<td style="text-align: left;">마르코프 역과정</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 왜 노이즈를 예측하는가</strong></td>
+<td style="text-align: left;"><span class="math inline">\(x_t = \sqrt{\bar\alpha_t}x_0 + \sqrt{1 - \bar\alpha_t}\,\epsilon\)</span> 이므로 <span class="math inline">\(x_0\)</span>, <span class="math inline">\(\epsilon\)</span>, 스코어는 서로 <strong>등가</strong>인 예측 대상이다. 실제로는 <span class="math inline">\(\epsilon\)</span> 예측이 스케일이 일정해 학습이 안정적이다</td>
+<td style="text-align: left;">세 가지 등가 목표</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 단순한 목적함수</strong></td>
+<td style="text-align: left;"><span class="math inline">\(t\)</span> 를 균등하게 뽑고 노이즈를 한 번에 입힌 뒤 <span class="math inline">\(\mathcal{L}_{\text{simple}} = \mathbb{E}\lVert \epsilon - \epsilon_\theta(x_t, t) \rVert_2^2\)</span> 를 최소화한다. 생성 문제가 회귀 문제가 되었다</td>
+<td style="text-align: left;">DDPM 학습 알고리즘</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 샘플링</strong></td>
+<td style="text-align: left;"><span class="math inline">\(x_T \sim \mathcal{N}(0, I)\)</span> 에서 시작해, 예측한 <span class="math inline">\(\epsilon_\theta\)</span> 로 <span class="math inline">\(\hat{x}_0\)</span> 를 복원하고 사후 분포의 평균으로 한 걸음씩 내려온다. 학습은 병렬이지만 샘플링은 <span class="math inline">\(T\)</span> 번 순차적이다</td>
+<td style="text-align: left;">DDPM 샘플링 알고리즘</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ 네트워크</strong></td>
+<td style="text-align: left;">모델은 <span class="math inline">\(x_t\)</span> 와 <span class="math inline">\(t\)</span> 를 모두 알아야 하므로, 사인파 시간 임베딩을 U-Net의 각 블록에 주입한다</td>
+<td style="text-align: left;">시간 임베딩 · U-Net</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ 목적함수의 출처</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\mathcal{L}_{\text{simple}}\)</span> 은 임의로 고른 것이 아니다. VAE와 같은 방식으로 변분 하한을 세우고 KL 항으로 정리한 뒤 가우시안 KL을 대입하면 노이즈 예측 손실이 나온다</td>
+<td style="text-align: left;">변분적 관점</td>
+</tr>
+</tbody>
+</table>
 
 
 
-</section>
 </section>
 
 </main> <!-- /main -->

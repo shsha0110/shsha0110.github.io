@@ -11,6 +11,14 @@ format:
     math: true
 ---
 
+> 본 포스트는 서울대학교 컴퓨터공학부 **Hyun Oh Song** 교수님의 *Introduction to Deep Learning* (M2177.0043) 강의 자료(24강 *Reinforcement Learning III: Policy Gradient and Actor-Critic*)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 세 차례 강화학습 강의의 마지막으로, 가치가 아니라 **정책**을 직접 최적화합니다.
+
+## 한 줄 요약 (TL;DR)
+
+> **"정책 경사법의 이야기는 처음부터 끝까지 분산과의 싸움이고, PPO의 클리핑은 그 싸움에 '보폭 제한'을 더한 것입니다."**
+>
+> 22–23강의 가치 기반 방법은 $\arg\max_a Q(s, a)$ 로 행동을 골랐습니다. 이 방식은 연속 행동 공간에서 곧바로 막히고, 확률적 정책도 자연스럽게 표현하지 못합니다. 그래서 이번에는 정책 $\pi_\theta(a \mid s)$ 를 직접 매개변수화합니다. 핵심 도구는 **로그-미분 트릭** 입니다. $\nabla_\theta p_\theta = p_\theta \nabla_\theta \log p_\theta$ 라는 한 줄 덕분에 기댓값의 그래디언트를 표본 평균으로 추정할 수 있고, 궤적의 로그 확률을 전개하면 **전이 확률 $T$ 가 $\theta$ 와 무관해 사라져** 모델을 몰라도 그래디언트를 계산할 수 있습니다. 이것이 **REINFORCE** 입니다. 문제는 분산입니다. 이 강의의 나머지는 그 분산을 깎아 내는 이야기로 읽힙니다. 이미 지나간 보상은 현재 행동과 무관하므로 제거할 수 있고(**reward-to-go**), 상태에만 의존하는 **baseline** 은 기댓값을 바꾸지 않고 분산만 줄이며, 가장 좋은 baseline이 $V^\pi(s)$ 여서 가중치가 **어드밴티지** $A^\pi(s,a) = Q^\pi - V^\pi$ 가 됩니다. **PPO** 는 다른 축을 건드립니다. 중요도 표본추출로 옛 정책의 데이터를 재사용하되, 비율 $\rho_t$ 를 클리핑해 한 번에 너무 멀리 가지 못하게 묶습니다. 이 구조가 그대로 LLM의 RLHF와 GRPO로 이어집니다. 마지막으로 **actor-critic** 은 critic이 어드밴티지를 추정해 actor의 분산을 줄이는 형태이며, DDPG · TD3 · SAC가 연속 제어에서 이를 구현합니다.
+
 ## 지난 강의 복습 (Last Time)
 
 지난 강의에서는 **모델 없는(model-free) 가치 학습(value learning)**을 다루었습니다. 핵심 아이디어는 환경과의 상호작용으로 얻은 샘플 전이 $(s_t, a_t, r_t, s_{t+1})$을 이용해 가치 함수를 추정하는 것이었습니다.
@@ -576,7 +584,7 @@ $$\min_{\phi_j}\; \mathbb{E}_{(s,a,r,s') \sim \mathcal{D}}\!\left[\bigl(Q_{\phi_
 
 연속 제어 알고리즘의 성능은 주로 MuJoCo 물리 시뮬레이터의 로코모션(locomotion) 태스크로 평가합니다.
 
-![Figure: MuJoCo 연속 제어 벤치마크 환경들. 왼쪽 위부터 시계 방향으로: Hopper-v1(한 발 달리기), Walker2d-v1(두 발 걷기), HalfCheetah-v1(치타 달리기), Humanoid-v1(인간형 로봇), Ant-v1(네 발 로봇). 각 환경은 체크무늬 바닥 위에 관절 기반 로봇 모델이 주어지며, 에이전트는 관절 토크를 연속 행동으로 출력하여 빠르게, 효율적으로 이동하도록 학습해야 한다.](./images/mujoco_envs.png)
+![Figure: MuJoCo 연속 제어 벤치마크 환경들. 윗줄 왼쪽부터 Hopper-v1(한 발 달리기), Walker2d-v1(두 발 걷기), HalfCheetah-v1(치타 달리기), 아랫줄에 Ant-v1(네 발 로봇), Humanoid-v1(인간형 로봇)입니다. 각 환경은 체크무늬 바닥 위에 관절 기반 로봇 모델이 주어지며, 에이전트는 관절 토크를 연속 행동으로 출력하여 빠르게, 효율적으로 이동하도록 학습해야 한다.](./images/mujoco_envs.png)
 
 대표적인 환경들:
 - **Hopper-v1**: 외발 로봇이 쓰러지지 않고 앞으로 이동
@@ -598,36 +606,22 @@ $$\min_{\phi_j}\; \mathbb{E}_{(s,a,r,s') \sim \mathcal{D}}\!\left[\bigl(Q_{\phi_
 
 ---
 
-## 6. 요약 (Summary)
+## 정리하며 (Closing Remarks)
 
-### 정책 기반 방법론 비교
+이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.
 
-| 방법론 | 정책 유형 | Critic? | 핵심 아이디어 |
-|---|---|---|---|
-| **REINFORCE** | 확률적 | 없음 | 점수 함수 기반 정책 경사 |
-| **A2C/A3C** | 확률적 | $V_\phi(s)$ | 가치 크리틱을 이용한 어드밴티지 baseline |
-| **DDPG** | 결정론적 | $Q_\phi(s,a)$ | 결정론적 Actor로 연속 행동 처리 |
-| **TD3** | 결정론적 | 이중 Q 크리틱 | 과대 추정 감소 및 DDPG 안정화 |
-| **SAC** | 확률적 | 이중 Q 크리틱 | 최대 엔트로피 Actor-Critic |
-
-### 강의 전체 요약
-
-이번 강의에서 다룬 핵심 내용을 정리하면 다음과 같습니다.
-
-- **Policy gradient**: 정책 $\pi_\theta(a \mid s)$를 직접 최적화합니다. 가치 기반 방법과 달리 연속 행동 공간을 자연스럽게 처리할 수 있습니다.
-
-- **REINFORCE 기울기**:
-
-$$\nabla_\theta J(\theta) = \mathbb{E}\!\left[\sum_t \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, G_t\right]$$
-
-- **Reward-to-go와 Baseline**: 과거 보상 제거(reward-to-go)와 baseline 빼기를 통해 비편향성을 유지하면서 분산을 감소시킵니다.
-
-- **Advantage 함수**: $A^\pi(s, a) = Q^\pi(s, a) - V^\pi(s)$는 평균 행동 대비 특정 행동의 상대적 가치를 측정합니다.
-
-- **PPO**: 중요도 샘플링과 클리핑을 통해 정책 업데이트의 크기를 제어합니다. RLHF의 표준 알고리즘입니다.
-
-- **GRPO**: 가치 모델 없이 그룹 상대적 어드밴티지로 LLM을 효율적으로 RL 파인튜닝합니다.
-
-- **Actor-Critic**: Actor $\pi_\theta$와 Critic $V_\phi$ 또는 $Q_\phi$를 동시에 학습합니다.
-
-- **DDPG, TD3, SAC**: 연속 제어를 위한 주요 Actor-Critic 알고리즘으로, MuJoCo 벤치마크에서 SAC가 가장 좋은 성능을 보입니다.
+| 단계 | 내용 | 근거 |
+|:---|:---|:---|
+| **① 가치 기반의 한계** | $\arg\max_a Q(s,a)$ 는 연속 행동 공간에서 풀 수 없고, 확률적 정책도 표현하지 못한다 | 정책을 직접 최적화하는 이유 |
+| **② 로그-미분 트릭** | $\nabla_\theta p_\theta(x) = p_\theta(x)\nabla_\theta \log p_\theta(x)$ 덕분에 기댓값의 그래디언트를 표본 평균으로 바꿀 수 있다 | 로그-미분 보조정리 |
+| **③ 모델이 사라진다** | 궤적 로그 확률을 전개하면 $\nabla_\theta \log p_\theta(\tau) = \sum_t \nabla_\theta \log \pi_\theta(a_t \mid s_t)$ 다. 전이 $T$ 는 $\theta$ 와 무관해 미분에서 소멸하므로 **모델을 몰라도 된다** | 궤적 로그 확률의 그래디언트 |
+| **④ REINFORCE** | $\nabla_\theta J(\theta) = \mathbb{E}[\sum_t \nabla_\theta \log \pi_\theta(a_t \mid s_t) R(\tau)]$. 수익이 크면 그 행동의 확률을 올린다는 직관 그대로다 | REINFORCE 유도 |
+| **⑤ 분산 감소 ①** | 시점 $t$ 의 행동은 그 이전 보상에 영향을 줄 수 없으므로 과거 보상을 떼어낼 수 있다. 가중치가 **reward-to-go** $G_t$ 로 줄어든다 | 인과성 논증 |
+| **⑥ 분산 감소 ②** | $\mathbb{E}_{a \sim \pi_\theta}[\nabla_\theta \log \pi_\theta(a \mid s)] = 0$ 이므로, 상태에만 의존하는 baseline $b(s)$ 를 빼도 **기댓값은 불변**이고 분산만 준다 | 기대 grad-log-prob = 0 |
+| **⑦ 어드밴티지** | 자연스러운 baseline은 $V^\pi(s)$ 이고, 그때 가중치는 $A^\pi(s,a) = Q^\pi(s,a) - V^\pi(s)$ 가 된다. "평균보다 얼마나 나은 행동인가"를 재는 값이다 | 어드밴티지 함수 |
+| **⑧ 데이터 재사용** | 정책 경사법은 온폴리시라 매 갱신마다 새 표본이 필요하다. 중요도 표본추출 비율 $\rho_t(\theta) = \pi_\theta(a_t \mid s_t)/\pi_{\theta_{\text{old}}}(a_t \mid s_t)$ 로 옛 데이터를 재사용한다 | 중요도 표본추출 |
+| **⑨ PPO의 클리핑** | 비율이 커지면 갱신이 폭주하므로 $\rho_t$ 를 $[1-\epsilon, 1+\epsilon]$ 로 클리핑한다. 어드밴티지 부호에 따라 한쪽 방향으로만 제한이 걸려, 정책이 한 번에 너무 멀리 가지 못한다 | PPO 클리핑 목적함수 |
+| **⑩ LLM으로의 이식** | 생성된 응답을 궤적으로 보면 언어 모델 파인튜닝이 그대로 RL이 된다. RLHF는 SFT 모델에서 시작해 보상 모델과 KL 페널티로 PPO를 돌린다 | PPO for RLHF |
+| **⑪ GRPO** | 가치 모델을 따로 두는 대신 한 프롬프트에 $G$ 개 응답을 뽑아 **그룹 내 상대 점수**로 어드밴티지를 만든다. 가치망 학습 비용이 사라진다 | PPO vs. GRPO |
+| **⑫ Actor-Critic** | actor는 정책을, critic은 가치를 배운다. critic이 어드밴티지를 추정해 주면 actor의 그래디언트 분산이 크게 줄어든다 | Actor-critic · A2C/A3C |
+| **⑬ 연속 제어** | $\max_{a'}$ 를 풀 수 없으므로 actor가 그 자리를 대신한다. DDPG는 결정론적 actor를, TD3는 클리핑된 이중 Q와 지연 갱신을, SAC는 엔트로피 정규화를 더한다. 벤치마크에서 SAC가 대체로 가장 좋다 | DDPG · TD3 · SAC |

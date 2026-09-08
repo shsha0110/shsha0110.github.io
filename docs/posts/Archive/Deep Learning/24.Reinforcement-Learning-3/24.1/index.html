@@ -2893,7 +2893,8 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#지난-강의-복습-last-time" id="toc-지난-강의-복습-last-time" class="nav-link active" data-scroll-target="#지난-강의-복습-last-time">지난 강의 복습 (Last Time)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
+  <li><a href="#지난-강의-복습-last-time" id="toc-지난-강의-복습-last-time" class="nav-link" data-scroll-target="#지난-강의-복습-last-time">지난 강의 복습 (Last Time)</a></li>
   <li><a href="#policy-gradient-정책-경사법" id="toc-policy-gradient-정책-경사법" class="nav-link" data-scroll-target="#policy-gradient-정책-경사법">1. Policy Gradient (정책 경사법)</a>
   <ul class="collapse">
   <li><a href="#왜-정책을-직접-최적화하는가" id="toc-왜-정책을-직접-최적화하는가" class="nav-link" data-scroll-target="#왜-정책을-직접-최적화하는가">왜 정책을 직접 최적화하는가?</a></li>
@@ -2943,11 +2944,7 @@ window.Quarto = {
   <li><a href="#mujoco-연속-제어-벤치마크" id="toc-mujoco-연속-제어-벤치마크" class="nav-link" data-scroll-target="#mujoco-연속-제어-벤치마크">MuJoCo 연속 제어 벤치마크</a></li>
   <li><a href="#sac-성능-비교-sac-example" id="toc-sac-성능-비교-sac-example" class="nav-link" data-scroll-target="#sac-성능-비교-sac-example">SAC 성능 비교 (SAC Example)</a></li>
   </ul></li>
-  <li><a href="#요약-summary" id="toc-요약-summary" class="nav-link" data-scroll-target="#요약-summary">6. 요약 (Summary)</a>
-  <ul class="collapse">
-  <li><a href="#정책-기반-방법론-비교" id="toc-정책-기반-방법론-비교" class="nav-link" data-scroll-target="#정책-기반-방법론-비교">정책 기반 방법론 비교</a></li>
-  <li><a href="#강의-전체-요약" id="toc-강의-전체-요약" class="nav-link" data-scroll-target="#강의-전체-요약">강의 전체 요약</a></li>
-  </ul></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2958,6 +2955,16 @@ window.Quarto = {
 
 
 
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 강의 자료(24강 <em>Reinforcement Learning III: Policy Gradient and Actor-Critic</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 세 차례 강화학습 강의의 마지막으로, 가치가 아니라 <strong>정책</strong>을 직접 최적화합니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“정책 경사법의 이야기는 처음부터 끝까지 분산과의 싸움이고, PPO의 클리핑은 그 싸움에 ’보폭 제한’을 더한 것입니다.”</strong></p>
+<p>22–23강의 가치 기반 방법은 <span class="math inline">\(\arg\max_a Q(s, a)\)</span> 로 행동을 골랐습니다. 이 방식은 연속 행동 공간에서 곧바로 막히고, 확률적 정책도 자연스럽게 표현하지 못합니다. 그래서 이번에는 정책 <span class="math inline">\(\pi_\theta(a \mid s)\)</span> 를 직접 매개변수화합니다. 핵심 도구는 <strong>로그-미분 트릭</strong> 입니다. <span class="math inline">\(\nabla_\theta p_\theta = p_\theta \nabla_\theta \log p_\theta\)</span> 라는 한 줄 덕분에 기댓값의 그래디언트를 표본 평균으로 추정할 수 있고, 궤적의 로그 확률을 전개하면 <strong>전이 확률 <span class="math inline">\(T\)</span> 가 <span class="math inline">\(\theta\)</span> 와 무관해 사라져</strong> 모델을 몰라도 그래디언트를 계산할 수 있습니다. 이것이 <strong>REINFORCE</strong> 입니다. 문제는 분산입니다. 이 강의의 나머지는 그 분산을 깎아 내는 이야기로 읽힙니다. 이미 지나간 보상은 현재 행동과 무관하므로 제거할 수 있고(<strong>reward-to-go</strong>), 상태에만 의존하는 <strong>baseline</strong> 은 기댓값을 바꾸지 않고 분산만 줄이며, 가장 좋은 baseline이 <span class="math inline">\(V^\pi(s)\)</span> 여서 가중치가 <strong>어드밴티지</strong> <span class="math inline">\(A^\pi(s,a) = Q^\pi - V^\pi\)</span> 가 됩니다. <strong>PPO</strong> 는 다른 축을 건드립니다. 중요도 표본추출로 옛 정책의 데이터를 재사용하되, 비율 <span class="math inline">\(\rho_t\)</span> 를 클리핑해 한 번에 너무 멀리 가지 못하게 묶습니다. 이 구조가 그대로 LLM의 RLHF와 GRPO로 이어집니다. 마지막으로 <strong>actor-critic</strong> 은 critic이 어드밴티지를 추정해 actor의 분산을 줄이는 형태이며, DDPG · TD3 · SAC가 연속 제어에서 이를 구현합니다.</p>
+</blockquote>
+</section>
 <section id="지난-강의-복습-last-time" class="level2">
 <h2 class="anchored" data-anchor-id="지난-강의-복습-last-time">지난 강의 복습 (Last Time)</h2>
 <p>지난 강의에서는 <strong>모델 없는(model-free) 가치 학습(value learning)</strong>을 다루었습니다. 핵심 아이디어는 환경과의 상호작용으로 얻은 샘플 전이 <span class="math inline">\((s_t, a_t, r_t, s_{t+1})\)</span>을 이용해 가치 함수를 추정하는 것이었습니다.</p>
@@ -3440,7 +3447,7 @@ window.Quarto = {
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/mujoco_envs.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: MuJoCo 연속 제어 벤치마크 환경들. 왼쪽 위부터 시계 방향으로: Hopper-v1(한 발 달리기), Walker2d-v1(두 발 걷기), HalfCheetah-v1(치타 달리기), Humanoid-v1(인간형 로봇), Ant-v1(네 발 로봇). 각 환경은 체크무늬 바닥 위에 관절 기반 로봇 모델이 주어지며, 에이전트는 관절 토크를 연속 행동으로 출력하여 빠르게, 효율적으로 이동하도록 학습해야 한다.</figcaption>
+<figcaption>Figure: MuJoCo 연속 제어 벤치마크 환경들. 윗줄 왼쪽부터 Hopper-v1(한 발 달리기), Walker2d-v1(두 발 걷기), HalfCheetah-v1(치타 달리기), 아랫줄에 Ant-v1(네 발 로봇), Humanoid-v1(인간형 로봇)입니다. 각 환경은 체크무늬 바닥 위에 관절 기반 로봇 모델이 주어지며, 에이전트는 관절 토크를 연속 행동으로 출력하여 빠르게, 효율적으로 이동하도록 학습해야 한다.</figcaption>
 </figure>
 </div>
 <p>대표적인 환경들: - <strong>Hopper-v1</strong>: 외발 로봇이 쓰러지지 않고 앞으로 이동 - <strong>Walker2d-v1</strong>: 두 다리 로봇이 안정적으로 걷기 - <strong>HalfCheetah-v1</strong>: 치타형 로봇이 최대 속도로 달리기 - <strong>Ant-v1</strong>: 네 다리 로봇이 균형 있게 이동 - <strong>Humanoid-v1</strong>: 인간형 로봇의 이족 보행</p>
@@ -3463,79 +3470,93 @@ window.Quarto = {
 <hr>
 </section>
 </section>
-<section id="요약-summary" class="level2">
-<h2 class="anchored" data-anchor-id="요약-summary">6. 요약 (Summary)</h2>
-<section id="정책-기반-방법론-비교" class="level3">
-<h3 class="anchored" data-anchor-id="정책-기반-방법론-비교">정책 기반 방법론 비교</h3>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
 </colgroup>
 <thead>
 <tr class="header">
-<th>방법론</th>
-<th>정책 유형</th>
-<th>Critic?</th>
-<th>핵심 아이디어</th>
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td><strong>REINFORCE</strong></td>
-<td>확률적</td>
-<td>없음</td>
-<td>점수 함수 기반 정책 경사</td>
+<td style="text-align: left;"><strong>① 가치 기반의 한계</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\arg\max_a Q(s,a)\)</span> 는 연속 행동 공간에서 풀 수 없고, 확률적 정책도 표현하지 못한다</td>
+<td style="text-align: left;">정책을 직접 최적화하는 이유</td>
 </tr>
 <tr class="even">
-<td><strong>A2C/A3C</strong></td>
-<td>확률적</td>
-<td><span class="math inline">\(V_\phi(s)\)</span></td>
-<td>가치 크리틱을 이용한 어드밴티지 baseline</td>
+<td style="text-align: left;"><strong>② 로그-미분 트릭</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\nabla_\theta p_\theta(x) = p_\theta(x)\nabla_\theta \log p_\theta(x)\)</span> 덕분에 기댓값의 그래디언트를 표본 평균으로 바꿀 수 있다</td>
+<td style="text-align: left;">로그-미분 보조정리</td>
 </tr>
 <tr class="odd">
-<td><strong>DDPG</strong></td>
-<td>결정론적</td>
-<td><span class="math inline">\(Q_\phi(s,a)\)</span></td>
-<td>결정론적 Actor로 연속 행동 처리</td>
+<td style="text-align: left;"><strong>③ 모델이 사라진다</strong></td>
+<td style="text-align: left;">궤적 로그 확률을 전개하면 <span class="math inline">\(\nabla_\theta \log p_\theta(\tau) = \sum_t \nabla_\theta \log \pi_\theta(a_t \mid s_t)\)</span> 다. 전이 <span class="math inline">\(T\)</span> 는 <span class="math inline">\(\theta\)</span> 와 무관해 미분에서 소멸하므로 <strong>모델을 몰라도 된다</strong></td>
+<td style="text-align: left;">궤적 로그 확률의 그래디언트</td>
 </tr>
 <tr class="even">
-<td><strong>TD3</strong></td>
-<td>결정론적</td>
-<td>이중 Q 크리틱</td>
-<td>과대 추정 감소 및 DDPG 안정화</td>
+<td style="text-align: left;"><strong>④ REINFORCE</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\nabla_\theta J(\theta) = \mathbb{E}[\sum_t \nabla_\theta \log \pi_\theta(a_t \mid s_t) R(\tau)]\)</span>. 수익이 크면 그 행동의 확률을 올린다는 직관 그대로다</td>
+<td style="text-align: left;">REINFORCE 유도</td>
 </tr>
 <tr class="odd">
-<td><strong>SAC</strong></td>
-<td>확률적</td>
-<td>이중 Q 크리틱</td>
-<td>최대 엔트로피 Actor-Critic</td>
+<td style="text-align: left;"><strong>⑤ 분산 감소 ①</strong></td>
+<td style="text-align: left;">시점 <span class="math inline">\(t\)</span> 의 행동은 그 이전 보상에 영향을 줄 수 없으므로 과거 보상을 떼어낼 수 있다. 가중치가 <strong>reward-to-go</strong> <span class="math inline">\(G_t\)</span> 로 줄어든다</td>
+<td style="text-align: left;">인과성 논증</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 분산 감소 ②</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\mathbb{E}_{a \sim \pi_\theta}[\nabla_\theta \log \pi_\theta(a \mid s)] = 0\)</span> 이므로, 상태에만 의존하는 baseline <span class="math inline">\(b(s)\)</span> 를 빼도 <strong>기댓값은 불변</strong>이고 분산만 준다</td>
+<td style="text-align: left;">기대 grad-log-prob = 0</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 어드밴티지</strong></td>
+<td style="text-align: left;">자연스러운 baseline은 <span class="math inline">\(V^\pi(s)\)</span> 이고, 그때 가중치는 <span class="math inline">\(A^\pi(s,a) = Q^\pi(s,a) - V^\pi(s)\)</span> 가 된다. “평균보다 얼마나 나은 행동인가”를 재는 값이다</td>
+<td style="text-align: left;">어드밴티지 함수</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 데이터 재사용</strong></td>
+<td style="text-align: left;">정책 경사법은 온폴리시라 매 갱신마다 새 표본이 필요하다. 중요도 표본추출 비율 <span class="math inline">\(\rho_t(\theta) = \pi_\theta(a_t \mid s_t)/\pi_{\theta_{\text{old}}}(a_t \mid s_t)\)</span> 로 옛 데이터를 재사용한다</td>
+<td style="text-align: left;">중요도 표본추출</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ PPO의 클리핑</strong></td>
+<td style="text-align: left;">비율이 커지면 갱신이 폭주하므로 <span class="math inline">\(\rho_t\)</span> 를 <span class="math inline">\([1-\epsilon, 1+\epsilon]\)</span> 로 클리핑한다. 어드밴티지 부호에 따라 한쪽 방향으로만 제한이 걸려, 정책이 한 번에 너무 멀리 가지 못한다</td>
+<td style="text-align: left;">PPO 클리핑 목적함수</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ LLM으로의 이식</strong></td>
+<td style="text-align: left;">생성된 응답을 궤적으로 보면 언어 모델 파인튜닝이 그대로 RL이 된다. RLHF는 SFT 모델에서 시작해 보상 모델과 KL 페널티로 PPO를 돌린다</td>
+<td style="text-align: left;">PPO for RLHF</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑪ GRPO</strong></td>
+<td style="text-align: left;">가치 모델을 따로 두는 대신 한 프롬프트에 <span class="math inline">\(G\)</span> 개 응답을 뽑아 <strong>그룹 내 상대 점수</strong>로 어드밴티지를 만든다. 가치망 학습 비용이 사라진다</td>
+<td style="text-align: left;">PPO vs.&nbsp;GRPO</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑫ Actor-Critic</strong></td>
+<td style="text-align: left;">actor는 정책을, critic은 가치를 배운다. critic이 어드밴티지를 추정해 주면 actor의 그래디언트 분산이 크게 줄어든다</td>
+<td style="text-align: left;">Actor-critic · A2C/A3C</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑬ 연속 제어</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\max_{a'}\)</span> 를 풀 수 없으므로 actor가 그 자리를 대신한다. DDPG는 결정론적 actor를, TD3는 클리핑된 이중 Q와 지연 갱신을, SAC는 엔트로피 정규화를 더한다. 벤치마크에서 SAC가 대체로 가장 좋다</td>
+<td style="text-align: left;">DDPG · TD3 · SAC</td>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="강의-전체-요약" class="level3">
-<h3 class="anchored" data-anchor-id="강의-전체-요약">강의 전체 요약</h3>
-<p>이번 강의에서 다룬 핵심 내용을 정리하면 다음과 같습니다.</p>
-<ul>
-<li><p><strong>Policy gradient</strong>: 정책 <span class="math inline">\(\pi_\theta(a \mid s)\)</span>를 직접 최적화합니다. 가치 기반 방법과 달리 연속 행동 공간을 자연스럽게 처리할 수 있습니다.</p></li>
-<li><p><strong>REINFORCE 기울기</strong>:</p></li>
-</ul>
-<p><span class="math display">\[\nabla_\theta J(\theta) = \mathbb{E}\!\left[\sum_t \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, G_t\right]\]</span></p>
-<ul>
-<li><p><strong>Reward-to-go와 Baseline</strong>: 과거 보상 제거(reward-to-go)와 baseline 빼기를 통해 비편향성을 유지하면서 분산을 감소시킵니다.</p></li>
-<li><p><strong>Advantage 함수</strong>: <span class="math inline">\(A^\pi(s, a) = Q^\pi(s, a) - V^\pi(s)\)</span>는 평균 행동 대비 특정 행동의 상대적 가치를 측정합니다.</p></li>
-<li><p><strong>PPO</strong>: 중요도 샘플링과 클리핑을 통해 정책 업데이트의 크기를 제어합니다. RLHF의 표준 알고리즘입니다.</p></li>
-<li><p><strong>GRPO</strong>: 가치 모델 없이 그룹 상대적 어드밴티지로 LLM을 효율적으로 RL 파인튜닝합니다.</p></li>
-<li><p><strong>Actor-Critic</strong>: Actor <span class="math inline">\(\pi_\theta\)</span>와 Critic <span class="math inline">\(V_\phi\)</span> 또는 <span class="math inline">\(Q_\phi\)</span>를 동시에 학습합니다.</p></li>
-<li><p><strong>DDPG, TD3, SAC</strong>: 연속 제어를 위한 주요 Actor-Critic 알고리즘으로, MuJoCo 벤치마크에서 SAC가 가장 좋은 성능을 보입니다.</p></li>
-</ul>
 
 
 
-</section>
 </section>
 
 </main> <!-- /main -->

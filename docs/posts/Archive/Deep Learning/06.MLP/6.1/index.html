@@ -7,9 +7,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="MLP">
+<meta name="description" content="층을 쌓을 때마다 분산이 왜 커지는지 직접 유도해 1/√n_in 스케일링을 얻어내고, 비선형성이 없으면 깊이가 무의미해지는 이유와 기울기 소실을 실습으로 확인합니다.">
 
-<title>[Deep Learning] 6. MLP – shsha0110.github.io</title>
+<title>[Deep Learning] 06. MLP – shsha0110.github.io</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -186,10 +186,10 @@ window.Quarto = {
 <header id="title-block-header" class="quarto-title-block default page-columns page-full">
   <div class="quarto-title-banner page-columns page-full">
     <div class="quarto-title column-body"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item">Posts</li><li class="breadcrumb-item">Archive</li><li class="breadcrumb-item">Deep Learning</li><li class="breadcrumb-item"><a href="../../../../../posts/Archive/Deep Learning/06.MLP/6.1/index.html">06.MLP</a></li><li class="breadcrumb-item"><a href="../../../../../posts/Archive/Deep Learning/06.MLP/6.1/index.html">[Deep Learning] 06. MLP</a></li></ol></nav>
-      <h1 class="title">[Deep Learning] 6. MLP</h1>
+      <h1 class="title">[Deep Learning] 06. MLP</h1>
                   <div>
         <div class="description">
-          MLP
+          층을 쌓을 때마다 분산이 왜 커지는지 직접 유도해 1/√n_in 스케일링을 얻어내고, 비선형성이 없으면 깊이가 무의미해지는 이유와 기울기 소실을 실습으로 확인합니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -2928,7 +2928,7 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#들어가며-overview" id="toc-들어가며-overview" class="nav-link active" data-scroll-target="#들어가며-overview">들어가며 (Overview)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
   <li><a href="#선형-변환-linear-maps" id="toc-선형-변환-linear-maps" class="nav-link" data-scroll-target="#선형-변환-linear-maps">1. 선형 변환 (Linear maps)</a>
   <ul class="collapse">
   <li><a href="#선형-변환의-정의" id="toc-선형-변환의-정의" class="nav-link" data-scroll-target="#선형-변환의-정의">1.1. 선형 변환의 정의</a></li>
@@ -2950,7 +2950,7 @@ window.Quarto = {
   <li><a href="#mlp-구현" id="toc-mlp-구현" class="nav-link" data-scroll-target="#mlp-구현">3.2. MLP 구현</a></li>
   <li><a href="#입력과-출력-형태-확인" id="toc-입력과-출력-형태-확인" class="nav-link" data-scroll-target="#입력과-출력-형태-확인">3.3. 입력과 출력 형태 확인</a></li>
   </ul></li>
-  <li><a href="#마치며-summary" id="toc-마치며-summary" class="nav-link" data-scroll-target="#마치며-summary">마치며 (Summary)</a></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2961,40 +2961,30 @@ window.Quarto = {
 
 
 
-<section id="들어가며-overview" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며-overview">들어가며 (Overview)</h2>
-<p>이번 포스트의 목표는 딥러닝의 가장 기본이 되는 구성 요소인 <strong>다층 퍼셉트론(Multi-Layer Perceptron, MLP)</strong> 을 직접 구현하며 그 작동 원리를 이해하는 것입니다.</p>
-<p>복잡한 신경망도 결국은 두 가지 단순한 모듈의 반복적인 조합으로 이루어져 있습니다.</p>
-<ul>
-<li><strong>선형 변환(Linear map):</strong> 입력을 가중치와 곱하고 편향을 더하는, 가장 기본적인 변환 모듈입니다.</li>
-<li><strong>활성함수(Activation function):</strong> 선형 변환만으로는 표현할 수 없는 <strong>비선형 관계</strong>를 학습할 수 있게 해 주는 함수입니다.</li>
-</ul>
-<p>이번 강의는 다음 세 가지 순서로 진행됩니다.</p>
-<ol type="1">
-<li><strong>선형 변환 (Linear maps)</strong></li>
-<li><strong>활성함수 (Activation functions)</strong></li>
-<li><strong>다층 퍼셉트론 (MLP layers)</strong></li>
-</ol>
-<p>전체 구현은 PyTorch를 기반으로 하며, 자세한 API는 <a href="https://pytorch.org/docs/stable/index.html">PyTorch 공식 문서</a>를 참고하시면 좋습니다. 먼저 필요한 라이브러리를 불러오겠습니다.</p>
-<div id="300ee115" class="cell" data-execution_count="1">
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 6강 실습 세션(<em>Multi-layer Perceptron</em>)의 노트북을 바탕으로, 코드와 그 배경이 되는 논리를 함께 따라갈 수 있도록 재구성한 것입니다. 본문의 그래프는 문서를 렌더링할 때 실제로 코드를 실행해 그린 것입니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“MLP는 선형 변환과 비선형 활성함수의 교대 합성이며, 두 요소 각각이 분산과 기울기라는 대가를 요구합니다.”</strong></p>
+<p>3강에서 이론으로 다룬 신경망을 이번에는 PyTorch 텐서 수준에서 직접 만들어 봅니다. 먼저 <strong>선형 변환</strong>을 <span class="math inline">\(\mathcal{N}(0,1)\)</span> 로 소박하게 초기화하면 출력 분산이 입력보다 크게 부풀고, 층을 쌓을수록 이 증폭이 누적되어 수치적으로 불안정해집니다. 출력 분산을 직접 유도하면 <span class="math inline">\(\mathrm{Var}[y] = n_{in}\mathrm{Var}[W]\mathrm{Var}[x]\)</span> 이므로, 가중치를 <span class="math inline">\(1/\sqrt{n_{in}}\)</span> 으로 스케일링하면 분산이 보존된다는 조건이 곧바로 따라옵니다. 다음으로 <strong>활성함수</strong>가 필요한 이유는 명확합니다. 비선형성이 없으면 선형 변환의 합성이 다시 하나의 선형 변환으로 붕괴하기 때문입니다. 그러나 활성함수는 공짜가 아니어서, Sigmoid와 Tanh는 양 끝에서 포화되어 도함수가 0에 가까워지고 ReLU는 음수 구간에서 정확히 0이 되어 <strong>기울기 소실</strong>을 일으킵니다. 마지막으로 이 두 요소를 교대로 쌓아 MLP를 조립하고, 입출력 형태를 확인하며 마무리합니다.</p>
+</blockquote>
+</section>
+<section id="선형-변환-linear-maps" class="level2">
+<h2 class="anchored" data-anchor-id="선형-변환-linear-maps">1. 선형 변환 (Linear maps)</h2>
+<p>먼저 실습에 필요한 라이브러리를 불러오고 연산 장치를 지정합니다. 이후의 모든 코드 블록은 이 설정 위에서 순서대로 실행됩니다.</p>
+<div id="1eca4340" class="cell" data-execution_count="1">
 <details open="" class="code-fold">
 <summary>Code</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> torch</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> time</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(torch.__version__)</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>DEVICE <span class="op">=</span> <span class="st">"cpu"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>DEVICE <span class="op">=</span> <span class="st">"cpu"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
-<div class="cell-output cell-output-stdout">
-<pre><code>2.12.0</code></pre>
 </div>
-</div>
-<hr>
-</section>
-<section id="선형-변환-linear-maps" class="level2">
-<h2 class="anchored" data-anchor-id="선형-변환-linear-maps">1. 선형 변환 (Linear maps)</h2>
 <section id="선형-변환의-정의" class="level3">
 <h3 class="anchored" data-anchor-id="선형-변환의-정의">1.1. 선형 변환의 정의</h3>
 <p>신경망의 가장 기본적인 변환 모듈인 선형 변환을 먼저 살펴보겠습니다. 선형 변환은 입력 텐서 <span class="math inline">\(x\)</span>를 받아 출력 텐서 <span class="math inline">\(y\)</span>로 다음과 같이 변환합니다.</p>
@@ -3014,50 +3004,50 @@ window.Quarto = {
 <section id="선형-변환-구현-랜덤-초기화" class="level3">
 <h3 class="anchored" data-anchor-id="선형-변환-구현-랜덤-초기화">1.2. 선형 변환 구현 (랜덤 초기화)</h3>
 <p>이제 무작위로 초기화된 가중치를 갖는 선형 함수를 구현하겠습니다. 가중치 <span class="math inline">\(W\)</span>는 표준 정규분포 <span class="math inline">\(\mathcal{N}(0,1)\)</span>에서 샘플링하고, 편향 <span class="math inline">\(b\)</span>는 관례에 따라 0으로 초기화합니다.</p>
-<div id="9e57f805" class="cell" data-execution_count="2">
+<div id="8c75fbe8" class="cell" data-execution_count="2">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Linear():</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Computes a linear function: y = xW + b</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co">    Parameters:</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co">    x (torch.Tensor): Input tensor of shape (..., input_dim)</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">    self.weight (torch.Tensor): Weight tensor of shape (input_dim, output_dim)</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="co">    self.bias (torch.Tensor): Bias tensor of shape (output_dim)</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns:</span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="co">    torch.Tensor: Output tensor of shape (..., output_dim)</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, input_dim, output_dim):</span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>        <span class="co"># N(0,1)에서 가중치 무작위 초기화, 편향은 0</span></span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.weight <span class="op">=</span> torch.randn(input_dim, output_dim)</span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.bias <span class="op">=</span> torch.zeros(output_dim)</span>
-<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__call__</span>(<span class="va">self</span>, x):</span>
-<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># y = xW + b</span></span>
-<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>        output <span class="op">=</span> torch.matmul(x, <span class="va">self</span>.weight) <span class="op">+</span> <span class="va">self</span>.bias</span>
-<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> output</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Linear():</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Computes a linear function: y = xW + b</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co">    Parameters:</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co">    x (torch.Tensor): Input tensor of shape (..., input_dim)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co">    self.weight (torch.Tensor): Weight tensor of shape (input_dim, output_dim)</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co">    self.bias (torch.Tensor): Bias tensor of shape (output_dim)</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns:</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co">    torch.Tensor: Output tensor of shape (..., output_dim)</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, input_dim, output_dim):</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>        <span class="co"># N(0,1)에서 가중치 무작위 초기화, 편향은 0</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.weight <span class="op">=</span> torch.randn(input_dim, output_dim)</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.bias <span class="op">=</span> torch.zeros(output_dim)</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__call__</span>(<span class="va">self</span>, x):</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># y = xW + b</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>        output <span class="op">=</span> torch.matmul(x, <span class="va">self</span>.weight) <span class="op">+</span> <span class="va">self</span>.bias</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> output</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 <p>구현이 의도대로 동작하는지, 입력과 출력의 형태를 확인해 보겠습니다.</p>
-<div id="19751e94" class="cell" data-execution_count="3">
+<div id="7e6a4890" class="cell" data-execution_count="3">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>batch_size <span class="op">=</span> <span class="dv">2</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>input_dim <span class="op">=</span> <span class="dv">64</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>output_dim <span class="op">=</span> <span class="dv">256</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 무작위 입력 텐서</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> torch.randn(batch_size, input_dim)</span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 선형 함수 출력 계산</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>linear <span class="op">=</span> Linear(input_dim, output_dim)</span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> linear(x)</span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"input size  :"</span>, x.shape)   <span class="co"># torch.Size([2, 64])</span></span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"output size :"</span>, y.shape)   <span class="co"># torch.Size([2, 256])</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>batch_size <span class="op">=</span> <span class="dv">2</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>input_dim <span class="op">=</span> <span class="dv">64</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>output_dim <span class="op">=</span> <span class="dv">256</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 무작위 입력 텐서</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> torch.randn(batch_size, input_dim)</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 선형 함수 출력 계산</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>linear <span class="op">=</span> Linear(input_dim, output_dim)</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> linear(x)</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"input size  :"</span>, x.shape)   <span class="co"># torch.Size([2, 64])</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"output size :"</span>, y.shape)   <span class="co"># torch.Size([2, 256])</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>input size  : torch.Size([2, 64])
@@ -3069,49 +3059,44 @@ output size : torch.Size([2, 256])</code></pre>
 <section id="입력과-출력의-분포-비교" class="level3">
 <h3 class="anchored" data-anchor-id="입력과-출력의-분포-비교">1.3. 입력과 출력의 분포 비교</h3>
 <p>선형 변환이 데이터의 <strong>분포</strong>를 어떻게 바꾸는지 시각적으로 확인해 보겠습니다. 아래 함수는 입력과 출력의 값을 모두 펼쳐(flatten) 히스토그램으로 그려 줍니다.</p>
-<div id="067a2b4b" class="cell" data-execution_count="4">
+<div id="dbe5b112" class="cell" data-execution_count="4">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> histogram(x, y):</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># 히스토그램을 위해 입력/출력을 1차원으로 펼침</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    x_flat <span class="op">=</span> x.flatten().numpy()</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    y_flat <span class="op">=</span> y.flatten().numpy()</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    ranges <span class="op">=</span> (<span class="bu">min</span>(x_flat.<span class="bu">min</span>(), y_flat.<span class="bu">min</span>()), <span class="bu">max</span>(x_flat.<span class="bu">max</span>(), y_flat.<span class="bu">max</span>()))</span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    plt.figure(figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">5</span>))</span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    plt.subplot(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">1</span>)</span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    plt.hist(x_flat, bins<span class="op">=</span><span class="dv">50</span>, color<span class="op">=</span><span class="st">'blue'</span>, alpha<span class="op">=</span><span class="fl">0.7</span>, edgecolor<span class="op">=</span><span class="st">'black'</span>, <span class="bu">range</span><span class="op">=</span>ranges)</span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    plt.title(<span class="st">"Input Distribution"</span>)</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    plt.xlabel(<span class="st">"Value"</span>)<span class="op">;</span> plt.ylabel(<span class="st">"Frequency"</span>)</span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    plt.subplot(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">2</span>)</span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    plt.hist(y_flat, bins<span class="op">=</span><span class="dv">50</span>, color<span class="op">=</span><span class="st">'red'</span>, alpha<span class="op">=</span><span class="fl">0.7</span>, edgecolor<span class="op">=</span><span class="st">'black'</span>, <span class="bu">range</span><span class="op">=</span>ranges)</span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    plt.title(<span class="st">"Output Distribution"</span>)</span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>    plt.xlabel(<span class="st">"Value"</span>)<span class="op">;</span> plt.ylabel(<span class="st">"Frequency"</span>)</span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>    plt.tight_layout()</span>
-<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>    plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> histogram(x, y):</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># 히스토그램을 위해 입력/출력을 1차원으로 펼침</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    x_flat <span class="op">=</span> x.flatten().numpy()</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    y_flat <span class="op">=</span> y.flatten().numpy()</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    ranges <span class="op">=</span> (<span class="bu">min</span>(x_flat.<span class="bu">min</span>(), y_flat.<span class="bu">min</span>()), <span class="bu">max</span>(x_flat.<span class="bu">max</span>(), y_flat.<span class="bu">max</span>()))</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    plt.figure(figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">5</span>))</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    plt.subplot(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">1</span>)</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    plt.hist(x_flat, bins<span class="op">=</span><span class="dv">50</span>, color<span class="op">=</span><span class="st">'blue'</span>, alpha<span class="op">=</span><span class="fl">0.7</span>, edgecolor<span class="op">=</span><span class="st">'black'</span>, <span class="bu">range</span><span class="op">=</span>ranges)</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    plt.title(<span class="st">"Input Distribution"</span>)</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    plt.xlabel(<span class="st">"Value"</span>)<span class="op">;</span> plt.ylabel(<span class="st">"Frequency"</span>)</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>    plt.subplot(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">2</span>)</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>    plt.hist(y_flat, bins<span class="op">=</span><span class="dv">50</span>, color<span class="op">=</span><span class="st">'red'</span>, alpha<span class="op">=</span><span class="fl">0.7</span>, edgecolor<span class="op">=</span><span class="st">'black'</span>, <span class="bu">range</span><span class="op">=</span>ranges)</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>    plt.title(<span class="st">"Output Distribution"</span>)</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>    plt.xlabel(<span class="st">"Value"</span>)<span class="op">;</span> plt.ylabel(<span class="st">"Frequency"</span>)</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>    plt.tight_layout()</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>    plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
-<div id="5e251f81" class="cell" data-execution_count="5">
+<div id="7486afba" class="cell" data-execution_count="5">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>histogram(x, y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>histogram(x, y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="index_files/figure-html/cell-6-output-1.png" width="1141" height="468" class="figure-img"></p>
-</figure>
-</div>
-</div>
-</div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/01_linear_variance_growth.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 단순히 <span class="math inline">\(\mathcal{N}(0,1)\)</span>로 초기화한 선형 변환의 입력(파란색)과 출력(빨간색) 분포 비교입니다. 두 그래프의 x축 범위가 동일하게 맞춰져 있는데, 입력은 대략 <span class="math inline">\([-3, 3]\)</span> 구간에 좁게 모여 있는 반면 출력은 <span class="math inline">\([-20, 20]\)</span> 가까이로 훨씬 넓게 퍼져 있습니다. 즉 선형 변환을 한 번 거칠 때마다 값의 <strong>분산(퍼짐)이 크게 증가</strong>함을 보여주며, 이 현상이 여러 층을 쌓을 때 수치적 불안정성의 원인이 됨을 시사합니다.</figcaption>
+<p><img src="index_files/figure-html/cell-6-output-1.png" width="1141" height="468" class="figure-img"></p>
+<figcaption>단순히 <span class="math inline">\(\mathcal{N}(0,1)\)</span>로 초기화한 선형 변환의 입력(파란색)과 출력(빨간색) 분포 비교입니다. 두 그래프의 x축 범위가 동일하게 맞춰져 있는데, 입력은 대략 <span class="math inline">\([-3, 3]\)</span> 구간에 좁게 모여 있는 반면 출력은 <span class="math inline">\([-20, 20]\)</span> 가까이로 훨씬 넓게 퍼져 있습니다. 즉 선형 변환을 한 번 거칠 때마다 값의 <strong>분산(퍼짐)이 크게 증가</strong>함을 보여주며, 이 현상이 여러 층을 쌓을 때 수치적 불안정성의 원인이 됨을 시사합니다.</figcaption>
 </figure>
+</div>
+</div>
 </div>
 <section id="분산-증가가-일으키는-문제-numerical-instability" class="level4">
 <h4 class="anchored" data-anchor-id="분산-증가가-일으키는-문제-numerical-instability">분산 증가가 일으키는 문제 (Numerical instability)</h4>
@@ -3160,55 +3145,50 @@ n_{in}\,\mathrm{Var}[x_{k,i}]\,\mathrm{Var}[W_{i,j}] = \mathrm{Var}[x_{k,i}]
 <section id="분산을-보정한-선형-변환-구현" class="level3">
 <h3 class="anchored" data-anchor-id="분산을-보정한-선형-변환-구현">1.4. 분산을 보정한 선형 변환 구현</h3>
 <p>유도한 조건 <span class="math inline">\(\mathrm{Var}[W] = 1/n_{in}\)</span>을 반영하여 가중치를 <span class="math inline">\(1/\sqrt{n_{in}}\)</span> 배로 스케일링하도록 <code>Linear</code> 클래스를 수정합니다.</p>
-<div id="4704d7ad" class="cell" data-execution_count="6">
+<div id="2b148003" class="cell" data-execution_count="6">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Linear():</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Computes a linear function: y = xW + b (variance-preserving init)</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, input_dim, output_dim):</span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 가중치 무작위 초기화</span></span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.weight <span class="op">=</span> torch.randn(input_dim, output_dim)</span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 입력과 출력의 분산이 같아지도록 가중치 재조정</span></span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.weight <span class="op">*=</span> <span class="dv">1</span> <span class="op">/</span> math.sqrt(input_dim)</span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.bias <span class="op">=</span> torch.zeros(output_dim)</span>
-<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__call__</span>(<span class="va">self</span>, x):</span>
-<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> torch.matmul(x, <span class="va">self</span>.weight) <span class="op">+</span> <span class="va">self</span>.bias</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Linear():</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Computes a linear function: y = xW + b (variance-preserving init)</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, input_dim, output_dim):</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 가중치 무작위 초기화</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.weight <span class="op">=</span> torch.randn(input_dim, output_dim)</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 입력과 출력의 분산이 같아지도록 가중치 재조정</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.weight <span class="op">*=</span> <span class="dv">1</span> <span class="op">/</span> math.sqrt(input_dim)</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.bias <span class="op">=</span> torch.zeros(output_dim)</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__call__</span>(<span class="va">self</span>, x):</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> torch.matmul(x, <span class="va">self</span>.weight) <span class="op">+</span> <span class="va">self</span>.bias</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 <p>다시 입력과 출력의 분포를 비교해 보겠습니다.</p>
-<div id="31990aca" class="cell" data-execution_count="7">
+<div id="1976a142" class="cell" data-execution_count="7">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>batch_size <span class="op">=</span> <span class="dv">2</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>input_dim <span class="op">=</span> <span class="dv">64</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>output_dim <span class="op">=</span> <span class="dv">256</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> torch.randn(batch_size, input_dim)</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>linear <span class="op">=</span> Linear(input_dim, output_dim)</span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> linear(x)</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>histogram(x, y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>batch_size <span class="op">=</span> <span class="dv">2</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>input_dim <span class="op">=</span> <span class="dv">64</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>output_dim <span class="op">=</span> <span class="dv">256</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> torch.randn(batch_size, input_dim)</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>linear <span class="op">=</span> Linear(input_dim, output_dim)</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> linear(x)</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>histogram(x, y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="index_files/figure-html/cell-8-output-1.png" width="1141" height="468" class="figure-img"></p>
-</figure>
-</div>
-</div>
-</div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/02_linear_variance_preserved.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 가중치를 <span class="math inline">\(1/\sqrt{n_{in}}\)</span>로 스케일링한 뒤의 입력(파란색)과 출력(빨간색) 분포입니다. 앞선 그림과 달리 입력과 출력이 모두 대략 <span class="math inline">\([-4, 4]\)</span>의 <strong>유사한 범위</strong>에 분포하고 있으며, 출력의 퍼짐 정도가 입력과 거의 동일하게 유지되었습니다. 이는 유도한 조건 <span class="math inline">\(\mathrm{Var}[W]=1/n_{in}\)</span>이 실제로 분산을 보존하여, 층을 쌓아도 값이 폭발하지 않게 해 줌을 실증적으로 확인시켜 줍니다.</figcaption>
+<p><img src="index_files/figure-html/cell-8-output-1.png" width="1141" height="468" class="figure-img"></p>
+<figcaption>가중치를 <span class="math inline">\(1/\sqrt{n_{in}}\)</span>로 스케일링한 뒤의 입력(파란색)과 출력(빨간색) 분포입니다. 앞선 그림과 달리 입력과 출력이 모두 대략 <span class="math inline">\([-4, 4]\)</span>의 <strong>유사한 범위</strong>에 분포하고 있으며, 출력의 퍼짐 정도가 입력과 거의 동일하게 유지되었습니다. 이는 유도한 조건 <span class="math inline">\(\mathrm{Var}[W]=1/n_{in}\)</span>이 실제로 분산을 보존하여, 층을 쌓아도 값이 폭발하지 않게 해 줌을 실증적으로 확인시켜 줍니다.</figcaption>
 </figure>
+</div>
+</div>
 </div>
 <hr>
 </section>
@@ -3260,38 +3240,38 @@ n_{in}\,\mathrm{Var}[x_{k,i}]\,\mathrm{Var}[W_{i,j}] = \mathrm{Var}[x_{k,i}]
 <section id="활성함수와-도함수-구현" class="level3">
 <h3 class="anchored" data-anchor-id="활성함수와-도함수-구현">2.3. 활성함수와 도함수 구현</h3>
 <p>순전파(forward)뿐 아니라, 역전파(backpropagation)에 필요한 <strong>도함수(grad)</strong> 까지 함께 구현합니다.</p>
-<div id="87d2681a" class="cell" data-execution_count="8">
+<div id="5c761b03" class="cell" data-execution_count="8">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Activation():</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, name):</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.name <span class="op">=</span> name</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__call__</span>(<span class="va">self</span>, x):</span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""y = act(x), 입력과 같은 형태의 출력을 반환"""</span></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'sigmoid'</span>:</span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x))</span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'tanh'</span>:</span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> (torch.exp(x) <span class="op">-</span> torch.exp(<span class="op">-</span>x)) <span class="op">/</span> (torch.exp(x) <span class="op">+</span> torch.exp(<span class="op">-</span>x))</span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'relu'</span>:</span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> torch.clamp(x, <span class="bu">min</span><span class="op">=</span><span class="fl">0.</span>)</span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'silu'</span>:</span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>            <span class="co"># SiLU(x) = x * sigmoid(x)</span></span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> x <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x))</span>
-<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">else</span>:</span>
-<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">"Unsupported activation function"</span>)</span>
-<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> grad(<span class="va">self</span>, x):</span>
-<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'sigmoid'</span>:</span>
-<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> (<span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x))) <span class="op">*</span> (<span class="dv">1</span> <span class="op">-</span> (<span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x))))</span>
-<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'tanh'</span>:</span>
-<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="dv">1</span> <span class="op">-</span> ((torch.exp(x) <span class="op">-</span> torch.exp(<span class="op">-</span>x)) <span class="op">/</span> (torch.exp(x) <span class="op">+</span> torch.exp(<span class="op">-</span>x))) <span class="op">**</span> <span class="dv">2</span></span>
-<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'relu'</span>:</span>
-<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> (x <span class="op">&gt;</span> <span class="fl">0.</span>).<span class="bu">float</span>()</span>
-<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'silu'</span>:</span>
-<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> (<span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x))) <span class="op">*</span> (<span class="dv">1</span> <span class="op">+</span> x <span class="op">*</span> (<span class="dv">1</span> <span class="op">-</span> (<span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x)))))</span>
-<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>        <span class="cf">else</span>:</span>
-<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">"Unsupported activation function"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Activation():</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, name):</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.name <span class="op">=</span> name</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__call__</span>(<span class="va">self</span>, x):</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""y = act(x), 입력과 같은 형태의 출력을 반환"""</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'sigmoid'</span>:</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x))</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'tanh'</span>:</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> (torch.exp(x) <span class="op">-</span> torch.exp(<span class="op">-</span>x)) <span class="op">/</span> (torch.exp(x) <span class="op">+</span> torch.exp(<span class="op">-</span>x))</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'relu'</span>:</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> torch.clamp(x, <span class="bu">min</span><span class="op">=</span><span class="fl">0.</span>)</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'silu'</span>:</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>            <span class="co"># SiLU(x) = x * sigmoid(x)</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> x <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x))</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">else</span>:</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">"Unsupported activation function"</span>)</span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> grad(<span class="va">self</span>, x):</span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'sigmoid'</span>:</span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> (<span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x))) <span class="op">*</span> (<span class="dv">1</span> <span class="op">-</span> (<span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x))))</span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'tanh'</span>:</span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="dv">1</span> <span class="op">-</span> ((torch.exp(x) <span class="op">-</span> torch.exp(<span class="op">-</span>x)) <span class="op">/</span> (torch.exp(x) <span class="op">+</span> torch.exp(<span class="op">-</span>x))) <span class="op">**</span> <span class="dv">2</span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'relu'</span>:</span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> (x <span class="op">&gt;</span> <span class="fl">0.</span>).<span class="bu">float</span>()</span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> <span class="va">self</span>.name <span class="op">==</span> <span class="st">'silu'</span>:</span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> (<span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x))) <span class="op">*</span> (<span class="dv">1</span> <span class="op">+</span> x <span class="op">*</span> (<span class="dv">1</span> <span class="op">-</span> (<span class="dv">1</span> <span class="op">/</span> (<span class="dv">1</span> <span class="op">+</span> torch.exp(<span class="op">-</span>x)))))</span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>        <span class="cf">else</span>:</span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">"Unsupported activation function"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 <section id="도함수-유도" class="level4">
@@ -3320,51 +3300,46 @@ n_{in}\,\mathrm{Var}[x_{k,i}]\,\mathrm{Var}[W_{i,j}] = \mathrm{Var}[x_{k,i}]
 <section id="활성함수-그래프와-기울기-소실-문제" class="level3">
 <h3 class="anchored" data-anchor-id="활성함수-그래프와-기울기-소실-문제">2.4. 활성함수 그래프와 기울기 소실 문제</h3>
 <p>네 함수의 값과 도함수를 함께 그려, 그 차이를 시각적으로 비교해 보겠습니다.</p>
-<div id="0be2abeb" class="cell" data-execution_count="9">
+<div id="e0370675" class="cell" data-execution_count="9">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>x_vals <span class="op">=</span> torch.linspace(<span class="op">-</span><span class="dv">5</span>, <span class="dv">5</span>, <span class="dv">200</span>)</span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">3</span>))</span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>plt.subplot(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">1</span>)</span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name <span class="kw">in</span> [<span class="st">'sigmoid'</span>, <span class="st">'tanh'</span>, <span class="st">'relu'</span>, <span class="st">'silu'</span>]:</span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    act_fn <span class="op">=</span> Activation(name)</span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    y_vals <span class="op">=</span> act_fn(x_vals)</span>
-<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    plt.plot(x_vals.numpy(), y_vals.numpy(), label<span class="op">=</span>name.capitalize())</span>
-<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>plt.axhline(<span class="dv">0</span>, color<span class="op">=</span><span class="st">'black'</span>, linewidth<span class="op">=</span><span class="fl">0.5</span>, linestyle<span class="op">=</span><span class="st">'--'</span>)</span>
-<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>plt.axvline(<span class="dv">0</span>, color<span class="op">=</span><span class="st">'black'</span>, linewidth<span class="op">=</span><span class="fl">0.5</span>, linestyle<span class="op">=</span><span class="st">'--'</span>)</span>
-<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>plt.title(<span class="st">"Activation Function Values"</span>)</span>
-<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">"Input"</span>)<span class="op">;</span> plt.ylabel(<span class="st">"Output"</span>)</span>
-<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>plt.ylim(<span class="op">-</span><span class="dv">1</span>, <span class="dv">2</span>)<span class="op">;</span> plt.legend(fontsize<span class="op">=</span><span class="dv">12</span>)<span class="op">;</span> plt.grid(<span class="va">True</span>)</span>
-<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>plt.subplot(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">2</span>)</span>
-<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name <span class="kw">in</span> [<span class="st">'sigmoid'</span>, <span class="st">'tanh'</span>, <span class="st">'relu'</span>, <span class="st">'silu'</span>]:</span>
-<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>    act_fn <span class="op">=</span> Activation(name)</span>
-<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>    y_vals <span class="op">=</span> act_fn.grad(x_vals)</span>
-<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    plt.plot(x_vals.numpy(), y_vals.numpy(), label<span class="op">=</span>name.capitalize())</span>
-<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>plt.axhline(<span class="dv">0</span>, color<span class="op">=</span><span class="st">'black'</span>, linewidth<span class="op">=</span><span class="fl">0.5</span>, linestyle<span class="op">=</span><span class="st">'--'</span>)</span>
-<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>plt.axvline(<span class="dv">0</span>, color<span class="op">=</span><span class="st">'black'</span>, linewidth<span class="op">=</span><span class="fl">0.5</span>, linestyle<span class="op">=</span><span class="st">'--'</span>)</span>
-<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>plt.title(<span class="st">"Activation Function Derivatives"</span>)</span>
-<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">"Input"</span>)<span class="op">;</span> plt.ylabel(<span class="st">"Derivative"</span>)</span>
-<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>plt.legend(fontsize<span class="op">=</span><span class="dv">12</span>)<span class="op">;</span> plt.grid(<span class="va">True</span>)</span>
-<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
-<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>x_vals <span class="op">=</span> torch.linspace(<span class="op">-</span><span class="dv">5</span>, <span class="dv">5</span>, <span class="dv">200</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">3</span>))</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>plt.subplot(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">1</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name <span class="kw">in</span> [<span class="st">'sigmoid'</span>, <span class="st">'tanh'</span>, <span class="st">'relu'</span>, <span class="st">'silu'</span>]:</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    act_fn <span class="op">=</span> Activation(name)</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    y_vals <span class="op">=</span> act_fn(x_vals)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    plt.plot(x_vals.numpy(), y_vals.numpy(), label<span class="op">=</span>name.capitalize())</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>plt.axhline(<span class="dv">0</span>, color<span class="op">=</span><span class="st">'black'</span>, linewidth<span class="op">=</span><span class="fl">0.5</span>, linestyle<span class="op">=</span><span class="st">'--'</span>)</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>plt.axvline(<span class="dv">0</span>, color<span class="op">=</span><span class="st">'black'</span>, linewidth<span class="op">=</span><span class="fl">0.5</span>, linestyle<span class="op">=</span><span class="st">'--'</span>)</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>plt.title(<span class="st">"Activation Function Values"</span>)</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">"Input"</span>)<span class="op">;</span> plt.ylabel(<span class="st">"Output"</span>)</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>plt.ylim(<span class="op">-</span><span class="dv">1</span>, <span class="dv">2</span>)<span class="op">;</span> plt.legend(fontsize<span class="op">=</span><span class="dv">12</span>)<span class="op">;</span> plt.grid(<span class="va">True</span>)</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>plt.subplot(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">2</span>)</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name <span class="kw">in</span> [<span class="st">'sigmoid'</span>, <span class="st">'tanh'</span>, <span class="st">'relu'</span>, <span class="st">'silu'</span>]:</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>    act_fn <span class="op">=</span> Activation(name)</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    y_vals <span class="op">=</span> act_fn.grad(x_vals)</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>    plt.plot(x_vals.numpy(), y_vals.numpy(), label<span class="op">=</span>name.capitalize())</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>plt.axhline(<span class="dv">0</span>, color<span class="op">=</span><span class="st">'black'</span>, linewidth<span class="op">=</span><span class="fl">0.5</span>, linestyle<span class="op">=</span><span class="st">'--'</span>)</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>plt.axvline(<span class="dv">0</span>, color<span class="op">=</span><span class="st">'black'</span>, linewidth<span class="op">=</span><span class="fl">0.5</span>, linestyle<span class="op">=</span><span class="st">'--'</span>)</span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>plt.title(<span class="st">"Activation Function Derivatives"</span>)</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">"Input"</span>)<span class="op">;</span> plt.ylabel(<span class="st">"Derivative"</span>)</span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>plt.legend(fontsize<span class="op">=</span><span class="dv">12</span>)<span class="op">;</span> plt.grid(<span class="va">True</span>)</span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="index_files/figure-html/cell-10-output-1.png" width="1141" height="276" class="figure-img"></p>
-</figure>
-</div>
-</div>
-</div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/03_activation_functions.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 왼쪽은 네 활성함수의 출력값, 오른쪽은 각 함수의 도함수를 입력 <span class="math inline">\(x\in[-5,5]\)</span>에 대해 그린 것입니다. 왼쪽 그림에서 Sigmoid(파란색)와 Tanh(주황색)는 양 끝으로 갈수록 각각 0·1과 -1·1로 평평하게 포화(saturate)되고, ReLU(초록색)는 음수 구간에서 0, 양수 구간에서 직선으로 증가하며, SiLU(빨간색)는 음수 구간에서 살짝 아래로 내려갔다 다시 올라오는 부드러운 곡선을 그립니다. 오른쪽 도함수 그림이 핵심인데, Sigmoid와 Tanh의 도함수는 입력의 절댓값이 커질수록 <strong>0에 가까워지는 영역</strong>이 넓고, ReLU의 도함수는 음수 구간에서 정확히 0입니다. 이렇게 도함수가 0에 가까운 영역은 역전파 시 기울기가 거의 흐르지 못하게 만들어 학습을 방해합니다.</figcaption>
+<p><img src="index_files/figure-html/cell-10-output-1.png" width="1141" height="276" class="figure-img"></p>
+<figcaption>왼쪽은 네 활성함수의 출력값, 오른쪽은 각 함수의 도함수를 입력 <span class="math inline">\(x\in[-5,5]\)</span>에 대해 그린 것입니다. 왼쪽 그림에서 Sigmoid(파란색)와 Tanh(주황색)는 양 끝으로 갈수록 각각 0·1과 -1·1로 평평하게 포화(saturate)되고, ReLU(초록색)는 음수 구간에서 0, 양수 구간에서 직선으로 증가하며, SiLU(빨간색)는 음수 구간에서 살짝 아래로 내려갔다 다시 올라오는 부드러운 곡선을 그립니다. 오른쪽 도함수 그림이 핵심인데, Sigmoid와 Tanh의 도함수는 입력의 절댓값이 커질수록 <strong>0에 가까워지는 영역</strong>이 넓고, ReLU의 도함수는 음수 구간에서 정확히 0입니다. 이렇게 도함수가 0에 가까운 영역은 역전파 시 기울기가 거의 흐르지 못하게 만들어 학습을 방해합니다.</figcaption>
 </figure>
+</div>
+</div>
 </div>
 <p>위 그림에서 다음과 같은 중요한 시사점을 얻을 수 있습니다.</p>
 <ul>
@@ -3377,31 +3352,26 @@ n_{in}\,\mathrm{Var}[x_{k,i}]\,\mathrm{Var}[W_{i,j}] = \mathrm{Var}[x_{k,i}]
 <section id="선형-변환-활성함수의-출력-분포" class="level3">
 <h3 class="anchored" data-anchor-id="선형-변환-활성함수의-출력-분포">2.5. 선형 변환 + 활성함수의 출력 분포</h3>
 <p>선형 변환 뒤에 SiLU를 적용했을 때 출력 분포가 어떻게 바뀌는지 확인해 보겠습니다.</p>
-<div id="678eeedd" class="cell" data-execution_count="10">
+<div id="c9cf669d" class="cell" data-execution_count="10">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> torch.randn(batch_size, input_dim)</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>linear <span class="op">=</span> Linear(input_dim, output_dim)</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>act_fn <span class="op">=</span> Activation(<span class="st">'silu'</span>)</span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> act_fn(linear(x))</span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>histogram(x, y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> torch.randn(batch_size, input_dim)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>linear <span class="op">=</span> Linear(input_dim, output_dim)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>act_fn <span class="op">=</span> Activation(<span class="st">'silu'</span>)</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> act_fn(linear(x))</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>histogram(x, y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="index_files/figure-html/cell-11-output-1.png" width="1141" height="468" class="figure-img"></p>
-</figure>
-</div>
-</div>
-</div>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/04_mlp_silu_output.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 선형 변환에 이어 SiLU를 적용한 뒤의 입력(파란색)과 출력(빨간색) 분포입니다. 입력은 0을 중심으로 좌우 대칭이지만, 출력은 SiLU의 비선형 특성 때문에 <strong>대부분 0 부근과 양수 영역에 몰려 있고 음수 쪽으로는 약 <span class="math inline">\(-0.3\)</span>까지만 살짝 분포</strong>하는 비대칭 형태로 바뀌었습니다. 이는 SiLU가 큰 음수 입력을 0에 가깝게 눌러 주면서도 작은 음수 영역에서는 약간 음수값을 허용한다는 점을 분포 차원에서 보여주며, 활성함수가 단순히 분산을 바꾸는 것이 아니라 데이터의 <strong>모양 자체를 비선형적으로 변형</strong>함을 시각화합니다.</figcaption>
+<p><img src="index_files/figure-html/cell-11-output-1.png" width="1141" height="468" class="figure-img"></p>
+<figcaption>선형 변환에 이어 SiLU를 적용한 뒤의 입력(파란색)과 출력(빨간색) 분포입니다. 입력은 0을 중심으로 좌우 대칭이지만, 출력은 SiLU의 비선형 특성 때문에 <strong>대부분 0 부근과 양수 영역에 몰려 있고 음수 쪽으로는 약 <span class="math inline">\(-0.3\)</span>까지만 살짝 분포</strong>하는 비대칭 형태로 바뀌었습니다. 이는 SiLU가 큰 음수 입력을 0에 가깝게 눌러 주면서도 작은 음수 영역에서는 약간 음수값을 허용한다는 점을 분포 차원에서 보여주며, 활성함수가 단순히 분산을 바꾸는 것이 아니라 데이터의 <strong>모양 자체를 비선형적으로 변형</strong>함을 시각화합니다.</figcaption>
 </figure>
+</div>
+</div>
 </div>
 <hr>
 </section>
@@ -3424,44 +3394,44 @@ n_{in}\,\mathrm{Var}[x_{k,i}]\,\mathrm{Var}[W_{i,j}] = \mathrm{Var}[x_{k,i}]
 </section>
 <section id="mlp-구현" class="level3">
 <h3 class="anchored" data-anchor-id="mlp-구현">3.2. MLP 구현</h3>
-<div id="59365252" class="cell" data-execution_count="11">
+<div id="be78fd11" class="cell" data-execution_count="11">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> MLP():</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, dim, hidden_dim):</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>        <span class="co"># MLP에 필요한 층 선언</span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Linear_1 : dim -&gt; hidden_dim</span></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Linear_2 : hidden_dim -&gt; dim</span></span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.w1 <span class="op">=</span> Linear(dim, hidden_dim)</span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.w2 <span class="op">=</span> Linear(hidden_dim, dim)</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.act_fn <span class="op">=</span> Activation(<span class="st">'silu'</span>)</span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__call__</span>(<span class="va">self</span>, x):</span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""A MLP layer: y = MLP(x), 입력과 같은 차원의 출력을 반환"""</span></span>
-<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>        <span class="co"># MLP(x) = Linear_2( SiLU( Linear_1(x) ) )</span></span>
-<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>        h <span class="op">=</span> <span class="va">self</span>.w1(x)</span>
-<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>        h <span class="op">=</span> <span class="va">self</span>.act_fn(h)</span>
-<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>        output <span class="op">=</span> <span class="va">self</span>.w2(h)</span>
-<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> output</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> MLP():</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, dim, hidden_dim):</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>        <span class="co"># MLP에 필요한 층 선언</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Linear_1 : dim -&gt; hidden_dim</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Linear_2 : hidden_dim -&gt; dim</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.w1 <span class="op">=</span> Linear(dim, hidden_dim)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.w2 <span class="op">=</span> Linear(hidden_dim, dim)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.act_fn <span class="op">=</span> Activation(<span class="st">'silu'</span>)</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__call__</span>(<span class="va">self</span>, x):</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""A MLP layer: y = MLP(x), 입력과 같은 차원의 출력을 반환"""</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>        <span class="co"># MLP(x) = Linear_2( SiLU( Linear_1(x) ) )</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>        h <span class="op">=</span> <span class="va">self</span>.w1(x)</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>        h <span class="op">=</span> <span class="va">self</span>.act_fn(h)</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>        output <span class="op">=</span> <span class="va">self</span>.w2(h)</span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> output</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
 <section id="입력과-출력-형태-확인" class="level3">
 <h3 class="anchored" data-anchor-id="입력과-출력-형태-확인">3.3. 입력과 출력 형태 확인</h3>
-<div id="53693376" class="cell" data-execution_count="12">
+<div id="e1e41d85" class="cell" data-execution_count="12">
 <details open="" class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>batch_size <span class="op">=</span> <span class="dv">2</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>input_dim <span class="op">=</span> <span class="dv">64</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>hidden_dim <span class="op">=</span> <span class="dv">256</span></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> torch.randn(batch_size, input_dim)</span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>mlp <span class="op">=</span> MLP(input_dim, hidden_dim)</span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> mlp(x)</span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"input size  :"</span>, x.shape)   <span class="co"># torch.Size([2, 64])</span></span>
-<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"output size :"</span>, y.shape)   <span class="co"># torch.Size([2, 64])</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>batch_size <span class="op">=</span> <span class="dv">2</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>input_dim <span class="op">=</span> <span class="dv">64</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>hidden_dim <span class="op">=</span> <span class="dv">256</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> torch.randn(batch_size, input_dim)</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>mlp <span class="op">=</span> MLP(input_dim, hidden_dim)</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> mlp(x)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"input size  :"</span>, x.shape)   <span class="co"># torch.Size([2, 64])</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"output size :"</span>, y.shape)   <span class="co"># torch.Size([2, 64])</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code>input size  : torch.Size([2, 64])
@@ -3472,15 +3442,65 @@ output size : torch.Size([2, 64])</code></pre>
 <hr>
 </section>
 </section>
-<section id="마치며-summary" class="level2">
-<h2 class="anchored" data-anchor-id="마치며-summary">마치며 (Summary)</h2>
-<p>이번 포스트에서는 신경망의 가장 기본적인 빌딩 블록들을 직접 구현하며 다음을 이해했습니다.</p>
-<ul>
-<li><strong>선형 변환</strong>은 feature 차원만 바꾸는 기본 모듈이며, 층을 쌓을 때 분산이 폭발하지 않도록 가중치를 <span class="math inline">\(\mathrm{Var}[W]=1/n_{in}\)</span> (즉 <span class="math inline">\(1/\sqrt{n_{in}}\)</span> 스케일링)으로 초기화해야 합니다.</li>
-<li><strong>활성함수</strong>는 비선형성을 주입하는 역할을 하며, Sigmoid·Tanh의 기울기 소실과 ReLU의 음수 영역 0 기울기 문제 때문에 오늘날에는 <strong>SiLU</strong>가 널리 쓰입니다.</li>
-<li>선형 변환과 활성함수를 교차로 쌓으면 비로소 비선형 관계를 학습하는 <strong>MLP</strong>가 완성됩니다.</li>
-</ul>
-<p>다음 단계에서는 이렇게 만든 MLP를 실제 과제에 대해 <strong>최적화(학습)</strong> 하게 됩니다. 그 핵심 도구인 역전파(backpropagation)는 <code>backprop.ipynb</code>에서 이어집니다.</p>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 실습의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 선형 변환</strong></td>
+<td style="text-align: left;">MLP의 기본 벽돌은 <span class="math inline">\(y = xW + b\)</span> 이며, 텐서 차원 <span class="math inline">\((\dots, n_{in}) \to (\dots, n_{out})\)</span> 로 마지막 축만 바꾼다</td>
+<td style="text-align: left;">선형 변환의 정의</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 관측된 문제</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\mathcal{N}(0,1)\)</span> 로 초기화하면 출력 분포가 입력보다 훨씬 넓게 퍼진다</td>
+<td style="text-align: left;">입력·출력 히스토그램 비교</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 원인의 유도</strong></td>
+<td style="text-align: left;">가중치와 입력이 i.i.d.이고 평균 0이면 <span class="math inline">\(\mathrm{Var}[y_{k,j}] = n_{in}\,\mathrm{Var}[W]\,\mathrm{Var}[x]\)</span> 이므로, 입력 차원 <span class="math inline">\(n_{in}\)</span> 만큼 분산이 곱해진다</td>
+<td style="text-align: left;">분산 전파식</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 해법</strong></td>
+<td style="text-align: left;">분산을 보존하려면 <span class="math inline">\(\mathrm{Var}[W] = 1/n_{in}\)</span>, 즉 가중치를 <span class="math inline">\(1/\sqrt{n_{in}}\)</span> 로 스케일링하면 된다</td>
+<td style="text-align: left;">③에서 직접 따라옴</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 비선형성의 필요</strong></td>
+<td style="text-align: left;">활성함수가 없으면 <span class="math inline">\(W_2(W_1 x) = (W_2 W_1)x\)</span> 로 붕괴해 층을 쌓는 의미가 사라진다</td>
+<td style="text-align: left;">행렬 곱의 결합법칙</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 활성함수의 대가</strong></td>
+<td style="text-align: left;">Sigmoid · Tanh는 양 끝에서 포화되어 도함수가 0에 수렴하고 ReLU는 음수 구간에서 도함수가 정확히 0이다. 이 영역에서는 역전파 시 기울기가 흐르지 못한다</td>
+<td style="text-align: left;">도함수 그래프</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 분포의 변형</strong></td>
+<td style="text-align: left;">활성함수는 분산만 바꾸는 것이 아니라 분포의 <strong>모양 자체</strong>를 비대칭으로 바꾼다. SiLU를 지난 출력이 0 부근과 양수 쪽으로 몰리는 것이 그 예다</td>
+<td style="text-align: left;">SiLU 통과 후 분포</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 조립</strong></td>
+<td style="text-align: left;">선형 변환과 활성함수를 교대로 쌓으면 MLP가 되고, 마지막 층은 보통 활성함수 없이 출력 차원으로 사상한다</td>
+<td style="text-align: left;">MLP 구현 · 형태 확인</td>
+</tr>
+</tbody>
+</table>
 
 
 

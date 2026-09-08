@@ -1,6 +1,6 @@
 ---
 title: "[Deep Learning] 10. Transformer Backward"
-description: "Transformer Backward"
+description: "autograd 없이 LLaMA 계열 디코더의 역전파를 손으로 구현하며, 잔차 연결의 덧셈이 왜 그래디언트 고속도로가 되고 softmax+CE의 그래디언트가 왜 p − one-hot으로 떨어지는지 유도합니다."
 author: "유성현"
 categories: [Deep Learning]
 format:
@@ -10,6 +10,14 @@ format:
     code-fold: show
     math: true
 ---
+
+> 본 포스트는 서울대학교 컴퓨터공학부 **Hyun Oh Song** 교수님의 *Introduction to Deep Learning* (M2177.0043) 10강 실습 세션(*Transformer backward*)의 노트북을 바탕으로, 코드와 그 배경이 되는 논리를 함께 따라갈 수 있도록 재구성한 것입니다.
+
+## 한 줄 요약 (TL;DR)
+
+> **"역전파는 마법이 아니라 연쇄법칙의 기계적 반복이며, 잔차 연결의 `+` 한 글자가 그래디언트 고속도로의 정체입니다."**
+>
+> 지금까지 Transformer의 모든 빌딩 블록을 순전파 방향으로 만들어 봤다면, 이번에는 그 반대 방향을 손으로 구현합니다. PyTorch의 `autograd` 가 대신 해 주는 일을 굳이 직접 짜는 이유는 세 가지입니다. 첫째, 모든 모듈이 따르는 `backward(grad_output) → grad_input` 규약이 자동 미분의 **VJP(Vector-Jacobian Product)** 와 정확히 같다는 사실을 코드 수준에서 확인할 수 있습니다. 야코비안을 명시적으로 만들지 않고 벡터를 곱한 결과만 계산한다는 점이 역전파를 실용적으로 만드는 지점입니다. 둘째, Pre-Norm 잔차 블록의 backward가 "**항등 경로로 직진한 몫 + 서브모듈을 거쳐 온 몫**"의 합이라는 것이 드러납니다. 직진 몫은 어떤 가중치도 통과하지 않으므로 줄어들지 않고, 이것이 깊은 Transformer에서 그래디언트가 살아남는 이유입니다. 셋째, `softmax + cross-entropy` 의 로짓 그래디언트가 왜 $\frac{1}{N}(p - \text{one-hot})$ 이라는 깔끔한 형태로 떨어지는지 직접 유도합니다. 마지막으로 전체 모델의 backward가 forward의 정확한 역순 순회임을 확인하고, 수치 미분으로 모든 파라미터의 그래디언트를 검증합니다.
 
 ## 들어가며 (Introduction)
 
@@ -40,9 +48,14 @@ PyTorch의 `autograd`가 자동으로 해 주는 일을 굳이 손으로 짜는 
 tokens → Embedding → [TransformerBlock × n_layers] → RMSNorm → Linear(output) → logits → CrossEntLoss → loss
 ```
 
-아래 그림은 이번 실습에서 구현할 backward의 **전체 신호 흐름**을 개념적으로 정리한 것입니다.
+backward는 이 흐름을 **정확히 뒤집은 것**입니다. loss의 그래디언트(스칼라 자기 자신에 대한 미분이므로 보통 1)에서 출발해 `CrossEntLoss` → `Linear(output)` → 최종 `RMSNorm` → 블록들을 역순(`layer_{n-1}` → ⋯ → `layer_0`)으로 통과하여 `Embedding` 까지 내려갑니다.
 
-![Figure: 디코더 전용 Transformer의 forward(위쪽 검은 화살표)와 backward(아래쪽 빨간 화살표)를 나란히 표현한 계산 그래프입니다. forward는 토큰 임베딩에서 시작해 n개의 TransformerBlock, 최종 RMSNorm, 출력 Linear를 거쳐 logits를 만들고 CrossEntLoss로 스칼라 loss를 산출합니다. backward는 정확히 그 역순으로, loss의 그래디언트(보통 1)에서 출발해 CrossEntLoss → output Linear → 최종 norm → 블록들을 역순(layer_{n-1} → … → layer_0)으로 통과하여 Embedding까지 그래디언트를 전파합니다. 화살표가 정확히 대칭으로 뒤집혀 있다는 점이 핵심 메시지입니다.](./images/transformer_backward_overview.png)
+```
+loss ← CrossEntLoss ← logits ← Linear(output) ← RMSNorm ← [TransformerBlock × n_layers] ← Embedding
+      (grad = 1)                                              (역순: layer_{n-1} → ... → layer_0)
+```
+
+여기서 유일하게 기억할 것은 **화살표가 대칭으로 뒤집힌다**는 사실뿐입니다. forward에서 마지막에 적용한 연산이 backward에서는 가장 먼저 처리되고, 각 모듈은 자기 바로 위에서 내려온 그래디언트만 받아 자기 아래로 넘겨줍니다.
 
 ---
 
@@ -145,9 +158,16 @@ def backward(self, grad_output):
 * `grad_output +`, `grad_h +` 부분이 바로 **잔차 항등 경로**입니다. 이 한 글자(`+`)가 그래디언트 고속도로 역할을 합니다.
 * $\overline{\cos}, \overline{\sin}$ 까지 함께 반환하는 이유는, 상위 모듈(`Transformer`)에서 위치 정보의 그래디언트를 어떻게 처리할지 결정하도록 인터페이스를 열어 두기 위함입니다. (3절에서 다룹니다.)
 
-아래 그림은 이 backward 흐름을 시각화한 것입니다.
+이 블록의 backward를 신호 흐름으로 정리하면 다음과 같습니다.
 
-![Figure: Pre-Norm Transformer 블록 한 개의 backward 흐름도입니다. 오른쪽 위에서 grad_output(=out에 대한 그래디언트)이 들어오면, 점선으로 표시된 잔차 항등 경로를 따라 일부는 그대로 아래로 직진하고(고속도로), 일부는 FeedForward → ffn_norm 분기를 따라 내려와 grad_h 지점에서 합쳐집니다. 같은 패턴이 한 번 더 반복되어 Attention → attention_norm 분기와 두 번째 잔차 직진 경로가 grad_x 지점에서 합류합니다. 두 군데의 합류(덧셈) 지점이 잔차 연결이 그래디언트를 보존하는 핵심임을 보여 줍니다.](./images/transformer_block_backward.png)
+```
+grad_output ──┬────────────────────────────────────┐  (잔차 항등 경로: 그대로 직진)
+              └→ FeedForward.backward → ffn_norm ──┴→ grad_h
+grad_h ───────┬────────────────────────────────────┐  (잔차 항등 경로: 그대로 직진)
+              └→ Attention.backward → attention_norm ┴→ grad_x
+```
+
+합류 지점이 두 군데라는 점이 핵심입니다. 각 합류에서 그래디언트는 **분기를 거쳐 온 몫과 항등 경로로 직진해 온 몫의 합**이 되는데, 직진 몫은 어떤 가중치도 거치지 않으므로 크기가 줄어들 일이 없습니다. 잔차 연결이 그래디언트를 보존한다는 말의 실체가 바로 이 덧셈입니다.
 
 테스트(`test_module`)는 모든 학습 파라미터(`wq, wk, wv, wo, w1, w2, w3` 등)와 입력에 대해 **수치 미분(finite difference)으로 구한 그래디언트**와 우리가 구현한 **해석적 그래디언트**를 비교하며, 17개 항목이 모두 통과(`✓ test passed`)함을 확인합니다.
 
@@ -342,12 +362,19 @@ def backward(self, grad_logits, grad_loss=None):
 
 ---
 
-## 정리 (Summary)
+## 정리하며 (Closing Remarks)
 
-이번 실습에서 배운 핵심을 세 줄로 압축하면 다음과 같습니다.
+이번 실습의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.
 
-* **잔차 블록의 backward는 "직진(skip) 경로 + 서브모듈 경로의 합"** 이며, 이 덧셈이 깊은 Transformer에서 그래디언트가 잘 흐르게 하는 비결입니다($\bar x = \bar y + f.\text{backward}(\bar y)$).
-* **softmax + cross-entropy의 logit 그래디언트는 $\frac{1}{N}(p - \text{one-hot})$**, 즉 "예측 확률에서 정답을 빼고 평균"이라는 놀랍도록 단순한 형태로 정리됩니다.
-* **전체 모델의 backward는 forward의 정확한 역순 순회**이며, 비학습 상수(RoPE의 $\cos/\sin$, causal mask)는 그래디언트를 무시하고, 한 변수가 여러 경로로 갈라지면 그래디언트는 합산합니다.
+| 단계 | 내용 | 근거 |
+|:---|:---|:---|
+| **① 공통 규약** | 모든 모듈은 `forward` 에서 중간값을 저장하고, `backward(grad_output)` 에서 입력에 대한 그래디언트를 돌려준다 | Module 인터페이스 |
+| **② 규약의 정체** | 이 규약은 자동 미분의 **VJP** 와 정확히 같다. 야코비안 $J_f$ 를 명시적으로 만들지 않고 $\bar{y}^\top J_f$ 만 계산하므로 메모리와 연산이 감당 가능해진다 | Vector-Jacobian Product |
+| **③ 블록의 backward** | Pre-Norm 잔차 블록에서 그래디언트는 두 군데서 합류한다. 각 합류는 "항등 경로로 직진한 몫 + 서브모듈을 거쳐 온 몫"의 합이다 | `grad_output +`, `grad_h +` |
+| **④ 고속도로의 정체** | 직진 몫은 어떤 가중치도 통과하지 않아 크기가 줄지 않는다. 잔차 연결이 그래디언트를 보존한다는 말의 실체가 이 덧셈이다 | ③에서 직접 따라옴 |
+| **⑤ 손실의 그래디언트** | softmax와 cross-entropy를 합쳐서 미분하면 로짓 그래디언트가 $\frac{1}{N}(p - \text{one-hot})$ 으로 떨어진다. 두 연산을 따로 미분하지 않고 묶는 것이 수치적으로도 안정적이다 | 직접 유도 |
+| **⑥ 전체 순회** | 모델 전체의 backward는 forward의 정확한 역순이다. loss에서 시작해 블록을 역순으로 통과해 Embedding까지 내려간다 | 신호 흐름 대칭성 |
+| **⑦ 비학습 상수의 처리** | RoPE의 $\cos / \sin$ 과 causal mask는 학습 대상이 아니므로 그래디언트를 상위로 전달하되 갱신하지는 않는다 | 상수 텐서의 취급 |
+| **⑧ 검증** | 모든 학습 파라미터와 입력에 대해 수치 미분(finite difference)과 해석적 그래디언트를 대조해 구현의 정확성을 확인한다 | `test_module` |
 
-autograd가 내부적으로 수행하는 일을 직접 손으로 짜 봄으로써, "역전파는 마법이 아니라 연쇄법칙의 체계적 적용"이라는 점을 코드 한 줄 한 줄에서 확인할 수 있었습니다.
+autograd가 내부적으로 수행하는 일을 직접 손으로 짜 봄으로써, "역전파는 마법이 아니라 연쇄법칙의 기계적 반복"이라는 사실을 확인할 수 있습니다.

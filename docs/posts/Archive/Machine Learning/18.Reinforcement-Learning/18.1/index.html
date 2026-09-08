@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Reinforcement Learning">
+<meta name="description" content="연속 상태·행동 공간의 제어 — LQR의 리카티 방정식, 비선형을 국소 선형화하는 DDP, 칼만 필터를 결합한 LQG, 그리고 모델 없이 정책을 직접 미분하는 Policy Gradient.">
 
 <title>[Machine Learning] 18. Reinforcement Learning – shsha0110.github.io</title>
 <style>
@@ -154,7 +154,7 @@ window.Quarto = {
       <h1 class="title">[Machine Learning] 18. Reinforcement Learning</h1>
                   <div>
         <div class="description">
-          Reinforcement Learning
+          연속 상태·행동 공간의 제어 — LQR의 리카티 방정식, 비선형을 국소 선형화하는 DDP, 칼만 필터를 결합한 LQG, 그리고 모델 없이 정책을 직접 미분하는 Policy Gradient.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -1286,7 +1286,7 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../../../../../posts/Archive/Deep Learning/26.Neural-Network-Prunning-and-LLM-Compression/26.1/index.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">[Deep Learning] 26. Neural Network Pruning and LLM Compression</span></a>
+ <span class="menu-text">[Deep Learning] 26. Neural Network Quantization and LLM Compression</span></a>
   </div>
 </li>
       </ul>
@@ -2893,7 +2893,7 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#들어가며-introduction" id="toc-들어가며-introduction" class="nav-link active" data-scroll-target="#들어가며-introduction">들어가며 (Introduction)</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
   <li><a href="#유한-시계-mdp-finite-horizon-mdps" id="toc-유한-시계-mdp-finite-horizon-mdps" class="nav-link" data-scroll-target="#유한-시계-mdp-finite-horizon-mdps">1. 유한 시계 MDP (Finite-Horizon MDPs)</a>
   <ul class="collapse">
   <li><a href="#최적-가치함수와-정책의-재정의" id="toc-최적-가치함수와-정책의-재정의" class="nav-link" data-scroll-target="#최적-가치함수와-정책의-재정의">1.1. 최적 가치함수와 정책의 재정의</a></li>
@@ -2943,7 +2943,7 @@ window.Quarto = {
   <li><a href="#advanced-베이스라인baseline과-분산-감소" id="toc-advanced-베이스라인baseline과-분산-감소" class="nav-link" data-scroll-target="#advanced-베이스라인baseline과-분산-감소">7.8. (ADVANCED) 베이스라인(Baseline)과 분산 감소</a></li>
   <li><a href="#알고리즘-베이스라인을-사용한-바닐라-정책-경사" id="toc-알고리즘-베이스라인을-사용한-바닐라-정책-경사" class="nav-link" data-scroll-target="#알고리즘-베이스라인을-사용한-바닐라-정책-경사">7.9. 알고리즘: 베이스라인을 사용한 바닐라 정책 경사</a></li>
   </ul></li>
-  <li><a href="#마치며-conclusion" id="toc-마치며-conclusion" class="nav-link" data-scroll-target="#마치며-conclusion">마치며 (Conclusion)</a></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2954,16 +2954,19 @@ window.Quarto = {
 
 
 
-<section id="들어가며-introduction" class="level2">
-<h2 class="anchored" data-anchor-id="들어가며-introduction">들어가며 (Introduction)</h2>
-<p>이번 포스트는 강화학습(Reinforcement Learning)의 두 번째 파트로, <strong>연속 상태·행동 공간(continuous state-action space)에서의 제어(control) 문제</strong>와 <strong>정책을 직접 최적화하는 방법</strong>을 다룹니다. 앞서 다룬 이산적인 MDP의 가치 반복(Value Iteration)이 유한한 상태 집합을 전제로 했다면, 이번에는 로봇 제어나 자율주행처럼 상태가 연속적이고 차원이 높은 현실 문제로 시야를 넓혀 보겠습니다.</p>
-<p>이번 강의에서 다룰 제어 기법들은 다음과 같습니다.</p>
-<ul>
-<li><strong>LQR (Linear Quadratic Regulator):</strong> 시스템 동역학이 <strong>선형(linear)</strong>이고 비용 함수가 <strong>이차식(quadratic)</strong>인 경우. 정확한 해(exact solution)를 비교적 쉽게 구할 수 있습니다.</li>
-<li><strong>DDP (Differential Dynamic Programming):</strong> 동역학과 비용 함수가 <strong>비선형(nonlinear)</strong>이지만, 국소적으로 <strong>선형 / 2차 근사(local linear / 2nd-order approximation)</strong>를 취해 LQR 틀로 환원하는 방법입니다.</li>
-<li><strong>LQG (Linear Quadratic Gaussian):</strong> LQR에 <strong>프로세스 노이즈(process noise)와 관측 노이즈(observation noise)</strong>가 더해진, 부분 관측 환경을 위한 방법입니다.</li>
-</ul>
-<p>그리고 마지막으로, 가치함수나 Q함수의 개념 없이 정책 자체를 경사 상승으로 학습하는 <strong>Policy Gradient</strong> 방법까지 살펴보겠습니다.</p>
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 · 인공지능대학원(IPAI) <strong>박재식(Jaesik Park)</strong> 교수님의 <em>Introduction to Machine Learning</em> (4190.428) 강의 자료(18강 <em>Reinforcement Learning, Part 2 — LQR, DDP, LQG</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 원 강의 자료는 MIT 6.036(2019 Fall)과 Stanford CS229(2023–2024 Summer)의 강의 노트를 상당 부분 차용하고 있습니다. 17강의 이산 MDP와 가치 반복에서 이어집니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“연속 상태에서는 모든 상태를 훑는 것이 불가능합니다. 그래서 이번 회차의 네 기법은 전부 ‘문제를 풀 수 있는 모양으로 바꾸는’ 전략입니다 — 가정을 좁히거나(LQR), 국소 근사하거나(DDP), 추정과 제어를 분리하거나(LQG), 아예 모델을 포기하거나(Policy Gradient).”</strong></p>
+<p>출발점은 <strong>유한 시계 MDP</strong>입니다. 보상과 전이가 시간에 따라 달라질 수 있으므로 최적 정책도 <strong>시간에 의존</strong>하게 되고(비정상 정책), 마지막 시점에서 거꾸로 내려오는 <strong>후방 귀납</strong>이 자연스러운 해법이 됩니다.</p>
+<p><strong>LQR</strong>은 여기에 강한 가정을 얹습니다 — 동역학이 선형이고 보상이 이차식이면, 최적 가치함수가 상태의 이차형식으로 유지되고 최적 행동이 상태의 <strong>선형 함수</strong> <span class="math inline">\(a_t = L_t s_t\)</span>로 떨어집니다. 계수는 <strong>이산 리카티 방정식</strong>을 후방으로 풀어 얻으며, 놀랍게도 이 해는 <strong>프로세스 노이즈의 공분산에 전혀 의존하지 않습니다.</strong></p>
+<p><strong>DDP</strong>는 그 가정이 깨질 때의 대응입니다. 현재 궤적 주변에서 동역학을 1차, 보상을 2차로 테일러 전개하면 국소적으로 LQR 문제가 되고, 그 해로 새 궤적을 만들어 다시 전개하기를 반복합니다.</p>
+<p><strong>LQG</strong>는 상태를 직접 볼 수 없는 경우입니다. <strong>칼만 필터</strong>로 관측에서 상태 분포를 추정한 뒤 그 추정치에 LQR을 적용하는데, 이 분리가 정당한 이유가 바로 위의 <strong>노이즈 독립성</strong>입니다.</p>
+<p>마지막 <strong>Policy Gradient</strong>는 방향을 완전히 바꿉니다. 가치함수를 거치지 않고 <span class="math inline">\(\eta(\theta)\)</span>를 <span class="math inline">\(\theta\)</span>로 직접 미분하는데, 궤적 분포가 <span class="math inline">\(\theta\)</span>에 의존해 재매개변수화 트릭을 쓸 수 없습니다. <strong>로그 미분 트릭</strong>이 이를 뚫으며, 그 결과 식에서 <strong>전이 확률이 완전히 사라져</strong> 모델을 몰라도 학습할 수 있게 됩니다. 남는 문제인 분산은 <strong>베이스라인</strong>을 빼서 다스립니다.</p>
+</blockquote>
 <hr>
 </section>
 <section id="유한-시계-mdp-finite-horizon-mdps" class="level2">
@@ -3042,7 +3045,7 @@ V_t(s) = \mathbb{E}\left[ R^{(t)}(s_t, a_t) + \cdots + R^{(T)}(s_T, a_T) \,\midd
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/algorithm10_finite_horizon.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 유한 시계 MDP의 최적 가치함수 <span class="math inline">\(V_t^*\)</span>를 계산하는 알고리즘(Algorithm 10). 먼저 마지막 시점 <span class="math inline">\(T\)</span>에서 <span class="math inline">\(V_T^*(s) = \max_a R^{(T)}(s,a)\)</span>로 초기화한 뒤, <span class="math inline">\(t = T-1\)</span>부터 <span class="math inline">\(0\)</span>까지 시간을 거꾸로 내려가면서(backward loop) 벨만 갱신식 <span class="math inline">\(V_t^*(s) = \max_a [R^{(t)}(s,a) + \mathbb{E}_{s' \sim P_{sa}^{(t)}}[V_{t+1}^*(s')]]\)</span>을 반복 적용한다. 이 그림은 유한 시계 동적 계획법이 ’미래의 해를 알면 현재의 해가 결정된다’는 후방 귀납(backward induction) 구조임을 보여준다.</figcaption>
+<figcaption>Figure 1: 유한 시계 MDP의 최적 가치함수 <span class="math inline">\(V_t^*\)</span>를 계산하는 알고리즘(Algorithm 10). 먼저 마지막 시점 <span class="math inline">\(T\)</span>에서 <span class="math inline">\(V_T^*(s) = \max_a R^{(T)}(s,a)\)</span>로 초기화한 뒤, <span class="math inline">\(t = T-1\)</span>부터 <span class="math inline">\(0\)</span>까지 시간을 거꾸로 내려가면서(backward loop) 벨만 갱신식 <span class="math inline">\(V_t^*(s) = \max_a [R^{(t)}(s,a) + \mathbb{E}_{s' \sim P_{sa}^{(t)}}[V_{t+1}^*(s')]]\)</span>을 반복 적용한다. 이 그림은 유한 시계 동적 계획법이 ’미래의 해를 알면 현재의 해가 결정된다’는 후방 귀납(backward induction) 구조임을 보여준다.</figcaption>
 </figure>
 </div>
 <ol type="1">
@@ -3601,7 +3604,7 @@ P_\theta(\tau) = \mu(s_0) \pi_\theta(a_0 | s_0) P_{s_0 a_0}(s_1) \pi_\theta(a_1 
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="./images/algorithm11_policy_gradient.png" class="img-fluid figure-img"></p>
-<figcaption>Figure: 베이스라인을 사용한 바닐라 정책 경사 알고리즘(Algorithm 11). 매 반복마다 (1) 현재 정책을 실행해 궤적 집합을 수집하고 미래 누적 보상 <span class="math inline">\(R_{\ge t} = \sum_{j \ge t}\gamma^{j-t}R(s_j,a_j)\)</span>를 계산한다. (2) <span class="math inline">\(\sum_\tau \sum_t (R_{\ge t} - B(s_t))^2\)</span>을 최소화하여 베이스라인 함수 <span class="math inline">\(B\)</span>를 적합(fit)한다. 즉 베이스라인을 미래 보상의 회귀 예측치로 학습한다. (3) 경사 추정량 <span class="math inline">\(\sum_\tau \sum_t \nabla_\theta \log \pi_\theta(a_t|s_t) \cdot (R_{\ge t} - B(s_t))\)</span>로 정책 파라미터 <span class="math inline">\(\theta\)</span>를 갱신한다. 이 그림은 ’advantage(<span class="math inline">\(R_{\ge t} - B(s_t)\)</span>)에 따라 행동 확률을 높이거나 낮춘다’는 정책 경사의 핵심 루프를 보여준다.</figcaption>
+<figcaption>Figure 2: 베이스라인을 사용한 바닐라 정책 경사 알고리즘(Algorithm 11). 매 반복마다 (1) 현재 정책을 실행해 궤적 집합을 수집하고 미래 누적 보상 <span class="math inline">\(R_{\ge t} = \sum_{j \ge t}\gamma^{j-t}R(s_j,a_j)\)</span>를 계산한다. (2) <span class="math inline">\(\sum_\tau \sum_t (R_{\ge t} - B(s_t))^2\)</span>을 최소화하여 베이스라인 함수 <span class="math inline">\(B\)</span>를 적합(fit)한다. 즉 베이스라인을 미래 보상의 회귀 예측치로 학습한다. (3) 경사 추정량 <span class="math inline">\(\sum_\tau \sum_t \nabla_\theta \log \pi_\theta(a_t|s_t) \cdot (R_{\ge t} - B(s_t))\)</span>로 정책 파라미터 <span class="math inline">\(\theta\)</span>를 갱신한다. 이 그림은 ’advantage(<span class="math inline">\(R_{\ge t} - B(s_t)\)</span>)에 따라 행동 확률을 높이거나 낮춘다’는 정책 경사의 핵심 루프를 보여준다.</figcaption>
 </figure>
 </div>
 <p><code>for</code> <span class="math inline">\(i = 1, 2, \cdots\)</span> 에 대해:</p>
@@ -3620,15 +3623,120 @@ P_\theta(\tau) = \mu(s_0) \pi_\theta(a_0 | s_0) P_{s_0 a_0}(s_1) \pi_\theta(a_1 
 <hr>
 </section>
 </section>
-<section id="마치며-conclusion" class="level2">
-<h2 class="anchored" data-anchor-id="마치며-conclusion">마치며 (Conclusion)</h2>
-<p>이번 포스트에서는 연속 제어 문제를 다루는 세 가지 고전적 기법과 정책 직접 최적화 방법을 살펴보았습니다.</p>
-<ul>
-<li><strong>LQR</strong>은 선형 동역학·이차 보상이라는 강한 가정 위에서 리카티 방정식을 통해 깔끔한 선형 최적 정책을 제공하며, 놀랍게도 노이즈에 독립적입니다.</li>
-<li><strong>DDP</strong>는 비선형 시스템을 궤적 주변에서 반복적으로 선형화하여 LQR 틀로 환원합니다.</li>
-<li><strong>LQG</strong>는 칼만 필터로 상태를 추정한 뒤 LQR을 적용하는데, LQR의 노이즈 독립성 덕분에 추정과 제어를 분리할 수 있습니다.</li>
-<li><strong>Policy Gradient</strong>는 모델을 전혀 몰라도(model-free) 로그 미분 트릭으로 정책을 직접 학습하며, 베이스라인으로 분산을 다스립니다.</li>
-</ul>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 토대</strong></td>
+<td style="text-align: left;">보상·전이가 시간에 의존하면 최적 정책도 시간에 의존한다 (비정상 정책)</td>
+<td style="text-align: left;">§1.2–§1.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 해법 구조</strong></td>
+<td style="text-align: left;">마지막 시점에서 거꾸로 내려오는 후방 귀납 동적 계획법</td>
+<td style="text-align: left;">§1.4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 가정 1</strong></td>
+<td style="text-align: left;">동역학이 선형: <span class="math inline">\(s_{t+1} = A_t s_t + B_t a_t + w_t\)</span></td>
+<td style="text-align: left;">§2.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 가정 2</strong></td>
+<td style="text-align: left;">보상이 이차식(음의 준정부호): <span class="math inline">\(-s^\top U s - a^\top W a\)</span></td>
+<td style="text-align: left;">§2.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 결과 1</strong></td>
+<td style="text-align: left;">최적 가치함수가 상태의 이차형식 <span class="math inline">\(s^\top \Phi_t s + \Psi_t\)</span>로 <strong>닫혀 있다</strong></td>
+<td style="text-align: left;">§2.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 결과 2</strong></td>
+<td style="text-align: left;">최적 행동이 상태의 선형 함수 <span class="math inline">\(a_t = L_t s_t\)</span>가 된다</td>
+<td style="text-align: left;">§2.4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 계산</strong></td>
+<td style="text-align: left;">계수 <span class="math inline">\(\Phi_t, \Psi_t\)</span>는 이산 리카티 방정식을 후방으로 풀어 얻는다</td>
+<td style="text-align: left;">§2.4</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 핵심 성질</strong></td>
+<td style="text-align: left;"><span class="math inline">\(L_t\)</span>가 프로세스 노이즈의 공분산 <span class="math inline">\(\Sigma_w\)</span>에 의존하지 않는다</td>
+<td style="text-align: left;">§2.4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ 가정이 깨질 때</strong></td>
+<td style="text-align: left;">비선형 동역학은 현재 궤적 주변에서 테일러 전개로 선형화한다</td>
+<td style="text-align: left;">§3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ DDP</strong></td>
+<td style="text-align: left;">선형화 → LQR로 풀기 → 새 궤적 생성 → 재선형화를 반복한다</td>
+<td style="text-align: left;">§4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑪ 상태를 못 볼 때</strong></td>
+<td style="text-align: left;">관측만 주어지는 POMDP에서는 신념 상태를 다뤄야 한다</td>
+<td style="text-align: left;">§5</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑫ LQG</strong></td>
+<td style="text-align: left;">칼만 필터로 상태 분포를 추정하고, 그 추정치에 LQR을 적용한다</td>
+<td style="text-align: left;">§6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑬ 분리의 근거</strong></td>
+<td style="text-align: left;">⑧의 노이즈 독립성이 “추정과 제어를 따로 해도 된다”를 정당화한다</td>
+<td style="text-align: left;">§6.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑭ 관점 전환</strong></td>
+<td style="text-align: left;">가치함수를 거치지 않고 정책 <span class="math inline">\(\pi_\theta\)</span>를 직접 미분한다</td>
+<td style="text-align: left;">§7.1–§7.2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑮ 난관</strong></td>
+<td style="text-align: left;">궤적 분포가 <span class="math inline">\(\theta\)</span>에 의존해 재매개변수화 트릭을 쓸 수 없다</td>
+<td style="text-align: left;">§7.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑯ 돌파</strong></td>
+<td style="text-align: left;">로그 미분 트릭 <span class="math inline">\(\nabla_\theta P = P\,\nabla_\theta \log P\)</span>로 기댓값 안으로 들어간다</td>
+<td style="text-align: left;">§7.4</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑰ 수확</strong></td>
+<td style="text-align: left;">전이 확률이 상쇄되어 사라진다 → 모델 없이(model-free) 학습 가능</td>
+<td style="text-align: left;">§7.6</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑱ 해석</strong></td>
+<td style="text-align: left;">미래 보상의 부호에 따라 그 행동의 확률을 높이거나 낮춘다</td>
+<td style="text-align: left;">§7.7</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑲ 마무리</strong></td>
+<td style="text-align: left;">베이스라인을 빼면 편향 없이 분산만 줄어든다 (거의 최적은 <span class="math inline">\(V^{\pi_\theta}\)</span>)</td>
+<td style="text-align: left;">§7.8–§7.9</td>
+</tr>
+</tbody>
+</table>
 <p>이 기법들은 현대 강화학습(예: TRPO, PPO, Actor-Critic 등)의 직접적인 토대가 됩니다.</p>
 
 

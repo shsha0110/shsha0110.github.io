@@ -1,6 +1,6 @@
 ---
 title: "[Deep Learning] 19. Deep Generative Models 3"
-description: "Autoregressive Models and GANs"
+description: "명시적 우도를 곧이곧대로 최대화하는 자기회귀 모델과, 밀도를 아예 정의하지 않고 게임으로 배우는 GAN — 두 정반대 전략을 비교하며 생성 모델의 지도를 완성합니다."
 author: "유성현"
 categories: [Deep Learning]
 format:
@@ -11,7 +11,16 @@ format:
     math: true
 ---
 
-## 1. Introduction: 생성 모델의 분류 (Taxonomy of Generative Models)
+> 본 포스트는 서울대학교 컴퓨터공학부 **Hyun Oh Song** 교수님의 *Introduction to Deep Learning* (M2177.0043) 강의 자료(19강 *Deep Generative Models III: Autoregressive Models and GANs*)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 원본 슬라이드의 일부 그림은 Justin Johnson의 강의 자료 및 Radford et al. (ICLR 2016)에서 차용된 것임이 강의 자료에 명시되어 있습니다.
+
+## 한 줄 요약 (TL;DR)
+
+> **"자기회귀 모델은 우도를 정확히 계산하고 느리게 샘플링하며, GAN은 우도를 아예 포기하고 빠르게 샘플링합니다. 셋을 나란히 놓아야 생성 모델의 지도가 완성됩니다."**
+>
+> 17–18강의 VAE가 다루기 힘든 적분을 하한으로 우회했다면, 이번 강의는 그 우회를 택하지 않은 두 가지 길을 봅니다. 첫 번째는 **자기회귀 모델**입니다. 연쇄 법칙 $p_\theta(x) = \prod_t p_\theta(x_t \mid x_{<t})$ 로 결합 분포를 곧이곧대로 분해하면 근사 없이 **정확한 로그 우도**를 얻습니다. 대가는 샘플링입니다. 픽셀을 래스터 스캔 순서로 하나씩 조건부로 뽑아야 하므로 생성이 순차적이고 느립니다. PixelRNN은 순환 연결로, PixelCNN은 마스크 합성곱으로 이 조건부를 구현하며, 후자는 학습을 병렬화하는 대신 수용 영역이 제한됩니다. 두 번째는 **GAN**입니다. 밀도를 정의하는 일을 통째로 포기하고, 노이즈를 데이터로 보내는 생성자와 진짜·가짜를 가르는 식별자의 **두 플레이어 게임**으로 학습합니다. 고정된 생성자에 대한 최적 식별자를 구하면 목적 함수가 $-\log 4 + 2\,\mathrm{JSD}(p_{\text{data}} \Vert p_g)$ 로 정리되어, GAN이 사실 젠센-섀넌 발산을 최소화하고 있음이 드러납니다. 샘플은 선명하지만 학습이 불안정하다는 것이 그 대가입니다.
+
+## 1. 자기회귀 모델: PixelRNN과 PixelCNN (Autoregressive Models: PixelRNN and PixelCNN)
+
 
 * 이전 강의에서 우리는 변분 오토인코더(Variational Autoencoders, VAE)에 대해 다루었습니다. 이미지 데이터 $x$에 대한 우도(Likelihood) 인 $\log p_{\theta}(x)$를 직접 최적화하는 것은 계산적으로 매우 어렵기 때문에(Intractable), VAE는 대신 증거 하한(Evidence Lower Bound, ELBO)을 유도하여 이를 최대화하는 간접적인 방식을 취했습니다.
 
@@ -27,9 +36,9 @@ format:
 
 ---
 
-## 2. 자기회귀 모델의 수학적 공식화 (Mathematical Formulation)
+### 1.1 자기회귀 모델의 수학적 공식화 (Mathematical Formulation)
 
-### 2.1. 연쇄 법칙(Chain Rule)을 통한 인수분해
+#### 1.1.1 연쇄 법칙(Chain Rule)을 통한 인수분해
 * 자기회귀 모델은 복잡한 결합 확률 분포를 조건부 확률의 곱으로 분해합니다. 어떤 순서를 가진 확률 변수들의 집합 $x = (x_1, x_2, \dots, x_T)$가 주어졌을 때, 확률의 연쇄 법칙에 의해 결합 확률 $p(x)$는 다음과 같이 전개됩니다.
 
 $$p(x) = p(x_1)p(x_2|x_1)p(x_3|x_1,x_2) \dots p(x_T|x_{<T})$$
@@ -40,7 +49,7 @@ $$p(x) = \prod_{t=1}^{T} p(x_t | x_{<t})$$
 
 * **자기회귀 모델링(Autoregressive Modeling)**은 이 수식에 기반하여, 변수들의 순서를 정한 뒤 신경망을 훈련시켜 이전 변수들($x_{<t}$)이 주어졌을 때 다음 변수($x_t$)의 확률 분포를 예측하도록 만드는 기법입니다.
 
-### 2.2. 이미지 데이터로의 확장: 래스터 스캔 순서 (Raster-scan Ordering)
+#### 1.1.2 이미지 데이터로의 확장: 래스터 스캔 순서 (Raster-scan Ordering)
 * 이미지 데이터에 자기회귀 모델을 적용하기 위해서는 2차원 그리드 형태의 픽셀들을 1차원 시퀀스로 평탄화(Flatten)해야 합니다. 이를 위해 보통 **래스터 스캔 순서(Raster-scan order)**를 사용합니다.
 
 * 픽셀들은 위에서 아래로, 좌에서 우로 (마치 글을 읽듯) 행 단위로 정렬됩니다.
@@ -52,7 +61,7 @@ $$\log p_{\theta}(x) = \sum_{t=1}^{T} \log p_{\theta}(x_t | x_{<t})$$
 
 ![Figure 1: Raster-scan ordering. 파란색 영역은 현재 픽셀($x_t$, 붉은색)을 예측하기 위해 조건부로 주어지는 이전 컨텍스트(Previous context) 픽셀들을 나타낸다. 하얀색 영역은 아직 생성되지 않은 미래의 픽셀들이다. 모든 생성은 좌상단 $x_1$에서 시작하여 우하단 $x_T$에서 종료된다.](./images/raster_scan.png) 
 
-### 2.3. RGB 채널 순서링 (RGB Channel Ordering)
+#### 1.1.3 RGB 채널 순서링 (RGB Channel Ordering)
 * 컬러 이미지의 경우 각 픽셀 $i$는 3개의 색상 채널 $(x_{i,R}, x_{i,G}, x_{i,B})$를 가집니다. 이 채널 간에도 의존성을 부여하기 위해 추가적인 인수분해를 수행합니다. 일반적으로 R $\rightarrow$ G $\rightarrow$ B 순서로 조건을 부여합니다:
 
 $$p(x_i | x_{<i}) = p(x_{i,R} | x_{<i}) \cdot p(x_{i,G} | x_{<i}, x_{i,R}) \cdot p(x_{i,B} | x_{<i}, x_{i,R}, x_{i,G})$$ 
@@ -61,16 +70,16 @@ $$p(x_i | x_{<i}) = p(x_{i,R} | x_{<i}) \cdot p(x_{i,G} | x_{<i}, x_{i,R}) \cdot
 
 ---
 
-## 3. 훈련 및 샘플링 (Training and Sampling)
+### 1.2 훈련 및 샘플링 (Training and Sampling)
 
-### 3.1. 정확한 로그 우도 최대화를 통한 훈련
+#### 1.2.1 정확한 로그 우도 최대화를 통한 훈련
 * 자기회귀 모델은 VAE의 하한(ELBO) 근사와 달리, **정확한 로그 우도(Exact log-likelihood)를 직접 최대화**하는 방식으로 훈련됩니다.
 
 $$\max_{\theta} \mathbb{E}_{x \sim \mathcal{D}_{train}} \left[ \sum_{t=1}^{T} \log p_{\theta}(x_t | x_{<t}) \right]$$
 
 * 이것은 지도 학습(Supervised-learning)의 관점으로 해석할 수 있습니다. 이전 픽셀들 $x_{<t}$ 가 입력(Feature)으로 주어졌을 때, 다음 픽셀 $x_t$ (Target)를 예측하는 분류 문제와 같습니다. 픽셀 값이 이산적(Discrete, 예: 0~255)이므로, 각 조건부 확률 분포는 픽셀 값에 대한 범주형 분포(Categorical distribution)로 모델링할 수 있습니다.
 
-### 3.2. 순차적 샘플링과 Trade-off
+#### 1.2.2 순차적 샘플링과 Trade-off
 * 훈련 시에는 정답 이미지 $x$가 모두 주어져 있으므로 연산을 병렬화할 수 있는 여지가 있지만, **새로운 이미지를 생성(Sampling)할 때는 반드시 순차적(Sequential)이어야 합니다**.
 
 1. $x_1 \sim p_{\theta}(x_1)$ 
@@ -83,16 +92,16 @@ $$\max_{\theta} \mathbb{E}_{x \sim \mathcal{D}_{train}} \left[ \sum_{t=1}^{T} \l
 
 ---
 
-## 4. PixelRNN과 PixelCNN
+### 1.3 PixelRNN과 PixelCNN
 
 * 이미지의 이전 컨텍스트 $x_{<t}$를 모델링하기 위해 어떤 신경망 아키텍처를 사용할 것인지에 따라 두 가지 주요 모델로 나뉩니다.
 
-### 4.1. PixelRNN
+#### 1.3.1 PixelRNN
 * **구조:** 픽셀 공간 전체에 걸쳐 순환 신경망(RNN, Recurrent Neural Networks) 연결을 사용합니다.
 * **장점:** RNN의 메모리 특성 덕분에 이미지 내의 매우 긴 의존성(Long-range dependencies)을 효과적으로 포착할 수 있습니다.
 * **단점:** 연산이 순차적이므로 훈련 시 병렬 처리가 어렵고 계산 비용이 매우 높습니다.
 
-### 4.2. PixelCNN과 마스크 합성곱 (Masked Convolution)
+#### 1.3.2 PixelCNN과 마스크 합성곱 (Masked Convolution)
 * PixelRNN의 훈련 속도 문제를 극복하기 위해 제안된 것이 **PixelCNN**입니다. CNN(Convolutional Neural Networks)을 사용하면 훈련 시 모든 픽셀에 대한 특성(Features)을 한 번에 병렬로 계산할 수 있습니다. 하지만, 일반적인 CNN 필터는 '미래의 픽셀' 정보까지 참조할 수 있기 때문에, 자기회귀 조건(미래 정보를 보면 안 됨)을 위반하게 됩니다.
 
 * 이를 방지하기 위해 PixelCNN은 **마스크 합성곱(Masked Convolution)**을 도입합니다. 
@@ -134,7 +143,7 @@ $$\max_{\theta} \mathbb{E}_{x \sim \mathcal{D}_{train}} \left[ \sum_{t=1}^{T} \l
 
 ---
 
-## 5. Summary: 자기회귀 모델 요약
+### 1.4 Summary: 자기회귀 모델 요약
 
 * 마지막으로 PixelRNN과 PixelCNN의 핵심 특성을 요약 비교합니다.
 
@@ -152,15 +161,16 @@ $$\max_{\theta} \mathbb{E}_{x \sim \mathcal{D}_{train}} \left[ \sum_{t=1}^{T} \l
 
 ---
 
-## 1. Introduction: 암묵적 생성 모델 (Implicit Generative Models)
+## 2. 생성적 적대 신경망 (Generative Adversarial Networks)
 
-* 이전 포스트에서 다룬 자기회귀 모델(Autoregressive Models)은 확률 밀도 $p_\theta(x)$를 명시적으로 정의하고 정확한 우도(Exact likelihood)를 최대화하는 모델이었습니다. 이와 달리, **생성적 적대 신경망(Generative Adversarial Networks, GAN)**은 명시적인 확률 밀도 함수를 추정하지 않는 **암묵적 생성 모델(Implicit Generative Models)**입니다.
+
+* 앞 절에서 다룬 자기회귀 모델(Autoregressive Models)은 확률 밀도 $p_\theta(x)$를 명시적으로 정의하고 정확한 우도(Exact likelihood)를 최대화하는 모델이었습니다. 이와 달리, **생성적 적대 신경망(Generative Adversarial Networks, GAN)**은 명시적인 확률 밀도 함수를 추정하지 않는 **암묵적 생성 모델(Implicit Generative Models)**입니다.
 
 * GAN은 잠재 공간(Latent space)의 노이즈 $z \sim p(z)$를 샘플링한 후, 생성자(Generator) 역할을 하는 신경망 $G_\theta$를 통과시켜 가짜 샘플 $x = G_\theta(z)$를 만들어냅니다. 즉, 데이터의 확률 밀도 $p_\theta(x)$에 대한 다루기 쉬운(Tractable) 수식을 제공하지 않으며, 결과적으로 우도를 직접 최대화하는 방식을 사용하지 않습니다. 대신, 두 신경망 간의 **적대적 게임(Adversarial game)**을 통해 모델을 학습시킵니다.
 
 ---
 
-## 2. 적대적 두 플레이어 게임 (Adversarial Two-Player Game)
+### 2.1 적대적 두 플레이어 게임 (Adversarial Two-Player Game)
 
 * GAN의 핵심 아이디어는 위조지폐범(Generator)과 경찰(Discriminator)의 경쟁으로 자주 비유됩니다. 
   * 1. **생성자 (Generator, $G_\theta$)**: 노이즈 $z \sim p(z)$를 입력받아 실제 데이터와 구별할 수 없는 가짜 샘플 $G_\theta(z)$를 생성하는 것이 목표입니다.
@@ -168,7 +178,7 @@ $$\max_{\theta} \mathbb{E}_{x \sim \mathcal{D}_{train}} \left[ \sum_{t=1}^{T} \l
 
 ![Figure 1: GAN의 기본 구조 도식. 잠재 노이즈 $z$에서 출발한 생성자의 출력 $G_\theta(z)$와 실제 데이터 $x \sim p_{data}$가 식별자 $D_\psi$에 입력되어 Real or Fake를 판별하는 과정을 보여준다.](./images/gan_architecture.png)
 
-### 2.1. Minimax 목적 함수
+#### 2.1.1 Minimax 목적 함수
 * 이러한 경쟁 관계는 다음과 같은 **Minimax 목적 함수(Objective)**로 공식화됩니다:
 
 $$\min_G \max_D V(G,D) = \mathbb{E}_{x \sim p_{data}}[\log D(x)] + \mathbb{E}_{z \sim p(z)}[\log(1 - D(G(z)))]$$
@@ -178,13 +188,13 @@ $$\min_G \max_D V(G,D) = \mathbb{E}_{x \sim p_{data}}[\log D(x)] + \mathbb{E}_{z
 
 ---
 
-## 3. 훈련 메커니즘과 Generator Loss의 개선
+### 2.2 훈련 메커니즘과 Generator Loss의 개선
 
 * 실제 훈련 시에는 하나의 최적화 문제를 푸는 대신, 두 네트워크를 교대로 업데이트(Alternating updates)합니다.
   * 1. **Discriminator 업데이트**: 식별자를 강화하기 위해 목적 함수를 $\max_D$ 방향으로 경사 상승법(Gradient Ascent)을 적용합니다.
   * 2. **Generator 업데이트**: 생성자를 강화하기 위해 $\min_G$ 방향으로 경사 하강법(Gradient Descent)을 적용합니다.
 
-### 3.1. 포화(Saturating) vs 비포화(Non-saturating) Generator Loss
+#### 2.2.1 포화(Saturating) vs 비포화(Non-saturating) Generator Loss
 
 * 초기 GAN 학습의 가장 큰 문제 중 하나는 식별자가 생성자보다 너무 빨리 학습될 때 발생하는 **기울기 소실(Vanishing gradient)**입니다.
 
@@ -199,11 +209,11 @@ $$\max_G \mathbb{E}_z[\log D(G(z))] \quad \text{또는} \quad \min_G -\mathbb{E}
 
 ---
 
-## 4. 이론적 분석: 최적 식별자와 Jensen-Shannon Divergence
+### 2.3 이론적 분석: 최적 식별자와 Jensen-Shannon Divergence
 
 * GAN의 수학적 우수성은 이 모델이 분포 간의 차이를 측정하는 발산(Divergence)을 최소화한다는 점을 증명할 수 있다는 데 있습니다.
 
-### 4.1. 고정된 생성자에 대한 최적 식별자 (Optimal Discriminator)
+#### 2.3.1 고정된 생성자에 대한 최적 식별자 (Optimal Discriminator)
 * 어떤 고정된 생성자 $G$에 대해 가짜 샘플의 분포를 $p_g$라고 합시다 ($x = G(z) \sim p_g$). 이때 식별자가 최대화하려는 목적 함수는 적분 형태로 나타낼 수 있습니다:
 
 $$V(G,D) = \int \left[ p_{data}(x)\log D(x) + p_g(x)\log(1 - D(x)) \right] dx$$
@@ -220,7 +230,7 @@ $$D_G^*(x) = \frac{p_{data}(x)}{p_{data}(x) + p_g(x)}$$
 
 * **해석 (Interpretation):** 최적 식별자는 실제 데이터 분포 밀도가 가짜 분포 밀도보다 상대적으로 얼마나 큰지를 측정하는 **밀도비 추정기(Density-ratio estimator)** 역할을 수행합니다. $\frac{D_G^*(x)}{1 - D_G^*(x)} = \frac{p_{data}(x)}{p_g(x)}$가 성립합니다.
 
-### 4.2. GAN은 JSD를 최소화한다
+#### 2.3.2 GAN은 JSD를 최소화한다
 * 이제 찾아낸 최적 식별자 $D_G^*(x)$를 원래의 Minimax 목적 함수에 대입해봅시다. 생성자의 최적화 목표 $C(G) = \max_D V(G,D)$는 다음과 같이 전개됩니다.
 
 $$C(G) = \mathbb{E}_{x \sim p_{data}} \left[ \log \frac{p_{data}(x)}{p_{data}(x) + p_g(x)} \right] + \mathbb{E}_{x \sim p_g} \left[ \log \frac{p_g(x)}{p_{data}(x) + p_g(x)} \right]$$
@@ -238,35 +248,36 @@ $$= -\log 4 + 2 \cdot JSD(p_{data}||p_g)$$
 
 ---
 
-## 5. 심층 구조로의 확장: DCGAN과 잠재 공간(Latent Space)
+### 2.4 심층 구조로의 확장: DCGAN과 잠재 공간(Latent Space)
 
 * GAN은 학습이 매우 불안정하다는 여러 실패 모드(Failure modes - Mode collapse, Oscillatory dynamics 등)를 겪습니다. 이를 완화하기 위해 합성곱(Convolution) 구조를 성공적으로 도입한 것이 **DCGAN(Deep Convolutional GANs)**입니다.
 
-### 5.1. Transposed Convolution
+#### 2.4.1 Transposed Convolution
 * 이미지를 생성해야 하는 Generator는 저해상도의 잠재 벡터 $z$ (예: $100$차원)에서 시작하여 점진적으로 공간적 해상도(Spatial resolution)를 키워나가야 합니다. 이를 위해 학습 가능한 업샘플링(Upsampling) 연산인 **전치 합성곱(Transposed Convolution)** 또는 Fractional-strided convolution을 사용합니다. 
 
 ![Figure 3: Transposed Convolution의 연산 구조. 파란색의 저해상도 피처맵 입력이 주어지면, 필터를 거쳐 공간 해상도가 더 넓은 청록색의 고해상도 출력 피처맵으로 변환된다. Generator의 핵심 구성 요소이다.](./images/transposed_conv.png)
 
-### 5.2. DCGAN 아키텍처 가이드라인 (Architecture Guidelines)
+#### 2.4.2 DCGAN 아키텍처 가이드라인 (Architecture Guidelines)
 * DCGAN 논문(Radford et al., 2016)은 안정적인 적대적 학습을 위해 다음과 같은 구조적 규칙을 제안했습니다.
   * **Discriminator**: Pooling 계층 대신 Strided Convolution을 사용하여 공간을 축소합니다. 활성화 함수로 **LeakyReLU**를 사용합니다.
   * **Generator**: Transposed Convolution을 사용하여 해상도를 키웁니다. 활성화 함수로 **ReLU**를 사용하되, 마지막 출력층에는 **Tanh**를 사용합니다.
   * **공통**: Fully Connected (FC) 은닉층을 제거하고, 두 네트워크 모두에 **배치 정규화(Batch Normalization)**를 적용합니다.
 
-### 5.3. 잠재 공간 연산 (Latent-space Arithmetic)
+#### 2.4.3 잠재 공간 연산 (Latent-space Arithmetic)
 * GAN의 가장 매력적인 특징 중 하나는 노이즈 공간 $z$가 유의미한 의미적(Semantic) 방향성을 갖도록 학습된다는 점입니다. $z$ 벡터들 간의 선형 연산(Linear operations)이 출력 이미지의 직관적인 변화로 이어집니다.
 
 ![Figure 4: 잠재 공간의 의미적 산술 연산 예시. 선글라스를 낀 남성의 잠재 벡터($z$)에서 선글라스 없는 남성의 $z$를 빼고, 선글라스 없는 여성의 $z$를 더한 뒤 Generator를 통과시키면 '선글라스를 낀 여성' 이미지가 생성된다. 이는 모델이 잠재 공간 상에서 성별과 선글라스 착용 여부라는 특징을 선형적으로 분리하여 포착했음을 시사한다.](./images/latent_arithmetic.png)
 
 ---
 
-## 6. Summary
+### 2.5 Summary
 
 * GAN은 우도를 명시적으로 모델링하는 대신, 생성자와 식별자 간의 적대적 게임을 통해 데이터 분포를 학습합니다. 수학적으로 이는 데이터 분포와 생성 분포 간의 Jensen-Shannon Divergence를 최소화하는 과정으로 증명됩니다. 학습 불안정성이라는 고질적인 문제가 있으나, 비포화 손실 함수의 적용 및 DCGAN과 같은 구조적 개선을 통해 이를 극복하고 잠재 공간의 풍부한 표현력을 활용할 수 있게 되었습니다.
 
 ---
 
-## 1. Introduction: 딥러닝 기반 생성 모델의 여정
+## 3. 심층 생성 모델 총정리 (Summary of Deep Generative Models)
+
 
 * 지금까지 세 번의 포스트에 걸쳐 딥러닝을 활용한 대표적인 생성 모델(Deep Generative Models)인 **변분 오토인코더(VAE)**, **자기회귀 모델(Autoregressive Models, AR)**, 그리고 **생성적 적대 신경망(GAN)**을 살펴보았습니다. 
 
@@ -274,11 +285,11 @@ $$= -\log 4 + 2 \cdot JSD(p_{data}||p_g)$$
 
 ---
 
-## 2. 생성 모델 총정리 및 최종 비교 (Final Comparison)
+### 3.1 생성 모델 총정리 및 최종 비교 (Final Comparison)
 
 * 세 가지 주요 생성 모델은 밀도 추정 방식, 훈련 목적 함수, 샘플링 속도 및 생성 품질 등에서 뚜렷한 장단점(Trade-offs)을 보입니다.
 
-### 2.1. 모델 간 특성 비교 요약표
+#### 3.1.1 모델 간 특성 비교 요약표
 
 | 비교 항목 (Aspect) | VAE (Variational Autoencoders) | Autoregressive Models (PixelRNN/CNN) | GAN (Generative Adversarial Networks) |
 | :--- | :--- | :--- | :--- |
@@ -290,7 +301,7 @@ $$= -\log 4 + 2 \cdot JSD(p_{data}||p_g)$$
 | **훈련 안정성 (Training)** | 안정적 (Stable) | 지도 학습 손실로 매우 안정적 (Stable supervised loss) | 불안정한 게임 다이내믹스 (Unstable game dynamics) |
 | **주요 약점 (Main weakness)** | 느슨한 하한 / 흐릿한 이미지 | 지나치게 느린 샘플링 속도 | 모드 붕괴(Mode collapse) 및 학습 불안정 |
 
-### 2.2. 핵심 요약 (Takeaways) 및 최신 동향 (Modern Context)
+#### 3.1.2 핵심 요약 (Takeaways) 및 최신 동향 (Modern Context)
 
 * **자기회귀 모델 (AR Models)**: 연쇄 법칙 $p_\theta(x) = \prod_t p_\theta(x_t | x_{<t})$ 을 사용하여 정확한 우도를 제공하고 학습이 매우 안정적입니다. 과거 PixelCNN이 이미지 생성에서 마스크 합성곱을 통해 병렬 훈련을 이끌어냈듯, 이 **자기회귀 모델링 기법은 오늘날 대규모 언어 모델(LLMs, 예: GPT)의 핵심 기반 기술**로 자리 잡았습니다.
 * **GAN**: 잠재 공간에서 $z \sim p(z)$를 추출해 $x = G_\theta(z)$로 매핑하는 암묵적 생성기입니다. 훈련은 최적의 식별자를 가정할 때 $-\log 4 + 2JSD(p_{data}||p_g)$ 를 최소화하는 과정으로 해석됩니다. 
@@ -298,9 +309,11 @@ $$= -\log 4 + 2 \cdot JSD(p_{data}||p_g)$$
 
 ---
 
-## 3. 보충 심화: 팽창 합성곱 (Dilated Convolutions)
+## 4. 부록 (Backup)
 
-* 이전 포스트에서 PixelCNN의 약점으로 '네트워크가 깊어지거나 구조적 변화가 없으면 수용 영역(Receptive field)이 제한된다'는 점을 언급했습니다. 이를 극복하기 위해 자기회귀 모델(특히 합성곱 기반)에서 널리 쓰이는 기법이 **팽창 합성곱(Dilated Convolutions)**입니다.
+### 4.1 팽창 합성곱 (Dilated Convolutions)
+
+* 앞에서 PixelCNN의 약점으로 '네트워크가 깊어지거나 구조적 변화가 없으면 수용 영역(Receptive field)이 제한된다'는 점을 언급했습니다. 이를 극복하기 위해 자기회귀 모델(특히 합성곱 기반)에서 널리 쓰이는 기법이 **팽창 합성곱(Dilated Convolutions)**입니다.
 
 ![Figure 1: Dilated Convolution 구조. 일반적인 합성곱 필터와 달리 커널의 가중치 사이에 일정한 간격(Skip)을 두어 피처맵을 연산한다. 이를 통해 동일한 파라미터 수로도 훨씬 넓은 영역의 공간적 컨텍스트를 한 번에 포착할 수 있다.](./images/dilated_conv.png)
 
@@ -310,9 +323,9 @@ $$= -\log 4 + 2 \cdot JSD(p_{data}||p_g)$$
 
 ---
 
-## 4. 보충 심화: 오리지널 GAN 훈련 알고리즘 (Original GAN Training Algorithm)
+### 4.2 오리지널 GAN 훈련 알고리즘 (Original GAN Training Algorithm)
 
-* 이전 포스트에서 다룬 수식을 실제 코드 기반의 훈련 알고리즘(Mini-batch Stochastic Gradient Ascent)으로 정리하면 다음과 같습니다. 
+* 앞에서 다룬 수식을 실제 코드 기반의 훈련 알고리즘(Mini-batch Stochastic Gradient Ascent)으로 정리하면 다음과 같습니다. 
 
 * GAN은 식별자(Discriminator)를 $k$번 업데이트할 때 생성자(Generator)를 1번 업데이트하는 방식으로 학습 비율을 조정하기도 합니다. (단, 최적의 $k$값은 문제마다 다릅니다.)
 
@@ -330,7 +343,7 @@ $$= -\log 4 + 2 \cdot JSD(p_{data}||p_g)$$
 
 ---
 
-## 5. 보충 심화: 잠재 공간의 의미론적 산술 (Latent-vector Arithmetic)
+### 4.3 잠재 공간의 의미론적 산술 (Latent-vector Arithmetic)
 
 * GAN의 흥미로운 성질인 $z$ 벡터의 의미론적(Semantic) 선형 연산을 좀 더 명확한 예시로 확인해보겠습니다.
 
@@ -339,3 +352,23 @@ $$= -\log 4 + 2 \cdot JSD(p_{data}||p_g)$$
 * 위 그림처럼, 생성 모델이 데이터를 단순히 암기하는 것이 아니라, 잠재 공간(Latent space) 내에 '성별(Gender)', '표정(Expression)', '안경 착용 여부(Glasses)'와 같은 **추상적이고 고차원적인 특징들을 선형적으로 분리(Disentanglement)**하여 학습했음을 보여주는 강력한 증거입니다.
 
 * 이러한 성공 이후 GAN의 구조를 응용한 수백 가지의 변형 모델들이 쏟아져 나왔으며, 이를 학계에서는 우스갯소리로 "The GAN Zoo(동물원)"라고 부르기도 합니다(예: CycleGAN, InfoGAN, StyleGAN 등).
+
+## 정리하며 (Closing Remarks)
+
+이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.
+
+| 단계 | 내용 | 근거 |
+|:---|:---|:---|
+| **① 세 갈래의 지도** | 밀도를 어떻게 다루느냐로 갈린다 — VAE는 적분을 하한으로 우회하고, 자기회귀 모델은 정확히 계산하며, GAN은 아예 정의하지 않는다 | 생성 모델 분류 |
+| **② 자기회귀 분해** | 연쇄 법칙 $p_\theta(x) = \prod_t p_\theta(x_t \mid x_{<t})$ 는 근사가 아니라 항등식이다. 따라서 **정확한** 로그 우도를 최대화할 수 있다 | 연쇄 법칙 인수분해 |
+| **③ 순서의 필요** | 이미지에는 자연스러운 순서가 없으므로 래스터 스캔으로 강제로 부여하고, 컬러는 채널 순서까지 정한다 | 래스터 스캔 · RGB 순서 |
+| **④ 대가는 샘플링** | 학습은 정답 이미지가 있어 병렬로 할 수 있지만, 생성은 이전 픽셀이 있어야 다음을 뽑으므로 **순차적**이고 느리다 | 학습 병렬 · 샘플링 순차 |
+| **⑤ 두 구현** | PixelRNN은 순환 연결로 장거리 의존성을 잡지만 느리고, PixelCNN은 마스크 합성곱으로 병렬 학습을 얻지만 수용 영역이 제한된다. 첫 층은 Mask A, 이후는 Mask B를 쓴다 | PixelRNN vs PixelCNN |
+| **⑥ 정반대의 전략** | GAN은 $z \sim p(z),\ x = G_\theta(z)$ 로 표본만 만들 뿐 $p_\theta(x)$ 를 계산하지 않는다. 이것이 **암묵적(implicit)** 생성 모델이다 | 암묵적 생성 모델 |
+| **⑦ 게임으로서의 학습** | 생성자는 식별자를 속이려 하고 식별자는 진짜와 가짜를 가르려 한다. 목적 함수는 $\min_G \max_D V(G, D)$ 의 minimax 형태다 | 두 플레이어 게임 |
+| **⑧ 실전의 수정** | 원래의 생성자 손실은 학습 초기에 포화되어 그래디언트가 사라진다. $\max_G \log D(G(z))$ 형태의 비포화 손실이 실제로 쓰인다 | 포화 vs 비포화 |
+| **⑨ 이론적 정체** | 고정된 $G$ 에 대한 최적 식별자는 $D^*_G(x) = \frac{p_{\text{data}}(x)}{p_{\text{data}}(x) + p_g(x)}$ 이고, 이를 대입하면 $C(G) = -\log 4 + 2\,\mathrm{JSD}(p_{\text{data}} \Vert p_g)$ 다 | 최적 식별자 · JSD |
+| **⑩ 전역 최적** | JSD가 음이 아니므로 최솟값은 $p_g = p_{\text{data}}$ 일 때 $-\log 4$ 다. 즉 GAN의 이상적 해는 데이터 분포를 정확히 복원한다 | 전역 최적 |
+| **⑪ 실패 모드** | 식별자가 너무 강하면 그래디언트가 사라지고, 생성자가 몇 가지 표본만 반복하면 모드 붕괴가 일어난다. 학습이 섬세하다 | GAN 실패 모드 |
+| **⑫ 심층 구조** | DCGAN은 풀링 대신 스트라이드 합성곱, 배치 정규화, 완전 연결층 제거 등의 지침으로 학습을 안정화했다. 그 잠재 공간은 "안경 낀 남자 − 남자 + 여자 = 안경 낀 여자" 같은 **의미론적 산술**을 지원한다 | DCGAN · 잠재 공간 연산 |
+| **⑬ 최종 비교** | 정확한 우도가 필요하면 자기회귀, 빠르고 선명한 표본이 필요하면 GAN, 추론 모델과 구조화된 잠재 공간이 필요하면 VAE다 | 최종 비교표 |

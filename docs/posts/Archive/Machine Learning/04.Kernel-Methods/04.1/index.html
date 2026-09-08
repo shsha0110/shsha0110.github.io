@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="Kernel Methods">
+<meta name="description" content="고차원 특징 벡터를 아예 계산하지 않고도 그 내적만 얻어내는 커널 트릭의 유도 — 표현 정리 성격의 보조정리부터 Mercer 조건, 유사도로서의 커널 해석까지 따라갑니다.">
 
 <title>[Machine Learning] 04. Kernel Methods – shsha0110.github.io</title>
 <style>
@@ -154,7 +154,7 @@ window.Quarto = {
       <h1 class="title">[Machine Learning] 04. Kernel Methods</h1>
                   <div>
         <div class="description">
-          Kernel Methods
+          고차원 특징 벡터를 아예 계산하지 않고도 그 내적만 얻어내는 커널 트릭의 유도 — 표현 정리 성격의 보조정리부터 Mercer 조건, 유사도로서의 커널 해석까지 따라갑니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -1286,7 +1286,7 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../../../../../posts/Archive/Deep Learning/26.Neural-Network-Prunning-and-LLM-Compression/26.1/index.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">[Deep Learning] 26. Neural Network Pruning and LLM Compression</span></a>
+ <span class="menu-text">[Deep Learning] 26. Neural Network Quantization and LLM Compression</span></a>
   </div>
 </li>
       </ul>
@@ -2893,7 +2893,8 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#introduction-비선형성non-linearity의-필요성" id="toc-introduction-비선형성non-linearity의-필요성" class="nav-link active" data-scroll-target="#introduction-비선형성non-linearity의-필요성">1. Introduction: 비선형성(Non-linearity)의 필요성</a></li>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
+  <li><a href="#introduction-비선형성non-linearity의-필요성" id="toc-introduction-비선형성non-linearity의-필요성" class="nav-link" data-scroll-target="#introduction-비선형성non-linearity의-필요성">1. Introduction: 비선형성(Non-linearity)의 필요성</a></li>
   <li><a href="#core-concepts-특징-사상feature-maps" id="toc-core-concepts-특징-사상feature-maps" class="nav-link" data-scroll-target="#core-concepts-특징-사상feature-maps">2. Core Concepts: 특징 사상(Feature Maps)</a></li>
   <li><a href="#mathematical-formulation-고차원-매핑의-한계" id="toc-mathematical-formulation-고차원-매핑의-한계" class="nav-link" data-scroll-target="#mathematical-formulation-고차원-매핑의-한계">3. Mathematical Formulation: 고차원 매핑의 한계</a>
   <ul class="collapse">
@@ -2910,7 +2911,7 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#다항식-커널-polynomial-kernels" id="toc-다항식-커널-polynomial-kernels" class="nav-link" data-scroll-target="#다항식-커널-polynomial-kernels">5.1. 다항식 커널 (Polynomial Kernels)</a></li>
   </ul></li>
-  <li><a href="#properties-of-kernels-mercers-theorem" id="toc-properties-of-kernels-mercers-theorem" class="nav-link" data-scroll-target="#properties-of-kernels-mercers-theorem">6. Properties of Kernels (Mercer”s Theorem)</a>
+  <li><a href="#properties-of-kernels-mercers-theorem" id="toc-properties-of-kernels-mercers-theorem" class="nav-link" data-scroll-target="#properties-of-kernels-mercers-theorem">6. Properties of Kernels (Mercer’s Theorem)</a>
   <ul class="collapse">
   <li><a href="#대칭성-symmetry-증명" id="toc-대칭성-symmetry-증명" class="nav-link" data-scroll-target="#대칭성-symmetry-증명"><strong>1. 대칭성 (Symmetry) 증명</strong></a></li>
   <li><a href="#양의-준정부호-positive-semidefinite-증명" id="toc-양의-준정부호-positive-semidefinite-증명" class="nav-link" data-scroll-target="#양의-준정부호-positive-semidefinite-증명"><strong>2. 양의 준정부호 (Positive Semidefinite) 증명</strong></a></li>
@@ -2919,6 +2920,7 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#실제-활용-사례-applications" id="toc-실제-활용-사례-applications" class="nav-link" data-scroll-target="#실제-활용-사례-applications">7.1. 실제 활용 사례 (Applications)</a></li>
   </ul></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2929,6 +2931,19 @@ window.Quarto = {
 
 
 
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 · 인공지능대학원(IPAI) <strong>박재식(Jaesik Park)</strong> 교수님의 <em>Introduction to Machine Learning</em> (4190.428) 강의 자료(4강 <em>Kernel Methods</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 이 회차는 특히 Stanford <strong>CS229 강의 노트</strong>(<code>cs229.stanford.edu/main_notes.pdf</code>)의 2장을 뼈대로 삼고 있으며, 강의에서는 Bishop의 <em>Pattern Recognition and Machine Learning</em> (2006)도 함께 참고 교재로 제시됩니다. 두 교재는 기호와 용어가 조금씩 다르므로 대조해 읽을 때 주의가 필요합니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“고차원 특징 벡터 <span class="math inline">\(\phi(x)\)</span>는 결국 내적으로만 쓰입니다. 그렇다면 벡터를 만들지 말고 내적만 계산하면 됩니다 — 이것이 커널 트릭입니다.”</strong></p>
+<p>3강에서 얻은 처방(“데이터를 고차원으로 올려라”)에는 곧바로 청구서가 따라옵니다. <span class="math inline">\(d\)</span>차원 입력에 3차 이하 단항식을 모두 넣으면 <span class="math inline">\(\phi(x)\)</span>의 차원은 <span class="math inline">\(O(d^3)\)</span>이 되고, <span class="math inline">\(d = 10^3\)</span>이면 10억 차원이라 저장조차 어렵습니다.</p>
+<p>탈출구는 알고리즘을 다시 들여다보는 데서 나옵니다. 경사 하강법으로 갱신되는 <span class="math inline">\(\theta\)</span>는 <strong>언제나 <span class="math inline">\(\phi(x^{(1)}), \dots, \phi(x^{(n)})\)</span>의 선형 결합</strong>이라는 것이 귀납법으로 증명되므로, <span class="math inline">\(p\)</span>차원 벡터 <span class="math inline">\(\theta\)</span> 대신 <span class="math inline">\(n\)</span>개의 스칼라 <span class="math inline">\(\beta_i\)</span>만 갱신하면 충분합니다. 그러면 식에 남는 것은 <span class="math inline">\(\phi\)</span> 자체가 아니라 내적 <span class="math inline">\(\langle \phi(x), \phi(z) \rangle\)</span>뿐이고, 이를 <strong>커널 <span class="math inline">\(K(x,z)\)</span></strong>로 묶습니다.</p>
+<p>많은 특징 사상에서 이 커널은 원래 차원의 내적만으로 닫힌 형태로 계산됩니다 — 3차 단항식 사상의 경우 <span class="math inline">\(1 + \langle x,z \rangle + \langle x,z \rangle^2 + \langle x,z \rangle^3\)</span>이 되어 <span class="math inline">\(O(d^3)\)</span>이 <span class="math inline">\(O(d)\)</span>로 줄어듭니다.</p>
+<p>마지막으로 “어떤 <span class="math inline">\(K\)</span>가 유효한 커널인가”라는 역방향 질문에는 <strong>대칭성과 양의 준정부호성</strong>이 필요충분조건이라는 답(Mercer 조건)이 주어지며, 이로써 <span class="math inline">\(\phi\)</span>를 한 번도 언급하지 않고 커널만으로 작업할 수 있게 됩니다.</p>
+</blockquote>
+</section>
 <section id="introduction-비선형성non-linearity의-필요성" class="level2">
 <h2 class="anchored" data-anchor-id="introduction-비선형성non-linearity의-필요성">1. Introduction: 비선형성(Non-linearity)의 필요성</h2>
 <ul>
@@ -3029,12 +3044,35 @@ J(\theta) = \frac{1}{2} \sum_{i=1}^{n} \left( \theta^\top x^{(i)} - y^{(i)} \rig
 <ul>
 <li>커널 트릭의 핵심은 다음과 같은 보조정리(Lemma)에서 출발합니다:</li>
 </ul>
-<blockquote class="blockquote">
-<p><strong>“파라미터 벡터 <span class="math inline">\(\theta\)</span>는 항상 학습 데이터들의 특징 벡터 <span class="math inline">\(\phi(x^{(1)}), \dots, \phi(x^{(n)})\)</span>의 선형 결합(Linear combination)으로 표현될 수 있다.”</strong></p>
-</blockquote>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>보조정리 (Lemma)
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>경사 하강법으로 학습되는 파라미터 벡터 <span class="math inline">\(\theta\)</span>는 <strong>항상</strong> 학습 데이터들의 특징 벡터 <span class="math inline">\(\phi(x^{(1)}), \dots, \phi(x^{(n)})\)</span>의 선형 결합(linear combination)으로 표현될 수 있다.</p>
+</div>
+</div>
 <ul>
 <li>이 명제는 수학적 귀납법(Mathematical induction)을 통해 완벽하게 증명할 수 있습니다.</li>
 </ul>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>이 보조정리가 왜 결정적인가
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><span class="math inline">\(\theta\)</span>가 <span class="math inline">\(p\)</span>차원 공간 어디에나 놓일 수 있다면 우리는 <span class="math inline">\(p\)</span>개의 숫자를 관리해야 합니다. 그러나 보조정리는 <span class="math inline">\(\theta\)</span>가 데이터가 만드는 <strong><span class="math inline">\(n\)</span>차원 부분공간(span)을 절대 벗어나지 않는다</strong>고 말합니다. <span class="math inline">\(p\)</span>가 10억이어도 <span class="math inline">\(n\)</span>이 1000이면 실제 자유도는 1000뿐입니다. 즉 이 정리는 “<span class="math inline">\(\theta\)</span>를 <span class="math inline">\(\beta\)</span>로 갈아탈 수 있다”는 허가증이며, 커널 트릭 전체가 이 한 줄 위에 서 있습니다.</p>
+</div>
+</div>
 <section id="step-1-기저-조건-initialization" class="level4">
 <h4 class="anchored" data-anchor-id="step-1-기저-조건-initialization"><strong>[Step 1: 기저 조건 (Initialization)]</strong></h4>
 <ul>
@@ -3135,7 +3173,13 @@ K(x, z) := \langle \phi(x), \phi(z) \rangle
 <li><p>이를 풀어서 쓰면 다음과 같습니다: <span class="math display">\[
 K(x, z) = \left( \sum_{i=1}^{d} x_i z_i \right) \left( \sum_{j=1}^{d} x_j z_j \right) = \sum_{i=1}^{d} \sum_{j=1}^{d} x_i x_j z_i z_j = \sum_{i,j=1}^{d} (x_i x_j)(z_i z_j) \quad \text{}
 \]</span></p></li>
-<li><p>이 식은 <span class="math inline">\(\phi(x)\)</span>가 <span class="math inline">\(x_1x_1, x_1x_2, \dots, x_3x_3\)</span> 등의 항을 가지는 특징 벡터의 내적과 완벽히 일치함을 보여줍니다 . 명시적 사상은 <span class="math inline">\(O(d^2)\)</span> 시간이 걸리지만, 커널 연산 <span class="math inline">\((x^\top z)^2\)</span>은 <span class="math inline">\(O(d)\)</span> 선형 시간만 소요됩니다.</p></li>
+<li><p>이 식은 <span class="math inline">\(\phi(x)\)</span>가 좌표들의 모든 곱 <span class="math inline">\(x_i x_j\)</span>를 성분으로 갖는 특징 벡터일 때의 내적과 완벽히 일치함을 보여줍니다. <span class="math inline">\(d=3\)</span>인 경우를 직접 써 보면 대응하는 특징 사상은 다음과 같습니다.</p></li>
+</ul>
+<p><span class="math display">\[
+\phi(x) = \begin{bmatrix} x_1x_1 &amp; x_1x_2 &amp; x_1x_3 &amp; x_2x_1 &amp; x_2x_2 &amp; x_2x_3 &amp; x_3x_1 &amp; x_3x_2 &amp; x_3x_3 \end{bmatrix}^\top
+\]</span></p>
+<ul>
+<li>이 벡터를 명시적으로 만들어 내적을 계산하면 <span class="math inline">\(O(d^2)\)</span> 시간이 걸리지만, 커널 연산 <span class="math inline">\((x^\top z)^2\)</span>은 원래 차원에서의 내적 한 번이므로 <span class="math inline">\(O(d)\)</span> 선형 시간만 소요됩니다.</li>
 </ul>
 </section>
 <section id="절편이-포함된-제곱-커널-kx-z-xtop-z-c2" class="level4">
@@ -3144,16 +3188,37 @@ K(x, z) = \left( \sum_{i=1}^{d} x_i z_i \right) \left( \sum_{j=1}^{d} x_j z_j \r
 <li><p>이를 전개하면 2차항, 1차항, 상수항을 모두 포괄하는 특징 공간을 암시합니다: <span class="math display">\[
 K(x, z) = \sum_{i,j=1}^{d} (x_i x_j)(z_i z_j) + \sum_{i=1}^{d} (\sqrt{2c} x_i)(\sqrt{2c} z_i) + c^2
 \]</span></p></li>
-<li><p>여기에 대응하는 <span class="math inline">\(\phi(x)\)</span> 벡터는 기존 2차항들에 <span class="math inline">\(\sqrt{2c}x_1, \sqrt{2c}x_2, \sqrt{2c}x_3\)</span> 와 상수 <span class="math inline">\(c\)</span>가 추가된 형태가 됩니다 .</p></li>
+<li><p>여기에 대응하는 <span class="math inline">\(\phi(x)\)</span> 벡터는 기존 2차항들에 1차항과 상수항이 덧붙은 형태입니다. <span class="math inline">\(d=3\)</span>이면 다음과 같습니다.</p></li>
+</ul>
+<p><span class="math display">\[
+\phi(x) = \begin{bmatrix} x_1x_1 &amp; \cdots &amp; x_3x_3 &amp; \sqrt{2c}\,x_1 &amp; \sqrt{2c}\,x_2 &amp; \sqrt{2c}\,x_3 &amp; c \end{bmatrix}^\top
+\]</span></p>
+<ul>
+<li>즉 상수 <span class="math inline">\(c\)</span>를 조절하는 것은 <strong>2차항 대비 1차항의 상대적 가중치를 조절</strong>하는 일에 해당합니다. <span class="math inline">\(c\)</span>가 크면 1차항의 영향이 커지고, <span class="math inline">\(c \to 0\)</span>이면 앞서 본 순수 제곱 커널로 돌아갑니다.</li>
 </ul>
 </section>
 </section>
 </section>
 <section id="properties-of-kernels-mercers-theorem" class="level2">
-<h2 class="anchored" data-anchor-id="properties-of-kernels-mercers-theorem">6. Properties of Kernels (Mercer”s Theorem)</h2>
+<h2 class="anchored" data-anchor-id="properties-of-kernels-mercers-theorem">6. Properties of Kernels (Mercer’s Theorem)</h2>
 <ul>
-<li><p>그렇다면 우리가 임의로 만든 함수 <span class="math inline">\(K(x, z)\)</span>가 유효한 커널(어떤 특징 사상 <span class="math inline">\(\phi\)</span>에 대응되는 커널)인지 어떻게 확인할 수 있을까요? 특징 사상을 해석적으로 접근하지 않고 커널 함수만 단독으로 사용하기 위해서는 특정 수학적 조건을 만족해야 합니다.</p></li>
-<li><p>이론적으로 커널 행렬(Kernel Matrix)이 <strong>대칭(Symmetric)</strong>이고 <strong>양의 준정부호(Positive semidefinite)</strong>라는 것은 유효한 커널(Mercer Kernel)이 되기 위한 <strong>필요충분조건(Necessary and sufficient condition)</strong>입니다.</p></li>
+<li>그렇다면 우리가 임의로 만든 함수 <span class="math inline">\(K(x, z)\)</span>가 유효한 커널(어떤 특징 사상 <span class="math inline">\(\phi\)</span>에 대응되는 커널)인지 어떻게 확인할 수 있을까요? 특징 사상을 해석적으로 접근하지 않고 커널 함수만 단독으로 사용하기 위해서는 특정 수학적 조건을 만족해야 합니다.</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>정리 (Mercer 조건)
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>함수 <span class="math inline">\(K(\cdot, \cdot)\)</span>가 어떤 특징 사상 <span class="math inline">\(\phi\)</span>에 대응하는 <strong>유효한 커널(Mercer Kernel)</strong>일 필요충분조건은, 임의의 유한 표본 <span class="math inline">\(\{x^{(1)}, \dots, x^{(n)}\}\)</span>에 대해 만들어지는 커널 행렬 <span class="math inline">\(K \in \mathbb{R}^{n \times n}\)</span>이 <strong>대칭(symmetric)</strong>이고 <strong>양의 준정부호(positive semidefinite)</strong>인 것이다.</p>
+</div>
+</div>
+<ul>
+<li><p>이 조건 덕분에 우리는 <span class="math inline">\(\phi\)</span>를 한 번도 적어 보지 않고, 오직 <span class="math inline">\(K\)</span>의 성질만 확인해서 그 커널을 사용할 자격이 있는지 판정할 수 있습니다. 아래에서는 이 중 <strong>필요조건</strong> 방향만 증명합니다.</p></li>
 <li><p>여기서 필요조건(Necessary condition) 측면을 수학적으로 증명해 보겠습니다. <span class="math inline">\(K\)</span>가 어떤 <span class="math inline">\(\phi\)</span>에 대응하는 유효한 커널이라고 가정하고 , 유한한 <span class="math inline">\(n\)</span>개의 데이터 포인트로 구성된 정방 행렬 <span class="math inline">\(K \in \mathbb{R}^{n \times n}\)</span> (이때 <span class="math inline">\((i, j)\)</span> 성분은 <span class="math inline">\(K_{ij} = K(x^{(i)}, x^{(j)})\)</span>)을 정의합시다.</p></li>
 </ul>
 <section id="대칭성-symmetry-증명" class="level3">
@@ -3209,13 +3274,99 @@ K(x, z) = \exp\left(-\frac{||x - z||^2}{2\sigma^2}\right) \quad \text{}
 <li>이러한 커널 방법론은 다양한 머신러닝 문제에서 강력한 성능을 발휘합니다.
 <ul>
 <li><strong>손글씨 숫자 인식 (256-pixels Digit Recognition):</strong> 0부터 9까지의 필기체 이미지(256 픽셀)가 주어졌을 때, 픽셀 간의 공간적 인접성 정보를 모델에 주지 않고 단지 256차원 벡터로만 취급해도 다항식 커널 <span class="math inline">\(K(x, z) = (x^\top z)^k\)</span>나 가우시안 커널을 기반으로 한 SVM(Support Vector Machine)은 매우 뛰어난 성능을 보여줍니다.</li>
-<li><strong>아미노산/문자열 분류 (Amino Acids/String Classification):</strong> 입력 데이터가 길이가 서로 다른 문자열일 경우 고정된 크기의 특징 벡터를 만들기 까다롭습니다. 이때 길이기 <span class="math inline">\(k\)</span>인 하위 문자열(substring)의 등장 횟수를 카운트하는 특징 벡터 <span class="math inline">\(\phi(x)\)</span>를 정의해 봅시다. 우리는 이 고차원 벡터를 명시적으로 계산하지 않고도, 문자열 매칭 알고리즘을 사용하여 커널 값 <span class="math inline">\(K(x, z) = \phi(x)^\top \phi(z)\)</span>만을 효율적으로 직접 계산해 낼 수 있습니다.</li>
+<li><strong>아미노산/문자열 분류 (Amino Acids/String Classification):</strong> 입력 데이터가 길이가 서로 다른 문자열일 경우 고정된 크기의 특징 벡터를 만들기 까다롭습니다. 이때 길이가 <span class="math inline">\(k\)</span>인 하위 문자열(substring)의 등장 횟수를 카운트하는 특징 벡터 <span class="math inline">\(\phi(x)\)</span>를 정의해 봅시다. 우리는 이 고차원 벡터를 명시적으로 계산하지 않고도, 문자열 매칭 알고리즘을 사용하여 커널 값 <span class="math inline">\(K(x, z) = \phi(x)^\top \phi(z)\)</span>만을 효율적으로 직접 계산해 낼 수 있습니다.</li>
 </ul></li>
 </ul>
-
-
-
+<hr>
 </section>
+</section>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 동기</strong></td>
+<td style="text-align: left;">비선형 회귀는 원래 좌표 <span class="math inline">\(x\)</span>의 선형 함수로 표현되지 않는다</td>
+<td style="text-align: left;">§1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② 해결 도구</strong></td>
+<td style="text-align: left;">특징 사상 <span class="math inline">\(\phi\)</span>를 도입하면 <span class="math inline">\(\theta_3x^3 + \cdots + \theta_0 = \theta^\top\phi(x)\)</span>로 다시 선형이 된다</td>
+<td style="text-align: left;">§2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 알고리즘 이식</strong></td>
+<td style="text-align: left;">LMS 경사 하강 갱신식에서 <span class="math inline">\(x^{(i)}\)</span> 자리에 <span class="math inline">\(\phi(x^{(i)})\)</span>를 넣는 것으로 끝난다</td>
+<td style="text-align: left;">§3.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ 청구서</strong></td>
+<td style="text-align: left;">3차 단항식 사상은 <span class="math inline">\(p \approx d^3\)</span> — <span class="math inline">\(d=10^3\)</span>이면 <span class="math inline">\(10^9\)</span>차원, 최소제곱 대비 <span class="math inline">\(10^6\)</span>배 느림</td>
+<td style="text-align: left;">§3.2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ 구조 관찰</strong></td>
+<td style="text-align: left;"><span class="math inline">\(\theta\)</span>는 갱신을 아무리 반복해도 <span class="math inline">\(\{\phi(x^{(i)})\}\)</span>의 선형 결합을 벗어나지 않는다 (귀납법)</td>
+<td style="text-align: left;">§4.1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ 변수 교체</strong></td>
+<td style="text-align: left;">따라서 <span class="math inline">\(p\)</span>차원 <span class="math inline">\(\theta\)</span> 대신 <span class="math inline">\(n\)</span>개의 스칼라 <span class="math inline">\(\beta_i\)</span>를 갱신하면 된다</td>
+<td style="text-align: left;">§4.2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ 커널의 등장</strong></td>
+<td style="text-align: left;">갱신식에 남는 것은 내적뿐 — 이를 <span class="math inline">\(K(x,z) := \langle \phi(x), \phi(z)\rangle\)</span>로 정의한다</td>
+<td style="text-align: left;">§4.2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 효율의 근거</strong></td>
+<td style="text-align: left;">(i) 모든 쌍을 사전 계산 가능, (ii) 많은 <span class="math inline">\(\phi\)</span>에서 <span class="math inline">\(K\)</span>가 닫힌 형태로 계산된다</td>
+<td style="text-align: left;">§4.3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ 계산량 붕괴</strong></td>
+<td style="text-align: left;">3차 단항식 사상: <span class="math inline">\(1 + \langle x,z\rangle + \langle x,z\rangle^2 + \langle x,z\rangle^3\)</span> → <span class="math inline">\(O(d^3) \Rightarrow O(d)\)</span></td>
+<td style="text-align: left;">§4.3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ 최종 알고리즘</strong></td>
+<td style="text-align: left;"><span class="math inline">\(K\)</span> 행렬을 만들고 <span class="math inline">\(\beta = \beta + \alpha(\vec{y} - K\beta)\)</span>를 반복한다 — <span class="math inline">\(\phi\)</span>는 등장하지 않는다</td>
+<td style="text-align: left;">§5</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑪ 역방향 질문</strong></td>
+<td style="text-align: left;">그렇다면 임의의 <span class="math inline">\(K\)</span>가 유효한지는 어떻게 아는가</td>
+<td style="text-align: left;">§6</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑫ 판정 조건</strong></td>
+<td style="text-align: left;">커널 행렬의 대칭성 + 양의 준정부호성이 필요충분조건 (Mercer)</td>
+<td style="text-align: left;">§6</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑬ 해석</strong></td>
+<td style="text-align: left;">커널은 내적이므로 곧 유사도 지표이며, 가우시안 커널이 그 직관을 가장 잘 구현한다</td>
+<td style="text-align: left;">§7</td>
+</tr>
+</tbody>
+</table>
+
+
+
 </section>
 
 </main> <!-- /main -->

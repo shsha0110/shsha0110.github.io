@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="유성현">
-<meta name="description" content="RNN, LSTM, Attention, Transformer">
+<meta name="description" content="순차적 누적에서 병렬적 어텐션으로 — RNN의 그래디언트 소실이 LSTM을 부르고, Seq2Seq의 병목이 어텐션을 부르며, 어텐션만 남긴 결과가 Transformer가 되는 과정을 따라갑니다.">
 
 <title>[Deep Learning] 04. RNN, LSTM, Attention, Transformer – shsha0110.github.io</title>
 <style>
@@ -189,7 +189,7 @@ window.Quarto = {
       <h1 class="title">[Deep Learning] 04. RNN, LSTM, Attention, Transformer</h1>
                   <div>
         <div class="description">
-          RNN, LSTM, Attention, Transformer
+          순차적 누적에서 병렬적 어텐션으로 — RNN의 그래디언트 소실이 LSTM을 부르고, Seq2Seq의 병목이 어텐션을 부르며, 어텐션만 남긴 결과가 Transformer가 되는 과정을 따라갑니다.
         </div>
       </div>
                           <div class="quarto-categories">
@@ -2928,7 +2928,8 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#순환-신경망-rnn" id="toc-순환-신경망-rnn" class="nav-link active" data-scroll-target="#순환-신경망-rnn">1. 순환 신경망 (RNN)</a>
+  <li><a href="#한-줄-요약-tldr" id="toc-한-줄-요약-tldr" class="nav-link active" data-scroll-target="#한-줄-요약-tldr">한 줄 요약 (TL;DR)</a></li>
+  <li><a href="#순환-신경망-rnn" id="toc-순환-신경망-rnn" class="nav-link" data-scroll-target="#순환-신경망-rnn">1. 순환 신경망 (RNN)</a>
   <ul class="collapse">
   <li><a href="#왜-시퀀스-처리가-필요한가" id="toc-왜-시퀀스-처리가-필요한가" class="nav-link" data-scroll-target="#왜-시퀀스-처리가-필요한가">1.1 왜 시퀀스 처리가 필요한가</a></li>
   <li><a href="#rnn의-핵심-아이디어" id="toc-rnn의-핵심-아이디어" class="nav-link" data-scroll-target="#rnn의-핵심-아이디어">1.2 RNN의 핵심 아이디어</a></li>
@@ -2967,7 +2968,7 @@ window.Quarto = {
   <li><a href="#자기회귀-모델의-텍스트-생성-디코딩" id="toc-자기회귀-모델의-텍스트-생성-디코딩" class="nav-link" data-scroll-target="#자기회귀-모델의-텍스트-생성-디코딩">4.8 자기회귀 모델의 텍스트 생성 (디코딩)</a></li>
   <li><a href="#인간-피드백-기반-강화학습-rlhf" id="toc-인간-피드백-기반-강화학습-rlhf" class="nav-link" data-scroll-target="#인간-피드백-기반-강화학습-rlhf">4.9 인간 피드백 기반 강화학습 (RLHF)</a></li>
   </ul></li>
-  <li><a href="#마무리" id="toc-마무리" class="nav-link" data-scroll-target="#마무리">5. 마무리</a></li>
+  <li><a href="#정리하며-closing-remarks" id="toc-정리하며-closing-remarks" class="nav-link" data-scroll-target="#정리하며-closing-remarks">정리하며 (Closing Remarks)</a></li>
   </ul>
 </nav>
     </div>
@@ -2978,7 +2979,16 @@ window.Quarto = {
 
 
 
-<p>이번 글에서는 <strong>시퀀스(sequence) 데이터를 처리하는 신경망 구조</strong>를 역사적 발전 순서에 따라 정리합니다. 고정된 입력-출력만 다루던 피드포워드 신경망의 한계에서 출발하여, 순환 구조(RNN), 장기 의존성 문제를 해결한 LSTM, 그리고 순환을 완전히 제거하고 병렬화를 달성한 Attention과 Transformer까지 이어지는 흐름을 따라가 보겠습니다. 마지막에는 GPT-3, 텍스트 디코딩 알고리즘, RLHF까지 현대 대규모 언어모델(LLM)의 핵심 요소들도 함께 다룹니다.</p>
+<blockquote class="blockquote">
+<p>본 포스트는 서울대학교 컴퓨터공학부 <strong>Hyun Oh Song</strong> 교수님의 <em>Introduction to Deep Learning</em> (M2177.0043) 강의 자료(4강 <em>RNN, LSTM, Attention, Transformers</em>)를 바탕으로, 강의를 처음 듣는 독자도 논리적 흐름을 따라갈 수 있도록 재구성한 것입니다. 원본 슬라이드의 여러 그림은 Stanford cs231n 및 Justin Johnson(University of Michigan)의 강의 자료에서 차용된 것임이 강의 자료에 명시되어 있습니다.</p>
+</blockquote>
+<section id="한-줄-요약-tldr" class="level2">
+<h2 class="anchored" data-anchor-id="한-줄-요약-tldr">한 줄 요약 (TL;DR)</h2>
+<blockquote class="blockquote">
+<p><strong>“순차적 누적에서 병렬적 어텐션으로 — 각 단계의 전환은 모두 앞 구조가 부딪힌 벽에서 출발합니다.”</strong></p>
+<p>이 강의는 네 개의 아키텍처를 나열하는 것이 아니라, 하나의 실패가 다음 설계를 부르는 사슬로 읽어야 합니다. 고정된 입력·출력만 다루던 피드포워드 신경망의 한계에서 출발해 봅시다. <strong>RNN</strong>은 내부 상태와 가중치 공유로 가변 길이 시퀀스를 다루지만, 역전파할 때마다 <span class="math inline">\(W^\top\)</span> 가 거듭 곱해져 그래디언트가 지수적으로 폭발하거나 소실됩니다. 폭발은 클리핑으로 막을 수 있어도 소실은 아키텍처를 바꿔야만 하고, 그 답이 <strong>LSTM</strong>입니다. 셀 상태 <span class="math inline">\(c_t\)</span> 를 따로 두고 게이트로 덧셈적 갱신을 하면 그래디언트가 방해받지 않고 흐릅니다. 하지만 Seq2Seq에서는 입력 전체를 하나의 벡터 <span class="math inline">\(h_T\)</span> 에 밀어 넣는 <strong>병목</strong>이 남고, 이를 푸는 것이 <strong>어텐션</strong>입니다. 어텐션은 모든 위치가 서로 직접 상호작용하게 하지만 그 대가로 순서 감각을 잃어(순열 등변성) 위치 인코딩이 필요해집니다. 마지막으로 순환을 완전히 걷어내고 Self-Attention · Layer Norm · MLP · 잔차 연결만 남긴 블록이 <strong>Transformer</strong>이며, 이 구조가 병렬화 가능해진 덕분에 GPT-3 규모의 스케일업과 그 위의 디코딩 전략 · RLHF까지 이어집니다.</p>
+</blockquote>
+</section>
 <section id="순환-신경망-rnn" class="level2">
 <h2 class="anchored" data-anchor-id="순환-신경망-rnn">1. 순환 신경망 (RNN)</h2>
 <section id="왜-시퀀스-처리가-필요한가" class="level3">
@@ -2996,7 +3006,7 @@ window.Quarto = {
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/rnn_sequence_types.png" class="img-fluid figure-img"></p>
+<p><img src="./images/network_architectures.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: RNN이 다룰 수 있는 입력-출력 구조의 다섯 가지 유형을 도식화한 그림입니다. 빨간 박스는 입력, 초록 박스는 은닉 상태(RNN 셀), 파란 박스는 출력을 나타냅니다. 셀 사이를 잇는 초록 화살표는 은닉 상태가 시간축을 따라 전달됨을 의미하며, one-to-one(피드포워드)에서 many-to-many(기계 번역, 프레임별 분류)로 갈수록 입력·출력 시퀀스의 길이가 늘어나는 구조적 차이를 한눈에 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3010,7 +3020,7 @@ h_t = f_W(h_{t-1}, x_t)
 <p>여기서 중요한 점은 <strong>모든 시점에서 동일한 함수 <span class="math inline">\(f_W\)</span>와 동일한 파라미터 집합 <span class="math inline">\(W\)</span>가 사용된다</strong>는 것입니다. 이 가중치 공유(weight sharing) 덕분에 RNN은 임의 길이의 시퀀스를 고정된 수의 파라미터로 처리할 수 있습니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/rnn_cell.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure02_rnn_cell.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: RNN의 기본 단위를 나타낸 그림입니다. 아래쪽 분홍 박스(입력 <span class="math inline">\(x\)</span>)가 초록색 RNN 셀로 들어가고, 셀은 출력 <span class="math inline">\(y\)</span>를 위로 내보내는 동시에 자기 자신으로 되돌아가는 순환 화살표(오른쪽 꺾인 화살표)를 가집니다. 이 자기 순환이 바로 내부 상태 <span class="math inline">\(h\)</span>가 다음 시점으로 전달되는 경로이며, 동일한 셀이 시간에 따라 반복 적용됨을 상징합니다.</figcaption>
 </figure>
 </div>
@@ -3042,7 +3052,13 @@ y_t &amp;= W_{hy}\, h_t + b_y
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/rnn_computation_graph_many2many.png" class="img-fluid figure-img"></p>
+<p><img src="./images/rnn_computation_graph.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: RNN을 시간축으로 펼친 계산 그래프입니다. 왼쪽의 초록색 RNN 셀 도식(입력 <span class="math inline">\(x\)</span> → RNN → 출력 <span class="math inline">\(y\)</span>, 자기 자신으로 돌아가는 순환 화살표)이 오른쪽에서는 <span class="math inline">\(h_0 \to f_W \to h_1 \to f_W \to h_2 \to \cdots \to h_T\)</span> 의 사슬로 풀려 있고, 각 <span class="math inline">\(f_W\)</span> 블록 아래로 그 시점의 입력 <span class="math inline">\(x_t\)</span>(분홍 박스)가 들어갑니다. 결정적인 부분은 노란 박스 <span class="math inline">\(W\)</span> 하나에서 모든 <span class="math inline">\(f_W\)</span> 블록으로 화살표가 뻗어 있다는 점인데, 이는 시점마다 별도의 파라미터를 두는 것이 아니라 <strong>같은 가중치 행렬을 매 시점 재사용</strong>한다는 뜻입니다. 덕분에 파라미터 수가 시퀀스 길이와 무관해지고, 길이가 다른 입력도 같은 모델로 처리할 수 있습니다.</figcaption>
+</figure>
+</div>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/figure04_rnn_computation_graph_many2many.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: Many-to-many 구조의 펼쳐진 계산 그래프입니다. 왼쪽 노란 박스 <span class="math inline">\(W\)</span>에서 뻗어나온 여러 화살표가 모든 시점의 <span class="math inline">\(f_W\)</span> 블록으로 연결되어 가중치가 공유됨을 시각적으로 강조합니다. 각 시점의 은닉 상태 <span class="math inline">\(h_t\)</span>는 출력 <span class="math inline">\(y_t\)</span>를 거쳐 개별 손실 <span class="math inline">\(L_t\)</span>를 만들고, 이들이 모두 우상단의 전체 손실 <span class="math inline">\(L\)</span>로 모입니다. 이 그래프는 역전파가 시간 전체에 걸쳐 흘러야 함을 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3066,7 +3082,7 @@ y_t &amp;= W_{hy}\, h_t + b_y
 <p>각 문자를 <strong>원-핫 벡터(one-hot vector)</strong>로 인코딩하여 입력합니다. 그러면 모델은 “h”가 주어지면 “e”를, “he”가 주어지면 “l”을, “hel”이 주어지면 “l”을, “hell”이 주어지면 “o”를 예측하도록 학습됩니다. 각 시점에서 출력층(output layer)의 점수가 가장 높은 문자가 타깃이 되도록 학습이 진행됩니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/lm_hello.png" class="img-fluid figure-img"></p>
+<p><img src="./images/rnn_forward_path_train.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: “hello”를 학습하는 문자 단위 RNN의 펼쳐진 도식입니다. 맨 아래 입력층은 각 문자의 원-핫 벡터(예: “h” → [1,0,0,0])이며, 중간 은닉층은 <span class="math inline">\(W_{hh}\)</span>로 연결되어 상태를 전달하고, 맨 위 출력층의 점수가 다음 문자(target chars: e, l, l, o)를 예측합니다. 굵게 표시된 숫자가 각 시점에서 정답 문자에 해당하는 점수로, 학습 목표가 이 값을 키우는 것임을 나타냅니다.</figcaption>
 </figure>
 </div>
@@ -3085,6 +3101,18 @@ y_t &amp;= W_{hy}\, h_t + b_y
 <ul>
 <li>이 점에 착안하여, 비효율적인 행렬곱 대신 별도의 <strong>임베딩 층(embedding layer)</strong>을 두어 해당 열을 직접 조회(lookup)하는 방식이 널리 쓰입니다.</li>
 </ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/rnn_embedding_layer.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 임베딩 층을 끼워 넣은 문자 단위 언어 모델의 순전파입니다. 맨 아래 input layer의 원-핫 벡터(“h”, “e”, “l”, “l”)가 곧바로 은닉층으로 가지 않고, 그 위의 주황색 embedding layer에서 밀집 벡터로 변환된 뒤 <span class="math inline">\(W_{xh}\)</span> 를 타고 초록색 hidden layer로 들어갑니다. 은닉 상태는 <span class="math inline">\(W_{hh}\)</span> 로 오른쪽 시점에 전달되고, <span class="math inline">\(W_{hy}\)</span> 를 거쳐 파란색 output layer의 점수가 되며, 위쪽에 각 시점의 정답 문자(target chars: “e”, “l”, “l”, “o”)가 표시됩니다. 원-핫 곱셈이 사실상 열 조회이므로, 그 자리를 조회 테이블인 임베딩 층으로 바꾸어도 계산은 같고 비용만 줄어든다는 점을 보여 줍니다.</figcaption>
+</figure>
+</div>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/rnn_forward_path_test.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 같은 모델의 <strong>테스트 시점</strong> 동작입니다. 학습 때와 달리 정답 문자를 넣어 주지 않고, output layer의 점수를 softmax(주황색 행)로 확률로 바꾼 뒤 그 분포에서 문자를 하나 <strong>샘플링</strong>하고(맨 위 sample 행: “e”, “l”, “l”, “o”), 그 문자를 다음 시점의 입력으로 되먹입니다. 아래쪽 input chars가 “h” 하나로 시작해 이후 시점의 입력이 모두 자신이 뽑은 출력이라는 점이 학습 시점의 그림과 다른 지점이며, 이 되먹임 구조가 바로 자기회귀 생성(autoregressive generation)입니다.</figcaption>
+</figure>
+</div>
 </section>
 </section>
 <section id="시간-역전파-bptt와-절단-역전파-tbptt" class="level3">
@@ -3097,6 +3125,12 @@ y_t &amp;= W_{hy}\, h_t + b_y
 <li><strong>역전파(backward)</strong>: 시퀀스 전체를 거슬러 그래디언트를 계산합니다.</li>
 <li><strong>문제점</strong>: 긴 시퀀스에서는 <strong>매우 많은 메모리</strong>가 필요합니다. 모든 중간 상태를 저장해 두어야 하기 때문입니다.</li>
 </ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/bptt_diagram.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: BPTT의 계산 범위를 나타낸 그림입니다. 분홍색 입력, 초록색 은닉 상태, 파란색 출력이 가로로 길게 늘어서고, 모든 시점의 출력이 위쪽 보라색 Loss 박스로 모입니다. 그림 맨 아래를 가로지르는 굵은 빨간 양방향 화살표가 시퀀스의 처음부터 끝까지 한 번에 뻗어 있는데, 이것이 손실에서 시작한 그래디언트가 <strong>시퀀스 전 구간을 거슬러 올라간다</strong>는 뜻입니다. 따라서 역전파를 시작하려면 모든 시점의 중간 상태를 메모리에 들고 있어야 하고, 이 점이 곧이어 TBPTT를 도입하는 이유가 됩니다.</figcaption>
+</figure>
+</div>
 </section>
 <section id="tbptt-truncated-bptt" class="level4">
 <h4 class="anchored" data-anchor-id="tbptt-truncated-bptt">TBPTT (Truncated BPTT)</h4>
@@ -3110,7 +3144,7 @@ y_t &amp;= W_{hy}\, h_t + b_y
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/tbptt.png" class="img-fluid figure-img"></p>
+<p><img src="./images/tbptt_diagram.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: TBPTT의 동작을 나타낸 그림입니다. 가로로 길게 펼쳐진 시퀀스에서 검은 화살표(순전파)는 청크 경계를 넘어 끝까지 이어지지만, 빨간 화살표(역전파)는 회색 박스로 표시된 현재 청크 내부에서만 짧게 머뭅니다. 즉 은닉 상태는 무한히 전달되되 그래디언트는 청크 단위로 절단되어 메모리 비용을 크게 줄임을 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3140,7 +3174,7 @@ y_t &amp;= W_{hy}\, h_t + b_y
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/image_captioning.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure10_image_captioning.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 이미지 캡셔닝의 전체 파이프라인입니다. 왼쪽의 CNN(conv/maxpool/FC 층들)이 이미지에서 특징 벡터 <span class="math inline">\(v\)</span>를 뽑아 분홍색 <span class="math inline">\(W_{ih}\)</span> 경로를 통해 RNN의 첫 은닉 상태 <span class="math inline">\(h_0\)</span>로 주입됩니다. 이후 RNN은 <code>&lt;START&gt;</code>부터 시작해 “man”, “in”, “straw”, “hat” 등의 단어를 차례로 생성하며, 각 출력 단어가 다음 시점의 입력으로 되먹임됩니다. <span class="math inline">\(W_{ih} v\)</span> 항이 추가됨으로써 언어 모델이 이미지 내용에 조건화됨을 강조합니다.</figcaption>
 </figure>
 </div>
@@ -3165,6 +3199,12 @@ h_t &amp;= \tanh\!\left(W_{hh} h_{t-1} + W_{xh} x_t + b_h\right) \\
 \end{aligned}
 \]</span></p>
 <p>여기서 핵심은 <strong><span class="math inline">\(h_t\)</span>에서 <span class="math inline">\(h_{t-1}\)</span>로 역전파할 때마다 <span class="math inline">\(W\)</span>(정확히는 <span class="math inline">\(W_{hh}^{\top}\)</span>)가 곱해진다</strong>는 사실입니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/vanilla_rnn_gradient.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Vanilla RNN에서 그래디언트가 시간을 거슬러 흐르는 경로를 네 시점에 걸쳐 그린 그림입니다. 각 블록 안에서 입력 <span class="math inline">\(x_t\)</span> 와 이전 은닉 상태가 stack되어 가중치 <span class="math inline">\(W\)</span> 를 통과한 뒤 <span class="math inline">\(\tanh\)</span> 를 거치고, 빨간 화살표가 <span class="math inline">\(h_4 \to h_3 \to h_2 \to h_1 \to h_0\)</span> 방향으로 되돌아옵니다. 중요한 것은 빨간 경로가 매 블록에서 <strong><span class="math inline">\(W\)</span> 와 <span class="math inline">\(\tanh\)</span> 의 미분을 반드시 통과한다</strong>는 점입니다. 즉 <span class="math inline">\(h_0\)</span> 의 그래디언트에는 <span class="math inline">\(W^\top\)</span> 가 시퀀스 길이만큼 거듭 곱해지므로, <span class="math inline">\(W\)</span> 의 최대 특이값이 1보다 크면 지수적으로 폭발하고 1보다 작으면 지수적으로 소실됩니다.</figcaption>
+</figure>
+</div>
 <p>따라서 <span class="math inline">\(h_0\)</span>에 대한 그래디언트를 계산하려면 <strong><span class="math inline">\(W\)</span>가 여러 번 반복적으로 곱해지고, <span class="math inline">\(\tanh\)</span>의 미분도 반복적으로 곱해집니다.</strong> <span class="math inline">\(T\)</span> 시점을 거슬러 올라가면 대략 <span class="math inline">\(W\)</span>가 <span class="math inline">\(T\)</span>번 곱해지는 셈이므로, <span class="math inline">\(W\)</span>의 <strong>최대 특이값(largest singular value)</strong>에 따라 다음 두 가지 병리적 현상이 발생합니다.</p>
 <ul>
 <li><strong>최대 특이값 <span class="math inline">\(&gt; 1\)</span> → 그래디언트 폭발(exploding gradients)</strong>: 그래디언트의 크기가 지수적으로 커집니다.
@@ -3215,7 +3255,7 @@ h_t &amp;= o_t \odot \tanh(c_t)
 <p>세 게이트(<span class="math inline">\(i, f, o\)</span>)는 시그모이드를 거쳐 <span class="math inline">\([0,1]\)</span>의 “문 열림 정도”가 되고, <span class="math inline">\(g\)</span>만 <span class="math inline">\(\tanh\)</span>를 거쳐 <span class="math inline">\([-1,1]\)</span>의 후보 정보가 됩니다.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/lstm_gates.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure12_lstm_gates.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: LSTM 셀의 내부 구조입니다. 왼쪽에서 이전 은닉 상태 <span class="math inline">\(h\)</span>와 입력 <span class="math inline">\(x\)</span>가 쌓여(stack) 가중치 <span class="math inline">\(W\)</span>(4h × 2h)와 곱해진 뒤, 네 갈래로 나뉘어 각각 sigmoid·sigmoid·sigmoid·tanh를 거쳐 게이트 <span class="math inline">\(i, f, o, g\)</span>(각 4h)를 만듭니다. 이 게이트들이 위의 두 갱신식에 따라 셀 상태와 은닉 상태를 갱신하는 과정을 보여주며, 단일 행렬곱으로 네 게이트를 한꺼번에 계산함을 강조합니다.</figcaption>
 </figure>
 </div>
@@ -3240,7 +3280,7 @@ y_t &amp;= g_t \odot H(x, W_h) + (1 - g_t) \odot x_t
 \]</span></p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/lstm_gradient_flow.png" class="img-fluid figure-img"></p>
+<p><img src="./images/uninterrupted_gradient_flow.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 여러 시점에 걸친 LSTM 셀 상태의 그래디언트 흐름입니다. 맨 위 가로축을 따라 <span class="math inline">\(C_0 \to C_1 \to C_2 \to C_3\)</span>로 이어지는 셀 상태 경로에서, 빨간 역전파 화살표가 끊김 없이 매끄럽게 흐릅니다. 아래쪽 ResNet 구조 그림과 나란히 배치되어, LSTM의 셀 상태 경로가 ResNet의 스킵 연결과 동일한 “방해받지 않는 그래디언트 흐름”을 만들어냄을 시각적으로 대응시킵니다.</figcaption>
 </figure>
 </div>
@@ -3251,6 +3291,12 @@ y_t &amp;= g_t \odot H(x, W_h) + (1 - g_t) \odot x_t
 <p><span class="math display">\[
 h_t^{l} = \tanh\!\left( W \begin{pmatrix} h_{t-1}^{l} \\ h_t^{l-1} \end{pmatrix} + b_h^{l} \right)
 \]</span></p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/two-layer_rnn.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 2층 RNN의 구조를 격자로 나타낸 그림입니다. 맨 아래 분홍색 입력 <span class="math inline">\(x_0, \dots, x_6\)</span> 위로 첫 번째 층의 은닉 상태 <span class="math inline">\(h^1_t\)</span> 가 가로로 이어지고, 그 위에 두 번째 층의 은닉 상태 <span class="math inline">\(h^2_t\)</span> 가 다시 가로로 이어져 파란색 출력 <span class="math inline">\(y_t\)</span> 를 만듭니다. 가로 화살표는 같은 층 안에서 시간을 따라 흐르는 순환이고, 세로 화살표는 아래층의 은닉 상태가 위층의 <strong>입력으로</strong> 쓰인다는 뜻입니다. 즉 <span class="math inline">\(h^{l-1}_t\)</span> 가 <span class="math inline">\(l\)</span> 층의 입력 자리를 차지하며, 이것이 위 갱신식에서 <span class="math inline">\(x_t\)</span> 대신 <span class="math inline">\(h^{l-1}_t\)</span> 가 들어간 이유입니다.</figcaption>
+</figure>
+</div>
 <p>LSTM의 경우도 동일하게 층 인덱스 <span class="math inline">\(l\)</span>을 붙여 확장합니다.</p>
 <p><span class="math display">\[
 \begin{pmatrix} i_t^{l} \\ f_t^{l} \\ o_t^{l} \\ g_t^{l} \end{pmatrix}
@@ -3273,6 +3319,12 @@ h_t^{l} &amp;= o_t^{l} \odot \tanh(c_t^{l})
 <li>LSTM 셀 구조를 사람이 설계하는 대신, <strong>강화학습으로 셀 구조 자체를 탐색</strong>할 수 있습니다 (Zoph and Le, ICLR 2017).</li>
 <li>학습된 아키텍처(Learned architecture)는 LSTM보다 훨씬 복잡하고 비직관적인 연산 그래프를 갖습니다.</li>
 </ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/figure15_nas_learned_architecture.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 왼쪽은 사람이 설계한 LSTM 셀의 연산 그래프, 오른쪽은 강화학습으로 탐색해 얻은 셀(Learned architecture)의 연산 그래프를 나란히 놓은 그림입니다. 왼쪽 LSTM은 sigmoid 세 개와 tanh 하나가 elem_mult·add로 규칙적으로 엮인 대칭적 구조인 반면, 오른쪽 학습된 셀은 sigmoid·tanh·relu·identity 노드가 훨씬 많고 배선이 불규칙하게 얽혀 있습니다. 성능은 더 좋지만 사람이 그 설계 의도를 읽어내기는 어렵다는 점, 즉 아키텍처 탐색이 <strong>직관이 아니라 탐색으로 얻어진 구조</strong>를 내놓는다는 점을 대비로 보여 줍니다.</figcaption>
+</figure>
+</div>
 </section>
 <section id="해석-가능한-은닉-유닛-interpretable-hidden-units" class="level4">
 <h4 class="anchored" data-anchor-id="해석-가능한-은닉-유닛-interpretable-hidden-units">해석 가능한 은닉 유닛 (Interpretable hidden units)</h4>
@@ -3354,7 +3406,7 @@ Y = A V \qquad (\text{형태: } N_X \times D_V)
 </blockquote>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/self_attention.png" class="img-fluid figure-img"></p>
+<p><img src="./images/self_attention_computation.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: Self-Attention 층의 계산 흐름을 격자로 나타낸 그림입니다. 맨 아래 입력 <span class="math inline">\(X_1, X_2, X_3\)</span>에서 쿼리 <span class="math inline">\(Q\)</span>(초록), 키 <span class="math inline">\(K\)</span>(노랑), 값 <span class="math inline">\(V\)</span>(보라)가 생성됩니다. 쿼리와 키의 내적으로 유사도 행렬 <span class="math inline">\(E_{i,j}\)</span>가 채워지고, 세로 방향(↑) 소프트맥스를 거쳐 어텐션 가중치 <span class="math inline">\(A_{i,j}\)</span>가 되며, 값 벡터와 곱-합(Product→, Sum↑)되어 출력 <span class="math inline">\(Y_1, Y_2, Y_3\)</span>가 산출됩니다. 모든 출력이 모든 입력에 직접 연결됨을 화살표로 강조합니다.</figcaption>
 </figure>
 </div>
@@ -3375,6 +3427,12 @@ Y = A V \qquad (\text{형태: } N_X \times D_V)
 </ul></li>
 </ul>
 <p>결론적으로 <strong>Self-Attention 층은 순열 등변성(permutation equivariant)</strong>을 가지며, 본질적으로 <strong>벡터의 집합(set)</strong> 위에서 동작합니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/permutation_equivariance.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: Self-Attention의 순열 등변성을 보여 주는 계산 도식입니다. 아래쪽 입력이 <span class="math inline">\(X_1, X_2, X_3\)</span> 순서가 아니라 <span class="math inline">\(X_3, X_1, X_2\)</span> 로 섞여 들어가 있고, 그로부터 만들어지는 쿼리 <span class="math inline">\(Q_3, Q_1, Q_2\)</span>, 유사도 행렬 <span class="math inline">\(E\)</span>, softmax를 거친 어텐션 <span class="math inline">\(A\)</span>, 값 <span class="math inline">\(V\)</span> 가 모두 <strong>같은 값이 같은 방식으로 자리만 바뀐</strong> 형태임을 첨자로 확인할 수 있습니다. 그 결과 맨 위 출력도 빨간 테두리로 강조된 <span class="math inline">\(Y_3, Y_1, Y_2\)</span> 가 되어, 입력을 치환하면 출력도 똑같이 치환될 뿐 값 자체는 변하지 않습니다. 이것이 Self-Attention이 순서를 가진 시퀀스가 아니라 <strong>집합</strong>을 다루는 연산이라는 뜻이며, 곧이어 위치 인코딩이 필요해지는 이유입니다.</figcaption>
+</figure>
+</div>
 </section>
 <section id="위치-인코딩-positional-encoding" class="level3">
 <h3 class="anchored" data-anchor-id="위치-인코딩-positional-encoding">3.4 위치 인코딩 (Positional Encoding)</h3>
@@ -3383,6 +3441,12 @@ Y = A V \qquad (\text{형태: } N_X \times D_V)
 <li>처리를 <strong>위치 인식(position-aware)</strong>하게 만들기 위해, 입력에 <strong>위치 인코딩(positional encoding)</strong>을 결합(concatenate)합니다.</li>
 <li>위치 인코딩 함수 <span class="math inline">\(E\)</span>는 <strong>학습되는 룩업 테이블(learned lookup table)</strong>일 수도 있고, <strong>고정된 함수(fixed function)</strong>(예: 사인/코사인)일 수도 있습니다.</li>
 </ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/positional_encoding.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 위치 인코딩을 더한 Self-Attention의 계산 도식입니다. 맨 아래 입력 <span class="math inline">\(X_1, X_2, X_3\)</span> 아래에 각각 <span class="math inline">\(E(1), E(2), E(3)\)</span> 이라는 위치 인코딩이 붙어 있고, 이렇게 위치 정보가 결합된 벡터로부터 쿼리 <span class="math inline">\(Q\)</span>, 키 <span class="math inline">\(K\)</span>, 유사도 <span class="math inline">\(E\)</span>, 어텐션 <span class="math inline">\(A\)</span>, 값 <span class="math inline">\(V\)</span> 가 만들어져 출력 <span class="math inline">\(Y_1, Y_2, Y_3\)</span> 이 됩니다. 앞 그림과 비교하면 달라진 것은 입력 단계에 위치 함수를 더한 것뿐인데, 이 한 번의 주입만으로 층 전체가 <strong>위치를 구별할 수 있게(position-aware)</strong> 바뀝니다. 어텐션 연산 자체는 전혀 손대지 않았다는 점이 핵심입니다.</figcaption>
+</figure>
+</div>
 </section>
 <section id="마스크드-self-attention-masked-self-attention" class="level3">
 <h3 class="anchored" data-anchor-id="마스크드-self-attention-masked-self-attention">3.5 마스크드 Self-Attention (Masked Self-Attention)</h3>
@@ -3392,7 +3456,7 @@ Y = A V \qquad (\text{형태: } N_X \times D_V)
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/masked_self_attention.png" class="img-fluid figure-img"></p>
+<p><img src="./images/masked_attention.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: 마스크드 Self-Attention의 유사도 행렬입니다. 미래 위치에 해당하는 상삼각(upper-triangular) 원소들이 빨간색 <span class="math inline">\(-\infty\)</span>로 채워져 있고, 소프트맥스 이후 해당 어텐션 가중치가 0(빨간 0)으로 바뀝니다. 이를 통해 시점 <span class="math inline">\(t\)</span>의 출력이 <span class="math inline">\(t\)</span> 이하의 토큰만 참조하도록 강제되어, 자기회귀적 언어 모델링에 적합한 인과적(causal) 구조가 됨을 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3404,6 +3468,12 @@ Y = A V \qquad (\text{형태: } N_X \times D_V)
 <li>입력을 <span class="math inline">\(H\)</span>개로 분할(Split)하여 각 헤드가 독립적으로 어텐션을 수행한 뒤, 결과를 다시 연결(Concat)합니다.</li>
 <li>각 헤드가 서로 다른 종류의 관계(문법적, 의미적 등)에 주목할 수 있어 표현력이 풍부해집니다.</li>
 </ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/multihead_attention.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 멀티헤드 Self-Attention의 구조입니다. 맨 아래 입력 <span class="math inline">\(X_1, X_2, X_3\)</span> 가 Split을 통해 <span class="math inline">\(H\)</span> 개의 조각으로 나뉘고, 각 조각이 서로 독립적인 Self-Attention 블록(그림에서는 세 개의 동일한 어텐션 도식)으로 병렬 처리된 뒤, 위쪽 Concat에서 다시 하나로 이어 붙여져 출력 <span class="math inline">\(Y_1, Y_2, Y_3\)</span> 가 됩니다. 헤드마다 별도의 쿼리·키·값 투영을 갖기 때문에 어떤 헤드는 문법적 인접 관계에, 다른 헤드는 의미적 관계에 주목하는 식으로 <strong>서로 다른 관계를 동시에</strong> 포착할 수 있고, 각 헤드의 차원이 <span class="math inline">\(1/H\)</span> 로 줄어 전체 계산량은 단일 헤드와 비슷하게 유지됩니다.</figcaption>
+</figure>
+</div>
 </section>
 </section>
 <section id="트랜스포머-transformer" class="level2">
@@ -3430,6 +3500,12 @@ Y = A V \qquad (\text{형태: } N_X \times D_V)
 </ul></li>
 </ul>
 <p>Self-Attention은 RNN의 장기 의존성 강점과 CNN의 병렬성을 동시에 취하는 대신, 시퀀스 길이의 제곱에 비례하는 연산 비용을 지불합니다. 이 통찰이 바로 <strong>“Attention is all you need”</strong> (Vaswani et al., NeurIPS 2017)의 핵심입니다.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/figure21_three_ways_sequences.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 시퀀스를 처리하는 세 방식을 나란히 비교한 그림입니다. <strong>RNN</strong>은 입력이 사슬처럼 이어져 긴 시퀀스에 이론적으로 좋지만(<span class="math inline">\(O(N)\)</span> 계산·메모리) 은닉 상태를 순차적으로 계산해야 해 병렬화가 되지 않습니다. <strong>1D 합성곱</strong>은 출력을 모두 병렬로 계산할 수 있지만 수용 영역이 좁아, 시퀀스 전체를 보려면 층을 여러 겹 쌓아야 합니다. <strong>Self-Attention</strong>은 각 출력이 모든 입력에 직접 연결되어 긴 시퀀스에 강하고 고도로 병렬적이지만, 길이 <span class="math inline">\(N\)</span> 에 대해 <span class="math inline">\(O(N^2)\)</span> 의 계산과 메모리를 요구합니다. 각 방식 아래 초록색(+)·빨간색(−) 항목이 이 장단점을 정리하며, 트랜스포머가 세 번째 길을 택한 이유를 설명합니다.</figcaption>
+</figure>
+</div>
 </section>
 <section id="층-정규화-layer-normalization" class="level3">
 <h3 class="anchored" data-anchor-id="층-정규화-layer-normalization">4.2 층 정규화 (Layer Normalization)</h3>
@@ -3709,7 +3785,7 @@ p_i = p(t \mid t_1, \ldots, t_{i-1})
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/gpt3_training.png" class="img-fluid figure-img"></p>
+<p><img src="./images/figure23_gpt3_training.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: GPT-3의 언어 모델링 학습 도식입니다. 맨 아래 입력 시퀀스 <span class="math inline">\(t_1, \ldots, t_n\)</span>이 노란색 GPT-3 블록을 통과하여, 각 위치마다 어휘 크기 <span class="math inline">\(|T|\)</span>의 확률 분포 <span class="math inline">\(p_2, \ldots, p_{n+1}\)</span>(<span class="math inline">\(\in \mathbb{R}^{n \times |T|}\)</span>)을 출력합니다. 이 예측이 한 칸씩 밀린 정답 출력 시퀀스 <span class="math inline">\(t_2, \ldots, t_n\)</span>과 위아래 화살표로 비교되어 교차 엔트로피 손실이 계산됩니다. 즉 “다음 토큰 예측”이 한 번의 순전파로 모든 위치에서 병렬로 이루어짐을 보여줍니다.</figcaption>
 </figure>
 </div>
@@ -3732,6 +3808,12 @@ t_{\text{ind}} = \arg\max_{t \in T} p(t \mid t_1, \ldots, t_{\text{ind}-1})
 <ul>
 <li><strong>단점</strong>: 매 시점 국소적으로 최선을 택하므로 <strong>전역적으로 차선(suboptimal)인 해</strong>에 빠질 수 있습니다. 예를 들어 첫 단어에서 확률 0.5인 “nice”를 택하면, 확률 0.4인 “dog”를 택했을 때 이어지는 0.9의 고확률 경로(예: “dog has”, 결합확률 <span class="math inline">\(0.4 \times 0.9 = 0.36\)</span>)를 놓칠 수 있습니다.</li>
 </ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/greedy_search.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 그리디 탐색의 탐색 트리입니다. “The”에서 시작해 각 단계마다 확률이 가장 높은 가지 하나만 빨간 선으로 따라갑니다. 첫 단계에서 “nice”(0.5)가 “dog”(0.4)보다 높아 선택되고, 다음 단계에서 “woman”(0.4)이 선택되어 최종 경로의 확률은 <span class="math inline">\(0.5 \times 0.4 = 0.2\)</span> 가 됩니다. 그런데 선택되지 않은 “dog” 가지 아래에는 “has”(0.9)가 달려 있어 <span class="math inline">\(0.4 \times 0.9 = 0.36\)</span> 으로 더 높습니다. 매 시점 국소적으로 최선을 고르는 것이 전역적으로는 차선이 될 수 있다는 그리디 탐색의 약점을 한 장으로 보여 주는 반례입니다.</figcaption>
+</figure>
+</div>
 </section>
 <section id="빔-탐색-beam-search" class="level4">
 <h4 class="anchored" data-anchor-id="빔-탐색-beam-search">빔 탐색 (Beam Search)</h4>
@@ -3754,6 +3836,12 @@ t_{\text{ind}} = \arg\max_{t \in T} p(t \mid t_1, \ldots, t_{\text{ind}-1})
 <ul>
 <li><strong>장점(<span class="math inline">\(B=2\)</span>의 예)</strong>: 그리디 탐색보다 <strong>더 확률이 높은 시퀀스</strong>를 얻을 수 있습니다. 여러 경로를 동시에 추적하므로 국소 최적의 함정을 일부 피합니다.</li>
 </ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/beam_search.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: 빔 폭 <span class="math inline">\(B = 2\)</span> 인 빔 탐색의 탐색 트리입니다. 그리디 탐색과 같은 트리이지만, 매 단계에서 후보 하나가 아니라 상위 두 개의 부분 시퀀스를 함께 남깁니다. 덕분에 첫 단계에서 확률이 낮았던 “dog”(0.4) 가지가 살아남고, 그 아래 “has”(0.9)와 이어져 최종적으로 <span class="math inline">\(0.4 \times 0.9 = 0.36\)</span> 인 경로(빨간 선)를 찾아냅니다. 그리디가 놓쳤던 <span class="math inline">\(0.2\)</span> 보다 높은 해를 얻은 것으로, 빔을 넓힐수록 더 좋은 시퀀스를 찾을 가능성이 커지지만 계산량도 <span class="math inline">\(B\)</span> 배로 늘어납니다.</figcaption>
+</figure>
+</div>
 </section>
 <section id="top-k-샘플링" class="level4">
 <h4 class="anchored" data-anchor-id="top-k-샘플링">Top-K 샘플링</h4>
@@ -3771,6 +3859,12 @@ t_{\text{ind}} = \arg\max_{t \in T} p(t \mid t_1, \ldots, t_{\text{ind}-1})
 <ul>
 <li><strong>한계</strong>: 분포가 평평할 때(<span class="math inline">\(K=6\)</span> 예시에서 “The” 다음 상위 6개 합이 0.68)는 적절하지만, 분포가 뾰족할 때(“The car” 다음 상위 6개 합이 0.99)는 굳이 6개를 다 고려할 필요가 없어 부적절할 수 있습니다. 즉 <strong>고정된 <span class="math inline">\(K\)</span></strong>가 문맥마다 적절하지 않다는 문제가 있습니다.</li>
 </ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/figure26_topk_sampling.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: <span class="math inline">\(K = 6\)</span> 인 Top-K 샘플링의 두 상황을 나란히 비교한 막대그래프입니다. 왼쪽 <span class="math inline">\(P(w \mid \text{"The"})\)</span> 는 확률이 여러 단어에 넓고 평평하게 퍼져 있어 상위 6개를 모아도 누적 확률이 <span class="math inline">\(0.68\)</span> 에 그치고, 오른쪽 <span class="math inline">\(P(w \mid \text{"The", "car"})\)</span> 는 소수 단어에 확률이 몰려 있어 상위 6개만으로 <span class="math inline">\(0.99\)</span> 에 이릅니다. 즉 <strong>고정된 <span class="math inline">\(K\)</span> 는 분포의 뾰족함에 적응하지 못합니다.</strong> 평평한 분포에서는 그럴듯한 후보를 잘라 버리고, 뾰족한 분포에서는 사실상 확률이 0인 꼬리까지 후보에 넣게 되며, 이 점이 곧이어 누적 확률을 기준으로 삼는 뉴클리어스 샘플링을 부르는 이유입니다.</figcaption>
+</figure>
+</div>
 </section>
 <section id="뉴클리어스-샘플링-nucleus-sampling-top-p" class="level4">
 <h4 class="anchored" data-anchor-id="뉴클리어스-샘플링-nucleus-sampling-top-p">뉴클리어스 샘플링 (Nucleus Sampling, Top-p)</h4>
@@ -3790,6 +3884,12 @@ p(t_{\text{ind}} \in T_{\text{top-}N} \mid t_1, \ldots, t_{\text{ind}-1}) &gt; \
 <ul>
 <li><span class="math inline">\(\eta = 0.92\)</span>인 경우, 분포가 평평하면 자동으로 많은 토큰을 포함하고(예: “The” 다음 합 0.94), 분포가 뾰족하면 적은 토큰만 포함합니다(예: “The car” 다음 합 0.97). 이렇게 <strong>문맥에 따라 후보 집합 크기가 적응적으로 변하는 것</strong>이 핵심 장점입니다.</li>
 </ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/figure27_nucleus_sampling.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: <span class="math inline">\(\eta = 0.92\)</span> 인 뉴클리어스 샘플링의 두 상황입니다. 앞 그림과 같은 두 분포이지만, 이번에는 개수가 아니라 <strong>누적 확률이 <span class="math inline">\(0.92\)</span> 를 넘을 때까지</strong> 상위 단어를 모읍니다. 왼쪽의 평평한 분포에서는 많은 단어를 모아야 <span class="math inline">\(0.94\)</span> 에 도달해 후보 집합이 넓어지고, 오른쪽의 뾰족한 분포에서는 단 몇 개만으로 <span class="math inline">\(0.97\)</span> 에 도달해 후보 집합이 좁아집니다. 후보 집합의 크기가 분포의 모양에 따라 <strong>자동으로 조절</strong>된다는 점이 Top-K와의 결정적 차이입니다.</figcaption>
+</figure>
+</div>
 </section>
 <section id="생성-결과-예시" class="level4">
 <h4 class="anchored" data-anchor-id="생성-결과-예시">생성 결과 예시</h4>
@@ -3817,22 +3917,87 @@ p(t_{\text{ind}} \in T_{\text{top-}N} \mid t_1, \ldots, t_{\text{ind}-1}) &gt; \
 </ul>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img src="./images/rlhf.png" class="img-fluid figure-img"></p>
+<p><img src="./images/rlhf_training.png" class="img-fluid figure-img"></p>
 <figcaption>Figure: RLHF의 강화학습 단계 전체 흐름입니다. 프롬프트 <span class="math inline">\(x\)</span>가 초기 LM과 튜닝된 LM(RL Policy)에 동시에 입력되어 각각 텍스트 <span class="math inline">\(y\)</span>를 생성합니다. 튜닝된 모델의 출력은 보상 모델 <span class="math inline">\(r_\theta\)</span>로 점수화되고, 두 모델 출력 분포 간의 KL 페널티 <span class="math inline">\(-\lambda_{\text{KL}} D_{\text{KL}}\)</span>와 합쳐져 최종 보상 <span class="math inline">\(r_\theta(y\mid x)\)</span>를 만듭니다. 이 보상이 PPO 업데이트 <span class="math inline">\(\theta \leftarrow \theta + \nabla_\theta J(\theta)\)</span>로 정책을 갱신하는 폐회로(closed loop)를 형성함을 보여줍니다.</figcaption>
+</figure>
+</div>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/rlhf_fine_tuning.png" class="img-fluid figure-img"></p>
+<figcaption>Figure: RLHF의 앞 단계, 즉 보상 모델을 학습하는 과정입니다. 왼쪽의 프롬프트 데이터셋에서 프롬프트를 뽑아 초기 언어 모델에 넣어 여러 개의 응답을 생성하고, 사람이 그 응답들을 좋은 것부터 나쁜 것까지 <strong>순위로 매깁니다</strong>(Human Scoring, 오른쪽의 색 막대들이 순위가 매겨진 출력입니다). 이렇게 모은 (샘플, 보상) 쌍으로 오른쪽 위의 보상 모델 <span class="math inline">\(r_\theta\)</span> 를 학습합니다. 사람이 절대 점수를 매기기는 어렵지만 두 응답 중 어느 쪽이 나은지는 비교적 일관되게 고를 수 있다는 점을 이용한 설계이며, 여기서 얻은 <span class="math inline">\(r_\theta\)</span> 가 다음 단계의 강화학습에서 보상 신호로 쓰입니다.</figcaption>
 </figure>
 </div>
 </section>
 </section>
-<section id="마무리" class="level2">
-<h2 class="anchored" data-anchor-id="마무리">5. 마무리</h2>
-<p>이번 글에서는 시퀀스 모델링의 전체 발전 과정을 따라가 보았습니다.</p>
-<ul>
-<li><strong>RNN</strong>은 내부 상태와 가중치 공유로 가변 길이 시퀀스를 다루었지만, 그래디언트 소실/폭발로 장기 의존성에 약했습니다.</li>
-<li><strong>LSTM</strong>은 셀 상태와 게이트 메커니즘으로 방해받지 않는 그래디언트 흐름을 만들어 이 문제를 완화했습니다.</li>
-<li><strong>Attention</strong>은 순환 구조를 제거하고, 모든 위치가 서로 직접 상호작용하는 순열 등변적 연산을 제시했습니다.</li>
-<li><strong>Transformer</strong>는 Self-Attention, Layer Norm, MLP, 잔차 연결을 결합한 블록을 쌓아 고도로 병렬화 가능한 구조를 완성했고, Pre-Norm·RMSNorm·SwiGLU·MoE 등의 현대적 변형과 다양한 디코딩 전략, RLHF를 통해 오늘날의 LLM으로 이어졌습니다.</li>
-</ul>
-<p>핵심을 한 문장으로 요약하면, <strong>“순차적 누적에서 병렬적 어텐션으로”</strong>의 전환이 현대 딥러닝 시퀀스 모델의 근간을 이루고 있다고 할 수 있습니다.</p>
+<section id="정리하며-closing-remarks" class="level2">
+<h2 class="anchored" data-anchor-id="정리하며-closing-remarks">정리하며 (Closing Remarks)</h2>
+<p>이번 강의의 논리 사슬을 한 장으로 요약하면 다음과 같습니다.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">단계</th>
+<th style="text-align: left;">내용</th>
+<th style="text-align: left;">근거</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>① 시퀀스의 요구</strong></td>
+<td style="text-align: left;">입력·출력의 길이가 고정되지 않는 문제(one-to-many, many-to-one, many-to-many)를 다루려면 고정 크기 신경망으로는 부족하다</td>
+<td style="text-align: left;">시퀀스 유형 분류</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>② RNN의 해법</strong></td>
+<td style="text-align: left;">내부 상태 <span class="math inline">\(h_t = f_W(h_{t-1}, x_t)\)</span> 를 두고 <strong>모든 시점에서 같은 <span class="math inline">\(W\)</span> 를 재사용</strong>하면 길이와 무관한 파라미터로 시퀀스를 처리할 수 있다</td>
+<td style="text-align: left;">펼친 계산 그래프의 가중치 공유</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>③ 학습의 비용</strong></td>
+<td style="text-align: left;">BPTT는 시퀀스 전 구간을 거슬러 올라가므로 메모리가 감당되지 않는다. TBPTT는 은닉 상태만 앞으로 흘리고 역전파는 청크 안으로 제한한다</td>
+<td style="text-align: left;">BPTT · TBPTT 비교</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>④ RNN의 벽</strong></td>
+<td style="text-align: left;"><span class="math inline">\(h_t \to h_{t-1}\)</span> 역전파마다 <span class="math inline">\(W_{hh}^\top\)</span> 와 <span class="math inline">\(\tanh'\)</span> 가 곱해져, 최대 특이값이 <span class="math inline">\(&gt;1\)</span> 이면 폭발하고 <span class="math inline">\(&lt;1\)</span> 이면 소실된다. 폭발은 클리핑으로 막지만 소실은 구조를 바꿔야 한다</td>
+<td style="text-align: left;">반복 곱셈의 지수적 증폭</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑤ LSTM</strong></td>
+<td style="text-align: left;">셀 상태 <span class="math inline">\(c_t = f_t \odot c_{t-1} + i_t \odot g_t\)</span> 는 곱셈이 아닌 <strong>덧셈적 갱신</strong>이라 그래디언트가 게이트를 타고 방해받지 않고 흐른다. <span class="math inline">\(i, f, o, g\)</span> 네 게이트가 쓰기 · 지우기 · 드러내기 · 후보값을 나눠 맡는다</td>
+<td style="text-align: left;">방해받지 않는 그래디언트 흐름</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑥ Seq2Seq의 병목</strong></td>
+<td style="text-align: left;">인코더의 마지막 은닉 상태 하나에 입력 전체를 압축하면 긴 입력에서 정보가 손실된다</td>
+<td style="text-align: left;">병목(bottleneck) 문제</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑦ Self-Attention</strong></td>
+<td style="text-align: left;">쿼리와 키의 유사도로 어텐션 가중치를 만들고 값의 가중합을 내면, 모든 위치가 서로 <strong>직접</strong> 상호작용한다</td>
+<td style="text-align: left;"><span class="math inline">\(Q, K, V\)</span> 계산 과정</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑧ 순서의 상실과 회복</strong></td>
+<td style="text-align: left;">Self-Attention은 순열 등변적이라 사실상 집합을 다루는 연산이다. 순서를 알려면 입력 단계에서 <strong>위치 인코딩</strong>을 더해야 하고, 자기회귀 생성에는 미래를 가리는 <strong>인과 마스크</strong>가 필요하다</td>
+<td style="text-align: left;">순열 등변성 · 마스킹</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>⑨ Transformer 블록</strong></td>
+<td style="text-align: left;">Self-Attention(벡터 간 상호작용) + MLP(벡터별 독립 변환) + Layer Norm + 잔차 연결을 한 블록으로 묶어 쌓는다. Pre-Norm · RMSNorm · SwiGLU · MoE는 그 위의 현대적 변형이다</td>
+<td style="text-align: left;">블록 구성</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>⑩ 스케일과 정렬</strong></td>
+<td style="text-align: left;">병렬화 가능한 구조 덕분에 GPT-3 규모의 스케일업이 가능해졌고, 그 위에서 디코딩 전략(그리디 · 빔 · Top-K · 뉴클리어스)과 RLHF가 출력의 품질과 정렬을 결정한다</td>
+<td style="text-align: left;">GPT-3 · 디코딩 · RLHF</td>
+</tr>
+</tbody>
+</table>
 
 
 

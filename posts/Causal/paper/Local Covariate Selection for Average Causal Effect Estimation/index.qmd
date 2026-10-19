@@ -1,5 +1,5 @@
 ---
-title: "[Paper Review] Local Covariate Selection for Average Causal Effect Estimation without Pretreatment and Causal Suﬀiciency Assumptions"
+title: "[Paper Review] Local Covariate Selection for Average Causal Effect Estimation without Pretreatment and Causal Sufficiency Assumptions"
 description: "유효 조정집합이 존재한다면 반드시 MB(X) 안에도 하나 존재한다는 국소 경계 정리를 세우고, 세 개의 국소 식별 규칙(R1–R3)만으로 사전처치·인과충분성 가정 없이 건전(sound)하고 완전(complete)한 조정집합 탐색을 달성한 LCS 알고리즘을 정리합니다."
 author: "유성현"
 categories: [Causal Inference, Paper Review]
@@ -11,6 +11,8 @@ format:
     math: true
 ---
 
+> 본 포스트는 Beijing Technology and Business University의 **Zeyu Liu** · **Feng Xie** · **Yan Zeng**, 중국과학원 선전선진기술연구원(SIAT) · Fudan University의 **Zheng Li**, SIAT의 **Hao Zhang**, Carnegie Mellon University · MBZUAI의 **Kun Zhang**이 함께 쓴 논문 *Local Covariate Selection for Average Causal Effect Estimation without Pretreatment and Causal Sufficiency Assumptions* (arXiv:2605.21548v1 [stat.ML], 2026년 5월 프리프린트)를 바탕으로, 본문 1–6절과 부록 A–C(표기와 그래프 정의, 정리 1–6의 증명, Mildew 네트워크 예시와 국소 구조 학습 알고리즘)를 원문 순서대로 재구성한 것입니다. 정리 · 정의 · 예시 · 그림 번호는 모두 원문 표기를 따릅니다.
+
 ## 논문 정보 (Paper Information)
 
 * **제목**: *Local Covariate Selection for Average Causal Effect Estimation without Pretreatment and Causal Sufficiency Assumptions*
@@ -19,11 +21,11 @@ format:
 * **출처**: arXiv:2605.21548v1 [stat.ML], 2026년 5월 20일 (Preprint, May 22, 2026)
 * **키워드**: 조정집합(adjustment set), MAG/PAG, 마르코프 블랭킷(Markov blanket), 국소 인과 구조 학습(local causal structure learning), 건전성(soundness)/완전성(completeness)
 
-### 한 줄 요약
+## 한 줄 요약 (TL;DR)
 
 > **"처치 $X$의 마르코프 블랭킷 $\mathrm{MB}(X)$만 보면 충분하다."**
 >
-> 관측 변수 전체 $\mathbf{O}$ 안에 유효 조정집합이 하나라도 존재한다면 **반드시 $\mathrm{MB}(X)$ 안에도 하나 존재한다**는 **국소 경계(local boundary) 정리**를 세우고, 그 경계 안에서 조정집합을 찾아내는 세 개의 국소 식별 규칙 **R1, R2, R3**를 제시합니다. 그 결과 기존 국소 방법들이 의존하던 **사전처치(pretreatment)** 및 **인과충분성(causal sufficiency)** 가정을 모두 벗어난, **건전하고 완전한** 알고리즘 **LCS**를 얻습니다.
+> 관측 변수 전체 $\mathbf{O}$ 안에 유효 조정집합이 하나라도 존재한다면 **반드시 $\mathrm{MB}(X)$ 안에도 하나 존재한다**는 **국소 경계(local boundary) 정리**를 세우고, 그 경계 안에서 조정집합을 찾아내는 세 개의 국소 식별 규칙 **R1, R2, R3**를 제시합니다. 그 결과 기존 국소 방법들이 의존하던 **사전처치(pretreatment)** 및 **인과충분성(causal sufficiency)** 가정을 모두 벗어난, **건전하고 완전한** 알고리즘 **LCS**를 얻습니다. 세 규칙 중 어느 것도 적용되지 않으면 그 효과는 관측 가능한 조건부 독립·종속 관계만으로는 **식별 불가능**하다는 것까지 증명하므로(Theorems 5–6), LCS가 결론을 유보하는 경우는 알고리즘의 결함이 아니라 관측 정보의 한계로 읽힙니다. 합성 데이터와 두 실제 데이터셋(Cattaneo2, Jobs)에서 LCS는 정확한 인과효과 추정과 함께 계산 효율의 큰 개선을 보입니다.
 
 ---
 
@@ -92,7 +94,7 @@ format:
 
 ### 1.3 기존 방법들이 실패하는 지점 (Figure 2)
 
-![Figure 2: 기존 국소 공변량 선택 방법들이 각각 실패하는 네 가지 혼합 조상 그래프(MAG) 예시입니다. **붉게 음영 처리된 노드**가 해당 예시에서의 **유효 조정집합**을 나타냅니다. **(a)** Cheng et al. (2022)에서 각색한 예시로, 노드는 $V_1, X, Y$(윗줄)와 $V_2, V_3, V_4$(아랫줄)로 구성됩니다. **COSO 변수 $V_1$이 존재함에도 불구하고 CEELS는 어떤 조정집합도 선택하지 못합니다.** **(b)** $X$, $V_1, V_2$, $V_7, V_8, Y$, $V_4, V_5, V_6$로 구성된 그래프로, **사전처치 가정을 두지 않을 경우 LSAS는 $\mathrm{MB}(Y)$ 안에서 유효 조정집합을 찾지 못합니다.** **(c)** $X, Y$, $V_1$, $V_3, V_2, V_6$, $V_4, V_5$로 구성된 그래프로, **LDP(Maasch et al., 2024)가 유효 조정집합을 놓칠 수 있음**을 보여 주며 이는 곧 LDP에 **완전성이 없음**을 뜻합니다. **(d)** $V_2, V_3, X$, $V_1, Y$로 구성된 그래프로, **사전처치 가정이 성립하는데도** LDP의 충분조건이 위배되어 조정집합을 찾지 못합니다. 나아가 이 예시에는 **COSO 변수가 아예 존재하지 않음에도 국소적으로 유효 조정집합을 찾을 수 있는** 반면, CEELS는 여전히 어떤 조정집합도 선택하지 못합니다.](./images/figure02_mag_examples.png)
+![Figure 2: 기존 국소 공변량 선택 방법들이 각각 실패하는 네 가지 혼합 조상 그래프(MAG) 예시입니다. **붉게 음영 처리된 노드**가 해당 예시에서의 **유효 조정집합**을 나타내며, 한쪽 화살촉(→)은 유향 엣지, 양쪽 화살촉(↔)은 양방향 엣지(배우자 관계)입니다. **(a)** Cheng et al. (2022)에서 각색한 예시로, 노드는 $V_2, V_3, V_4$(윗줄)와 $V_1, X, Y$(아랫줄)로 구성됩니다. **COSO 변수 $V_1$이 존재함에도 불구하고 CEELS는 어떤 조정집합도 선택하지 못합니다.** **(b)** $X$, $V_1, V_2$, $V_7, V_8, Y$, $V_4, V_5, V_6$로 구성된 그래프로, **사전처치 가정을 두지 않을 경우 LSAS는 $\mathrm{MB}(Y)$ 안에서 유효 조정집합을 찾지 못합니다.** **(c)** $X, Y$, $V_1$, $V_3, V_2, V_6$, $V_4, V_5$로 구성된 그래프로, **LDP(Maasch et al., 2024)가 유효 조정집합을 놓칠 수 있음**을 보여 주며 이는 곧 LDP에 **완전성이 없음**을 뜻합니다. 붉게 강조된 $X \to Y$ 엣지는 Example 1에서 $V_3$를 $S$로 삼아 가시적임을 보이는 바로 그 엣지입니다. **(d)** $V_2, V_3, X$, $V_1, Y$로 구성된 그래프로, **사전처치 가정이 성립하는데도** LDP의 충분조건이 위배되어 조정집합을 찾지 못합니다. 나아가 이 예시에는 **COSO 변수가 아예 존재하지 않음에도 국소적으로 유효 조정집합을 찾을 수 있는** 반면, CEELS는 여전히 어떤 조정집합도 선택하지 못합니다.](./images/figure02_mag_examples.png)
 
 ::: {.callout-note}
 ## COSO 변수란?
@@ -342,7 +344,7 @@ $$
 
 * 사전처치 가정이 있으면 모든 공변량이 $X$와 $Y$의 **비후손**이므로, $\mathrm{MB}(Y)$ 안에는 **매개변수(mediator)가 들어올 수 없습니다**. 그래서 $\mathrm{MB}(Y)$가 안전한 경계로 기능합니다.
 * 사전처치 가정을 버리면 **$\mathrm{MB}(Y)$가 매개변수로 가득 찰 수** 있습니다. 매개변수는 $\mathrm{Forb}(X,Y)$에 속하므로 **GAC 조건 2에 의해 조정집합에 들어갈 수 없습니다**. 즉 경계 자체가 무너집니다.
-* 반면 $\mathrm{MB}(X)$는 (증명에서 보듯) **$X$에서 나가는 가시적 유향 엣지를 제거한 그래프 $\mathcal{P}_{\overline{X}}$에서 $X$의 자식이 없어지므로** 금지 집합 조건이 **자동으로 만족**됩니다.
+* 반면 $\mathrm{MB}(X)$는 (증명에서 보듯) **$X$에서 나가는 가시적 유향 엣지를 제거한 그래프 $\mathcal{P}_{\underline{X}}$에서 $X$의 자식이 없어지므로** 금지 집합 조건이 **자동으로 만족**됩니다.
 
 > **Example 2.** Figure 2(b)의 MAG와 그에 대응하는 Figure 3의 PAG를 봅시다.
 >
@@ -353,7 +355,7 @@ $$
 >
 > **결론**: 사전처치 가정이 성립하지 않으면 $\mathrm{MB}(Y)$는 유효 조정집합의 국소 경계를 특성화하는 데 **완전하지 않은** 반면, $\mathrm{MB}(X)$는 **여전히 완전**합니다.
 
-![Figure 3: Figure 2(b)의 MAG에 대응하는 PAG입니다. 노드 배치는 $X$(맨 위), $V_1, V_2$, $V_7, V_8, Y$, $V_4, V_5, V_6$ 순이며, MAG의 확정된 화살촉/꼬리 중 마르코프 동치류 전체에서 불변인 것만 살아남고 나머지는 원(◦) 마크로 표시됩니다. 이 그림의 핵심 메시지는 $\mathrm{MB}(Y) = \{V_2, V_8\}$의 두 원소가 모두 $X \to Y$ 인과 경로 위의 **매개변수**여서 $\mathrm{Forb}(X,Y)$에 속하는 반면, $\mathrm{MB}(X) = \{V_1, V_4, V_5, V_6, V_7\}$ 안에는 유효 조정집합 $\{V_5\}$가 실제로 존재한다는 점입니다. 즉 **사전처치 가정 없이는 $\mathrm{MB}(Y)$ 기반 경계가 무너지고 $\mathrm{MB}(X)$ 기반 경계만 살아남는다**는 Remark 1의 주장을 그림으로 확인시켜 줍니다.](./images/figure03_pag_of_fig2b.png)
+![Figure 3: Figure 2(b)의 MAG에 대응하는 PAG입니다. 노드는 $V_4, V_5, V_6$(윗줄), $V_1, V_2$(가운뎃줄), $X, V_7, V_8, Y$(아랫줄)로 배치되어 있으며, MAG의 확정된 화살촉/꼬리 중 마르코프 동치류 전체에서 불변인 것만 살아남고 나머지는 원(◦) 마크로 표시됩니다. 이 그림의 핵심 메시지는 $\mathrm{MB}(Y) = \{V_2, V_8\}$의 두 원소가 모두 $X \to Y$ 인과 경로 위의 **매개변수**여서 $\mathrm{Forb}(X,Y)$에 속하는 반면, $\mathrm{MB}(X) = \{V_1, V_4, V_5, V_6, V_7\}$ 안에는 유효 조정집합 $\{V_5\}$가 실제로 존재한다는 점입니다. 즉 **사전처치 가정 없이는 $\mathrm{MB}(Y)$ 기반 경계가 무너지고 $\mathrm{MB}(X)$ 기반 경계만 살아남는다**는 Remark 1의 주장을 그림으로 확인시켜 줍니다.](./images/figure03_pag_of_fig2b.png)
 
 #### 3.1.3 정리 2: R1 — 보조변수를 이용한 국소 탐색
 
@@ -402,7 +404,7 @@ R1만으로는 유효 조정집합을 **완전히** 식별할 수 없습니다. 
 * **문제**: $S$와 $\mathbf{Z}$가 **동일한 2원소 풀**에서 뽑히는데, 조건부 독립성 검정의 성질상 $S \notin \mathbf{Z}$여야 합니다. 가능한 조합은 $(V_3, \emptyset), (V_3, \{V_6\}), (V_6, \emptyset), (V_6, \{V_3\})$ 넷뿐이며, **어느 것도 R1의 두 조건을 만족하지 않습니다**.
 * **그런데 정답은 $\mathbf{Z} = \{V_3\}$**입니다. 즉 정답 $\mathbf{Z}$가 **유일한 유효 보조변수 $S$와 겹쳐 버려서** R1이 그것을 "증인"으로 쓸 수 없는 것입니다.
 
-![Figure 4: Figure 2(c)의 MAG에 대응하는 PAG입니다. 노드는 $X, Y$(윗줄), $V_1$, $V_3, V_2, V_6$, $V_4, V_5$로 배치되어 있습니다. 이 그림이 전달하는 핵심은 $\mathrm{MB}(X) = \{V_2, V_3, V_6, Y\}$, $\mathrm{Ch}(X,\mathcal{P}) = \{V_2, Y\}$, $\mathrm{PossDe}(X,\mathcal{P}) = \{V_2, V_5, Y\}$일 때 R1의 보조변수 후보 풀과 조정집합 후보 풀이 **모두 $\{V_3, V_6\}$으로 일치**해 버려, $S \notin \mathbf{Z}$ 제약 때문에 **정답 $\mathbf{Z} = \{V_3\}$을 R1로는 결코 찾을 수 없다**는 점입니다. 동시에 $X$에 인접한 모든 엣지의 $X$쪽 마크가 원(◦)이 아니라 **확정**되어 있다는 구조적 특징이 눈에 띄며, 바로 이 특징이 다음 정리 3(R2)의 조건이 됩니다.](./images/figure04_pag_of_fig2c.png)
+![Figure 4: Figure 2(c)의 MAG에 대응하는 PAG입니다. 노드는 $V_1, V_4, V_5$(윗줄), $X, Y$(가운뎃줄), $V_3, V_2, V_6$(아랫줄)로 배치되어 있고, Figure 2(c)에서처럼 붉게 강조된 $X \to Y$는 Example 1에서 가시적임을 확인한 엣지입니다($V_3 \to X$가 $X$로 들어오고 $V_3$는 $Y$와 인접하지 않으므로 이 PAG에서도 가시적입니다). 이 그림이 전달하는 핵심은 $\mathrm{MB}(X) = \{V_2, V_3, V_6, Y\}$, $\mathrm{Ch}(X,\mathcal{P}) = \{V_2, Y\}$, $\mathrm{PossDe}(X,\mathcal{P}) = \{V_2, V_5, Y\}$일 때 R1의 보조변수 후보 풀과 조정집합 후보 풀이 **모두 $\{V_3, V_6\}$으로 일치**해 버려, $S \notin \mathbf{Z}$ 제약 때문에 **정답 $\mathbf{Z} = \{V_3\}$을 R1로는 결코 찾을 수 없다**는 점입니다. 동시에 $X$에 인접한 모든 엣지의 $X$쪽 마크가 원(◦)이 아니라 **확정**되어 있다는 구조적 특징이 눈에 띄며, 바로 이 특징이 다음 정리 3(R2)의 조건이 됩니다.](./images/figure04_pag_of_fig2c.png)
 
 #### 3.1.5 정의 3과 정리 3: R2 — 확정된 국소 구조에서 직접 구성
 
@@ -571,7 +573,7 @@ $n = |\mathbf{O}|$을 관측 변수의 개수라 합시다. 제안 알고리즘�
 * $|\mathrm{MB}^+|$를 절차 중 마주치는 **확장 마르코프 블랭킷의 최대 크기**라 하면, 이 단계의 최악 복잡도는
 
 $$
-O\!\left( |\mathrm{MB}^+|^2 \cdot 2^{\,2|\mathrm{MB}^+|} \right)
+O\!\left( |\mathrm{MB}^+|^2 \cdot 2^{|\mathrm{MB}^+|} \right)
 $$
 
 로 유계입니다.
@@ -592,7 +594,7 @@ $$
 #### ③ 전체 복잡도
 
 $$
-O\!\left( |\mathrm{MB}^+|^2\, 2^{\,2|\mathrm{MB}^+|} \;+\; |\mathbf{S}|\, 2^{|\mathbf{Z}|} \right)
+O\!\left( |\mathrm{MB}^+|^2\, 2^{|\mathrm{MB}^+|} \;+\; |\mathbf{S}|\, 2^{|\mathbf{Z}|} \right)
 $$
 
 #### ④ 지수 복잡도에 대한 논평
@@ -615,7 +617,7 @@ $$
 
 제안 방법의 **정확성과 효율성**을 검증하기 위해 합성 데이터와 두 개의 실제 데이터셋에서 광범위한 실험을 수행했습니다. 목표 변수의 MB를 찾기 위해서는 **TC discovery 알고리즘**(Pellet & Elisseeff, 2008b)의 기존 구현을 사용했으며, 소스 코드는 보충 자료에 포함되어 있습니다.
 
-### 5.1 비교 대상 (Baselines)
+### 비교 대상 (Baselines)
 
 | 방법 | 탐색 범위 | 사전처치 가정 | 인과충분성 가정 | 비고 |
 |:---|:---|:---:|:---:|:---|
@@ -625,7 +627,7 @@ $$
 | **LDP** (Maasch et al., 2024) | 국소 | **완화** | — | 국소 탐색에서 사전처치 가정을 추가로 완화 |
 | **LCS (Ours)** | 국소 | **불필요** | **불필요** | — |
 
-### 5.2 평가 지표 (Evaluation Metrics)
+### 평가 지표 (Evaluation Metrics)
 
 기존 문헌(Cheng et al., 2022; Cheng et al., 2023; Li et al., 2025a)의 전형적 지표를 사용합니다.
 
@@ -640,9 +642,9 @@ $$
 * **nTest**: 알고리즘이 수행한 **(조건부) 독립성 검정의 횟수**
   → **적을수록 계산 비용이 낮습니다.**
 
-### 5.3 합성 데이터 (Synthetic Data)
+### 5.1 합성 데이터 (Synthetic Data)
 
-#### 5.3.1 데이터 설정 (Data Setup)
+#### 데이터 설정 (Data Setup)
 
 Malinsky & Spirtes (2016) 및 Entner et al. (2013)을 따릅니다.
 
@@ -673,9 +675,9 @@ Malinsky & Spirtes (2016) 및 Entner et al. (2013)을 따릅니다.
 
 (추가 정보: [bnlearn Bayesian Network Repository](https://www.bnlearn.com/bnrepository/))
 
-![Figure 6: 상대 오차(RE)와 조건부 독립성 검정 횟수(nTests)를 (a) 랜덤 그래프와 (b) bnlearn 벤치마크 네트워크에 대해 나타낸 4×4 패널 그림입니다. 각 패널의 가로축은 **표본 크기**(랜덤 그래프는 1000/5000/10000, 벤치마크 네트워크는 5000/10000/15000), 세로축은 (a)와 (b) 각각에서 첫째 행이 RE, 둘째 행이 nTests로, RE 행과 nTests 행이 번갈아 놓입니다. 다섯 개의 곡선은 각각 **LCS(붉은 사각형·파선)**, **LSAS(청록 원·실선)**, **CEELS(분홍 삼각형·일점쇄선)**, **LDP(연두 역삼각형·쇄선)**, **EHS(파란 마름모·점선)**를 나타냅니다. **RE는 낮을수록 추정 정확도가 높고, nTests는 적을수록 계산 비용이 낮다**는 점이 이 그림을 읽는 열쇠입니다. 핵심 메시지는 붉은 LCS 곡선이 **RE 패널에서는 대체로 가장 아래에**, **nTests 패널에서는 대체로 바닥에 붙어 있어**, 정확도와 계산 비용 양쪽에서 동시에 유리한 절충(trade-off)을 달성한다는 점입니다.](./images/figure06_synthetic_re_ntests.png)
+![Figure 6: 상대 오차(RE)와 조건부 독립성 검정 횟수(nTests)를 (a) 랜덤 그래프와 (b) bnlearn 벤치마크 네트워크에 대해 나타낸 4×4 패널 그림입니다. 각 패널의 가로축은 **표본 크기**(랜덤 그래프는 1000/5000/10000, 벤치마크 네트워크는 5000/10000/15000), 세로축은 (a)와 (b) 각각에서 첫째 행이 RE, 둘째 행이 nTests로, RE 행과 nTests 행이 번갈아 놓입니다. 다섯 개의 곡선은 각각 **LCS(붉은 사각형·파선)**, **LSAS(청록 원·실선)**, **CEELS(분홍 삼각형·일점쇄선)**, **LDP(연두 역삼각형·쇄선)**, **EHS(파란 마름모·점선)**를 나타냅니다. **RE는 낮을수록 추정 정확도가 높고, nTests는 적을수록 계산 비용이 낮다**는 점이 이 그림을 읽는 열쇠입니다. 핵심 메시지는 붉은 LCS 곡선이 **RE 패널에서는 대체로 가장 아래(또는 그 근처)에** 놓이고, **nTests 패널에서는 LSAS·EHS보다 대체로 훨씬 아래에** 놓여, 정확도와 계산 비용 사이에서 유리한 절충(trade-off)을 달성한다는 점입니다. 다만 노드가 76개인 win95pts에서는 구조 학습 단계 때문에 표본이 커질수록 LCS의 nTests가 가장 많아지고(Remark 2, §5.1.2), LDP는 child 네트워크에서 축척을 벗어나 해당 RE 패널에서 빠져 있으며, EHS는 값이 너무 커서 여러 패널에서 잘리거나 표시되지 않습니다.](./images/figure06_synthetic_re_ntests.png)
 
-#### 5.3.2 랜덤 그래프에서의 성능 (Performance on Random Graphs)
+#### 5.1.1 랜덤 그래프에서의 성능 (Performance on Random Graphs)
 
 **Figure 6(a)**는 노드 수를 달리한 랜덤 그래프에서의 성능을 보고합니다.
 
@@ -684,7 +686,7 @@ Malinsky & Spirtes (2016) 및 Entner et al. (2013)을 따릅니다.
 
 > **Remark 2.** LCS는 **초기 구조 학습 단계를 포함**하기 때문에, 노드 수가 증가함에 따라 조건부 독립성 검정 횟수가 자연스럽게 증가합니다. 이는 **알고리즘 설계상 예견된 결과**입니다.
 
-#### 5.3.3 벤치마크 네트워크에서의 성능 (Performance on Benchmark Networks)
+#### 5.1.2 벤치마크 네트워크에서의 성능 (Performance on Benchmark Networks)
 
 **Figure 6(b)**는 다양한 벤치마크 네트워크에서의 추정 정확도와 계산 비용을 보고합니다.
 
@@ -700,9 +702,9 @@ Malinsky & Spirtes (2016) 및 Entner et al. (2013)을 따릅니다.
 * LCS는 더 단순한 벤치마크에 비해 **win95pts 네트워크에서 더 많은 검정 횟수**를 요구합니다. 이는 예견된 결과로, **win95pts의 상당한 노드 수가 광범위한 구조 학습을 요구**하여 자연히 조건부 독립성 검정 횟수를 늘리기 때문입니다.
 * **EHS**는 적용 가능한 경우에도 **더 높은 계산 비용과 불안정한 성능**을 함께 보입니다. 나아가 EHS가 요구하는 극도로 많은 nTests 때문에, 여러 패널에서 그 결과가 **부분적으로 잘리거나 완전히 보이지 않습니다.**
 
-### 5.4 실제 데이터셋에서의 성능 (Performance on a Real-World Dataset)
+### 5.2 실제 데이터셋에서의 성능 (Performance on a Real-World Dataset)
 
-#### 5.4.1 Cattaneo2 데이터셋
+#### 5.2.1 Cattaneo2 데이터셋
 
 **데이터**:
 
@@ -729,7 +731,7 @@ Malinsky & Spirtes (2016) 및 Entner et al. (2013)을 따릅니다.
 * 반면 **CEELS, LSAS, LDP, EHS는 참조 효과에서 더 크게 벗어나거나, 현저히 더 높은 계산 비용을 치릅니다.**
 * **총평**: 이 결과들은 **사전처치 가정이 위배되는 상황에서 LCS의 강건성(robustness)**을 입증합니다. **국소 인과 구조를 명시적으로 활용하고 후처치 변수에 대한 부적절한 조정을 회피**함으로써, LCS는 추정 정확도와 계산 효율성 사이의 유리한 균형을 달성합니다.
 
-#### 5.4.2 Jobs 데이터셋
+#### 5.2.2 Jobs 데이터셋
 
 **데이터**:
 
@@ -747,7 +749,7 @@ $$
 
 여기서 $ATT^{*} = \$886$이 참조 효과입니다.
 
-::: {.callout-note}
+::: {.callout-important}
 ## Table 2. Jobs 데이터셋에서의 결과
 
 | Method | ATT | Bias (%) | nTests |
@@ -808,8 +810,8 @@ $$
 | $\mathrm{Forb}(X, Y)$ | $\mathcal{G}$에서 $X$로부터 $Y$로 가는 가능한 유향 경로 위에 놓인 $W$의 모든 가능한 후손 집합 |
 | $X \perp\!\!\!\perp Y \mid \mathbf{Z}$ | $\mathbf{Z}$가 주어졌을 때 $X$와 $Y$가 통계적으로 독립 |
 | $X \not\perp\!\!\!\perp Y \mid \mathbf{Z}$ | 위의 부정 |
-| $\mathcal{R}_{\overline{X}} = \mathcal{R}_{\overline{X}}(\mathcal{R}, \mathcal{G}, X)$ | $\mathcal{G}$에서 가시적인, $X$에서 나가는 모든 유향 엣지를 $\mathcal{R}$로부터 제거하여 얻은 그래프 |
-| $\mathcal{G}_{\overline{X}}$ | $\mathcal{G}$에서 $X$에서 나가는 모든 **가시적** 유향 엣지를 제거하여 얻은 그래프 |
+| $R_{\underline{X}} = R_{\underline{X}}(\mathcal{R}, \mathcal{G}, X)$ | $\mathcal{G}$에서 가시적인, $X$에서 나가는 모든 유향 엣지를 $\mathcal{R}$로부터 제거하여 얻은 그래프 |
+| $\mathcal{G}_{\underline{X}}$ | $\mathcal{G}$에서 $X$에서 나가는 모든 **가시적** 유향 엣지를 제거하여 얻은 그래프 |
 
 ### A.2 그래프에 관한 상세 정의 (Detailed definitions about the graph)
 
@@ -886,7 +888,7 @@ $$
 ::: {.callout-tip}
 ## Lemma 1이 하는 일
 
-이것이 **국소화의 진짜 엔진**입니다. "$X$와 $Y$를 떼어놓을 수 있다면, 그 분리자는 MB 안에서 찾을 수 있다"는 명제입니다. 정리 1의 증명은 결국 **GAC 조건을 "$\mathcal{P}_{\overline{X}}$에서의 m-분리"로 환원한 뒤 Lemma 1을 적용**하는 구조입니다.
+이것이 **국소화의 진짜 엔진**입니다. "$X$와 $Y$를 떼어놓을 수 있다면, 그 분리자는 MB 안에서 찾을 수 있다"는 명제입니다. 정리 1의 증명은 결국 **GAC 조건을 "$\mathcal{P}_{\underline{X}}$에서의 m-분리"로 환원한 뒤 Lemma 1을 적용**하는 구조입니다.
 :::
 
 **증명.**
@@ -897,26 +899,26 @@ $\mathbf{Z} \subseteq \mathbf{O}$가 $(X, Y)$에 대한 유효 조정집합인 �
 
 1. 그래프 $\mathcal{P}$가 $(X, Y)$에 대해 **조정 순응적**이다. 즉 $X$에서 $Y$로 가는 **모든 가능한 인과 경로가 $X$에서 나가는 가시적 유향 엣지로 시작**한다;
 2. $\mathbf{Z} \cap \mathrm{Forb}(X, Y) = \emptyset$; 그리고
-3. $\mathbf{Z}$가 $\mathcal{P}_{\overline{X}}$에서 $X$와 $Y$를 **m-분리**한다.
+3. $\mathbf{Z}$가 $\mathcal{P}_{\underline{X}}$에서 $X$와 $Y$를 **m-분리**한다.
 
-여기서 $\mathcal{P}_{\overline{X}}$는 $\mathcal{P}$로부터 **$X$에서 나가는 모든 가시적 유향 엣지를 제거**하여 얻은 그래프입니다(Maathuis & Colombo, 2015).
+여기서 $\mathcal{P}_{\underline{X}}$는 $\mathcal{P}$로부터 **$X$에서 나가는 모든 가시적 유향 엣지를 제거**하여 얻은 그래프입니다(Maathuis & Colombo, 2015).
 
-**(2단계) 조건 2의 자동 충족.** 그러한 모든 나가는 엣지가 제거되었으므로, **$\mathcal{P}_{\overline{X}}$에서 $X$는 자식을 갖지 않습니다.** 따라서 $\mathrm{Forb}(X, Y)$의 어떤 원소도 $\mathcal{P}_{\overline{X}}$에서 $X$의 마르코프 블랭킷에 속할 수 없습니다. 결과적으로, **$\mathrm{MB}(X)$에 포함된 임의의 후보 분리자에 대해 조건 $\mathbf{Z} \cap \mathrm{Forb}(X, Y) = \emptyset$은 $\mathcal{P}_{\overline{X}}$에서 자동으로 만족**됩니다.
+**(2단계) 조건 2의 자동 충족.** 그러한 모든 나가는 엣지가 제거되었으므로, **$\mathcal{P}_{\underline{X}}$에서 $X$는 자식을 갖지 않습니다.** 따라서 $\mathrm{Forb}(X, Y)$의 어떤 원소도 $\mathcal{P}_{\underline{X}}$에서 $X$의 마르코프 블랭킷에 속할 수 없습니다. 결과적으로, **$\mathrm{MB}(X)$에 포함된 임의의 후보 분리자에 대해 조건 $\mathbf{Z} \cap \mathrm{Forb}(X, Y) = \emptyset$은 $\mathcal{P}_{\underline{X}}$에서 자동으로 만족**됩니다.
 
-> 이것이 **왜 $\mathrm{MB}(Y)$가 아니라 $\mathrm{MB}(X)$인가**에 대한 형식적 답입니다. $\mathcal{P}_{\overline{X}}$로 넘어가는 순간 $X$의 후손이 사라지므로, 매개변수를 잘못 조정할 위험이 **구조적으로** 제거됩니다.
+> 이것이 **왜 $\mathrm{MB}(Y)$가 아니라 $\mathrm{MB}(X)$인가**에 대한 형식적 답입니다. $\mathcal{P}_{\underline{X}}$로 넘어가는 순간 $X$의 후손이 사라지므로, 매개변수를 잘못 조정할 위험이 **구조적으로** 제거됩니다.
 
-**(3단계) 순수 그래프 명제로의 환원.** 따라서 $\mathcal{P}_{\overline{X}}$에서 기준은 다음으로 더 단순화됩니다: 임의의 $\mathbf{Z}' \subseteq \mathbf{O}$에 대해, **$\mathbf{Z}'$가 유효 조정집합인 것과 $\mathcal{P}_{\overline{X}}$에서 $X$와 $Y$를 m-분리하는 것이 동치**입니다.
+**(3단계) 순수 그래프 명제로의 환원.** 따라서 $\mathcal{P}_{\underline{X}}$에서 기준은 다음으로 더 단순화됩니다: 임의의 $\mathbf{Z}' \subseteq \mathbf{O}$에 대해, **$\mathbf{Z}'$가 유효 조정집합인 것과 $\mathcal{P}_{\underline{X}}$에서 $X$와 $Y$를 m-분리하는 것이 동치**입니다.
 
-이 단순화된 형태를 사용하면, 정리는 $\mathcal{P}_{\overline{X}}$에서의 순수 그래프 이론적 명제로 재진술됩니다.
+이 단순화된 형태를 사용하면, 정리는 $\mathcal{P}_{\underline{X}}$에서의 순수 그래프 이론적 명제로 재진술됩니다.
 
 $$
-\exists\, \mathbf{Z} \subseteq \mathbf{O} \text{ s.t. } \mathbf{Z} \text{가 } \mathcal{P}_{\overline{X}} \text{에서 } X, Y \text{를 m-분리} \iff \exists\, \mathbf{Z} \subseteq \mathrm{MB}(X) \text{ s.t. } \mathbf{Z} \text{가 } \mathcal{P}_{\overline{X}} \text{에서 } X, Y \text{를 m-분리}
+\exists\, \mathbf{Z} \subseteq \mathbf{O} \text{ s.t. } \mathbf{Z} \text{가 } \mathcal{P}_{\underline{X}} \text{에서 } X, Y \text{를 m-분리} \iff \exists\, \mathbf{Z} \subseteq \mathrm{MB}(X) \text{ s.t. } \mathbf{Z} \text{가 } \mathcal{P}_{\underline{X}} \text{에서 } X, Y \text{를 m-분리}
 $$
 
-**(4단계) 경우 분석.** $\mathrm{MB}'(X) \subseteq \mathrm{MB}(X)$이고 $\mathcal{P}_{\overline{X}}$에서 $Y$가 $\mathrm{MB}'(Y)$에 속하지 않을 수 있음에 유의하며, 두 경우를 분석합니다.
+**(4단계) 경우 분석.** $\mathrm{MB}'(X) \subseteq \mathrm{MB}(X)$이고 $\mathcal{P}_{\underline{X}}$에서 $Y$가 $\mathrm{MB}'(Y)$에 속하지 않을 수 있음에 유의하며, 두 경우를 분석합니다.
 
-* **Case 1**: $\mathcal{P}$가 $(X, Y)$에 대해 조정 순응적이고, $\mathcal{P}_{\overline{X}}$에서 $Y \in \mathrm{MB}(X)$라 하자. 만약 $\mathcal{P}_{\overline{X}}$에서 $Y \in \mathrm{Adj}(X)$라면, 이는 $(X, Y)$에 대한 **조정 순응성 가정에 모순**됩니다. 따라서 $Y \notin \mathrm{Adj}(X)$여야 합니다. 이 경우 **Lemma 1에 의해** $\mathcal{P}_{\overline{X}}$에서 $X$와 $Y$를 m-분리하는 집합 $\mathbf{Z}$가 반드시 존재합니다.
-* **Case 2**: $\mathcal{P}$가 $(X, Y)$에 대해 조정 순응적이고, $\mathcal{P}_{\overline{X}}$에서 $Y \notin \mathrm{MB}(X)$라 하자. 그러면 $Y \notin \mathrm{Adj}(X)$가 따릅니다. 따라서 $X$와 $Y$는 $\mathrm{MB}(X)$에 의해 m-분리됩니다. 즉 $(X \perp\!\!\!\perp Y \mid \mathrm{MB}(X))_{\mathcal{P}_{\overline{X}}}$입니다. 만약 대신 $(X \not\perp\!\!\!\perp Y \mid \mathrm{MB}(X))_{\mathcal{P}_{\overline{X}}}$가 성립한다면, 이는 $\mathcal{P}$가 $(X, Y)$에 대해 조정 순응적이라는 가정에 모순됩니다. 결과적으로, $\mathbf{O} \setminus \{X\}$의 어떤 부분집합도 $\mathcal{P}$에서 $(X, Y)$에 대한 유효 조정집합이 아닙니다. $\blacksquare$
+* **Case 1**: $\mathcal{P}$가 $(X, Y)$에 대해 조정 순응적이고, $\mathcal{P}_{\underline{X}}$에서 $Y \in \mathrm{MB}(X)$라 하자. 만약 $\mathcal{P}_{\underline{X}}$에서 $Y \in \mathrm{Adj}(X)$라면, 이는 $(X, Y)$에 대한 **조정 순응성 가정에 모순**됩니다. 따라서 $Y \notin \mathrm{Adj}(X)$여야 합니다. 이 경우 **Lemma 1에 의해** $\mathcal{P}_{\underline{X}}$에서 $X$와 $Y$를 m-분리하는 집합 $\mathbf{Z}$가 반드시 존재합니다.
+* **Case 2**: $\mathcal{P}$가 $(X, Y)$에 대해 조정 순응적이고, $\mathcal{P}_{\underline{X}}$에서 $Y \notin \mathrm{MB}(X)$라 하자. 그러면 $Y \notin \mathrm{Adj}(X)$가 따릅니다. 따라서 $X$와 $Y$는 $\mathrm{MB}(X)$에 의해 m-분리됩니다. 즉 $(X \perp\!\!\!\perp Y \mid \mathrm{MB}(X))_{\mathcal{P}_{\underline{X}}}$입니다. 만약 대신 $(X \not\perp\!\!\!\perp Y \mid \mathrm{MB}(X))_{\mathcal{P}_{\underline{X}}}$가 성립한다면, 이는 $\mathcal{P}$가 $(X, Y)$에 대해 조정 순응적이라는 가정에 모순됩니다. 결과적으로, $\mathbf{O} \setminus \{X\}$의 어떤 부분집합도 $\mathcal{P}$에서 $(X, Y)$에 대한 유효 조정집합이 아닙니다. $\blacksquare$
 
 ### B.2 정리 2의 증명 (Proof of Theorem 2)
 
@@ -1069,11 +1071,11 @@ $X$에서 $Y$로의 인과효과는 **$X$에서 $Y$로 가는 임의의 가능�
 
 **설정**: bnlearn 벤치마크가 제공하는 **Mildew 네트워크**에서 출발하여, 이를 구체적인 그래프 모형으로 삼아 제안 방법을 시연합니다. 두 개의 잠재변수 **leldug_3**와 **lemp_2**를 무작위로 선택하고, **fastdag2pag 패키지**의 함수들을 사용해 대응하는 PAG를 생성합니다. 이 PAG를 기반으로 **네 개의 예시**를 통해 제안 알고리즘의 작동과 규칙 적용을 설명합니다.
 
-![Figure 12: 잠재변수 leldug_3, lemp_2(그래프에서 빠진 meldug_3, temp_2의 원문 오기로 보입니다)를 갖는 Mildew 네트워크의 전체 PAG입니다. 시간 지수 0–4가 붙은 여러 계열의 변수들(lai_·, temp_·, foto_·, mikro_·, straaling_·, meldug_·, middel_·, nedboer_·, dm_·)이 시계열적 인과 구조를 이루며, 최종 노드 udbytte(수확량)로 수렴합니다. 이 그림의 역할은 이어지는 Example 6–9에서 다루는 각 목표 쌍 $(X, Y)$가 **전체 그래프의 어느 위치에 놓여 있는지**를 보여 주는 전역 참조 지도입니다. 핵심 메시지는 이렇게 30여 개 노드가 얽힌 전역 구조를 전부 학습하지 않고도, LCS는 각 예시에서 **$\mathrm{MB}^+(X)$에 해당하는 작은 유도 부분그래프(Figures 8–11)만 학습**하여 결론에 도달한다는 점입니다.](./images/figure12_mildew_full_pag.png)
+![Figure 12: 잠재변수 leldug_3, lemp_2(그래프에서 빠진 meldug_3, temp_2의 원문 오기로 보입니다)를 갖는 Mildew 네트워크의 전체 PAG입니다. 시간 지수 0–4가 붙은 여러 계열의 변수들(lai_·, temp_·, foto_·, mikro_·, straaling_·, meldug_·, middel_·, nedboer_·, dm_·)이 시계열적 인과 구조를 이루며, 최종 노드 udbytte(수확량)로 수렴합니다. 화살촉과 꼬리는 동치류 전체에서 확정된 마크, 엣지 끝의 작은 원(◦)은 확정되지 않은 마크이며, foto_2와 mikro_2 사이에만 양방향 엣지(↔)가 있습니다. 이 그림의 역할은 이어지는 Example 6–9에서 다루는 각 목표 쌍 $(X, Y)$가 **전체 그래프의 어느 위치에 놓여 있는지**를 보여 주는 전역 참조 지도입니다. 핵심 메시지는 이렇게 30여 개 노드가 얽힌 전역 구조를 전부 학습하지 않고도, LCS는 각 예시에서 **$\mathrm{MB}^+(X)$에 해당하는 작은 유도 부분그래프(Figures 8–11)만 학습**하여 결론에 도달한다는 점입니다.](./images/figure12_mildew_full_pag.png)
 
 #### Example 6: R1으로 조정집합을 찾는 경우
 
-![Figure 8: Example 6에서 $\mathrm{MB}^+(X)$에 기반한 유도 부분그래프입니다. 노드는 lai4, temp4(윗줄), dm3, foto4, straaling4(가운뎃줄), dm4(아랫줄)로 구성되며, 여기서 $X = \text{foto4}$입니다. 이 그림이 보여 주는 핵심은 전체 Mildew 네트워크(Figure 12)의 30여 개 노드 중 **단 6개 노드만으로 이루어진 국소 구조**만 학습하면 $\mathrm{MB}(X)$, $\mathrm{Pa}(X)$, $\mathrm{NCPa}(X)$, $\mathrm{Ch}(X)$를 모두 읽어낼 수 있고, 그것만으로 R1이 발동하여 조정집합 $\mathbf{Z} = \{\text{lai4}\}$가 결정된다는 점입니다.](./images/figure08_mildew_example6_subgraph.png)
+![Figure 8: Example 6에서 $\mathrm{MB}^+(X)$에 기반한 유도 부분그래프입니다. 노드는 lai4, temp4(윗줄), dm3, foto4, straaling4(가운뎃줄), dm4(아랫줄)로 구성되며, 여기서 $X = \text{foto4}$입니다. lai4 → foto4는 확정된 부모($\mathrm{Pa}$), temp4와 straaling4에서 들어오는 $\circ\!\!\to$는 $X$쪽 화살촉만 확정된 가능한 부모($\mathrm{NCPa}$), foto4 → dm4는 자식($\mathrm{Ch}$)이며, dm3는 자식 dm4의 또 다른 부모로서 $\mathrm{MB}(X)$에 들어옵니다. 이 그림이 보여 주는 핵심은 전체 Mildew 네트워크(Figure 12)의 30여 개 노드 중 **단 6개 노드만으로 이루어진 국소 구조**만 학습하면 $\mathrm{MB}(X)$, $\mathrm{Pa}(X)$, $\mathrm{NCPa}(X)$, $\mathrm{Ch}(X)$를 모두 읽어낼 수 있고, 그것만으로 R1이 발동하여 조정집합 $\mathbf{Z} = \{\text{lai4}\}$가 결정된다는 점입니다.](./images/figure08_mildew_example6_subgraph.png)
 
 > **Example 6.** **Input**: 목표 변수쌍 $(X, Y) = (\text{foto4}, \text{udbytte})$와 관측 변수 집합 $\mathbf{O}$.
 >
@@ -1107,7 +1109,7 @@ $$\text{temp4} \perp\!\!\!\perp \text{udbytte} \mid \{\text{lai4},\ \text{foto4}
 
 #### Example 7: R2로 조정집합을 구성하는 경우
 
-![Figure 9: Example 7에서 $\mathrm{MB}^+(X)$에 기반한 유도 부분그래프입니다. 노드는 dm1, foto2(윗줄), dm2, dm3(가운뎃줄), foto3(아랫줄)로 구성되며, $X = \text{dm2}$입니다. 이 그림의 핵심 메시지는 $X = \text{dm2}$에 인접한 모든 엣지의 $X$쪽 마크가 확정되어 있어(원 ◦ 없음) $\mathrm{Pa}^{*}(X) = \mathrm{Pa}(X) = \{\text{dm1}, \text{foto2}\}$이고 $\mathrm{NCPa}(X) = \emptyset$이라는 점이며, 바로 이 **마크의 확정성**이 R1이 실패한 뒤 R2를 발동시켜 조정집합 $\mathbf{Z} = \{\text{dm1}, \text{foto2}\}$를 탐색 없이 직접 구성하게 해 줍니다.](./images/figure09_mildew_example7_subgraph.png)
+![Figure 9: Example 7에서 $\mathrm{MB}^+(X)$에 기반한 유도 부분그래프입니다. 노드는 dm1, foto2, foto3(윗줄)와 dm2, dm3(아랫줄)로 구성되며, $X = \text{dm2}$입니다. dm1 → dm2와 foto2 → dm2는 확정된 부모, dm2 → dm3는 자식, foto3 → dm3는 자식의 또 다른 부모를 나타냅니다. 이 그림의 핵심 메시지는 $X = \text{dm2}$에 인접한 모든 엣지의 $X$쪽 마크가 확정되어 있어(원 ◦ 없음) $\mathrm{Pa}^{*}(X) = \mathrm{Pa}(X) = \{\text{dm1}, \text{foto2}\}$이고 $\mathrm{NCPa}(X) = \emptyset$이라는 점이며, 바로 이 **마크의 확정성**이 R1이 실패한 뒤 R2를 발동시켜 조정집합 $\mathbf{Z} = \{\text{dm1}, \text{foto2}\}$를 탐색 없이 직접 구성하게 해 줍니다.](./images/figure09_mildew_example7_subgraph.png)
 
 > **Example 7.** **Input**: 목표 변수쌍 $(X, Y) = (\text{dm2}, \text{dm4})$와 관측 변수 집합 $\mathbf{O}$.
 >
@@ -1129,7 +1131,7 @@ $$\text{temp4} \perp\!\!\!\perp \text{udbytte} \mid \{\text{lai4},\ \text{foto4}
 
 #### Example 8: R3(i)로 영 효과를 판정하는 경우
 
-![Figure 10: Example 8에서 $\mathrm{MB}^+(X)$에 기반한 유도 부분그래프입니다. lai2, meldug2, mikro2, middel2, lai3, straaling3, meldug4, foto3, lai4, temp3, mikro3, nedboer3, middel3 등 13개 노드로 구성되며, $X = \text{lai3}$입니다. 이 그림은 앞선 두 예시보다 훨씬 큰 마르코프 블랭킷(12개 원소)을 가진 경우를 보여 주는데, 그럼에도 **R3(i)에 의해 $\text{lai3} \perp\!\!\!\perp \text{straaling4} \mid \emptyset$이라는 단 한 번의 독립성 검정만으로** 인과효과가 0임이 판정되어 절차가 즉시 종료된다는 점이 핵심입니다. 즉 국소 경계가 커도 규칙이 조기에 발동하면 실제 검정 비용은 작을 수 있음을 보여 줍니다.](./images/figure10_mildew_example8_subgraph.png)
+![Figure 10: Example 8에서 $\mathrm{MB}^+(X)$에 기반한 유도 부분그래프입니다. lai2, meldug2, mikro2, middel2, lai3, straaling3, meldug4, foto3, lai4, temp3, mikro3, nedboer3, middel3 등 13개 노드로 구성되며, $X = \text{lai3}$입니다. lai2·mikro2·meldug2에서 lai3로 들어오는 →는 확정된 부모, middel2에서 들어오는 $\circ\!\!\to$는 가능한 부모($\mathrm{NCPa}$), lai3에서 나가는 foto3·meldug4·lai4·mikro3은 자식이며, straaling3·temp3·nedboer3·middel3은 이 자식들에 $\circ\!\!\to$로 이어진 가능한 부모로서 $\mathrm{MB}(X)$에 들어옵니다. 이 그림은 앞선 두 예시보다 훨씬 큰 마르코프 블랭킷(12개 원소)을 가진 경우를 보여 주는데, 그럼에도 **R3(i)에 의해 lai3와 straaling4의 독립성이 확인되는 것만으로** 인과효과가 0임이 판정되어 절차가 종료된다는 점이 핵심입니다. 실제로 전체 PAG(Figure 12)에서 straaling4는 foto4에만 $\circ\!\!\to$로 연결되어 있어 lai3에서 straaling4로 가는 모든 경로가 충돌자(foto4 또는 dm4)에서 막히므로, 빈 조건화 집합 아래에서도 $\text{lai3} \perp\!\!\!\perp \text{straaling4}$가 성립합니다.](./images/figure10_mildew_example8_subgraph.png)
 
 > **Example 8.** **Input**: 목표 변수쌍 $(X, Y) = (\text{lai3}, \text{straaling4})$와 관측 변수 집합 $\mathbf{O}$.
 >
@@ -1150,7 +1152,7 @@ $$\text{temp4} \perp\!\!\!\perp \text{udbytte} \mid \{\text{lai4},\ \text{foto4}
 
 #### Example 9: R3(ii)로 영 효과를 판정하는 경우
 
-![Figure 11: Example 9에서 $\mathrm{MB}^+(X)$에 기반한 유도 부분그래프입니다. 노드는 dm1, straaling2, lai2, nedboer2(윗줄)와 dm2, foto2, mikro2(아랫줄)로 구성되며, $X = \text{foto2}$, $Y = \text{mikro2}$입니다(그림의 milkro2는 원문의 오기입니다). 여기서 $Y = \text{mikro2}$가 $\mathrm{MB}(X)$ 안에 있다는 점이 눈에 띕니다. 이 그림의 핵심 메시지는 R3의 **첫 번째 조건이 실패**하는(어떤 조건화 집합으로도 foto2와 mikro2를 독립으로 만들 수 없는) 상황에서, **두 번째 조건**이 구원투수로 등판한다는 것입니다. 즉 $S = \text{straaling2}$가 $\text{straaling2} \not\perp\!\!\!\perp \text{foto2}$이면서 $\text{straaling2} \perp\!\!\!\perp \text{mikro2}$를 만족하여, 정보가 $S$에서 $X$까지는 흐르지만 $Y$로는 전파되지 않음을 보이고, 따라서 인과효과가 0임이 판정됩니다.](./images/figure11_mildew_example9_subgraph.png)
+![Figure 11: Example 9에서 $\mathrm{MB}^+(X)$에 기반한 유도 부분그래프입니다. 노드는 dm1, straaling2, lai2, nedboer2(윗줄)와 dm2, foto2, mikro2(아랫줄)로 구성되며, $X = \text{foto2}$, $Y = \text{mikro2}$입니다(그림의 milkro2는 원문의 오기입니다). lai2 → foto2는 확정된 부모, straaling2 $\circ\!\!\to$ foto2는 가능한 부모($\mathrm{NCPa}$), foto2 → dm2는 자식(dm1은 dm2의 또 다른 부모)이고, foto2 ↔ mikro2는 양방향 엣지여서 mikro2가 $X$의 지구(district)에 속하며 nedboer2는 그 지구 원소에 $\circ\!\!\to$로 이어진 가능한 부모로서 $\mathrm{MB}(X)$에 들어옵니다. 여기서 $Y = \text{mikro2}$가 $\mathrm{MB}(X)$ 안에 있다는 점이 눈에 띕니다. 이 그림의 핵심 메시지는 R3의 **첫 번째 조건이 실패**하는(어떤 조건화 집합으로도 foto2와 mikro2를 독립으로 만들 수 없는) 상황에서, **두 번째 조건**이 구원투수로 등판한다는 것입니다. 즉 $S = \text{straaling2}$가 $\text{straaling2} \not\perp\!\!\!\perp \text{foto2}$이면서 $\text{straaling2} \perp\!\!\!\perp \text{mikro2}$를 만족하여, 정보가 $S$에서 $X$까지는 흐르지만 $Y$로는 전파되지 않음을 보이고, 따라서 인과효과가 0임이 판정됩니다.](./images/figure11_mildew_example9_subgraph.png)
 
 > **Example 9.** **Input**: 목표 변수쌍 $(X, Y) = (\text{foto2}, \text{mikro2})$와 관측 변수 집합 $\mathbf{O}$.
 >
@@ -1237,69 +1239,35 @@ output: X 주변에서 학습된 부분 조상 그래프 P (따라서 P_{MB+(X)}
 
 | 단계 | 내용 | 근거 |
 |:---|:---|:---|
-| **① 경계 설정** | 유효 조정집합이 $\mathbf{O}$ 안에 있으면 반드시 $\mathrm{MB}(X)$ 안에도 있다 | Theorem 1 (via Lemma 1, $\mathcal{P}_{\overline{X}}$ 환원) |
-| **② 왜 $X$인가** | $\mathcal{P}_{\overline{X}}$에서 $X$의 자식이 사라져 $\mathrm{Forb}$ 조건이 자동 충족 → 사전처치 가정 불필요 | Remark 1, Example 2, B.1 |
+| **① 경계 설정** | 유효 조정집합이 $\mathbf{O}$ 안에 있으면 반드시 $\mathrm{MB}(X)$ 안에도 있다 | Theorem 1 (via Lemma 1, $\mathcal{P}_{\underline{X}}$ 환원) |
+| **② 왜 $X$인가** | $\mathcal{P}_{\underline{X}}$에서 $X$의 자식이 사라져 $\mathrm{Forb}$ 조건이 자동 충족 → 사전처치 가정 불필요 | Remark 1, Example 2, B.1 |
 | **③ 잠재변수 처리** | MAG/PAG의 $\leftrightarrow$와 district 개념이 MB에 흡수 → 인과충분성 가정 불필요 | Definition 14 |
 | **④ 탐색 규칙** | R1(보조변수 $S$로 탐색) + R2(마크 확정 시 직접 구성) → 비영 효과의 모든 순응적 경우 포괄 | Theorems 2, 3, B.5 Case 1 |
 | **⑤ 영 효과 규칙** | R3(i)(직접 독립) + R3(ii)(정보가 $X$에서 멈춤) | Theorem 4, B.5 Case 2 |
 | **⑥ 경계 선언** | R1–R3가 모두 실패 = 관측 정보의 근본적 한계 | Theorems 5, 6 |
 | **⑦ 실증** | 합성 데이터 + Cattaneo2 + Jobs에서 정확도·효율성 동시 우위 | §5 |
 
-**개인적인 감상 몇 가지를 덧붙입니다.**
-
-* **가장 인상적인 지점**은 역시 **"$\mathcal{P}_{\overline{X}}$로 넘어가면 $\mathrm{Forb}$ 조건이 공짜가 된다"**는 관찰입니다. 사전처치 가정을 버리는 순간 가장 골치 아픈 것이 후처치 변수 조정 위험인데, **처치 쪽에서 국소 경계를 잡는다**는 선택 하나로 그 위험이 구조적으로 사라집니다. $\mathrm{MB}(Y)$가 아니라 $\mathrm{MB}(X)$를 택한 것이 단순한 대칭 교체가 아니라 **본질적인 설계 결정**임을 보여 줍니다.
-* **R1과 R2의 역할 분담**도 흥미롭습니다. R1은 "증인($S$)을 세워 탐색"하고, R2는 "증인이 없거나 증인이 정답과 겹칠 때 구조의 확정성을 이용해 조립"합니다. Example 3–4가 보여 주듯, **완전성은 이 두 상보적 전략을 모두 갖춰야만 얻어집니다.** LDP가 불완전한 이유도 이런 상보성이 없기 때문으로 읽힙니다.
-* **실용적 한계**도 정직하게 남아 있습니다. 최악 복잡도가 여전히 $|\mathrm{MB}^+|$에 대해 지수적이므로, **허브 노드(hub node)처럼 MB가 거대한 처치 변수**에 대해서는 국소성의 이점이 희석될 수 있습니다. 또한 Remark 2가 인정하듯 초기 구조 학습 단계 때문에 nTests가 노드 수에 따라 증가하며, Figure 6(b)의 win95pts 패널에서 그 대가가 실제로 관찰됩니다.
-* **유한 표본 문제**도 남습니다. Theorem 6은 **오라클 CI 검정**을 가정하므로, 실제 데이터에서는 검정 오류가 누적될 수 있습니다. Jobs 데이터셋에서 LDP가 보인 1635.98%의 편향은 **국소 구조 학습의 불안정성이 하류(downstream) 추정에 얼마나 파괴적일 수 있는지**를 보여 주는 경고로 읽힙니다.
-
----
-
-## 그림 파일 정리 (Figure File Index)
-
-| Figure File Name | 원문 Figure | 원문 위치 (페이지) | 내용 |
-|:---|:---|:---|:---|
-| `figure01_motivation_smoking_birthweight.png` | Figure 1 | p.1 | 산모 흡연 → 출생 체중 동기 예시 |
-| `figure02_mag_examples.png` | Figure 2 (a)–(d) | p.2 | 기존 방법이 실패하는 4개 MAG 예시 |
-| `figure03_pag_of_fig2b.png` | Figure 3 | p.5 | Figure 2(b)의 대응 PAG (Example 2) |
-| `figure04_pag_of_fig2c.png` | Figure 4 | p.5 | Figure 2(c)의 대응 PAG (Examples 3–4) |
-| `figure05_pag_of_fig2d.png` | Figure 5 | p.6 | Figure 2(d)의 대응 PAG (Example 5) |
-| `figure06_synthetic_re_ntests.png` | Figure 6 | p.8 | 랜덤 그래프 및 벤치마크 네트워크의 RE / nTests |
-| `figure07_cattaneo2_results.png` | Figure 7 | p.9 | Cattaneo2 데이터셋 추정 결과 (ATE vs nTests) |
-| `figure08_mildew_example6_subgraph.png` | Figure 8 | p.19 | Example 6의 $\mathrm{MB}^+(X)$ 유도 부분그래프 |
-| `figure09_mildew_example7_subgraph.png` | Figure 9 | p.20 | Example 7의 $\mathrm{MB}^+(X)$ 유도 부분그래프 |
-| `figure10_mildew_example8_subgraph.png` | Figure 10 | p.20 | Example 8의 $\mathrm{MB}^+(X)$ 유도 부분그래프 |
-| `figure11_mildew_example9_subgraph.png` | Figure 11 | p.21 | Example 9의 $\mathrm{MB}^+(X)$ 유도 부분그래프 |
-| `figure12_mildew_full_pag.png` | Figure 12 | p.22 | 잠재변수 leldug_3, lemp_2를 갖는 Mildew 네트워크의 전체 PAG |
-
-**표(Table) 위치 참고**:
-
-| 본문 내 표 | 원문 Table | 원문 위치 |
-|:---|:---|:---|
-| 국소 공변량 선택 방법 비교 | Table 1 | p.3 |
-| Jobs 데이터셋 결과 | Table 2 | p.10 |
-| 표기 목록 | Table 3 | p.14 |
-
 ---
 
 ## 주요 참고문헌 (Selected References)
 
-* Almond, D., Chay, K. Y., & Lee, D. S. (2005). The costs of low birth weight. *The Quarterly Journal of Economics*, 120(3), 1031–1083.
-* Cattaneo, M. D. (2010). Efficient semiparametric estimation of multi-valued treatment effects under ignorability. *Journal of Econometrics*, 155(2), 138–154.
+* Almond, D., Chay, K. Y., & Lee, D. S. (2005). The costs of low birth weight. *The Quarterly Journal of Economics*, 120(3), 1031–1083. **(Figure 1의 흡연–출생 체중 예시, Cattaneo2 참조 효과 200–250g)**
+* Cattaneo, M. D. (2010). Efficient semiparametric estimation of multi-valued treatment effects under ignorability. *Journal of Econometrics*, 155(2), 138–154. **(Cattaneo2 데이터셋)**
 * Cheng, D., Li, J., Liu, L., Zhang, J., Liu, J., & Le, T. D. (2022). Local search for efficient causal effect estimation. *IEEE TKDE*. **(CEELS)**
-* De Luna, X., Waernbaum, I., & Richardson, T. S. (2011). Covariate selection for the nonparametric estimation of an average treatment effect. *Biometrika*, 98(4), 861–875.
+* De Luna, X., Waernbaum, I., & Richardson, T. S. (2011). Covariate selection for the nonparametric estimation of an average treatment effect. *Biometrika*, 98(4), 861–875. **(CovSel의 그래프 기준)**
 * Entner, D., Hoyer, P., & Spirtes, P. (2013). Data-driven covariate selection for nonparametric estimation of causal effects. *AISTATS*, 256–264. **(EHS)**
-* Imai, K., & Ratkovic, M. (2014). Covariate balancing propensity score. *JRSS-B*, 76(1), 243–263.
-* LaLonde, R. J. (1986). Evaluating the econometric evaluations of training programs with experimental data. *American Economic Review*, 604–620.
-* Li, Z., Guo, X., Xie, F., Zeng, Y., Zhang, H., & Geng, Z. (2025a). Local learning for covariate selection in nonparametric causal effect estimation with latent variables. *NeurIPS*.
+* Imai, K., & Ratkovic, M. (2014). Covariate balancing propensity score. *JRSS-B*, 76(1), 243–263. **(Jobs 벤치마크 설정, 참조 ATT)**
+* LaLonde, R. J. (1986). Evaluating the econometric evaluations of training programs with experimental data. *American Economic Review*, 604–620. **(Jobs 데이터의 원 실험 연구)**
+* Li, Z., Guo, X., Xie, F., Zeng, Y., Zhang, H., & Geng, Z. (2025a). Local learning for covariate selection in nonparametric causal effect estimation with latent variables. *NeurIPS*. **(Remark 1이 대비하는 $\mathrm{MB}(Y)$ 기반 국소 경계)**
 * Li, Z., Liu, Z., Xie, F., Zhang, H., Liu, C., & Geng, Z. (2025b). Local identifying causal relations in the presence of latent variables. *ICML*. **(LSAS, Algorithm 2의 출처)**
 * Maasch, J., Pan, W., Gupta, S., Kuleshov, V., Gan, K., & Wang, F. (2024). Local discovery by partitioning: Polynomial-time causal discovery around exposure–outcome pairs. *UAI*, 2350–2382. **(LDP)**
-* Maathuis, M. H., & Colombo, D. (2015). A generalized back-door criterion. *The Annals of Statistics*, 43(3), 1060–1088.
+* Maathuis, M. H., & Colombo, D. (2015). A generalized back-door criterion. *The Annals of Statistics*, 43(3), 1060–1088. **(일반화 뒷문 기준, $\mathcal{P}_{\underline{X}}$)**
 * Maathuis, M. H., Kalisch, M., & Bühlmann, P. (2009). Estimating high-dimensional intervention effects from observational data. *The Annals of Statistics*, 37(6A), 3133–3164. **(IDA)**
 * Malinsky, D., & Spirtes, P. (2017). Estimating bounds on causal effects in high-dimensional and possibly confounded systems. *IJAR*, 88, 371–384. **(LV-IDA)**
 * Pellet, J.-P., & Elisseeff, A. (2008b). Using Markov blankets for causal structure learning. *JMLR*, 9(7). **(TC discovery)**
 * Perković, E., Textor, J., Kalisch, M., & Maathuis, M. H. (2018). Complete graphical characterization and construction of adjustment sets in Markov equivalence classes of ancestral graphs. *JMLR*, 18(220), 1–62. **(GAC)**
-* Richardson, T., & Spirtes, P. (2002). Ancestral graph Markov models. *The Annals of Statistics*, 30(4), 962–1030.
-* Spirtes, P., Glymour, C., & Scheines, R. (2000). *Causation, Prediction, and Search*. MIT Press.
+* Richardson, T., & Spirtes, P. (2002). Ancestral graph Markov models. *The Annals of Statistics*, 30(4), 962–1030. **(MAG의 정의)**
+* Spirtes, P., Glymour, C., & Scheines, R. (2000). *Causation, Prediction, and Search*. MIT Press. **(인과 마르코프·충실성 조건, Lemma 3.3.1)**
 * Xie, F., Li, Z., Wu, P., Zeng, Y., Chunchen, L., & Geng, Z. (2024). Local causal structure learning in the presence of latent variables. *ICML*. **(Lemma 1의 출처)**
 * Zhang, J. (2008a). Causal reasoning with ancestral graphs. *JMLR*, 9(7). **(가시성)**
-* Zhang, J. (2008b). On the completeness of orientation rules for causal discovery in the presence of latent confounders and selection bias. *Artificial Intelligence*, 172(16–17), 1873–1896.
+* Zhang, J. (2008b). On the completeness of orientation rules for causal discovery in the presence of latent confounders and selection bias. *Artificial Intelligence*, 172(16–17), 1873–1896. **(m-연결, MAG의 정의)**
